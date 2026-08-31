@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FIRE FIGHT — LEADERBOARDS</title>
+<link rel="icon" href="/firefightfavicon.png">
+<style>
+  /* ── FIRE FIGHT industrial: gunmetal plate, hazard amber, riveted glass.
+     The RAVE RAID face flips the accent to void neon — separate but equal. ── */
+  :root {
+    --bg: #0d0f12;
+    --plate: #16191e;
+    --plate-hi: #1d2127;
+    --line: #2a2f37;
+    --text: #e8e4da;
+    --dim: #8b8f98;
+    --accent: #ffb02e;          /* hazard amber */
+    --accent-dim: #7a5516;
+    --me: #ffb02e;
+    --hc: #ff4b3e;
+  }
+  .rr {
+    --accent: #ff3df0;          /* void magenta */
+    --accent-dim: #6d1a66;
+    --me: #3dfff0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(45deg, transparent 0 34px, rgba(255,255,255,.012) 34px 36px),
+      repeating-linear-gradient(-45deg, transparent 0 34px, rgba(255,255,255,.012) 34px 36px);
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+
+  header { text-align: center; margin-bottom: 18px; }
+  .mark {
+    font-size: clamp(28px, 6vw, 44px); font-weight: 900; letter-spacing: .14em;
+    color: var(--text); text-transform: uppercase; line-height: 1;
+  }
+  .mark span { color: var(--accent); }
+  .sub { color: var(--dim); letter-spacing: .3em; font-size: 11px; text-transform: uppercase; margin-top: 8px; }
+
+  /* Two equal game tabs — the hazard strip belongs to whichever is live. */
+  .games { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 22px 0 14px; }
+  .game-tab {
+    appearance: none; border: 1px solid var(--line); background: var(--plate);
+    color: var(--dim); font: inherit; font-weight: 800; letter-spacing: .18em;
+    text-transform: uppercase; font-size: clamp(13px, 2.6vw, 16px);
+    padding: 16px 8px 13px; cursor: pointer; position: relative; border-radius: 4px;
+  }
+  .game-tab::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+    border-radius: 0 0 4px 4px; background: transparent;
+  }
+  .game-tab.on { color: var(--text); background: var(--plate-hi); border-color: var(--accent-dim); }
+  .game-tab.on::after {
+    background: repeating-linear-gradient(-45deg, var(--accent) 0 10px, #16191e 10px 20px);
+  }
+  #tab-rr.on { border-color: #6d1a66; }
+  #tab-rr.on::after { background: repeating-linear-gradient(-45deg, #ff3df0 0 10px, #16191e 10px 20px); }
+
+  .boards { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+  .board-tab {
+    appearance: none; border: 1px solid var(--line); background: transparent; color: var(--dim);
+    font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+    padding: 7px 12px; cursor: pointer; border-radius: 3px;
+  }
+  .board-tab.on { color: #0d0f12; background: var(--accent); border-color: var(--accent); }
+
+  .pickers { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; align-items: center; }
+  select {
+    background: var(--plate-hi); color: var(--text); border: 1px solid var(--line);
+    font: inherit; font-size: 13px; letter-spacing: .06em; padding: 8px 10px; border-radius: 3px;
+  }
+  .seg { display: flex; gap: 4px; }
+  .seg button {
+    appearance: none; border: 1px solid var(--line); background: transparent; color: var(--dim);
+    font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .1em;
+    padding: 7px 10px; cursor: pointer; border-radius: 3px;
+  }
+  .seg button.on { color: #0d0f12; background: var(--accent); border-color: var(--accent); }
+
+  .panel {
+    background: var(--plate); border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 0; overflow: hidden; position: relative;
+  }
+  .panel::before {  /* riveted corners */
+    content: ""; position: absolute; inset: 6px; pointer-events: none;
+    background:
+      radial-gradient(circle 2.5px, #3a4048 98%, transparent) 0 0 / 6px 6px no-repeat,
+      radial-gradient(circle 2.5px, #3a4048 98%, transparent) 100% 0 / 6px 6px no-repeat,
+      radial-gradient(circle 2.5px, #3a4048 98%, transparent) 0 100% / 6px 6px no-repeat,
+      radial-gradient(circle 2.5px, #3a4048 98%, transparent) 100% 100% / 6px 6px no-repeat;
+  }
+  .board-title {
+    padding: 12px 18px 6px; font-size: 12px; font-weight: 800; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--accent);
+  }
+  .board-note { padding: 0 18px 8px; font-size: 12px; color: var(--dim); }
+
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th {
+    text-align: left; font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--dim); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line);
+  }
+  td { padding: 9px 10px; border-bottom: 1px solid rgba(42,47,55,.55); white-space: nowrap; }
+  td.names { white-space: normal; }
+  tr:last-child td { border-bottom: 0; }
+  .rank { color: var(--dim); width: 44px; font-variant-numeric: tabular-nums; }
+  tr.top1 .rank { color: #ffd700; font-weight: 800; }
+  tr.top2 .rank { color: #c9ced6; font-weight: 800; }
+  tr.top3 .rank { color: #cd7f32; font-weight: 800; }
+  .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); padding-right: 18px; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .1em;
+    padding: 2px 6px; border-radius: 2px; margin-left: 6px; vertical-align: 1px;
+  }
+  .b-hard    { background: #4a3208; color: #ffb02e; }
+  .b-blazing { background: #4a1508; color: #ff6a3d; }
+  .b-hc      { background: #3d0e0a; color: var(--hc); }
+  .grade { font-weight: 900; width: 40px; text-align: center; }
+  .g-S { color: #ffd700; } .g-A { color: #3dfff0; } .g-B { color: #7ee081; }
+  .g-C { color: #c9ced6; } .g-F { color: #ff4b3e; }
+  .state { padding: 26px 18px; color: var(--dim); font-size: 13px; letter-spacing: .08em; }
+  .hidden { display: none; }
+  footer { text-align: center; color: #565b64; font-size: 11px; letter-spacing: .12em; margin-top: 26px; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="wrap" id="page">
+  <header>
+    <div class="mark">FIRE <span>FIGHT</span></div>
+    <div class="sub">World Leaderboards</div>
+  </header>
+
+  <div class="games">
+    <button class="game-tab on" id="tab-ff">🔥 Fire Fight</button>
+    <button class="game-tab" id="tab-rr">⚡ Rave Raid</button>
+  </div>
+
+  <!-- ══ FIRE FIGHT face ══ -->
+  <section id="face-ff">
+    <div class="boards" id="ff-boards"></div>
+    <div class="panel">
+      <div class="board-title" id="ff-title">RANKED</div>
+      <div class="board-note" id="ff-note"></div>
+      <div class="scroll"><table id="ff-table"></table></div>
+      <div class="state hidden" id="ff-state"></div>
+    </div>
+  </section>
+
+  <!-- ══ RAVE RAID face ══ -->
+  <section id="face-rr" class="rr hidden">
+    <div class="pickers">
+      <select id="rr-track"></select>
+      <div class="seg" id="rr-diff"></div>
+    </div>
+    <div class="panel">
+      <div class="board-title" id="rr-title">WORLD BOARD</div>
+      <div class="board-note">Personal bests, one row per raider — records stand.</div>
+      <div class="scroll"><table id="rr-table"></table></div>
+      <div class="state hidden" id="rr-state"></div>
+    </div>
+  </section>
+
+  <footer>Fire Fight × Rave Raid — boards refresh on every visit</footer>
+</div>
+
+<script>
+/* Both games keep their boards in world-readable Firestore. This page reads
+ * them over the plain REST API — no SDK, no auth, nothing writable from here.
+ * Shapes mirror the games' own code:
+ *   Fire Fight  src/net/leaderboard.ts  (players + runGauntlet/runRaid/runGoopliath)
+ *   Rave Raid   src/net/scores.ts       (scores: one doc per player per chart)
+ */
+const FF = { projectId: 'arfi-b68f9',    key: 'AIzaSyA0NYO_w6uU0Fcc6nuVPitRQaGW3B6518E' };
+const RR = { projectId: 'raveraid-bc866', key: 'AIzaSyBqsUcpCKzs2bANP0db6J4Nz_SkKe4wXzI' };
+
+async function runQuery(cfg, structuredQuery) {
+  const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents:runQuery?key=${cfg.key}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ structuredQuery }),
+  });
+  if (!res.ok) throw new Error(`firestore ${res.status}`);
+  const parts = await res.json();
+  return parts.filter((p) => p.document).map((p) => ({
+    id: p.document.name.split('/').pop(),
+    data: decodeFields(p.document.fields || {}),
+  }));
+}
+function decodeValue(v) {
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue' in v) return v.doubleValue;
+  if ('stringValue' in v) return v.stringValue;
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('arrayValue' in v) return (v.arrayValue.values || []).map(decodeValue);
+  if ('mapValue' in v) return decodeFields(v.mapValue.fields || {});
+  if ('timestampValue' in v) return v.timestampValue;
+  return null;
+}
+function decodeFields(fields) {
+  const out = {};
+  for (const k of Object.keys(fields)) out[k] = decodeValue(fields[k]);
+  return out;
+}
+const field = (fieldPath) => ({ fieldPath });
+const orderBy = (f, dir) => ({ field: field(f), direction: dir });
+const whereEq = (f, value) => ({ fieldFilter: { field: field(f), op: 'EQUAL', value } });
+
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+const num = (n) => Number(n || 0).toLocaleString('en-US');
+const clock = (s) => {
+  const t = Math.max(0, Math.round(s));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+};
+const rowClass = (i) => (i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '');
+
+/* ── FIRE FIGHT ─────────────────────────────────────────────────────────── */
+
+/* The season ladder writes score_s<N>; mirror the game's clock exactly
+ * (src/config.ts — seasons open Mon 6 Jul 2026, 90 days each, forever). */
+const SEASON_EPOCH = Date.UTC(2026, 6, 6);
+const SEASON_DAYS = 90;
+const seasonIndex = () => Math.max(1, 1 + Math.floor((Date.now() - SEASON_EPOCH) / (SEASON_DAYS * 86400000)));
+
+const FF_BOARDS = [
+  { id: 'ranked',    label: 'RANKED',   kind: 'player', field: () => `score_s${seasonIndex()}`,
+    note: () => `Season ${seasonIndex()} ladder points`, col: 'POINTS' },
+  { id: 'xp',        label: 'XP',       kind: 'player', field: () => 'xp',       note: () => 'Lifetime experience', col: 'XP' },
+  { id: 'training',  label: 'AIM',      kind: 'player', field: () => 'training', note: () => 'Best aim-training score', col: 'SCORE' },
+  { id: 'duo',       label: '2V2',      kind: 'player', field: () => 'duo',      note: () => '2v2 brawl wins', col: 'WINS' },
+  { id: 'ffa',       label: 'FFA',      kind: 'player', field: () => 'ffa',      note: () => 'Free-for-all wins', col: 'WINS' },
+  { id: 'runGauntlet',  label: 'GAUNTLET',  kind: 'run', note: () => 'All five titans, one clock — fastest cumulative fight time' },
+  { id: 'runRaid',      label: 'RAID',      kind: 'run', note: () => 'Squad titan raids — the whole crew ranks on one row' },
+  { id: 'runGoopliath', label: 'GOOPLIATH', kind: 'run', note: () => 'The tide raid — one long fight, one clock' },
+];
+let ffBoard = FF_BOARDS[0];
+const ffCache = new Map();
+
+function drawFfTabs() {
+  const host = document.getElementById('ff-boards');
+  host.innerHTML = FF_BOARDS.map((b) =>
+    `<button class="board-tab${b === ffBoard ? ' on' : ''}" data-id="${b.id}">${b.label}</button>`).join('');
+  host.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => {
+    ffBoard = FF_BOARDS.find((b) => b.id === btn.dataset.id);
+    drawFfTabs(); void loadFf();
+  }));
+}
+
+async function loadFf() {
+  const title = document.getElementById('ff-title');
+  const note = document.getElementById('ff-note');
+  const table = document.getElementById('ff-table');
+  const state = document.getElementById('ff-state');
+  const board = ffBoard;
+  title.textContent = board.label;
+  note.textContent = board.note();
+  table.innerHTML = '';
+  state.classList.remove('hidden');
+  state.textContent = 'PULLING THE BOARD…';
+  try {
+    let rows = ffCache.get(board.id);
+    if (!rows) {
+      if (board.kind === 'player') {
+        const f = board.field();
+        rows = (await runQuery(FF, {
+          from: [{ collectionId: 'players' }],
+          orderBy: [orderBy(f, 'DESCENDING')],
+          limit: 50,
+        })).map((d) => ({ name: d.data.name || '???', value: d.data[f] || 0 }))
+          .filter((r) => r.value > 0);
+      } else {
+        const raw = (await runQuery(FF, {
+          from: [{ collectionId: board.id }],
+          orderBy: [orderBy('seconds', 'ASCENDING')],
+          limit: 50,
+        })).map((d) => ({
+          names: Array.isArray(d.data.names) ? d.data.names.map(String) : [],
+          seconds: d.data.seconds || 0,
+          difficulty: d.data.difficulty || 'normal',
+          hardcore: !!d.data.hardcore,
+        }));
+        /* Same dedup law as the in-game board: easy never ranks, and each
+         * squad keeps one best row per difficulty+hardcore feat. */
+        const seen = new Set();
+        rows = raw.filter((r) => r.difficulty !== 'easy').filter((r) => {
+          const key = `${r.names.map((n) => n.toLowerCase()).sort().join('|')}|${r.difficulty}|${r.hardcore ? 'hc' : ''}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
+      ffCache.set(board.id, rows);
+    }
+    if (ffBoard !== board) return;
+    if (!rows.length) { state.textContent = 'NO ENTRIES YET — THE BOARD IS OPEN.'; return; }
+    state.classList.add('hidden');
+    if (board.kind === 'player') {
+      table.innerHTML = `<tr><th>#</th><th>Boxer</th><th style="text-align:right;padding-right:18px">${board.col}</th></tr>` +
+        rows.map((r, i) =>
+          `<tr class="${rowClass(i)}"><td class="rank">${i + 1}</td><td>${esc(r.name)}</td><td class="val">${num(r.value)}</td></tr>`).join('');
+    } else {
+      table.innerHTML = `<tr><th>#</th><th>Squad</th><th style="text-align:right;padding-right:18px">TIME</th></tr>` +
+        rows.map((r, i) => {
+          const badges =
+            (r.difficulty === 'hard' ? '<span class="badge b-hard">HARD</span>' :
+             r.difficulty === 'blazing' ? '<span class="badge b-blazing">BLAZING</span>' : '') +
+            (r.hardcore ? '<span class="badge b-hc">HC</span>' : '');
+          return `<tr class="${rowClass(i)}"><td class="rank">${i + 1}</td>` +
+            `<td class="names">${r.names.map(esc).join(' · ')}${badges}</td>` +
+            `<td class="val">${clock(r.seconds)}</td></tr>`;
+        }).join('');
+    }
+  } catch (err) {
+    if (ffBoard !== board) return;
+    state.textContent = 'BOARD UNREACHABLE — TRY AGAIN IN A MINUTE.';
+  }
+}
+
+/* ── RAVE RAID ──────────────────────────────────────────────────────────── */
+
+const RR_TRACKS = [
+  ['sakupened', 'SAKUPENED'], ['combat', 'COMBAT'], ['discoball', 'DISCO BALL'],
+  ['loop', 'LOOP'], ['capture', 'CAPTURE'], ['morning', 'MORNING'],
+  ['money', 'MONEY'], ['target', 'TARGET'], ['breakcore', 'BREAKCORE'],
+  ['dynasty', 'DYNASTY'], ['spread', 'SPREAD'], ['unity', 'UNITY'],
+  ['assemble', 'ASSEMBLE'], ['infection', 'INFECTION'], ['giveit', 'GIVE IT TO ME'],
+  ['vone', 'ORIGINAL'], ['fusion', 'FUSION'], ['braineater', 'BRAIN EATER'],
+  ['credits', 'CREDITS'], ['chill', 'CHILL'], ['futurevibe', 'FUTURE VIBE'],
+  ['vfall', 'BREAKCORE V4'], ['defense', 'DEFENSE'], ['awakening', 'AWAKENING'],
+  ['swag', 'SWAG'], ['eclipse', 'ECLIPSE'],
+];
+const RR_DIFFS = ['EASY', 'NORMAL', 'HARD', 'EXPERT'];
+let rrTrack = RR_TRACKS[0][0];
+let rrDiff = 1;
+const rrCache = new Map();
+
+function drawRrPickers() {
+  const sel = document.getElementById('rr-track');
+  sel.innerHTML = RR_TRACKS.map(([id, name]) =>
+    `<option value="${id}"${id === rrTrack ? ' selected' : ''}>${name}</option>`).join('');
+  sel.onchange = () => { rrTrack = sel.value; void loadRr(); };
+  const seg = document.getElementById('rr-diff');
+  seg.innerHTML = RR_DIFFS.map((d, i) =>
+    `<button class="${i === rrDiff ? 'on' : ''}" data-i="${i}">${d}</button>`).join('');
+  seg.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => {
+    rrDiff = Number(btn.dataset.i); drawRrPickers(); void loadRr();
+  }));
+}
+
+async function loadRr() {
+  const title = document.getElementById('rr-title');
+  const table = document.getElementById('rr-table');
+  const state = document.getElementById('rr-state');
+  const track = rrTrack, diff = rrDiff;
+  const name = RR_TRACKS.find(([id]) => id === track)[1];
+  title.textContent = `${name} — ${RR_DIFFS[diff]}`;
+  table.innerHTML = '';
+  state.classList.remove('hidden');
+  state.textContent = 'PULLING THE BOARD…';
+  try {
+    const key = `${track}|${diff}`;
+    let rows = rrCache.get(key);
+    if (!rows) {
+      rows = (await runQuery(RR, {
+        from: [{ collectionId: 'scores' }],
+        where: { compositeFilter: { op: 'AND', filters: [
+          whereEq('track', { stringValue: track }),
+          whereEq('diff', { integerValue: String(diff) }),
+        ] } },
+        orderBy: [orderBy('score', 'DESCENDING')],
+        limit: 100,
+      })).map((d) => ({ name: d.data.name || '???', score: d.data.score || 0, grade: d.data.grade || 'F' }));
+      rrCache.set(key, rows);
+    }
+    if (rrTrack !== track || rrDiff !== diff) return;
+    if (!rows.length) { state.textContent = 'NO RUNS ON THIS CHART YET — SET THE FIRST.'; return; }
+    state.classList.add('hidden');
+    table.innerHTML = `<tr><th>#</th><th>Raider</th><th style="text-align:center">Grade</th><th style="text-align:right;padding-right:18px">SCORE</th></tr>` +
+      rows.map((r, i) =>
+        `<tr class="${rowClass(i)}"><td class="rank">${i + 1}</td><td>${esc(r.name)}</td>` +
+        `<td class="grade g-${esc(r.grade)}">${esc(r.grade)}</td><td class="val">${num(r.score)}</td></tr>`).join('');
+  } catch (err) {
+    if (rrTrack !== track || rrDiff !== diff) return;
+    state.textContent = 'BOARD UNREACHABLE — TRY AGAIN IN A MINUTE.';
+  }
+}
+
+/* ── Faces ──────────────────────────────────────────────────────────────── */
+
+const tabFf = document.getElementById('tab-ff');
+const tabRr = document.getElementById('tab-rr');
+function showFace(rr) {
+  tabFf.classList.toggle('on', !rr);
+  tabRr.classList.toggle('on', rr);
+  document.getElementById('face-ff').classList.toggle('hidden', rr);
+  document.getElementById('face-rr').classList.toggle('hidden', !rr);
+  const mark = document.querySelector('.mark');
+  mark.innerHTML = rr ? 'RAVE <span style="color:#ff3df0">RAID</span>' : 'FIRE <span>FIGHT</span>';
+  try { history.replaceState(null, '', rr ? '#raveraid' : '#firefight'); } catch {}
+}
+tabFf.addEventListener('click', () => { showFace(false); });
+tabRr.addEventListener('click', () => { showFace(true); if (!rrCache.size) void loadRr(); });
+
+drawFfTabs();
+drawRrPickers();
+if (location.hash === '#raveraid') { showFace(true); void loadRr(); }
+void loadFf();
+</script>
+</body>
+</html>

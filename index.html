@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Fire Fight 2</title>
+    <link rel="icon" type="image/png" href="/firefightfavicon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#14151c" />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #14151c;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      #scene-container {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        background:
+          radial-gradient(circle at 72% 28%, rgba(229, 63, 26, 0.24), transparent 34rem),
+          linear-gradient(135deg, #07080b 0%, #13151a 52%, #22100b 100%);
+      }
+      /* The landing is the in-game marquee, verbatim: the FIRE FIGHT sign
+         breathing in its pool of red, on black, one button beneath. */
+      .landing {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: clamp(28px, 6vh, 56px);
+        padding: clamp(16px, 5vw, 48px);
+        box-sizing: border-box;
+        background: #000;
+        transition:
+          opacity 220ms ease,
+          visibility 220ms ease;
+      }
+      .landing__logo-wrap {
+        position: relative;
+        display: grid;
+        place-items: center;
+      }
+      .landing__logo {
+        position: relative;
+        z-index: 1;
+        width: min(82vw, 620px);
+        height: auto;
+      }
+      /* The ACTIVE red glow behind the sign — the same breathing pool the
+         menu banner sits in: a wide haze under a hotter core. */
+      .landing__glow {
+        position: absolute;
+        width: 130%;
+        aspect-ratio: 3 / 2.4;
+        border-radius: 50%;
+        pointer-events: none;
+        background:
+          radial-gradient(circle, rgba(255, 42, 16, 0.5) 0%, rgba(255, 42, 16, 0.22) 34%, rgba(255, 42, 16, 0) 62%),
+          radial-gradient(circle, rgba(196, 18, 8, 0.42) 0%, rgba(196, 18, 8, 0.18) 48%, rgba(196, 18, 8, 0) 72%);
+        filter: blur(4px);
+        animation: landing-breathe 2.6s ease-in-out infinite;
+      }
+      @keyframes landing-breathe {
+        0%,
+        100% {
+          opacity: 0.55;
+          transform: scale(0.94);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.08);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .landing__glow {
+          animation: none;
+        }
+      }
+      /* The button is the game's own furniture: a steel plate with an ember
+         neon edge, breathing in the same pool as the sign. */
+      .enter-vr {
+        width: min(100%, 300px);
+        min-height: 70px;
+        border: 2px solid #ff7a18;
+        border-radius: 10px;
+        box-sizing: border-box;
+        padding: 0 34px;
+        color: #ffc07a;
+        background:
+          linear-gradient(180deg, rgba(255, 122, 24, 0.16) 0%, rgba(255, 122, 24, 0.04) 42%, rgba(255, 122, 24, 0) 100%),
+          linear-gradient(180deg, #1b1d24 0%, #101116 100%);
+        box-shadow:
+          0 0 16px rgba(255, 90, 20, 0.4),
+          inset 0 0 22px rgba(255, 90, 20, 0.14);
+        cursor: pointer;
+        font: 900 1.12rem/1 system-ui, -apple-system, sans-serif;
+        letter-spacing: 0.24em;
+        text-indent: 0.24em; /* recentre — tracking pads the right edge only */
+        text-transform: uppercase;
+        text-shadow: 0 0 14px rgba(255, 122, 24, 0.85);
+        animation: enter-vr-breathe 2.6s ease-in-out infinite;
+        transition:
+          color 160ms ease,
+          border-color 160ms ease,
+          box-shadow 160ms ease,
+          transform 160ms ease;
+      }
+      @keyframes enter-vr-breathe {
+        0%,
+        100% {
+          box-shadow:
+            0 0 12px rgba(255, 90, 20, 0.32),
+            inset 0 0 22px rgba(255, 90, 20, 0.14);
+        }
+        50% {
+          box-shadow:
+            0 0 24px rgba(255, 90, 20, 0.55),
+            inset 0 0 26px rgba(255, 90, 20, 0.18);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .enter-vr {
+          animation: none;
+        }
+      }
+      .enter-vr:hover,
+      .enter-vr:focus-visible {
+        color: #ffe3c2;
+        border-color: #ffb35c;
+        transform: translateY(-1px);
+        animation: none;
+        box-shadow:
+          0 0 30px rgba(255, 110, 30, 0.7),
+          inset 0 0 26px rgba(255, 110, 30, 0.2);
+      }
+      .enter-vr:focus-visible {
+        outline: 3px solid rgba(255, 255, 255, 0.78);
+        outline-offset: 4px;
+      }
+      .enter-vr:disabled {
+        cursor: wait;
+        opacity: 0.6;
+        transform: none;
+        animation: none;
+        box-shadow:
+          0 0 8px rgba(255, 90, 20, 0.2),
+          inset 0 0 18px rgba(255, 90, 20, 0.1);
+      }
+      /* Bottom-left community corner: a quiet label and the Discord mark. */
+      .discord-corner {
+        position: absolute;
+        left: clamp(16px, 3vw, 32px);
+        bottom: clamp(16px, 3vh, 28px);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+      }
+      .discord-corner span {
+        color: rgba(232, 236, 242, 0.75);
+        font: 700 0.92rem/1 system-ui, -apple-system, sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .discord-corner svg {
+        width: 34px;
+        height: 34px;
+        fill: #5865f2;
+        transition: fill 150ms ease, transform 150ms ease;
+      }
+      .discord-corner:hover svg,
+      .discord-corner:focus-visible svg {
+        fill: #7983f5;
+        transform: translateY(-1px);
+      }
+      .discord-corner:hover span,
+      .discord-corner:focus-visible span {
+        color: rgba(232, 236, 242, 0.95);
+      }
+      body.app-entered .landing {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      @media (max-width: 700px) {
+        .landing__logo {
+          width: min(92vw, 620px);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="scene-container"></div>
+    <section class="landing" id="landing" aria-label="Fire Fight">
+      <div class="landing__logo-wrap">
+        <div class="landing__glow" aria-hidden="true"></div>
+        <img class="landing__logo" src="/signs/fire-fight.png" alt="FIRE FIGHT" />
+      </div>
+      <button class="enter-vr" id="enter-vr" type="button">Enter VR</button>
+      <a class="discord-corner" href="https://discord.gg/gJY3XhejZf" target="_blank" rel="noopener" aria-label="Join the Discord">
+        <span>Join the Discord</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" /></svg>
+      </a>
+    </section>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
