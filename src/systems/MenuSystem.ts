@@ -56,6 +56,7 @@ import {
   type PanelId,
 } from '../menu/menu.js';
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
+import { installWrap, type Wrap } from '../menu/wrap.js';
 import {
   avatarOwned,
   clearShopPreview,
@@ -142,6 +143,7 @@ interface Pointer {
 
 export class MenuSystem extends createSystem({}) {
   private menu!: Menu;
+  private wrap!: Wrap;
   /** Last lobby-ness handed to the music (null = never) — see applyState(). */
   private musicInLobby: boolean | null = null;
   private ray = new Raycaster();
@@ -236,6 +238,10 @@ export class MenuSystem extends createSystem({}) {
 
   init(): void {
     this.menu = createMenu(this.scene);
+    // THE WRAP: the kit panels replace the legacy train/duel/info plates in
+    // place (same ids, same slots) — see menu/wrap.ts. The second argument
+    // lets the headless dev hook (__ff2.wrap.act) fire real actions.
+    this.wrap = installWrap(this.menu, (a) => this.run(a));
     this.panel = createActionPanel(this.scene);
     this.keyboard = createNameKeyboard(this.scene);
     this.pointers.left = this.makePointer();
@@ -249,6 +255,9 @@ export class MenuSystem extends createSystem({}) {
     if (app.state !== this.lastState) this.applyState();
     this.applyOwnSkins();
     this.pulseBannerGlow();
+    // Advance the wrap's kit transitions (hover eases, press flashes, the
+    // halo breath) every frame — a no-op while nothing moves.
+    this.wrap.tick(delta);
 
     // The BOOT INTRO owns the view: the lobby is live behind the black shade,
     // so without this the pointers sweep panels nobody can see — chirping the
@@ -425,6 +434,8 @@ export class MenuSystem extends createSystem({}) {
           if (panel.click(hit.uv.x, hit.uv.y)) clicked = true;
         } else if (action) {
           this.run(action);
+          // Wrap panels flash the pressed button (kit press feedback).
+          (panel as { flash?: (id: string) => void }).flash?.(action);
         }
       }
     }
@@ -497,12 +508,11 @@ export class MenuSystem extends createSystem({}) {
       this.menu.panels.find((p) => p.id === 'coins')?.redraw(null);
     }
 
-    // Pre-tutorial, the TUTORIAL plate breathes — repaint just the ARCADE
-    // panel each frame so the pulse animates. Ends for good once completed.
-    if (!app.tutorialDone) {
-      const train = this.menu.panels.find((p) => p.id === 'train');
-      if (train?.mesh.visible) train.redraw(this.hovered === 'train' ? this.hoveredAction : null);
-    }
+    // (The old pre-tutorial "TUTORIAL plate breathes" per-frame repaint is
+    // gone: on the wrap the sealed lobby's call to action is the kit's
+    // primary CTA — its glow needs no canvas re-upload, and a full-frame
+    // 1024² repaint every frame is exactly what the kit's repaint
+    // discipline exists to avoid.)
   }
 
   /** Repaint one panel by id, preserving its live hover highlight. */

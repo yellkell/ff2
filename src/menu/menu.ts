@@ -3861,15 +3861,15 @@ export function createMenu(scene: Scene): Menu {
   balls.mesh.rotation.y = -0.6;
   balls.mesh.visible = false;
   // The paper button sits just above the right (info) panel, sharing its tilt.
-  gazetteBtn.mesh.position.set(0.92, 1.86, -1.05);
+  gazetteBtn.mesh.position.set(0.92, 2.0, -1.05);
   gazetteBtn.mesh.rotation.y = -0.48;
   // The settings gear mirrors the coin readout to the LEFT of the paper button,
   // along the same inward-tilted arc (left → a touch further away).
-  gearBtn.mesh.position.set(0.66, 1.86, -1.16);
+  gearBtn.mesh.position.set(0.66, 2.0, -1.16);
   gearBtn.mesh.rotation.y = -0.48;
   // The coin readout sits just to the RIGHT of the paper button, same height +
   // tilt — symbol and balance together, as asked.
-  coinHud.mesh.position.set(1.18, 1.86, -0.94);
+  coinHud.mesh.position.set(1.18, 2.0, -0.94);
   coinHud.mesh.rotation.y = -0.48;
   // The platform shop opens where the customise plate sits (it replaces it).
   shop.mesh.position.set(0.5, 1.5, -1.1);

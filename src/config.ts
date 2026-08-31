@@ -13,7 +13,7 @@
 
 import type { Vector2Tuple } from 'three';
 
-export const GAME_TITLE = 'FIRE FIGHT';
+export const GAME_TITLE = 'FIRE FIGHT 2';
 
 /**
  * Progression — the Bronze→Overlord ladder. XP is cumulative across every

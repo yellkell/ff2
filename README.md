@@ -20,6 +20,11 @@ carried over verbatim: everything in it still applies to this code.
 
 - `public/stats.html` — the web leaderboard: FIRE FIGHT boards first,
   RAVE RAID as a separate-but-equal tab. Standalone, read-only, no SDK.
+- **THE WRAP** — the wrap-around three-panel lobby (DESIGN.md §2, phase 2),
+  live: RAVE RAID's panel kit ported to `src/ui/kit/` in FF2's amber, three
+  kit panels on an arc replacing the legacy BATTLE / ARCADE / house plates
+  (`src/menu/wrap.ts`), every existing flow intact. Headless probe:
+  `npm run dev` then `npm run check:wrap` (add `--shots` for panel PNGs).
 
 ## Run it
 

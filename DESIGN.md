@@ -402,6 +402,12 @@ Each phase is shippable; nothing waits on everything.
 2. **The wrap** — port `panel.ts`/`pointer.ts`/`safety.ts` from `dance`,
    build the ArcRig, move the first screens (BATTLE + ARCADE) onto the
    three-panel wrap. Old menu retires screen by screen.
+   *(v1 shipped: the kit lives at `src/ui/kit/`, and `src/menu/wrap.ts`
+   stands three kit panels on the arc as drop-in `MenuPanel`s — BATTLE
+   with all its faces, ARCADE, and the house panel. Still legacy: the
+   modals — campaign line-up, arcade lobby, locker, shop, settings,
+   gazette — the rear leaderboard, the name keyboard, and the pointer
+   visuals; `pointer.ts`/`safety.ts` port when those screens move.)*
 3. **The mannequin** — new procedural blank over the existing rig +
    hitboxes; FF1 skins retired behind it; attachments shop v1.
 4. **The paint** — stripe data model, per-part bake, locker paint mode,
