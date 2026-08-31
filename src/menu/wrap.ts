@@ -97,31 +97,33 @@ function note(text: string, y: number, W: number): (g: CanvasRenderingContext2D)
 
 /* ── CENTER — ARCADE ──────────────────────────────────────────────────── */
 
-const CX = 132;
-const CW = 760;
-
 function arcadeFace(): Face {
   const lock = sealed();
+  // Two columns on the wide slab: the four modes as a 2x2 of big plates,
+  // the breakers riding a slimmer row beneath.
+  const colW = 660;
+  const c1 = 96;
+  const c2 = 96 + colW + 24;
   const buttons: PanelButton[] = [
     {
       id: 'start-tutorial',
       label: 'TUTORIAL',
       sub: 'the guided basics',
-      x: CX, y: 150, w: CW, h: 110,
+      x: c1, y: 160, w: colW, h: 200,
       primary: lock, // pre-tutorial it IS the call to action
     },
     {
       id: 'open-campaign',
       label: 'CAMPAIGN',
       sub: lock ? SEAL_SUB : 'five titans, left to right',
-      x: CX, y: 286, w: CW, h: 110,
+      x: c2, y: 160, w: colW, h: 200,
       disabled: lock,
     },
     {
       id: 'open-raid',
       label: 'RAID',
       sub: lock ? SEAL_SUB : app.raidsOpen > 0 ? `${app.raidsOpen} squad${app.raidsOpen === 1 ? '' : 's'} forming now` : 'four boxers, one gauntlet',
-      x: CX, y: 422, w: CW, h: 110,
+      x: c1, y: 392, w: colW, h: 200,
       disabled: lock,
       tone: app.raidsOpen > 0 ? KIT.positive : undefined,
     },
@@ -129,14 +131,14 @@ function arcadeFace(): Face {
       id: 'start-training',
       label: 'AIM TRAINING',
       sub: lock ? SEAL_SUB : 'the heart of the game',
-      x: CX, y: 558, w: CW, h: 110,
+      x: c2, y: 392, w: colW, h: 200,
       disabled: lock,
     },
     {
       id: 'toggle-shootback',
       label: 'SHOOT BACK',
       sub: 'targets return fire',
-      x: CX, y: 726, w: 368, h: 92,
+      x: c1, y: 656, w: colW, h: 104,
       small: true,
       selected: app.shootBack,
       disabled: lock,
@@ -145,7 +147,7 @@ function arcadeFace(): Face {
       id: 'toggle-onlybots',
       label: 'ONLY BOTS',
       sub: 'never queue online',
-      x: CX + 392, y: 726, w: 368, h: 92,
+      x: c2, y: 656, w: colW, h: 104,
       small: true,
       selected: app.onlyBots,
       disabled: lock,
@@ -153,7 +155,7 @@ function arcadeFace(): Face {
   ];
   return {
     title: 'ARCADE',
-    body: note(lock ? 'the tutorial unseals the whole lobby' : 'every finished run pays the same flat coins', 950, 1024),
+    body: note(lock ? 'the tutorial unseals the whole lobby' : 'every finished run pays the same flat coins', 880, 1536),
     buttons,
   };
 }
@@ -477,18 +479,18 @@ declare global {
  * `createMenu`.
  */
 export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wrap {
-  const center = new WrapPanel('train', 0.94, 0.94, 1024, 1024, arcadeFace);
+  const center = new WrapPanel('train', 1.42, 0.95, 1536, 1024, arcadeFace);
   const left = new WrapPanel('duel', 0.74, 0.91, LW, 1024, battleFace);
   const right = new WrapPanel('info', 0.74, 0.91, LW, 1024, houseFace);
 
   // The arc: centre dead ahead, wings pulled in close and yawed hard so the
   // three read as one wrapped console, not a row of signs.
   const y = 1.45;
-  center.mesh.position.set(0, y, -1.28);
-  left.mesh.position.set(-0.92, y, -0.94);
-  left.mesh.rotation.y = 0.62;
-  right.mesh.position.set(0.92, y, -0.94);
-  right.mesh.rotation.y = -0.62;
+  center.mesh.position.set(0, y, -1.26);
+  left.mesh.position.set(-1.02, y, -1.02);
+  left.mesh.rotation.y = 0.58;
+  right.mesh.position.set(1.02, y, -1.02);
+  right.mesh.rotation.y = -0.58;
 
   const panels = [center, left, right];
   for (const p of panels) {
