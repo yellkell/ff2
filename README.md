@@ -36,6 +36,18 @@ carried over verbatim: everything in it still applies to this code.
   hitboxes, immune to every recolour; the rest of your colour is paint.
   THE PODIUM shows your dressed blank beside the YOU wing.
   Preview: `/skin-preview.html?skins=blank,onyx`.
+- **THE MOVE GRAMMAR** (DESIGN.md §4, first pass) — the five titans
+  learned RAVE RAID's dance: gates, crossfire rails + THE TRAP, THE X,
+  the donut's one-two, marching waves that always turn, and GOLIATH's
+  ROUTINE (taught corners, then falling blocks). Ported with the laws
+  that make it readable — never the same move twice, body-verbs damped,
+  THE FLOOR MANAGER — fully seeded for the raid wire, act-gated so easy
+  bouts stay honest. Probe: `npm run check:grammar` (add `--shots`).
+- **THE STAGE DECK** — the diamond-plate pedestals retired: fighting
+  platforms are now the club stage's realistic waxed-oak planking (boards
+  running at your foe, brass corner screws, the team-neon tube as edge
+  lighting). Skins stain the boards instead of tinting steel.
+  Preview: `/deck-preview.html?shape=gate|donut|x|routine`.
 - **THE PAINT** ([`docs/paint.md`](docs/paint.md), P1–P4 shipped) — buy
   stripes and splotches by colour, place them minutely on your own body in
   THE PAINT BAY (YOU wing), and the room sees the result: your look packs

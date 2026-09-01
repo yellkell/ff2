@@ -77,12 +77,14 @@ export interface PlatformSkin {
   earnedBy?: string;
 }
 
-/** The makePlatform() slab base tint — restored when a non-premium skin is worn. */
-export const DEFAULT_SLAB_TINT = 0x9aa0ab;
-/** The makePlatform() slab roughness — restored when a skin sets none. */
-export const DEFAULT_SLAB_ROUGH = 0.28;
-/** The makePlatform() slab metalness — restored when a skin sets none. */
-export const DEFAULT_SLAB_METAL = 0.92;
+/** The makePlatform() slab base tint — restored when a non-premium skin is
+ *  worn. Neutral white: THE STAGE DECK is waxed oak now (the map carries the
+ *  wood's own colour), and a premium skin's slab tint STAINS the boards. */
+export const DEFAULT_SLAB_TINT = 0xffce9a;
+/** The makePlatform() slab roughness — waxed boards, not varnish. */
+export const DEFAULT_SLAB_ROUGH = 0.55;
+/** The makePlatform() slab metalness — wood, not steel. */
+export const DEFAULT_SLAB_METAL = 0.05;
 
 /** Platform skins owned from the start (no purchase needed). */
 export const FREE_PLATFORMS = ['azure', 'inferno', 'ember'];
@@ -270,10 +272,11 @@ export function applyPlatformSkin(root: Object3D, skin: PlatformSkin): void {
     if (!m || Array.isArray(m) || !m.userData?.role) return;
     switch (m.userData.role) {
       case 'slab':
-        // Deck glows faintly in the neon by default; slabEmissive overrides
-        // it (VOLT wants a black deck under its yellow rim, not olive).
+        // slabEmissive overrides the neon (VOLT wants a black deck under
+        // its yellow rim, not olive). The default glow dropped with the
+        // wood decks: boards take lamp light, they don't emit team colour.
         m.emissive.setHex(skin.slabEmissive ?? skin.neon);
-        m.emissiveIntensity = skin.slabGlow ?? 0.08;
+        m.emissiveIntensity = skin.slabGlow ?? 0.02;
         // Premium pads repaint the steel; plain recolours restore the default.
         m.color.setHex(skin.slab ?? DEFAULT_SLAB_TINT);
         m.roughness = skin.slabRough ?? DEFAULT_SLAB_ROUGH;

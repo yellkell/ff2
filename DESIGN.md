@@ -225,16 +225,33 @@ damping repeated body-verbs, **THE FLOOR MANAGER** (`parkOf`/`evictsPark`:
 a correct dodge is never punished by where it parks you), windups sacred
 (escalation compresses gaps, never the read), landings on downbeats.
 
-New bosses (a fresh line-up — the FF1 five retire as legends; names/looks
-to be workshopped in their own session): each new titan owns a *subset* of
-the grammar as its personality, the way GOLIATH owns the nova. One late
-titan fights **on the beat** outright — the campaign's nod to the rave —
-its whole kill-zone choreography bar-quantized to the battle track.
+**No second line-up.** (Decision revised in build: a fresh bill of bosses
+wearing borrowed chassis was scraps-and-new-names — not worth a campaign.)
+Instead the campaign ITERATES: **the five titans learned to dance.** Each
+keeps its soul and gains the grammar subset that extends it — RUSTHOOK the
+scrapyard **gate** (+ slotted lanes), PISTONKAISER the **wave** (its
+drumline, marched deck-wide) + the surge, VULTURE the **crossfire** (rails,
+THE TRAP, the lattice) and **THE X**, JUGGERNAUT closing walls (**row
+gates + the donut's rim**), and GOLIATH — the king teaches — **THE
+ROUTINE**, the wave as procession, the donut, and once in a blazing night
+the **duckdonut**. Vocabulary is act-gated (`GRAMMAR_ACT_MIN`): an EASY
+bout stays the fight it always was; the hard tiers meet the whole grammar.
 `volley` remains the one blockable attack (the parry law is FF1's soul and
 stays); everything else is read-and-move.
+**SHIPPED (first pass)**: `campaign/grammar.ts` (the ported shapes + laws:
+never-twice, VERB damping, THE FLOOR MANAGER's parkOf/evictsPark, all
+seeded — one 32-bit number on the raid wire rebuilds the identical move on
+every client), the telegraph kit (gate/donut/X/rail/lane + THE ROUTINE's
+marks, quarter lines and falling blocks, octagon-masked), CampaignSystem's
+grammar path (windows so a cascade's later reads open as earlier steps
+fire; per-shape strikes; head-judged routine commitment), and the per-boss
+subsets above. Headless: `npm run check:grammar`. Boss-side ANIMATION
+language for the new moves (bespoke gestures per shape) is the next pass.
 
-Raid escalation carries over unchanged (solo-target → two marks → whole
-squad, DECREE-style shared bearings, the resurrection beat for the finale).
+Raid escalation carries over unchanged for the classic kinds (solo-target
+→ two marks → whole squad, DECREE-style shared bearings, the resurrection
+beat for the finale); grammar moves are squad-wide by RAVE RAID's own law —
+one chart, every deck.
 
 ---
 

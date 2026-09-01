@@ -58,12 +58,12 @@ import { MAX_OPPONENTS } from '../combat/opponentBus.js';
 import { localLayout } from '../combat/layout.js';
 import { app } from '../menu/appState.js';
 import { hazardTexture } from '../materials/hazard.js';
-import { diamondPlateTextures, type DiamondPlateMaps } from '../materials/diamondPlate.js';
+import { oakTexture } from '../club/materials.js';
 import { octagonSlab } from './octagon.js';
 import { createTitleBanner } from './banner.js';
 
-/** Shared diamond-plate maps, built lazily (both pedestals reuse them). */
-let plateMaps: DiamondPlateMaps | undefined;
+/** Shared stage-oak deck map, built lazily (every pedestal reuses it). */
+let deckMap: CanvasTexture | undefined;
 
 /**
  * Set dressing that is IDENTICAL on every pedestal — the hazard stripes and
@@ -273,12 +273,13 @@ export function setPlatformHazard(pad: Object3D, on: boolean): void {
   if (band) band.visible = on;
 }
 
-/** Bolted corner studs at each rim vertex — armour the silhouette. */
+/** Corner screws at each rim vertex — brass now, like the club stage's
+ *  fittings, holding the boards down where the steel studs used to be. */
 function makeCornerBolts(): Group {
   const bolts = new Group();
   bolts.name = 'corner-bolts';
   boltGeo ??= new CylinderGeometry(0.028, 0.035, 0.035, 8);
-  boltMat ??= new MeshStandardMaterial({ color: 0x202329, metalness: 0.96, roughness: 0.22 });
+  boltMat ??= new MeshStandardMaterial({ color: 0xc9a86a, metalness: 0.92, roughness: 0.34 });
   for (const [x, z] of OCTAGON_VERTICES) {
     const bolt = new Mesh(boltGeo, boltMat);
     bolt.position.set(x * 0.97, 0.018, z * 0.97);
@@ -288,27 +289,46 @@ function makeCornerBolts(): Group {
 }
 
 /**
- * One boxer's pedestal: a diamond-plate steel slab sunk so its top face sits
- * at floor level (your real floor IS the platform top), hazard banding and
- * corner bolts around the rim, and a thin team-colour glow line on the edge.
+ * One boxer's pedestal — THE STAGE DECK. FF1's diamond-plate steel retired
+ * with the sequel: the boards are now RAVE RAID's waxed oak (the club
+ * stage's own planking, src/club/materials.ts), laid running toward your
+ * foe, with brass corner screws and the team-neon glass tube ringing the
+ * edge like stage lighting. Sunk so the top face sits at floor level (your
+ * real floor IS the platform top). Skins still stain it: the 'slab' role
+ * tints the boards, so GOLD RUSH is gilded planking and VOLT scorched black.
  */
 export function makePlatform(color: number, groupScale = 1): Group {
   const group = new Group();
 
-  plateMaps ??= diamondPlateTextures();
-  // ExtrudeGeometry UVs are in shape units (metres): repeat = tiles per metre.
-  plateMaps.map.repeat.set(5, 5);
-  plateMaps.bumpMap.repeat.set(5, 5);
+  if (!deckMap) {
+    // ExtrudeGeometry UVs are in shape units (metres): repeat = tiles per
+    // metre, and a tile carries eight boards — ~0.12 m planks at 1.05/m.
+    // Rotated a quarter so the boards run FRONT-TO-BACK, at your foe.
+    deckMap = oakTexture([1.5, 1.05]);
+    deckMap.center.set(0.5, 0.5);
+    deckMap.rotation = Math.PI / 2;
+  }
   const slabMat = new MeshStandardMaterial({
-    color: 0x9aa0ab, // tint over the baked dark-steel tones in the map
-    map: plateMaps.map,
-    bumpMap: plateMaps.bumpMap,
-    bumpScale: 1.1,
+    // A warm lamp-light tint over the map: the desert fights at dusk, and
+    // under that cool sky a neutral white left the boards reading slate —
+    // this puts the club stage's warmth back into the wood.
+    color: 0xffce9a,
+    map: deckMap,
+    // The colour map doubles as a bump: plank seams and grain read as
+    // grooves, which is most of what "real boards" costs.
+    bumpMap: deckMap,
+    bumpScale: 0.5,
+    // Steel used to wear a team-neon underglow; boards don't glow. A trace
+    // remains so premium skins' slabGlow still works through the same knob.
     emissive: color,
-    emissiveIntensity: 0.08,
-    metalness: 0.92, // glistens off scene.environment (RoomEnvironment)
-    roughness: 0.28,
+    emissiveIntensity: 0.02,
+    metalness: 0.05,
+    roughness: 0.55, // waxed, not varnished — the club stage's finish
   });
+  // The deck's top face stares straight at the dusk sky, and the PMREM
+  // environment (tuned for glistening steel) floods it blue-grey — wood
+  // takes its light from the arena's warm lamps instead.
+  slabMat.envMapIntensity = 0.25;
   slabMat.userData.role = 'slab';
   const slab = new Mesh(octagonSlab(OCTAGON_VERTICES, PLATFORM.thickness), slabMat);
   // Top face at the floor line, body glowing faintly below. NB the extrude

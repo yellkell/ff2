@@ -104,12 +104,32 @@ export type PeerMessage =
    */
   | {
       k: 'ratk';
-      kind: 'slam' | 'sweep' | 'beam' | 'volley' | 'nova' | 'decree' | 'seesaw' | 'surge';
+      kind:
+        | 'slam'
+        | 'sweep'
+        | 'beam'
+        | 'volley'
+        | 'nova'
+        | 'decree'
+        | 'seesaw'
+        | 'surge'
+        // THE ENCORE's grammar moves (campaign/grammar.ts): the whole move
+        // rebuilds deterministically from `g`, so the wire stays one number.
+        | 'lanes'
+        | 'cross'
+        | 'gate'
+        | 'donut'
+        | 'routine'
+        | 'wave'
+        | 'duckdonut';
       seats: number[];
       x?: number[];
       z?: number[];
       y?: number[];
       a?: number[];
+      /** Grammar seed — every client replays the identical seeded build.
+       *  For grammar kinds, x[0]/z[0] carry THE FLOOR MANAGER's park. */
+      g?: number;
     }
   /** RAID (client → host): my ball landed on the titan's weak point `spot`
    *  for `pts` damage. The host validates the spot is LIVE and applies it. */

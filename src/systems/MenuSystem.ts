@@ -60,6 +60,7 @@ import {
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, type Wrap } from '../menu/wrap.js';
 import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
+import { installGrammarDevHook } from '../campaign/grammar.js';
 import { KitMenuPanel } from '../menu/wrap.js';
 import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey } from '../menu/paintbay.js';
 import {
@@ -268,6 +269,7 @@ export class MenuSystem extends createSystem({}) {
     this.menu.panels.push(this.bayPanel);
     this.menu.group.add(this.bayPanel.mesh);
     installPaintDevHook(); // __ff2.paint — THE PAINT's dev/probe verbs
+    installGrammarDevHook(); // __ff2.grammar — THE ENCORE's pure move grammar
     // Probe-only: drive the bay panel's own click path (wallet included).
     (window.__ff2 as unknown as Record<string, unknown>).bayClick = (id: string): void => {
       if (!bayClick(id)) this.run(id as MenuAction);

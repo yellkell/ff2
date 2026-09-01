@@ -511,6 +511,73 @@ export const CAMPAIGN = {
 };
 
 /**
+ * THE MOVE GRAMMAR — tuning for the ENCORE campaign's RAVE RAID vocabulary
+ * (campaign/grammar.ts; DESIGN.md §4). The numbers are RAVE RAID's own
+ * (dance/src/config.ts CHOREO), proven on the same octagon deck; distances
+ * in metres, cascades in GRAMMAR BEATS (each Encore titan carries its own
+ * `beat` seconds — its pulse). Chance tables index by escalation act 0..4.
+ */
+export const GRAMMAR = {
+  /** Laser lanes: strip half-width, the three SLOTS a single lands on, the
+   *  SPLIT pair's offset, the TWIN's inner edge, THE X's thin arms. */
+  laneHalfWidth: 0.24,
+  laneSlots: [-0.42, 0, 0.42],
+  laneSplitX: 0.5,
+  laneTwinInner: 0.12,
+  laneSplitChance: [0.4, 0.36, 0.42, 0.36, 0.34],
+  laneXChance: [0, 0, 0.24, 0.28, 0.32],
+  laneXHalfW: 0.14,
+  /** THE BOUNCE: whether a twin answers, whether it comes back, the beat
+   *  gap between volleys, the chain cap, and the act from which the full
+   *  three-volley rally is a promise rather than a coin. */
+  twinReturnChance: [0, 0.45, 0.85, 0.9, 0.94],
+  twinBounceChance: [0, 0.45, 0.85, 0.95, 0.98],
+  twinReturnBeats: 4,
+  twinChainMax: 3,
+  twinAlwaysFromAct: 3,
+  /** THE WAVE: the four stops per axis, march step per act, the breather at
+   *  the wheel, and blazing's third-leg coin. */
+  waveLaneX: [-0.645, -0.215, 0.215, 0.645],
+  waveRailZ: [-0.56, -0.19, 0.19, 0.56],
+  waveStepBeats: [2, 2, 1, 1, 1],
+  waveTurnExtraBeats: 1,
+  waveThirdChance: 0.3,
+  /** THE ROUTINE: corners to hold per act, beats corner-to-corner, how many
+   *  beats the blocks visibly fall, commitment margin past the quarter
+   *  lines, and the per-fight swept-routine coin. */
+  routineSteps: [2, 2, 3, 4, 4],
+  routineStepBeats: 3,
+  routineDropBeats: 2,
+  routineMargin: 0.08,
+  routineSweepChance: 0.12,
+  /** THE DONUT: safe-disc radii (blazing holds the tight disc all night),
+   *  the one-two's opening-laser odds and follow gap. */
+  donutInnerR: 0.42,
+  donutInnerRLate: 0.34,
+  donutInnerRExpert: 0.3,
+  donutRadius: 1.15,
+  donutFollowBeats: 4,
+  donutOpenChance: 0.7,
+  /** CROSSFIRE rails: strip half-depth, single-rail offsets (front half
+   *  only), THE TRAP's odds + symmetric offset, the vertical twin's odds +
+   *  inner edge, and the act the lattice lane joins from. */
+  railHalfDepth: 0.2,
+  railOffsetMin: 0.12,
+  railOffsetMax: 0.42,
+  railTrapChance: [0, 0, 0.35, 0.5, 0.5],
+  railTrapZ: 0.44,
+  railTwinChance: [0, 0, 0.4, 0.72, 0.8],
+  railTwinInner: 0.11,
+  latticeFromAct: 2,
+  /** The gate: safe-band half-widths by act and the offset floor (the gap
+   *  never offers the middle of the deck). */
+  gateHalfW: 0.3,
+  gateHalfWLate: 0.22,
+  gateHalfWExpert: 0.2,
+  gateOffsetMin: 0.22,
+};
+
+/**
  * RAID — the 2–5 player group campaign. Same five titans as the gauntlet but
  * built for a SQUAD: bigger, far tougher, attacks split across up to five
  * platforms, and GOLIATH does not stay down. The host runs the boss (attack

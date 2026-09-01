@@ -29,6 +29,7 @@ import {
   BoxGeometry,
   Color,
   CylinderGeometry,
+  DoubleSide,
   Group,
   Mesh,
   MeshBasicMaterial,
@@ -37,6 +38,19 @@ import {
   PointLight,
 } from 'three';
 import { BOSSES, GOOPLIATH_DEF, buildTitan, goopliathBoss, raidBoss, runLineup, type AttackKind, type BossDef, type RunStage, type TitanRig } from '../campaign/bosses.js';
+import {
+  GRAMMAR_ACT_MIN,
+  GRAMMAR_KINDS,
+  buildGrammarMove,
+  evictsPark,
+  grammarZoneHit,
+  mulberry32,
+  parkOf,
+  pickWeighted,
+  type GrammarKind,
+  type Park,
+} from '../campaign/grammar.js';
+import { RoutineBlockfall } from '../campaign/blockfall.js';
 import { playBossVoice, preloadBossVoice } from '../audio/bossVoice.js';
 import { GelCreature } from '../goopliath/GelCreature.js';
 import { GooFx } from '../goopliath/splats.js';
@@ -53,9 +67,16 @@ import {
 import {
   beamTelegraph,
   circleTelegraph,
+  donutTelegraph,
+  gateTelegraph,
   halfTelegraph,
+  laneTelegraph,
   novaTelegraph,
+  quarterTelegraph,
+  railTelegraph,
+  routineMarksTelegraph,
   sweepTelegraph,
+  xTelegraph,
   type Telegraph,
 } from '../campaign/telegraphs.js';
 import { BallState, Fireball } from '../components/Fireball.js';
@@ -96,6 +117,7 @@ import {
   FIREBALL,
   GOOPLIATH,
   type Difficulty,
+  GRAMMAR,
   MODE_LAYOUT,
   OCTAGON_HALF_DEPTH,
   OCTAGON_HALF_WIDTH,
@@ -122,7 +144,15 @@ type Zone =
   /** The seesaw / surge flood: the platform half on `side`'s sign of the
    *  `axis` (0 = local x, left/right seesaw; 1 = local z, front/back surge)
    *  burns — be across the centreline when it lands. */
-  | { kind: 'half'; side: -1 | 1; axis: 0 | 1 };
+  | { kind: 'half'; side: -1 | 1; axis: 0 | 1 }
+  /** THE ENCORE's grammar zones (campaign/grammar.ts): lanes, rails, the
+   *  gate, the donut's ring and the routine's quarters — all target-local.
+   *  (The grammar's height-less sweep maps onto the classic sweep above.) */
+  | { kind: 'lane'; x: number; halfW: number; yaw?: number }
+  | { kind: 'rail'; z: number; halfD: number; from: 1 | -1 }
+  | { kind: 'gate'; at: number; half: number; axis: 0 | 1 }
+  | { kind: 'ring'; innerR: number }
+  | { kind: 'quad'; corner: number; step: number; routine: readonly number[] };
 
 /** A weak point a pattern can light. The crown circuit uses all five. */
 type WeakSpot = 'head' | 'core' | 'low' | 'shoulderL' | 'shoulderR';
@@ -136,7 +166,7 @@ const CROWN_RING: WeakSpot[] = ['head', 'shoulderL', 'core', 'shoulderR', 'low']
 const REVERSE_RING: WeakSpot[] = [...CROWN_RING].reverse();
 
 interface ActiveAttack {
-  kind: AttackKind;
+  kind: AttackKind | GrammarKind;
   zones: Zone[];
   telegraphs: (Telegraph | null)[];
   /** Seconds after the charge completes at which each zone detonates. */
@@ -162,6 +192,16 @@ interface ActiveAttack {
   seats: number[];
   /** Which target seat each zone belongs to (parallel with zones). */
   zoneSeats: number[];
+  /** Seconds before a zone's due time its telegraph shows and fills. The
+   *  classic kinds use the whole run-up (old behaviour); a grammar cascade
+   *  opens each step's read one charge ahead — the return's telegraph opens
+   *  as the first pair fires, never sooner (RAVE RAID's law). */
+  windows: number[];
+  /** THE ROUTINE's falling blocks, one per quad zone (null elsewhere). */
+  blockfalls: (RoutineBlockfall | null)[];
+  /** Zone-less furniture updated with the overall charge and disposed with
+   *  the attack: the routine's quarter lines + fading step marks. */
+  dressing: Telegraph[];
 }
 
 /** One volley fireball in flight — dodge it, or put a fist in its path. */
@@ -249,7 +289,12 @@ export class CampaignSystem extends createSystem({
 
   private attack: ActiveAttack | null = null;
   private cooldown = 2.5;
-  private lastKind: AttackKind | null = null;
+  /** Last attack picked, classic or grammar — the never-twice law spans
+   *  both vocabularies on a titan that learned to dance. */
+  private lastKind: AttackKind | GrammarKind | null = null;
+  /** THE FLOOR MANAGER's park — where the last move's correct dodge left a
+   *  fighter who played it right. Reset to centre each stage. */
+  private park: Park = { x: 0, z: 0 };
   private strikes: Strike[] = [];
   private shots: VolleyShot[] = [];
   /**
@@ -305,6 +350,36 @@ export class CampaignSystem extends createSystem({
     this.light = new PointLight(0xffffff, 0, 16);
     this.light.visible = false;
     this.scene.add(this.light);
+
+  }
+
+  /** Headless probe (tools/encore-check.mjs): watch the live bout and FORCE
+   *  a specific grammar move — the same buildAttack path a real pick takes,
+   *  so a probe screenshot shows the true telegraphs. Installed at bout
+   *  start: the wrap owns (and rebuilds) the __ff2 namespace during lobby
+   *  boot, so an init-time install would be clobbered. */
+  private installTitanHook(): void {
+    const w = window as unknown as { __ff2?: Record<string, unknown> };
+    {
+      (w.__ff2 ??= {}).titan = {
+        phase: (): string => this.phase,
+        boss: (): string => this.def.name,
+        moves: (): string[] => Object.keys(this.def.grammar ?? {}),
+        kind: (): string | null => this.attack?.kind ?? null,
+        zones: (): string[] => this.attack?.zones.map((z) => z.kind) ?? [],
+        force: (kind: string, seed?: number): boolean => {
+          if (this.phase !== 'fight') return false;
+          this.buildAttack(kind as GrammarKind, [this.mySeatId()], {
+            g: (seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0,
+          });
+          return true;
+        },
+        heal: (): void => {
+          const me = fighterAt(0);
+          me?.setValue(Health, 'current', me.getValue(Health, 'max') ?? 100);
+        },
+      };
+    }
   }
 
   update(delta: number): void {
@@ -513,7 +588,7 @@ export class CampaignSystem extends createSystem({
       if (msg.k === 'rdmg' && this.isAuthority()) {
         this.applyBossDamage(msg.spot, msg.pts);
       } else if (msg.k === 'ratk' && seat !== mesh.mySeat) {
-        this.buildAttack(msg.kind, msg.seats, { x: msg.x, z: msg.z, y: msg.y, a: msg.a });
+        this.buildAttack(msg.kind, msg.seats, { x: msg.x, z: msg.z, y: msg.y, a: msg.a, g: msg.g });
       } else if (msg.k === 'rst' && !this.isAuthority()) {
         this.applyRaidState(msg);
       }
@@ -603,6 +678,7 @@ export class CampaignSystem extends createSystem({
   }
 
   private begin(): void {
+    this.installTitanHook();
     this.runClock = 0;
     this.p2 = false;
     this.lastTarget = -1;
@@ -689,6 +765,7 @@ export class CampaignSystem extends createSystem({
       this.def = BOSSES[clamp(app.campaignStage, 0, BOSSES.length - 1)];
       this.runLen = BOSSES.length;
     }
+    this.park = { x: 0, z: 0 }; // THE FLOOR MANAGER: everyone spawns centre
     // HARD+ shares the elite attacks (nova / seesaw / surge) to every boss.
     this.def = this.applyElite(this.def);
     this.goopStage = goopStage;
@@ -840,6 +917,8 @@ export class CampaignSystem extends createSystem({
     if (!a) return;
     a.telegraphs.forEach((t) => t?.dispose());
     a.markers.forEach((m) => this.disposeMarker(m));
+    a.blockfalls.forEach((b) => b?.dispose());
+    a.dressing.forEach((d) => d.dispose());
     this.attack = null;
   }
 
@@ -1553,7 +1632,7 @@ export class CampaignSystem extends createSystem({
    * I, TWO at random on stage II, and EVERYONE from stage III on. Group
    * picks come back sorted around the arc so cascades travel one way.
    */
-  private raidTargets(kind: AttackKind | 'decree'): number[] {
+  private raidTargets(kind: AttackKind | GrammarKind | 'decree'): number[] {
     if (!this.raid()) return [0];
     const alive = this.aliveSeats();
     if (!alive.length) return [this.mySeatId()];
@@ -1562,8 +1641,17 @@ export class CampaignSystem extends createSystem({
       return seats.slice().sort((a, b) => (canonical[a]?.yaw ?? 0) - (canonical[b]?.yaw ?? 0));
     };
     // The seesaw is squad-wide like the sweep: every platform rocks at once,
-    // each starting on the half its own raider stands on.
-    if (kind === 'sweep' || kind === 'decree' || kind === 'seesaw' || kind === 'surge') return arcOrder(alive);
+    // each starting on the half its own raider stands on. The GRAMMAR moves
+    // are squad-wide by RAVE RAID's own law — one chart, every deck.
+    if (
+      kind === 'sweep' ||
+      kind === 'decree' ||
+      kind === 'seesaw' ||
+      kind === 'surge' ||
+      (GRAMMAR_KINDS as readonly string[]).includes(kind)
+    ) {
+      return arcOrder(alive);
+    }
     const stage = app.campaignStage;
     if (stage <= 0 || alive.length === 1) {
       // Stage I: one raider at a time — never the same one twice while
@@ -1607,6 +1695,14 @@ export class CampaignSystem extends createSystem({
       return;
     }
 
+    // A titan that LEARNED TO DANCE picks over both vocabularies under the
+    // chart laws (never twice, verbs damped, THE FLOOR MANAGER) — its own
+    // path, seeded so the raid wire replays it.
+    if (this.def.grammar) {
+      this.startGrammar();
+      return;
+    }
+
     const kinds: AttackKind[] = ['slam', 'sweep', 'beam', 'volley', 'nova', 'seesaw', 'surge'];
     let total = 0;
     const pool: Array<[AttackKind, number]> = [];
@@ -1627,7 +1723,12 @@ export class CampaignSystem extends createSystem({
       }
     }
     this.lastKind = kind;
+    this.launchClassic(kind);
+  }
 
+  /** Aim + send + build one CLASSIC attack (the pre-Encore pipeline, pulled
+   *  out so the Encore's mixed picker can reach it too). */
+  private launchClassic(kind: AttackKind): void {
     // Aim parameters PER TARGET, each in that target's local frame (their
     // platform at their origin). A remote target's head comes off the pose
     // bus in MY world and gets pulled back into their frame.
@@ -1662,6 +1763,82 @@ export class CampaignSystem extends createSystem({
     this.buildAttack(kind, seats, params);
   }
 
+  /** Escalation act for the grammar (0..4): the picked difficulty sets the
+   *  floor, enrage lifts one act — synced discretely (enr rides the rst
+   *  echo), so every client derives the same act for the same attack. */
+  private grammarAct(): number {
+    const base = { easy: 1, normal: 2, hard: 3, blazing: 3 }[this.activeDifficulty()];
+    return Math.min(4, base + (this.enraged ? 1 : 0));
+  }
+
+  /** THE SWEPT ROUTINE's coin, derived from the attack seed so every client
+   *  agrees without another wire field. RAVE RAID rolled it per chart; a
+   *  per-move eighth keeps it a legend, not a garnish (it only ever bites
+   *  at act 4 anyway). */
+  private sweptCoin(seed: number): boolean {
+    return (seed & 7) === 0;
+  }
+
+  /**
+   * A dancing titan's pick: both vocabularies in one weighted pool under
+   * the chart laws — never the same move twice (classic or grammar),
+   * repeated body-verbs damped, each grammar kind gated by its escalation
+   * act, and THE FLOOR MANAGER re-rolling any grammar move whose danger
+   * never touches the parked ground. Each attempt rolls a fresh 32-bit
+   * seed; the accepted seed rides the raid wire, and every client replays
+   * pick + build from it byte for byte.
+   */
+  private startGrammar(): void {
+    const def = this.def;
+    const classicKinds: AttackKind[] = ['slam', 'sweep', 'beam', 'volley', 'nova', 'seesaw', 'surge'];
+    const act = this.grammarAct();
+    const entries: Array<[AttackKind | GrammarKind, number]> = [];
+    for (const k of classicKinds) if (def.weights[k] > 0) entries.push([k, def.weights[k]]);
+    for (const k of GRAMMAR_KINDS) {
+      const w = def.grammar?.[k] ?? 0;
+      if (w > 0 && act >= GRAMMAR_ACT_MIN[k]) entries.push([k, w]);
+    }
+    const expert = this.activeDifficulty() === 'blazing';
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const seed = (Math.random() * 0xffffffff) >>> 0;
+      const rng = mulberry32(seed);
+      const kind = pickWeighted(rng, entries, this.lastKind);
+      if (!(GRAMMAR_KINDS as readonly string[]).includes(kind)) {
+        // A classic pick: the usual aimed machinery. Aimed at the player,
+        // it always asks for a dodge — the park law is satisfied by design —
+        // and the dodge leaves them somewhere the grammar can't know.
+        this.lastKind = kind;
+        this.park = kind === 'sweep' ? this.park : null; // ducked in place vs. moved
+        this.launchClassic(kind as AttackKind);
+        return;
+      }
+      const gk = kind as GrammarKind;
+      const landings = buildGrammarMove(gk, rng, {
+        act,
+        beat: def.beat ?? 0.5,
+        expert,
+        sweptRoutine: this.sweptCoin(seed),
+        park: this.park,
+      });
+      // THE FLOOR MANAGER: a move that asks nothing of the parked ground
+      // didn't happen — roll a fresh seed. The final attempt stands (best
+      // effort, like RAVE RAID's twelve-shapes rule).
+      if (!evictsPark(landings, this.park) && attempt < 11) continue;
+      this.lastKind = gk;
+      const park = this.park;
+      // RAVE RAID's raid model, kept: the same seat-local pattern marks
+      // EVERY standing platform at once — fair by construction, and the
+      // whole ring dances one chart.
+      const seats = this.raidTargets(gk);
+      if (this.raid()) {
+        mesh.send({ k: 'ratk', kind: gk, seats, g: seed, x: park ? [park.x] : [], z: park ? [park.z] : [] });
+      }
+      this.buildAttack(gk, seats, { g: seed, x: park ? [park.x] : undefined, z: park ? [park.z] : undefined });
+      this.park = parkOf(gk, landings, park);
+      return;
+    }
+  }
+
   /**
    * Build the LIVE attack — shared by the authority (its own pick) and every
    * guest (from the ratk message). Zone coordinates are TARGET-local; the
@@ -1672,18 +1849,24 @@ export class CampaignSystem extends createSystem({
    * with per-raider wedges, and the squad sweep's cascading blade.
    */
   private buildAttack(
-    kind: AttackKind | 'decree',
+    kind: AttackKind | GrammarKind | 'decree',
     seats: number[],
-    params: { x?: number[]; z?: number[]; y?: number[]; a?: number[] },
+    params: { x?: number[]; z?: number[]; y?: number[]; a?: number[]; g?: number },
   ): void {
     this.disposeAttack(); // a straggling ratk never stacks two live attacks
     if (!seats.length) seats = [this.mySeatId()];
     this.faceSeat = seats[0];
+    const grammar = (GRAMMAR_KINDS as readonly string[]).includes(kind);
     // The windup is SACRED whatever the phase — enrage and GOOPLIATH's haste
     // compress the cooldown between attacks (attackCooldown), never the
     // telegraph itself: a late-fight laser reads exactly like the first one.
     // Difficulty stretches (EASY) or tightens (BLAZING) the windup.
-    let chargeTime = (kind === 'decree' ? RAID.decreeCharge : this.def.charge[kind]) * this.diff.charge;
+    let chargeTime =
+      (kind === 'decree'
+        ? RAID.decreeCharge
+        : grammar
+          ? (this.def.grammarCharge ?? 2)
+          : this.def.charge[kind as AttackKind]) * this.diff.charge;
     // The one exception, and it buys back readability rather than spending
     // it: the king's second life on BLAZING gives its falling block a little
     // longer to come down (see CAMPAIGN.phase2SlamCharge). Every client
@@ -1698,12 +1881,126 @@ export class CampaignSystem extends createSystem({
     const staggers: number[] = [];
     const beamOffsets: number[] = [];
     const markers: (Group | null)[] = [];
+    const windows: number[] = [];
+    const blockfalls: (RoutineBlockfall | null)[] = [];
+    const dressing: Telegraph[] = [];
     // Strike with the arm nearer the primary target (multi-target windups
     // hoist BOTH arms — see animateTitan).
     this.seatPoint(seats[0], 0, 0, 0, _p);
     const arm: 0 | 1 = _p.x + (seats[0] === this.mySeatId() ? this.headX() : 0) < 0 ? 1 : 0;
 
-    if (kind === 'decree') {
+    if (grammar) {
+      // A GRAMMAR move: rebuild the whole thing from the seed — the
+      // authority and every guest run the identical seeded stream (one roll
+      // for the pick, then the build), so the wire is one number. RAVE
+      // RAID's raid law holds: the SAME seat-local pattern marks every
+      // target platform at once. Each landing gets its own stagger and a
+      // one-charge telegraph WINDOW, so a cascade's later steps open their
+      // read as the earlier ones fire — never sooner.
+      const gk = kind as GrammarKind;
+      const seed = params.g ?? 0;
+      const rng = mulberry32(seed);
+      rng(); // the pick's roll — keeps this stream aligned with startGrammar
+      const park: Park =
+        params.x && params.x.length ? { x: params.x[0] ?? 0, z: params.z?.[0] ?? 0 } : null;
+      const landings = buildGrammarMove(gk, rng, {
+        act: this.grammarAct(),
+        beat: this.def.beat ?? 0.5,
+        expert: this.activeDifficulty() === 'blazing',
+        sweptRoutine: this.sweptCoin(seed),
+        park,
+      });
+      for (const seat of seats) {
+        this.seatPoint(seat, 0, CAMPAIGN.decalY, 0, _v);
+        const deckX = _v.x;
+        const deckY = _v.y;
+        const deckZ = _v.z;
+        const yawD = this.seatYawDelta(seat);
+        // The sweep line (the duckdonut's blade / the swept routine) hangs
+        // at MY height on my own deck; a remote deck wears the house line —
+        // visual only, their own client judges their own zone.
+        this.playerHead(_head);
+        const sweepY = seat === this.mySeatId() ? clamp(_head.y - 0.12, 1.3, 1.55) : 1.4;
+        const xDone = new Set<number>(); // one X pane per landing beat
+        for (const l of landings) {
+          const gz = l.zone;
+          const zone: Zone = gz.kind === 'sweep' ? { kind: 'sweep', y: sweepY } : gz;
+          zones.push(zone);
+          zoneSeats.push(seat);
+          staggers.push(l.delay);
+          windows.push(chargeTime);
+          markers.push(null);
+          let tg: Telegraph | null = null;
+          if (gz.kind === 'lane' && gz.yaw) {
+            // THE X: both arms drawn as ONE pane (the union composes); the
+            // second arm of the pair carries no telegraph of its own.
+            if (!xDone.has(l.delay)) {
+              xDone.add(l.delay);
+              tg = xTelegraph(gz.halfW);
+              tg.group.position.set(deckX, deckY, deckZ);
+              tg.group.rotation.y = yawD;
+            }
+          } else if (gz.kind === 'lane') {
+            tg = laneTelegraph(gz.halfW, OCTAGON_HALF_DEPTH * 2 + 0.6);
+            this.seatPoint(seat, gz.x, CAMPAIGN.decalY, 0, _v);
+            tg.group.position.copy(_v);
+            tg.group.rotation.y = yawD;
+          } else if (gz.kind === 'rail') {
+            tg = railTelegraph(gz.halfD, OCTAGON_HALF_WIDTH * 2 + 0.6, gz.from);
+            this.seatPoint(seat, 0, CAMPAIGN.decalY, gz.z, _v);
+            tg.group.position.copy(_v);
+            tg.group.rotation.y = yawD;
+          } else if (gz.kind === 'gate') {
+            tg = gateTelegraph(OCTAGON_HALF_WIDTH, OCTAGON_HALF_DEPTH, gz.at, gz.half, gz.axis);
+            tg.group.position.set(deckX, deckY, deckZ);
+            tg.group.rotation.y = yawD;
+          } else if (gz.kind === 'ring') {
+            tg = donutTelegraph(GRAMMAR.donutRadius, gz.innerR);
+            tg.group.position.set(deckX, deckY, deckZ);
+            tg.group.rotation.y = yawD;
+          } else if (gz.kind === 'sweep') {
+            const dir: 1 | -1 = arm === 0 ? -1 : 1;
+            tg = sweepTelegraph(OCTAGON_HALF_WIDTH * 2 + 0.5, OCTAGON_HALF_DEPTH * 2 + 0.3, sweepY, CAMPAIGN.sweepThickness, dir);
+            this.seatPoint(seat, 0, 0, 0, _v);
+            tg.group.position.copy(_v);
+            tg.group.rotation.y = yawD;
+          }
+          // quad: no zone telegraph — the marks + quarter lines teach
+          // (below) and the falling block IS the per-step warning.
+          if (tg) this.scene.add(tg.group);
+          telegraphs.push(tg);
+          if (gz.kind === 'quad') {
+            const bf = new RoutineBlockfall(
+              this.scene,
+              gz.corner,
+              chargeTime + l.delay,
+              GRAMMAR.routineDropBeats * (this.def.beat ?? 0.5),
+              seed,
+              gz.step,
+            );
+            bf.root.position.set(deckX, 0, deckZ);
+            bf.root.rotation.y = yawD;
+            blockfalls.push(bf);
+          } else {
+            blockfalls.push(null);
+          }
+        }
+        // THE ROUTINE's furniture: the chalk quarter lines for the whole
+        // move and the taught marks (they fade themselves out by fill 0.92
+        // — from then on the routine lives in your head).
+        const firstQuad = landings.find((l) => l.zone.kind === 'quad')?.zone;
+        if (firstQuad?.kind === 'quad') {
+          const quarters = quarterTelegraph(OCTAGON_HALF_WIDTH, OCTAGON_HALF_DEPTH);
+          const marks = routineMarksTelegraph(firstQuad.routine, OCTAGON_HALF_WIDTH, OCTAGON_HALF_DEPTH);
+          for (const d of [quarters, marks]) {
+            d.group.position.set(deckX, deckY, deckZ);
+            d.group.rotation.y = yawD;
+            this.scene.add(d.group);
+            dressing.push(d);
+          }
+        }
+      }
+    } else if (kind === 'decree') {
       // Novas bloom on EVERY standing platform around ONE canonical bearing —
       // the whole squad rotates to the same compass point together, or burns.
       const canonicalA = params.a?.[0] ?? 0;
@@ -1900,8 +2197,11 @@ export class CampaignSystem extends createSystem({
       markers,
       seats,
       zoneSeats,
+      windows,
+      blockfalls,
+      dressing,
     };
-    if (this.goop) this.goopTelegraph(this.attack.kind, chargeTime, seats[0]);
+    if (this.goop) this.goopTelegraph(this.attack.kind as AttackKind, chargeTime, seats[0]);
     sfx.chargeWhine(chargeTime);
   }
 
@@ -2041,6 +2341,12 @@ export class CampaignSystem extends createSystem({
       }
     }
 
+    // THE ROUTINE's blocks fly on the attack clock (their landing IS the
+    // step's detonation), and the routine's furniture — quarter lines, the
+    // fading step marks — reads the overall charge.
+    for (const bf of a.blockfalls) bf?.update(a.time, delta);
+    for (const d of a.dressing) d.update(clamp(a.time / a.chargeTime, 0, 1), this.time);
+
     // Each zone runs its OWN countdown to its own detonation — a marching
     // drumline or a staggered volley reads as a sequence of beats, not one.
     let allDone = true;
@@ -2055,9 +2361,33 @@ export class CampaignSystem extends createSystem({
         const m = a.markers[i] ?? null;
         this.disposeMarker(m);
         a.markers[i] = null;
+        // A landing block crushes NOW — hand its short afterlife to the
+        // strike pool so disposing the attack never cuts the crush short.
+        const bf = a.blockfalls[i] ?? null;
+        if (bf) {
+          a.blockfalls[i] = null;
+          bf.land();
+          let prev = 0;
+          this.strikes.push({
+            age: 0,
+            life: 0.6,
+            update(age) {
+              bf.update(0, age - prev);
+              prev = age;
+            },
+            dispose() {
+              bf.dispose();
+            },
+          });
+        }
         this.detonate(a.kind, a.zones[i], a.zoneSeats[i] ?? a.seats[0]);
       } else {
-        const fill = clamp(a.time / dueAt, 0, 1);
+        // A grammar cascade's later steps carry a one-charge WINDOW: the
+        // telegraph opens (and its fill runs) only that long before its own
+        // landing — the return's read opens as the first pair fires.
+        const window = Math.min(a.windows[i] ?? dueAt, dueAt);
+        const remaining = dueAt - a.time;
+        const fill = clamp(1 - remaining / window, 0, 1);
         const tg = a.telegraphs[i];
         if (tg) {
           tg.update(fill, this.time);
@@ -2065,6 +2395,7 @@ export class CampaignSystem extends createSystem({
           // panes at once made "which side is next" a shrug; two reads as
           // "THIS side now, THAT side next".
           if (a.zones[i].kind === 'half') tg.group.visible = dueAt - a.time < GOOPLIATH.seesawGap * 1.9;
+          else if (a.windows[i] !== undefined) tg.group.visible = remaining <= window;
         }
         const m = a.markers[i];
         const zone = a.zones[i];
@@ -2154,11 +2485,30 @@ export class CampaignSystem extends createSystem({
   /** A zone goes off: strike visual + sound on the TARGET's platform, and
    *  damage only if the zone is MINE and I'm in it. (A volley zone
    *  "detonating" is its LAUNCH — the shot judges itself in updateShots.) */
-  private detonate(kind: AttackKind, zone: Zone, seat: number): void {
+  private detonate(kind: AttackKind | GrammarKind, zone: Zone, seat: number): void {
     const mine = seat === this.mySeatId();
     const hit = mine && this.zoneTouchesPlayer(zone);
 
-    if (kind === 'slam') {
+    // THE ENCORE's zones detonate by SHAPE (one grammar move mixes several).
+    if (zone.kind === 'lane' || zone.kind === 'rail') {
+      sfx.beamBlast();
+      this.spawnStripStrike(zone, seat);
+    } else if (zone.kind === 'gate') {
+      sfx.slamImpact();
+      sfx.beamBlast();
+      this.spawnGateStrike(zone, seat);
+    } else if (zone.kind === 'ring') {
+      sfx.slamImpact();
+      sfx.beamBlast();
+      this.spawnRingStrike(zone, seat);
+    } else if (zone.kind === 'quad') {
+      sfx.slamImpact(); // the block crush (advanceAttack) carries the visual
+    } else if (zone.kind === 'sweep' && (GRAMMAR_KINDS as readonly string[]).includes(kind)) {
+      // The duckdonut's blade / the swept routine — the classic cut.
+      sfx.sweepWhoosh();
+      this.spawnBladeSweep(zone.y, this.attack!.arm, seat);
+      this.strikeSwing[this.attack!.arm] = 0.6;
+    } else if (kind === 'slam') {
       sfx.slamImpact();
       if (zone.kind === 'circle') this.spawnFistCrash(zone.x, zone.z, seat);
       this.strikeSwing[this.attack!.arm] = 0.6;
@@ -2215,6 +2565,13 @@ export class CampaignSystem extends createSystem({
       const d = Math.abs(((ang - zone.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
       return d > zone.halfAngle;
     }
+    // THE ROUTINE judges the HEAD's commitment, like the nova — the body
+    // spheres trail the head by design, and a corner you clearly reached
+    // must never clip you on a trailing hip.
+    if (zone.kind === 'quad') {
+      this.playerHead(_p);
+      return grammarZoneHit(zone, _p.x, _p.z, 0);
+    }
     for (const part of this.queries.playerParts.entities) {
       const obj = part.object3D;
       if (!obj) continue;
@@ -2240,6 +2597,9 @@ export class CampaignSystem extends createSystem({
         // surge judges z.
         const along = zone.axis === 1 ? _p.z : _p.x;
         if (along * zone.side > GOOPLIATH.seesawSafeLip) return true;
+      } else if (zone.kind === 'lane' || zone.kind === 'rail' || zone.kind === 'gate' || zone.kind === 'ring') {
+        // THE ENCORE's floor shapes — the grammar's own pure judge.
+        if (grammarZoneHit(zone, _p.x, _p.z, r)) return true;
       }
     }
     return false;
@@ -2477,6 +2837,175 @@ export class CampaignSystem extends createSystem({
    *  fire along the deck, and wet splats stamped where it hit. All target-
    *  local, transformed to the marked seat's platform. `axis` 0 = x split
    *  (seesaw), 1 = z split (surge) — the whole show turns a quarter turn. */
+  /** A shared strip-of-fire landing: a glowing slab flashes over the strip
+   *  and settles into the deck with a run of embers — the lane's and the
+   *  rail's detonation (THE ENCORE's laser shapes). */
+  private spawnStripStrike(zone: Zone & ({ kind: 'lane' } | { kind: 'rail' }), seat: number): void {
+    this.seatPoint(seat, 0, 0, 0, _v);
+    const cx = _v.x;
+    const cz = _v.z;
+    // Lane: a strip down local z at x (plus THE X's yaw). Rail: across at z.
+    const lane = zone.kind === 'lane';
+    const yd =
+      this.seatYawDelta(seat) + (lane ? (zone.yaw ?? 0) : Math.PI / 2);
+    const off = lane ? zone.x : zone.z;
+    const halfW = lane ? zone.halfW : zone.halfD;
+    const len = (lane ? OCTAGON_HALF_DEPTH : OCTAGON_HALF_WIDTH) * 2 + 0.6;
+    const cos = Math.cos(yd);
+    const sin = Math.sin(yd);
+    const slab = new Mesh(
+      new BoxGeometry(halfW * 2, 0.6, len),
+      new MeshBasicMaterial({
+        color: this.def.accent,
+        transparent: true,
+        opacity: 0.85,
+        blending: AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    slab.rotation.y = yd;
+    // The strip's perpendicular offset, rotated into world (lane offsets run
+    // local x; the rail's quarter-turn folds its z offset onto the same axis).
+    const ox = lane ? off : -off;
+    slab.position.set(cx + ox * cos, 0.3, cz - ox * sin);
+    this.scene.add(slab);
+    let burstClock = 0;
+    this.strikes.push({
+      age: 0,
+      life: 0.45,
+      update(age) {
+        const k = Math.min(1, age / 0.4);
+        (slab.material as MeshBasicMaterial).opacity = 0.85 * (1 - k * k);
+        slab.scale.y = 1 - 0.6 * k;
+        if (age > burstClock) {
+          burstClock = age + 0.08;
+          const along = rand(-len / 2 + 0.2, len / 2 - 0.2);
+          _v.set(slab.position.x + along * sin, 0.12, slab.position.z + along * cos);
+          emberBurst(_v, 4, true);
+        }
+      },
+      dispose() {
+        slab.geometry.dispose();
+        (slab.material as MeshBasicMaterial).dispose();
+        slab.removeFromParent();
+      },
+    });
+  }
+
+  /** The gate lands: everything EXCEPT the clear band goes up — two slabs
+   *  slam the doomed sides, leaving the doorway dark and standing. */
+  private spawnGateStrike(zone: Zone & { kind: 'gate' }, seat: number): void {
+    this.seatPoint(seat, 0, 0, 0, _v);
+    const cx = _v.x;
+    const cz = _v.z;
+    // axis 1 (the row gate) turns the whole picture a quarter, like its
+    // telegraph — extents swap so the platform stays covered.
+    const yd = this.seatYawDelta(seat) + (zone.axis ? Math.PI / 2 : 0);
+    const cos = Math.cos(yd);
+    const sin = Math.sin(yd);
+    const span = (zone.axis ? OCTAGON_HALF_DEPTH : OCTAGON_HALF_WIDTH) + 0.2;
+    const depth = (zone.axis ? OCTAGON_HALF_WIDTH : OCTAGON_HALF_DEPTH) * 2 + 0.3;
+    const at = zone.axis ? -zone.at : zone.at; // the quarter turn mirrors x
+    const slabs: Mesh[] = [];
+    for (const side of [-1, 1] as const) {
+      // Each doomed stretch runs from the gap's edge to the deck rim.
+      const edge = at + side * zone.half;
+      const rim = side * span;
+      const w = Math.max(0, (rim - edge) * side);
+      if (w < 0.05) continue;
+      const mid = (edge + rim) / 2;
+      const slab = new Mesh(
+        new BoxGeometry(w, 0.55, depth),
+        new MeshBasicMaterial({
+          color: this.def.accent,
+          transparent: true,
+          opacity: 0.7,
+          blending: AdditiveBlending,
+          depthWrite: false,
+        }),
+      );
+      slab.rotation.y = yd;
+      slab.position.set(cx + mid * cos, 0.28, cz - mid * sin);
+      this.scene.add(slab);
+      slabs.push(slab);
+    }
+    let burst = false;
+    this.strikes.push({
+      age: 0,
+      life: 0.45,
+      update(age) {
+        const k = Math.min(1, age / 0.4);
+        if (!burst) {
+          burst = true;
+          for (const s of slabs) {
+            _v.copy(s.position);
+            _v.y = 0.15;
+            emberBurst(_v, 10, true);
+          }
+        }
+        for (const s of slabs) {
+          (s.material as MeshBasicMaterial).opacity = 0.7 * (1 - k * k);
+          s.scale.y = 1 - 0.6 * k;
+        }
+      },
+      dispose() {
+        for (const s of slabs) {
+          s.geometry.dispose();
+          (s.material as MeshBasicMaterial).dispose();
+          s.removeFromParent();
+        }
+      },
+    });
+  }
+
+  /** The donut's rim comes down: a ring wall at the safe disc's edge flares
+   *  and collapses outward while the doomed rim burns — the middle lives. */
+  private spawnRingStrike(zone: Zone & { kind: 'ring' }, seat: number): void {
+    this.seatPoint(seat, 0, 0, 0, _v);
+    const cx = _v.x;
+    const cz = _v.z;
+    const wall = new Mesh(
+      new CylinderGeometry(zone.innerR, zone.innerR, 0.7, 40, 1, true),
+      new MeshBasicMaterial({
+        color: this.def.accent,
+        transparent: true,
+        opacity: 0.8,
+        blending: AdditiveBlending,
+        depthWrite: false,
+        side: DoubleSide,
+      }),
+    );
+    wall.position.set(cx, 0.35, cz);
+    this.scene.add(wall);
+    const world = this.world;
+    const innerR = zone.innerR;
+    let burstClock = 0;
+    this.strikes.push({
+      age: 0,
+      life: 0.5,
+      update(age) {
+        const k = Math.min(1, age / 0.45);
+        // The wall of fire sweeps OUT across the doomed rim and dies at it.
+        wall.scale.setScalar(1 + k * 1.6);
+        wall.scale.y = 1 - 0.5 * k;
+        (wall.material as MeshBasicMaterial).opacity = 0.8 * (1 - k * k);
+        if (age > burstClock) {
+          burstClock = age + 0.07;
+          const a = rand(0, Math.PI * 2);
+          const r = innerR * (1 + k * 1.4) + rand(0, 0.15);
+          _v.set(cx + Math.sin(a) * r, 0.12, cz + Math.cos(a) * r);
+          emberBurst(_v, 4, true);
+          if (k > 0.25 && k < 0.5) spawnFireImpact(world, _v, 1, 0.6);
+        }
+      },
+      dispose() {
+        wall.geometry.dispose();
+        (wall.material as MeshBasicMaterial).dispose();
+        wall.removeFromParent();
+      },
+    });
+  }
+
   private spawnHalfFlood(side: -1 | 1, seat: number, axis: 0 | 1): void {
     this.seatPoint(seat, 0, 0, 0, _v);
     const cx = _v.x;

@@ -121,6 +121,25 @@ export interface BossDef {
    * Omitted = the plain house pedestal in danger red, like every other titan.
    */
   platform?: string;
+
+  /**
+   * THE MOVE GRAMMAR (campaign/grammar.ts; DESIGN.md §4): the RAVE RAID
+   * vocabulary this titan has LEARNED, woven into its classic roster — the
+   * same machine, deeper choreography. Weights pick alongside the classic
+   * ones under one law book (never the same move twice, verbs damped, THE
+   * FLOOR MANAGER); each kind still respects its escalation-act minimum
+   * (GRAMMAR_ACT_MIN), so an easy bout stays the fight it always was and
+   * the hard tiers meet the full vocabulary. Omitted = a titan that never
+   * learned to dance (GOOPLIATH's gestures stay bespoke to the gel).
+   */
+  grammar?: Partial<Record<import('./grammar.js').GrammarKind, number>>;
+  /** Seconds per grammar beat — this titan's pulse; every cascade (twin
+   *  bounces, wave marches, routine steps, the donut's one-two) steps on
+   *  multiples of it. Defaults to 0.5. */
+  beat?: number;
+  /** Telegraph charge (seconds) for grammar moves — the read length. The
+   *  windup is sacred: escalation compresses gaps, never this. */
+  grammarCharge?: number;
 }
 
 export const BOSSES: BossDef[] = [
@@ -143,6 +162,11 @@ export const BOSSES: BossDef[] = [
     beamTracks: false,
     enrageAt: 0,
     weakPattern: 'both',
+    // The scrapyard learned the GATE: a fence of fire with one gap — the
+    // junkyard's own move, and the plainest read in the new vocabulary.
+    grammar: { gate: 3, lanes: 2 },
+    beat: 0.56,
+    grammarCharge: 2.1,
   },
   {
     name: 'PISTONKAISER',
@@ -154,7 +178,7 @@ export const BOSSES: BossDef[] = [
     cooldownMin: 2.2,
     cooldownMax: 3.2,
     charge: { slam: 1.6, sweep: 1.9, beam: 1.6, volley: 1.9, nova: 2.2, seesaw: 1.7, surge: 1.8 },
-    weights: { slam: 4, sweep: 3, beam: 2, volley: 0, nova: 0, seesaw: 0, surge: 0 },
+    weights: { slam: 4, sweep: 3, beam: 2, volley: 0, nova: 0, seesaw: 0, surge: 2 },
     volleyCount: 3,
     beams: 1,
     swayAmp: 0.5,
@@ -163,6 +187,12 @@ export const BOSSES: BossDef[] = [
     beamTracks: false,
     enrageAt: 0,
     weakPattern: 'alternate',
+    // The foundry press learned the WAVE: its drumline slam was already a
+    // march — now the whole deck marches (and the classic surge, weighted
+    // above, rocks it lengthways).
+    grammar: { wave: 4 },
+    beat: 0.5,
+    grammarCharge: 2.0,
   },
   {
     name: 'VULTURE',
@@ -183,6 +213,11 @@ export const BOSSES: BossDef[] = [
     beamTracks: true,
     enrageAt: 0,
     weakPattern: 'double',
+    // The executioner learned the CROSSFIRE — rails from the side emitters,
+    // the lattice, THE TRAP's jaws — and throws THE X through the lanes.
+    grammar: { cross: 4, lanes: 3 },
+    beat: 0.5,
+    grammarCharge: 1.9,
   },
   {
     name: 'JUGGERNAUT',
@@ -203,6 +238,11 @@ export const BOSSES: BossDef[] = [
     beamTracks: false,
     enrageAt: 0,
     weakPattern: 'triple',
+    // The rolling fortress learned to close its walls: row gates and the
+    // donut's collapsing rim — ground that shrinks until you hold the middle.
+    grammar: { gate: 3, donut: 3 },
+    beat: 0.48,
+    grammarCharge: 2.0,
   },
   {
     name: 'GOLIATH',
@@ -228,6 +268,12 @@ export const BOSSES: BossDef[] = [
     enrageAt: 0.5,
     weakPattern: 'crown',
     platform: 'blazing',
+    // The king learned it all — and being the king, he TEACHES: THE ROUTINE
+    // is his memory test, the wave his procession, and once in a blazing
+    // night the COMBINATION (duckdonut) closes the show on the beat.
+    grammar: { routine: 3, wave: 3, donut: 2, duckdonut: 0.4 },
+    beat: 0.46,
+    grammarCharge: 1.9,
   },
 ];
 
@@ -260,6 +306,8 @@ export function raidBoss(def: BossDef, stage: number, raiders: number): BossDef 
     cooldownMin: def.cooldownMin * cd,
     cooldownMax: def.cooldownMax * cd,
     charge,
+    // The grammar reads tighten on the same raid law as the classic charges.
+    grammarCharge: def.grammarCharge === undefined ? undefined : def.grammarCharge * RAID.chargeMult,
   };
 }
 

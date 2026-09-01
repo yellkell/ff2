@@ -95,6 +95,23 @@ const COMMON = /* glsl */ `
   }
 `;
 
+/**
+ * The platform's own silhouette, as a soft mask (RAVE RAID's trick). The
+ * donut and THE X are honest circles/diagonals — without this a metre of
+ * warning paint hangs off the deck into the void. `q` is platform-local
+ * metres; constants are the octagon from config (half-width .86, half-depth
+ * .75, chamfer plane 0.375|x|+0.485|z| = 0.5044, normalised by its length).
+ */
+const OCT_MASK = /* glsl */ `
+  float octMask(vec2 q){
+    q = abs(q);
+    float m = smoothstep(0.0, 0.045, 0.86 - q.x);
+    m = min(m, smoothstep(0.0, 0.045, 0.75 - q.y));
+    m = min(m, smoothstep(0.0, 0.045, (0.5044 - (0.375 * q.x + 0.485 * q.y)) / 0.613));
+    return m;
+  }
+`;
+
 /** Disc: bold rim ring, hazard ticks, a hot centre dot, and a radial fill
  *  that eats outward — LOUD, because this marks where a fist lands. */
 const CIRCLE_FRAG = /* glsl */ `
@@ -271,6 +288,167 @@ const BLADE_FRAG = /* glsl */ `
   }
 `;
 
+/* ── THE ENCORE's shapes (ported from RAVE RAID's choreo kit) ──────────── */
+
+/**
+ * Gate: the WHOLE deck floods EXCEPT one clear column — doorpost rails burn
+ * at its edges and chevron streams march INTO it from both sides. The linear
+ * cousin of the nova: the one telegraph that says "stand HERE" on a line.
+ * uGap = column centre (u), uHalf = half-width (u).
+ */
+const GATE_FRAG = /* glsl */ `
+  ${COMMON}
+  ${OCT_MASK}
+  uniform float uGap, uHalf, uAlong, uAcross, uSwap;
+  void main(){
+    vec3 col = warnColor();
+    float d = vUv.x - uGap;
+    float inGap = 1.0 - aaStep(uHalf, abs(d));
+    float a = 0.0;
+    // The flood: everything OUTSIDE the column fills with the charge.
+    a += (1.0 - inGap) * (0.1 + 0.5 * uFill);
+    // Doorpost rails — the honest edges of the safe ground.
+    a += smoothstep(0.045, 0.0, abs(abs(d) - uHalf)) * (0.35 + 0.65 * uFill);
+    // Chevron streams marching INTO the gap from both sides.
+    float band = aaStripe(abs(d) * 9.0 + uTime * 2.3, 0.68);
+    float rungs = 1.0 - aaStep(0.34, abs(fract(vUv.y * 4.0) - 0.5));
+    a += band * (1.0 - inGap) * rungs * 0.22;
+    a *= pulse();
+    // The paint never leaves the deck: uv → platform metres (the row gate's
+    // in-plane quarter turn swaps the axes), then the octagon's own mask.
+    vec2 m = vec2((vUv.x - 0.5) * uAlong, (vUv.y - 0.5) * uAcross);
+    if (uSwap > 0.5) m = m.yx;
+    a *= octMask(m);
+    gl_FragColor = vec4(col, ink(a));
+  }
+`;
+
+/**
+ * Donut: the RIM floods and the middle lives — the nova's opposite number.
+ * A bright doorpost CIRCLE burns at the edge of the safe disc with chevrons
+ * marching inward, so the shape says "in here". uInner = safe radius as a
+ * fraction of the pane; the octagon mask trims the paint to the deck.
+ */
+const DONUT_FRAG = /* glsl */ `
+  ${COMMON}
+  ${OCT_MASK}
+  uniform float uInner, uPaneR;
+  void main(){
+    vec2 p = vUv * 2.0 - 1.0;
+    float r = length(p);
+    float safe = 1.0 - aaStep(uInner, r);
+    vec3 col = warnColor();
+    float a = 0.0;
+    // The flood: everything outside the safe disc fills with the charge.
+    a += (1.0 - safe) * (0.12 + 0.5 * uFill);
+    // The doorpost ring — the honest edge of the ground that lives.
+    a += smoothstep(0.055, 0.0, abs(r - uInner)) * (0.35 + 0.65 * uFill);
+    // Chevron rings marching INWARD toward the safe disc.
+    float band = aaStripe((r - uInner) * 5.5 + uTime * 1.9, 0.68);
+    a += band * (1.0 - safe) * (0.12 + 0.2 * uFill);
+    a *= pulse();
+    // The deck's edge IS the far edge — nothing paints past it.
+    a *= octMask(p * uPaneR);
+    a *= 1.0 - smoothstep(0.985, 1.0, r);
+    gl_FragColor = vec4(col, ink(a));
+  }
+`;
+
+/**
+ * THE X: both diagonal arms drawn as ONE pane, so the crossing composes
+ * instead of double-blending to white — a single scrim, edge hairlines that
+ * trace the union's outline, a ringed diamond KNOT where the arms meet, and
+ * both arms filling from their far ends toward the crossing.
+ */
+const X_FRAG = /* glsl */ `
+  ${COMMON}
+  ${OCT_MASK}
+  uniform float uHalfW, uPaneR;
+  void main(){
+    vec2 q = (vUv * 2.0 - 1.0) * uPaneR;
+    float d1 = abs(q.x - q.y) * 0.7071;
+    float d2 = abs(q.x + q.y) * 0.7071;
+    float t1 = (q.x + q.y) * 0.7071;
+    float t2 = (q.x - q.y) * 0.7071;
+    vec3 col = warnColor();
+    float a = 0.0;
+    float in1 = 1.0 - smoothstep(uHalfW - 0.015, uHalfW + 0.015, d1);
+    float in2 = 1.0 - smoothstep(uHalfW - 0.015, uHalfW + 0.015, d2);
+    // One scrim for the union — the crossing never doubles.
+    float arm = max(in1, in2);
+    a += arm * (0.1 + 0.15 * uFill);
+    // Chevrons drawing INTO the knot along each arm.
+    float ch1 = in1 * aaStripe(abs(t1) * 2.6 + uTime * 1.5, 0.55);
+    float ch2 = in2 * aaStripe(abs(t2) * 2.6 + uTime * 1.5, 0.55);
+    a += max(ch1, ch2) * 0.13;
+    // The advance: both arms light from their far ends toward the crossing.
+    float front = (1.0 - uFill) * uPaneR;
+    a += max(in1 * smoothstep(front - 0.14, front, abs(t1)),
+             in2 * smoothstep(front - 0.14, front, abs(t2))) * 0.24;
+    // Edge hairlines along the UNION's outline — never through the knot.
+    float eu = abs(min(d1, d2) - uHalfW);
+    a += (1.0 - smoothstep(0.0, 0.02, eu)) * 0.95;
+    a += (1.0 - smoothstep(0.02, 0.09, eu)) * 0.22;
+    // THE KNOT: the diamond where the arms cross is the deadliest ground.
+    float kd = max(d1, d2);
+    a += (1.0 - smoothstep(0.0, 0.025, abs(kd - (uHalfW + 0.03)))) * (0.45 + 0.45 * uFill);
+    a += (1.0 - smoothstep(uHalfW * 0.5, uHalfW, kd)) * (0.08 + 0.3 * uFill);
+    a *= pulse();
+    a *= octMask(q);
+    gl_FragColor = vec4(col, ink(a));
+  }
+`;
+
+/**
+ * THE ROUTINE's step mark: one quarter of the deck, ringed and washed, its
+ * STEP NUMBER spelled as a row of dots. Drawn in the titan's TEACH green,
+ * never hazard amber: during the lesson nothing is dangerous yet. The marks
+ * fade near the end of the charge — from then on the routine lives in your
+ * head. uOrd = the step number.
+ */
+const MARK_FRAG = /* glsl */ `
+  ${COMMON}
+  uniform float uOrd, uAspect;
+  void main(){
+    vec3 col = vec3(0.62, 1.0, 0.70);
+    // The lesson is over before the first step lands.
+    float fade = 1.0 - smoothstep(0.70, 0.92, uFill);
+    float a = 0.10;
+    // Border around the quarter — this whole square is the ground.
+    float e = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+    a += (1.0 - smoothstep(0.022, 0.055, e)) * 0.55;
+    // The step number, as dots in a row across the middle.
+    for (int i = 0; i < 4; i++) {
+      if (float(i) >= uOrd) break;
+      float cx = 0.5 + (float(i) - (uOrd - 1.0) * 0.5) * 0.15;
+      vec2 p = (vUv - vec2(cx, 0.5)) * vec2(1.0, 1.0 / uAspect);
+      a += (1.0 - smoothstep(0.04, 0.055, length(p))) * 0.95;
+    }
+    a *= fade * pulse();
+    gl_FragColor = vec4(col, ink(a));
+  }
+`;
+
+/**
+ * THE ROUTINE's quarter lines: the cross that splits the deck into four,
+ * lit dim and neutral for the whole move — furniture, not danger. It says
+ * where the boxes will land, never which quarter is yours.
+ */
+const QUARTER_FRAG = /* glsl */ `
+  ${COMMON}
+  void main(){
+    float a = 0.0;
+    // Two chalk lines through the middle, softly feathered.
+    a += (1.0 - smoothstep(0.004, 0.016, abs(vUv.x - 0.5))) * 0.5;
+    a += (1.0 - smoothstep(0.004, 0.016, abs(vUv.y - 0.5))) * 0.5;
+    // Ticks at the rim so the split reads even from across the pit.
+    float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+    a *= 0.55 + 0.45 * (1.0 - smoothstep(0.0, 0.18, edge));
+    a *= 0.75 + 0.25 * sin(uTime * 2.0);
+    gl_FragColor = vec4(vec3(0.86, 0.92, 1.0), ink(a));
+  }
+`;
+
 function warnMat(frag: string, extra: Record<string, { value: number }> = {}): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: { uFill: { value: 0 }, uTime: { value: 0 }, ...extra },
@@ -385,6 +563,124 @@ export function beamTelegraph(halfWidth: number, length: number): Telegraph {
  * left→right, −1 for right→left. It MUST match spawnBladeSweep's `from` for
  * the same attack, or the warning wipes across opposite to the cut.
  */
+/**
+ * The gate: a full-deck pane where everything fills EXCEPT one clear band
+ * centred at `gapAt` (platform-local), `gapHalfW` wide each side. axis 0 is
+ * the doorway COLUMN at local x; axis 1 the horizontal cousin — a clear ROW
+ * at local z. Place the group at the platform centre on the floor.
+ */
+export function gateTelegraph(
+  halfWidth: number,
+  halfDepth: number,
+  gapAt: number,
+  gapHalfW: number,
+  axis: 0 | 1 = 0,
+): Telegraph {
+  const w = halfWidth * 2 + 0.4;
+  const d = halfDepth * 2 + 0.3;
+  // uv.x carries the gap. axis 1 spins the pane in-plane (the rail's trick),
+  // which lays geometry +x along world −z — so the gap coordinate mirrors.
+  const along = axis ? d : w;
+  const gap = axis ? -gapAt : gapAt;
+  const mat = warnMat(GATE_FRAG, {
+    uGap: { value: (gap + along / 2) / along },
+    uHalf: { value: gapHalfW / along },
+    uAlong: { value: along },
+    uAcross: { value: axis ? w : d },
+    uSwap: { value: axis },
+  });
+  const pane = new Mesh(new PlaneGeometry(along, axis ? w : d), mat);
+  pane.rotation.set(-Math.PI / 2, 0, axis ? Math.PI / 2 : 0);
+  return makeTelegraph([pane], [mat]);
+}
+
+/**
+ * THE DONUT: the deck's rim floods and one disc in the middle survives.
+ * `radius` covers the whole deck (corners included), `innerR` the safe
+ * disc. Place the group at the platform centre on the floor.
+ */
+export function donutTelegraph(radius: number, innerR: number): Telegraph {
+  const mat = warnMat(DONUT_FRAG, { uInner: { value: innerR / radius }, uPaneR: { value: radius } });
+  const disc = new Mesh(new PlaneGeometry(radius * 2, radius * 2), mat);
+  disc.rotation.x = -Math.PI / 2;
+  return makeTelegraph([disc], [mat]);
+}
+
+/**
+ * THE X, whole: one full-deck pane carrying both diagonal arms and the
+ * knot. Place the group at the platform centre on the floor — the octagon
+ * mask trims it to the deck.
+ */
+export function xTelegraph(halfW: number): Telegraph {
+  const R = 1.2; // spans the deck's diagonal; the mask trims the rest
+  const mat = warnMat(X_FRAG, { uHalfW: { value: halfW }, uPaneR: { value: R } });
+  const pane = new Mesh(new PlaneGeometry(R * 2, R * 2), mat);
+  pane.rotation.x = -Math.PI / 2;
+  return makeTelegraph([pane], [mat]);
+}
+
+/**
+ * THE ROUTINE, taught: one marked quarter per step, each carrying its step
+ * number in dots; the marks fade themselves out as the charge runs down.
+ * `routine` is the corner list (bit 0 = +x, bit 1 = +z). Place the group at
+ * the deck centre on the floor.
+ */
+export function routineMarksTelegraph(
+  routine: readonly number[],
+  halfWidth: number,
+  halfDepth: number,
+): Telegraph {
+  const meshes: Mesh[] = [];
+  const mats: ShaderMaterial[] = [];
+  const w = halfWidth * 0.92;
+  const d = halfDepth * 0.92;
+  routine.forEach((corner, step) => {
+    const mat = warnMat(MARK_FRAG, { uOrd: { value: step + 1 }, uAspect: { value: w / d } });
+    const pane = new Mesh(new PlaneGeometry(w, d), mat);
+    pane.rotation.x = -Math.PI / 2;
+    pane.position.set(((corner & 1 ? 1 : -1) * halfWidth) / 2, 0, ((corner & 2 ? 1 : -1) * halfDepth) / 2);
+    meshes.push(pane);
+    mats.push(mat);
+  });
+  return makeTelegraph(meshes, mats);
+}
+
+/** THE ROUTINE's quarter lines — the split deck, lit for the whole move. */
+export function quarterTelegraph(halfWidth: number, halfDepth: number): Telegraph {
+  const mat = warnMat(QUARTER_FRAG);
+  const pane = new Mesh(new PlaneGeometry(halfWidth * 2, halfDepth * 2), mat);
+  pane.rotation.x = -Math.PI / 2;
+  return makeTelegraph([pane], [mat]);
+}
+
+/**
+ * A laser LANE: the beam strip authored target-local — a full-length strip
+ * down the deck at a fixed local x, no aiming. Place the group at the deck
+ * centre (plus the lane's x) on the floor; yaw for THE X's arms.
+ */
+export function laneTelegraph(halfWidth: number, length: number): Telegraph {
+  const mat = warnMat(STRIP_FRAG);
+  const strip = new Mesh(new PlaneGeometry(halfWidth * 2, length), mat);
+  strip.rotation.x = -Math.PI / 2;
+  return makeTelegraph([strip], [mat]);
+}
+
+/**
+ * THE CROSSFIRE's rail: the beam strip a quarter-turn round, running across
+ * the deck so the dodge is a step toward or away from the titan. `from` is
+ * the local-x side the emitter sits on: the fill front advances from there.
+ * Place the group at the deck centre, at the strip's z.
+ */
+export function railTelegraph(halfDepth: number, length: number, from: 1 | -1): Telegraph {
+  const mat = warnMat(STRIP_FRAG);
+  const strip = new Mesh(new PlaneGeometry(halfDepth * 2, length), mat);
+  // Flat on the deck, then spun within the floor plane (z spin — innermost
+  // in three's default XYZ order). The sign puts v = 1, where the fill
+  // front starts, on the emitter side.
+  strip.rotation.set(-Math.PI / 2, 0, (from * Math.PI) / 2);
+  return makeTelegraph([strip], [mat]);
+}
+
 export function sweepTelegraph(
   width: number,
   depth: number,
