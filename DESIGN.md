@@ -77,6 +77,14 @@ Panel roles:
 | **CENTER — THE CALL** | What we're doing: FIGHT (1v1 ranked/quick/private · 2v2 · FFA), RAID (titans), **RAVE** (the full RAVE RAID mode), TRAIN (tutorial/aim), the campaign line-up. Primary CTA lives here and only here. |
 | **RIGHT — YOU** | The locker: your mannequin live-rendered, paint mode entry, the shop, wallet, rank, stats, settings. |
 
+**The few-doors law** (added when the first wrap proved too busy): the
+lobby never presents everything at once. The center slab's root offers
+exactly THREE doors — FIGHT, ARCADE, THE CLUB — and every other option
+is a sub-option behind its door, one BACK away. Preference breakers live
+where they matter (ONLY BOTS inside FIGHT, SHOOT BACK inside ARCADE),
+never at top level. The left wing is THE TOWN, a buttonless live-status
+board; the right wing stays YOU.
+
 The wrap is the *foyer* menu (solo/spawn context). On the club floor the
 same three panels compress into the summonable console (the RAVE RAID
 desk pattern) so the design system is identical in both places.

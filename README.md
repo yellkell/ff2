@@ -21,10 +21,13 @@ carried over verbatim: everything in it still applies to this code.
 - `public/stats.html` — the web leaderboard: FIRE FIGHT boards first,
   RAVE RAID as a separate-but-equal tab. Standalone, read-only, no SDK.
 - **THE WRAP** — the wrap-around three-panel lobby (DESIGN.md §2, phase 2),
-  live: RAVE RAID's panel kit ported to `src/ui/kit/` in FF2's amber, three
-  kit panels on an arc replacing the legacy BATTLE / ARCADE / house plates
-  (`src/menu/wrap.ts`), every existing flow intact. Headless probe:
-  `npm run dev` then `npm run check:wrap` (add `--shots` for panel PNGs).
+  live and SIMPLIFIED to the few-doors law: the center slab's root is just
+  FIGHT / ARCADE / THE CLUB, everything else a sub-option behind its door
+  (battle flows, arcade modes, the club's region pick — all on the slab,
+  one BACK away; ONLY BOTS and SHOOT BACK demoted into their doors). THE
+  TOWN (left) is a buttonless live-status board; YOU (right) is the body,
+  the shop and the wallet. Headless probe: `npm run dev` then
+  `npm run check:wrap` (add `--shots` for panel PNGs).
 - **THE BLANK** — the mannequin (DESIGN.md §5, phase 3 v3):
   `src/avatar/mannequin.ts`, the ONLY body — one smooth lofted surface
   per piece (no crossing parts, no seams, monotonic taper below the

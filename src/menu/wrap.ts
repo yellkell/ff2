@@ -1,23 +1,30 @@
 /**
  * THE WRAP — FIRE FIGHT 2's wrap-around three-panel lobby, built on the
- * panel kit ported from RAVE RAID (src/ui/kit/). Three kit panels stand on
- * a shallow arc around your spawn: BATTLE on the left wing, ARCADE dead
- * ahead, and the house panel (club · locker · you) on the right wing, both
- * wings yawed in so the menu wraps around you instead of standing in a row.
+ * panel kit ported from RAVE RAID (src/ui/kit/).
  *
- * HOW IT PLUGS IN (deliberately boring): each wrap panel implements FF1's
- * `MenuPanel` contract and REPLACES the legacy 'train' / 'duel' / 'info'
- * plates inside `menu.panels`, keeping their ids. Every existing MenuSystem
- * mechanism — visibility per modal, the pre-tutorial gate, hover repaints,
- * the freshness tick, `run(action)` — keeps working untouched, because the
- * button ids painted here ARE the existing `MenuAction` strings. The old
- * canvas-drawing code in menu.ts still exists but its three plates never
- * reach the scene; screens retire from it one wrap face at a time.
+ * SIMPLIFIED (the few-doors law): the lobby never presents everything at
+ * once. The CENTER slab is the whole menu — a root of THREE doors:
  *
- * Faces mirror the legacy panels' state machines exactly: the BATTLE wing
- * renders `app.duelView` (root / private / keypad / hosting / browser) and
- * the house wing renders `app.infoView` (root / pubpick), so every
- * mid-flow repaint MenuSystem fires by id lands on the right face.
+ *   FIGHT  → quick · ranked · private · 2v2 · ffa   (the battle flows)
+ *   ARCADE → tutorial · campaign · raid · aim
+ *   CLUB   → the social scene (region pick rides the same slab)
+ *
+ * Everything else is a SUB-OPTION behind its door, reached by drilling in
+ * and left by BACK. The old top-level breakers are demoted to where they
+ * matter: ONLY BOTS lives inside FIGHT, SHOOT BACK inside ARCADE. The
+ * LEFT wing is THE TOWN — a quiet live-status board with no buttons at
+ * all; the RIGHT wing stays YOU (name · body · shop · wallet).
+ *
+ * HOW IT PLUGS IN: each wrap panel implements FF1's `MenuPanel` contract
+ * and replaces the legacy 'train' / 'duel' / 'info' plates in place. The
+ * adapters use MenuPanel's optional `click()` so the wrap can own its
+ * LOCAL sub-navigation (`wrap:*` ids) while global ids — real MenuAction
+ * strings — go through MenuSystem.run via the dispatcher installWrap is
+ * handed. Every existing mechanism (modal visibility, the pre-tutorial
+ * clank gate, hover repaints, the freshness tick) drives it untouched;
+ * MenuSystem's post-click redrawAll repaints whichever face state a click
+ * moved to, so the battle flows render fine on the center slab even
+ * though their old id-targeted repaints pointed at the left wing.
  */
 
 import type { Menu, MenuAction, MenuPanel, PanelId } from './menu.js';
@@ -36,10 +43,14 @@ interface Face {
   buttons: PanelButton[];
 }
 
-/** A kit panel wearing FF1's MenuPanel contract. */
+/** A kit panel wearing FF1's MenuPanel contract. `onClick` receives every
+ *  pressed button id (local `wrap:*` or a real MenuAction) — defining
+ *  MenuPanel.click keeps MenuSystem's pre-tutorial gate in front of us
+ *  while letting the wrap route ids itself. */
 class WrapPanel implements MenuPanel {
   readonly kit: Panel;
   readonly mesh;
+  click?: (u: number, v: number) => boolean;
 
   constructor(
     readonly id: PanelId,
@@ -48,10 +59,20 @@ class WrapPanel implements MenuPanel {
     pxW: number,
     pxH: number,
     private face: () => Face,
+    onClick?: (id: string) => void,
   ) {
     this.kit = new Panel(wM, hM, pxW, pxH);
     this.mesh = this.kit.mesh;
     this.mesh.name = `menu-panel:${id}`;
+    if (onClick) {
+      this.click = (u: number, v: number): boolean => {
+        const id = this.kit.buttonAt(u, v);
+        if (!id) return false;
+        this.kit.press(id);
+        onClick(id);
+        return true; // MenuSystem clicks the relay + redraws all panels
+      };
+    }
   }
 
   redraw(hoverAction: MenuAction | null): void {
@@ -63,24 +84,13 @@ class WrapPanel implements MenuPanel {
     return this.kit.buttonAt(u, v) as MenuAction | null;
   }
 
-  /** Press feedback — MenuSystem calls this beside run(action). */
-  flash(id: string): void {
-    this.kit.press(id);
-  }
-
   tick(delta: number, pulse: number): void {
-    // A transition repaint inside the kit re-runs the LAST paint args; keep
-    // them fresh by repainting from live state only while animating is
-    // plausible — the kit itself no-ops when nothing moves, and full
-    // repaints stay on MenuSystem's hover/freshness paths.
     this.kit.tick(delta, pulse);
   }
 }
 
-/* ── shared face bits ─────────────────────────────────────────────────── */
+/* ── shared bits ──────────────────────────────────────────────────────── */
 
-/** Pre-tutorial the lobby is sealed: everything but the tutorial reads as
- *  bolted shut, matching MenuSystem's clank gate. */
 const sealed = (): boolean => !app.tutorialDone;
 const SEAL_SUB = 'sealed — run the tutorial';
 
@@ -94,94 +104,66 @@ function note(text: string, y: number, W: number): (g: CanvasRenderingContext2D)
   };
 }
 
-/* ── CENTER — ARCADE ──────────────────────────────────────────────────── */
+/* ── CENTER — the whole menu, three doors deep ────────────────────────── */
 
-function arcadeFace(): Face {
-  const lock = sealed();
-  // Two columns on the wide slab: the four modes as a 2x2 of big plates,
-  // the breakers riding a slimmer row beneath.
-  const colW = 660;
-  const c1 = 96;
-  const c2 = 96 + colW + 24;
-  const buttons: PanelButton[] = [
-    {
-      id: 'start-tutorial',
-      label: 'TUTORIAL',
-      sub: 'the guided basics',
-      x: c1, y: 160, w: colW, h: 200,
-      primary: lock, // pre-tutorial it IS the call to action
-    },
-    {
-      id: 'open-campaign',
-      label: 'CAMPAIGN',
-      sub: lock ? SEAL_SUB : 'five titans, left to right',
-      x: c2, y: 160, w: colW, h: 200,
-      disabled: lock,
-    },
-    {
-      id: 'open-raid',
-      label: 'RAID',
-      sub: lock ? SEAL_SUB : app.raidsOpen > 0 ? `${app.raidsOpen} squad${app.raidsOpen === 1 ? '' : 's'} forming now` : 'four boxers, one gauntlet',
-      x: c1, y: 392, w: colW, h: 200,
-      disabled: lock,
-      tone: app.raidsOpen > 0 ? KIT.positive : undefined,
-    },
-    {
-      id: 'start-training',
-      label: 'AIM TRAINING',
-      sub: lock ? SEAL_SUB : 'the heart of the game',
-      x: c2, y: 392, w: colW, h: 200,
-      disabled: lock,
-    },
-    {
-      id: 'toggle-shootback',
-      label: 'SHOOT BACK',
-      sub: 'targets return fire',
-      x: c1, y: 656, w: colW, h: 104,
-      small: true,
-      selected: app.shootBack,
-      disabled: lock,
-    },
-    {
-      id: 'toggle-onlybots',
-      label: 'ONLY BOTS',
-      sub: 'never queue online',
-      x: c2, y: 656, w: colW, h: 104,
-      small: true,
-      selected: app.onlyBots,
-      disabled: lock,
-    },
-  ];
+const CW = 1536; // canvas
+const M = 96; // margin
+const WIDE = CW - M * 2; // 1344
+const COL = 656; // half column
+const C2 = M + COL + 32; // right column x
+
+/** Which door the center slab is inside (wrap-local, not app state). */
+const center = { view: 'root' as 'root' | 'fight' | 'arcade' };
+
+const BACK: PanelButton = { id: 'wrap:back', label: 'BACK', x: M, y: 888, w: 320, h: 84, small: true };
+
+function rootFace(): Face {
+  if (sealed()) {
+    return {
+      title: 'FIRE FIGHT 2',
+      body: note('the tutorial unseals the town', 900, CW),
+      buttons: [
+        {
+          id: 'start-tutorial',
+          label: 'TUTORIAL',
+          sub: 'the guided basics — start here',
+          x: M, y: 190, w: WIDE, h: 240,
+          primary: true,
+        },
+        { id: 'wrap:fight', label: 'FIGHT', sub: SEAL_SUB, x: M, y: 480, w: COL, h: 190, disabled: true },
+        { id: 'open-pub', label: 'THE CLUB', sub: SEAL_SUB, x: C2, y: 480, w: COL, h: 190, disabled: true },
+      ],
+    };
+  }
   return {
-    title: 'ARCADE',
-    body: note(lock ? 'the tutorial unseals the whole lobby' : 'every finished run pays the same flat coins', 880, 1536),
-    buttons,
+    title: 'FIRE FIGHT 2',
+    body: note('three doors — everything else lives inside', 920, CW),
+    buttons: [
+      {
+        id: 'wrap:fight',
+        label: 'FIGHT',
+        sub: app.searching > 0 ? `${app.searching} searching right now` : 'quick · ranked · private · brawls',
+        x: M, y: 180, w: COL, h: 280,
+        primary: true,
+      },
+      {
+        id: 'wrap:arcade',
+        label: 'ARCADE',
+        sub: 'tutorial · campaign · raid · aim',
+        x: C2, y: 180, w: COL, h: 280,
+      },
+      {
+        id: 'open-pub',
+        label: 'THE CLUB',
+        sub: app.pubCount > 0 ? `${app.pubCount} inside right now` : 'the social scene',
+        x: M, y: 520, w: WIDE, h: 190,
+        tone: app.pubCount > 0 ? KIT.positive : undefined,
+      },
+    ],
   };
 }
 
-/* ── LEFT WING — BATTLE (renders app.duelView) ────────────────────────── */
-
-const LW = 832; // canvas width
-const LX = 96;
-const LWIDE = LW - LX * 2;
-
-function battleFace(): Face {
-  switch (app.duelView) {
-    case 'private':
-      return privateFace();
-    case 'keypad':
-      return keypadFace();
-    case 'hosting':
-      return hostingFace();
-    case 'browser':
-      return browserFace();
-    default:
-      return battleRoot();
-  }
-}
-
-function battleRoot(): Face {
-  const lock = sealed();
+function fightRoot(): Face {
   const queueing = app.state === 'queueing';
   const buttons: PanelButton[] = [
     queueing
@@ -189,52 +171,45 @@ function battleRoot(): Face {
           id: 'cancel-queue',
           label: 'CANCEL SEARCH',
           sub: app.searching > 0 ? `${app.searching} in the queue` : 'searching…',
-          x: LX, y: 156, w: LWIDE, h: 132,
+          x: M, y: 160, w: COL, h: 200,
           tone: KIT.danger,
         }
       : {
           id: 'quick-match',
           label: 'QUICK MATCH',
-          sub: lock ? SEAL_SUB : app.searching > 0 ? `${app.searching} searching now` : 'best of three · drop in',
-          x: LX, y: 156, w: LWIDE, h: 132,
-          primary: !lock,
-          disabled: lock,
+          sub: app.searching > 0 ? `${app.searching} searching now` : 'best of three · drop in',
+          x: M, y: 160, w: COL, h: 200,
+          primary: true,
         },
     {
       id: 'ranked-match',
       label: 'RANKED',
-      sub: lock ? SEAL_SUB : app.onlyBots ? 'off while ONLY BOTS is on' : 'best of five · the ladder',
-      x: LX, y: 324, w: LWIDE, h: 116,
-      disabled: lock || app.onlyBots || queueing,
+      sub: app.onlyBots ? 'off while ONLY BOTS is on' : 'best of five · the ladder',
+      x: M, y: 390, w: COL, h: 150,
+      disabled: app.onlyBots || queueing,
     },
     {
       id: 'private-open',
       label: 'PRIVATE MATCH',
-      sub: lock ? SEAL_SUB : 'a five-digit code for your lot',
-      x: LX, y: 464, w: LWIDE, h: 116,
-      disabled: lock || queueing,
+      sub: 'a five-digit code for your lot',
+      x: M, y: 570, w: COL, h: 150,
+      disabled: queueing,
     },
+    { id: 'arcade-2v2', label: '2V2', sub: 'tag brawl', x: C2, y: 160, w: COL, h: 170, disabled: queueing },
+    { id: 'arcade-ffa', label: 'FFA', sub: 'last one up', x: C2, y: 360, w: COL, h: 170, disabled: queueing },
     {
-      id: 'arcade-2v2',
-      label: '2V2',
-      sub: 'tag brawl',
-      x: LX, y: 640, w: 304, h: 124,
-      disabled: lock || queueing,
+      id: 'toggle-onlybots',
+      label: 'ONLY BOTS',
+      sub: 'never queue online',
+      x: C2, y: 590, w: COL, h: 110,
+      small: true,
+      selected: app.onlyBots,
     },
-    {
-      id: 'arcade-ffa',
-      label: 'FFA',
-      sub: 'last one up',
-      x: LX + 336, y: 640, w: 304, h: 124,
-      disabled: lock || queueing,
-    },
+    BACK,
   ];
-  // The connection line only earns its place while something is happening —
-  // an idle lobby's "not connected" reads as a fault, not a fact.
-  const status = queueing ? app.netStatus : '';
   return {
-    title: 'BATTLE',
-    body: status ? note(status, 880, LW) : note('every finished bout banks 10 bolt-dollars', 880, LW),
+    title: 'FIGHT',
+    body: note('every finished bout banks 10 bolt-dollars', 800, CW),
     buttons,
   };
 }
@@ -245,12 +220,11 @@ function privateFace(): Face {
     { id: 'private-mode-2v2' as MenuAction, label: '2V2', mode: '2v2', seats: '4 seats' },
     { id: 'private-mode-ffa' as MenuAction, label: 'FFA', mode: 'ffa', seats: '4 seats' },
   ];
-  const chipW = 197;
   const buttons: PanelButton[] = modes.map((m, i) => ({
     id: m.id,
     label: m.label,
     sub: m.seats,
-    x: LX + i * (chipW + 24), y: 170, w: chipW, h: 96,
+    x: C2 + (i % 2) * (COL / 2 + 16), y: 170 + Math.floor(i / 2) * 150, w: COL / 2 - 16, h: 130,
     small: true,
     selected: app.privateMode === m.mode,
   }));
@@ -259,20 +233,20 @@ function privateFace(): Face {
       id: 'private-create',
       label: 'CREATE CODE',
       sub: 'reserve a room of that shape',
-      x: LX, y: 320, w: LWIDE, h: 110,
+      x: M, y: 170, w: COL, h: 190,
       primary: true,
     },
     {
       id: 'private-enter',
       label: 'ENTER A CODE',
       sub: 'join whatever your mate opened',
-      x: LX, y: 460, w: LWIDE, h: 100,
+      x: M, y: 400, w: COL, h: 150,
     },
-    { id: 'private-back', label: 'BACK', x: LX, y: 856, w: LWIDE, h: 76, small: true },
+    { ...BACK, id: 'private-back' },
   );
   return {
     title: 'PRIVATE',
-    body: note('pick a format, then create or enter a code', 620, LW),
+    body: note('pick a format on the right, then create or enter', 800, CW),
     buttons,
   };
 }
@@ -280,50 +254,48 @@ function privateFace(): Face {
 function keypadFace(): Face {
   const draft = app.codeEntry.padEnd(5, '·').split('').join(' ');
   const buttons: PanelButton[] = [
-    { id: 'code-draft', label: draft, sub: 'the code', x: LX, y: 140, w: LWIDE, h: 96, display: true, px: 56 },
-  ];
-  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
-  const kw = 196;
-  const kh = 96;
-  keys.forEach((k, i) => {
-    buttons.push({
-      id: `kp-${k}` as MenuAction,
-      label: k,
-      x: LX + (i % 3) * (kw + 26), y: 268 + Math.floor(i / 3) * (kh + 20), w: kw, h: kh,
-      px: 40,
-    });
-  });
-  buttons.push(
-    { id: 'kp-del', label: '⌫', x: LX, y: 616, w: kw, h: kh, px: 40, disabled: app.codeEntry.length === 0 },
-    { id: 'kp-0', label: '0', x: LX + kw + 26, y: 616, w: kw, h: kh, px: 40 },
+    { id: 'code-draft', label: draft, sub: 'the code', x: M, y: 200, w: COL, h: 170, display: true, px: 72 },
     {
       id: 'kp-join',
       label: 'JOIN',
-      x: LX + (kw + 26) * 2, y: 616, w: kw, h: kh,
+      x: M, y: 430, w: COL, h: 170,
       primary: app.codeEntry.length === 5,
       disabled: app.codeEntry.length < 5,
     },
-    { id: 'private-back', label: 'BACK', x: LX, y: 856, w: LWIDE, h: 76, small: true },
-  );
+    { ...BACK, id: 'private-back' },
+  ];
+  const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', ''];
+  const kw = 200;
+  const kh = 130;
+  keys.forEach((k, i) => {
+    if (!k) return;
+    const id = k === '⌫' ? 'kp-del' : `kp-${k}`;
+    buttons.push({
+      id: id as MenuAction,
+      label: k,
+      x: C2 + (i % 3) * (kw + 24), y: 160 + Math.floor(i / 3) * (kh + 20), w: kw, h: kh,
+      px: 44,
+      disabled: k === '⌫' && app.codeEntry.length === 0,
+    });
+  });
   return { title: 'ENTER CODE', buttons };
 }
 
 function hostingFace(): Face {
-  const code = app.privateCode || '· · · · ·';
   return {
     title: 'PRIVATE',
-    body: note('the room launches itself once the seats fill', 460, LW),
+    body: note('the room launches itself once the seats fill', 700, CW),
     buttons: [
       {
         id: 'code-live',
-        label: app.privateCode ? code.split('').join(' ') : 'RESERVING…',
+        label: app.privateCode ? app.privateCode.split('').join(' ') : 'RESERVING…',
         sub: 'your code — shout it, ping it, text it',
-        x: LX, y: 190, w: LWIDE, h: 150,
+        x: M + 240, y: 240, w: WIDE - 480, h: 240,
         display: true,
-        px: 72,
+        px: 110,
         tone: KIT.accent,
       },
-      { id: 'private-back', label: 'CANCEL', x: LX, y: 856, w: LWIDE, h: 76, small: true, tone: KIT.danger },
+      { ...BACK, id: 'private-back', label: 'CANCEL', tone: KIT.danger },
     ],
   };
 }
@@ -335,97 +307,49 @@ function browserFace(): Face {
     id: `ranked-join-${r.id}` as MenuAction,
     label: r.host,
     sub: r.id === app.rankedRoomId ? 'your room — holding the door' : 'open — step in',
-    x: LX, y: 168 + i * 108, w: LWIDE, h: 92,
+    x: M, y: 160 + i * 136, w: 800, h: 118,
     small: true,
     disabled: r.id === app.rankedRoomId || hostingOwn,
     selected: r.id === app.rankedRoomId,
   }));
   buttons.push(
     hostingOwn || app.rankedHost
-      ? { id: 'ranked-cancel', label: 'STAND DOWN', sub: 'close your room', x: LX, y: 724, w: LWIDE, h: 100, tone: KIT.danger }
-      : { id: 'ranked-host', label: 'HOST A ROOM', sub: 'your name on the board', x: LX, y: 724, w: LWIDE, h: 100, primary: true },
-    { id: 'ranked-back', label: 'BACK', x: LX, y: 856, w: LWIDE, h: 76, small: true },
+      ? { id: 'ranked-cancel', label: 'STAND DOWN', sub: 'close your room', x: 968, y: 160, w: 472, h: 170, tone: KIT.danger }
+      : { id: 'ranked-host', label: 'HOST A ROOM', sub: 'your name on the board', x: 968, y: 160, w: 472, h: 170, primary: true },
+    { ...BACK, id: 'ranked-back' },
   );
   return {
     title: 'RANKED',
-    body: rows.length === 0 ? note('no open rooms — put your name up', 400, LW) : undefined,
+    body: rows.length === 0 ? note('no open rooms — put your name up', 500, CW) : undefined,
     buttons,
   };
 }
 
-/* ── RIGHT WING — the house (renders app.infoView) ────────────────────── */
-
-function houseFace(): Face {
-  if (app.infoView === 'pubpick') return pubPickFace();
-  return houseRoot();
-}
-
-function houseRoot(): Face {
-  const lock = sealed();
-  const stats = myStats();
-  const tier = tierForXp(stats.xp);
+function arcadeFace(): Face {
   const buttons: PanelButton[] = [
-    // YOU, above everything: the name plate is the panel's headline.
+    { id: 'start-tutorial', label: 'TUTORIAL', sub: 'the guided basics', x: M, y: 160, w: COL, h: 200 },
+    { id: 'open-campaign', label: 'CAMPAIGN', sub: 'five titans, left to right', x: C2, y: 160, w: COL, h: 200 },
     {
-      id: 'you-name',
-      label: stats.name,
-      sub: `${tier.name} · ${stats.xp} XP`,
-      x: LX, y: 140, w: LWIDE, h: 110,
-      display: true,
-      px: 52,
+      id: 'open-raid',
+      label: 'RAID',
+      sub: app.raidsOpen > 0 ? `${app.raidsOpen} squad${app.raidsOpen === 1 ? '' : 's'} forming now` : 'four boxers, one gauntlet',
+      x: M, y: 390, w: COL, h: 200,
+      tone: app.raidsOpen > 0 ? KIT.positive : undefined,
     },
-    // The body is the product now: the LOCKER leads.
+    { id: 'start-training', label: 'AIM TRAINING', sub: 'the heart of the game', x: C2, y: 390, w: COL, h: 200 },
     {
-      id: 'open-custom',
-      label: 'YOUR BLANK',
-      sub: lock ? SEAL_SUB : 'gauntlet neon · pads · arena — paint bay coming',
-      x: LX, y: 282, w: LWIDE, h: 116,
-      primary: !lock,
-      disabled: lock,
-    },
-    {
-      id: 'open-shop',
-      label: 'SHOP',
-      sub: lock ? SEAL_SUB : 'attachments and pads — spend your bolt-dollars',
-      x: LX, y: 422, w: LWIDE, h: 100,
-      disabled: lock,
-    },
-    {
-      id: 'you-coins',
-      label: `$ ${coins.balance}`,
-      sub: 'bolt-dollars',
-      x: LX, y: 552, w: 304, h: 88,
-      display: true,
+      id: 'toggle-shootback',
+      label: 'SHOOT BACK',
+      sub: 'aim-training targets return fire',
+      x: C2, y: 630, w: COL, h: 110,
       small: true,
-      tone: KIT.accent,
+      selected: app.shootBack,
     },
-    {
-      id: 'you-record',
-      label: `${app.stats.wins}W — ${app.stats.losses}L`,
-      sub: 'lifetime',
-      x: LX + 336, y: 552, w: 304, h: 88,
-      display: true,
-      small: true,
-    },
-    {
-      id: 'open-pub',
-      label: 'IRON BALLS CLUB',
-      sub: lock ? SEAL_SUB : app.pubCount > 0 ? `${app.pubCount} in the club right now` : 'the social scene',
-      x: LX, y: 682, w: LWIDE, h: 100,
-      disabled: lock,
-      tone: app.pubCount > 0 ? KIT.positive : undefined,
-    },
-    {
-      id: 'rename',
-      label: 'RENAME',
-      x: LX, y: 812, w: LWIDE, h: 72,
-      small: true,
-      disabled: lock,
-    },
+    BACK,
   ];
   return {
-    title: 'YOU',
-    body: note("that's you on the podium — everyone sees this body", 940, LW),
+    title: 'ARCADE',
+    body: note('every finished run pays the same flat coins', 800, CW),
     buttons,
   };
 }
@@ -437,14 +361,90 @@ function pubPickFace(): Face {
       id: `pub-go-${region.id}` as MenuAction,
       label: region.label,
       sub: count >= 0 ? `${count} inside` : 'knock and see',
-      x: LX, y: 190 + i * 136, w: LWIDE, h: 112,
+      x: M, y: 200 + i * 200, w: WIDE, h: 170,
     };
   });
-  buttons.push({ id: 'pub-back', label: 'BACK', x: LX, y: 856, w: LWIDE, h: 76, small: true });
+  buttons.push({ ...BACK, id: 'pub-back' });
   return {
     title: 'PICK A DOOR',
-    body: note('same club, different corner of the map', 560, LW),
+    body: note('same club, different corner of the map', 720, CW),
     buttons,
+  };
+}
+
+function centerFace(): Face {
+  // The club's region picker takes the slab over, whatever door was open.
+  if (app.infoView === 'pubpick') return pubPickFace();
+  if (center.view === 'fight') {
+    switch (app.duelView) {
+      case 'private':
+        return privateFace();
+      case 'keypad':
+        return keypadFace();
+      case 'hosting':
+        return hostingFace();
+      case 'browser':
+        return browserFace();
+      default:
+        return fightRoot();
+    }
+  }
+  if (center.view === 'arcade') return arcadeFace();
+  return rootFace();
+}
+
+/* ── LEFT WING — THE TOWN (a status board; no buttons at all) ─────────── */
+
+const LW = 832;
+
+function townFace(): Face {
+  const n = (v: number): string => (v >= 0 ? String(v) : '—');
+  const chip = (id: string, label: string, sub: string, y: number, tone?: string): PanelButton => ({
+    id, label, sub, x: 96, y, w: LW - 192, h: 150, display: true, px: 64, tone,
+  });
+  return {
+    title: 'THE TOWN',
+    body: note('the leaderboard hangs behind you', 940, LW),
+    buttons: [
+      chip('town-queue', n(app.searching), 'searching for a fight', 200, app.searching > 0 ? KIT.positive : undefined),
+      chip('town-raids', n(app.raidsOpen), 'raid squads forming', 400, app.raidsOpen > 0 ? KIT.positive : undefined),
+      chip('town-club', n(app.pubCount), 'in the club tonight', 600, app.pubCount > 0 ? KIT.accent : undefined),
+    ],
+  };
+}
+
+/* ── RIGHT WING — YOU ─────────────────────────────────────────────────── */
+
+function youFace(): Face {
+  const lock = sealed();
+  const stats = myStats();
+  const tier = tierForXp(stats.xp);
+  const X = 96;
+  const W = LW - 192;
+  return {
+    title: 'YOU',
+    body: note("that's you on the podium — everyone sees this body", 940, LW),
+    buttons: [
+      { id: 'you-name', label: stats.name, sub: `${tier.name} · ${stats.xp} XP`, x: X, y: 150, w: W, h: 120, display: true, px: 52 },
+      {
+        id: 'open-custom',
+        label: 'YOUR BLANK',
+        sub: lock ? SEAL_SUB : 'base tone · gauntlet neon · pads · arena',
+        x: X, y: 310, w: W, h: 130,
+        primary: !lock,
+        disabled: lock,
+      },
+      {
+        id: 'open-shop',
+        label: 'SHOP',
+        sub: lock ? SEAL_SUB : 'attachments and pads — spend your bolt-dollars',
+        x: X, y: 470, w: W, h: 110,
+        disabled: lock,
+      },
+      { id: 'you-coins', label: `$ ${coins.balance}`, sub: 'bolt-dollars', x: X, y: 620, w: (W - 32) / 2, h: 100, display: true, small: true, tone: KIT.accent },
+      { id: 'you-record', label: `${app.stats.wins}W — ${app.stats.losses}L`, sub: 'lifetime', x: X + (W + 32) / 2, y: 620, w: (W - 32) / 2, h: 100, display: true, small: true },
+      { id: 'rename', label: 'RENAME', x: X, y: 780, w: W, h: 84, small: true, disabled: lock },
+    ],
   };
 }
 
@@ -455,10 +455,6 @@ export interface Wrap {
   tick(delta: number): void;
 }
 
-/** Headless introspection, in the spirit of RAVE RAID's `__gdr`: probes ask
- *  what each wrap panel is offering, snapshot its canvas, and fire actions
- *  through the same dispatcher the trigger uses. Dev/test only by nature —
- *  it drives real state, so nothing here is reachable from painted UI. */
 declare global {
   interface Window {
     __ff2?: {
@@ -475,26 +471,40 @@ declare global {
 
 /**
  * Replace the legacy 'train' / 'duel' / 'info' plates with the wrap, in
- * place: same ids, same slots in `menu.panels`, same parent group — so
- * MenuSystem's visibility switch, gating, hover repaints and freshness
- * tick drive the new panels with no changes. Call once, right after
- * `createMenu`.
+ * place — same ids, same slots, same parent group. Call once, right after
+ * `createMenu`. `act` is MenuSystem.run — global ids go through it; the
+ * wrap's own `wrap:*` door navigation is handled here.
  */
 export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wrap {
-  const center = new WrapPanel('train', 1.42, 0.95, 1536, 1024, arcadeFace);
-  const left = new WrapPanel('duel', 0.74, 0.91, LW, 1024, battleFace);
-  const right = new WrapPanel('info', 0.74, 0.91, LW, 1024, houseFace);
+  /** Route one pressed id: local door-nav, or the real dispatcher. */
+  const dispatch = (id: string): void => {
+    if (id === 'wrap:fight') {
+      center.view = 'fight';
+      return;
+    }
+    if (id === 'wrap:arcade') {
+      center.view = 'arcade';
+      return;
+    }
+    if (id === 'wrap:back') {
+      center.view = 'root';
+      return;
+    }
+    act?.(id as MenuAction);
+  };
 
-  // The arc: centre dead ahead, wings pulled in close and yawed hard so the
-  // three read as one wrapped console, not a row of signs.
+  const slab = new WrapPanel('train', 1.42, 0.95, CW, 1024, centerFace, dispatch);
+  const town = new WrapPanel('duel', 0.74, 0.91, LW, 1024, townFace, dispatch);
+  const you = new WrapPanel('info', 0.74, 0.91, LW, 1024, youFace, dispatch);
+
   const y = 1.45;
-  center.mesh.position.set(0, y, -1.26);
-  left.mesh.position.set(-1.02, y, -1.02);
-  left.mesh.rotation.y = 0.58;
-  right.mesh.position.set(1.02, y, -1.02);
-  right.mesh.rotation.y = -0.58;
+  slab.mesh.position.set(0, y, -1.26);
+  town.mesh.position.set(-1.02, y, -1.02);
+  town.mesh.rotation.y = 0.58;
+  you.mesh.position.set(1.02, y, -1.02);
+  you.mesh.rotation.y = -0.58;
 
-  const panels = [center, left, right];
+  const panels = [slab, town, you];
   for (const p of panels) {
     const i = menu.panels.findIndex((old) => old.id === p.id);
     if (i < 0) continue;
@@ -512,7 +522,7 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
       live: (id) => byId(id)?.kit.liveButtons() ?? [],
       snap: (id) => (byId(id)?.kit.ctx().canvas as HTMLCanvasElement | undefined)?.toDataURL('image/png') ?? '',
       act: (action) => {
-        act?.(action as MenuAction);
+        dispatch(action);
         for (const p of panels) p.redraw(null);
       },
       redraw: () => {
@@ -525,7 +535,6 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
   return {
     tick(delta: number): void {
       clock += delta;
-      // A slow furnace breath on the halos — subtle, upload-free.
       const pulse = 0.5 + 0.5 * Math.sin((clock * 2 * Math.PI) / 6);
       for (const p of panels) p.tick(delta, pulse);
     },

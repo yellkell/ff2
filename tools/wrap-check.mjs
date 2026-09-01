@@ -6,11 +6,11 @@
  *   node tools/wrap-check.mjs [--shots]
  *
  * Boots the game in headless Chromium (the IWSDK dev plugin's IWER
- * emulator provides WebXR), enters the arena, and asks the wrap's dev hook
- * (window.__ff2.wrap) what each panel is offering — then walks the BATTLE
- * wing's faces (private → keypad → back) through the same dispatcher the
- * trigger uses. --shots also saves each panel's canvas as a PNG beside
- * this script, for eyeballing the design without a headset.
+ * emulator provides WebXR), enters the arena, and drives the SIMPLIFIED
+ * wrap through its dev hook (window.__ff2.wrap): the three-door root,
+ * the FIGHT door's flows (private → keypad → back), the ARCADE door, the
+ * buttonless TOWN board and the YOU wing. --shots saves each panel's
+ * canvas as a PNG beside this script.
  */
 
 import { chromium } from 'playwright';
@@ -60,36 +60,53 @@ if (!hook) {
 
 const wrap = (expr) => page.evaluate(`window.__ff2.wrap.${expr}`);
 
-console.log('\n=== the three panels, fresh ===');
-const train = await wrap(`buttons('train')`);
-check('ARCADE offers the arcade', train.includes('start-tutorial') && train.includes('open-campaign') && train.includes('open-raid') && train.includes('start-training'), train.join(','));
-const duel = await wrap(`buttons('duel')`);
-check('BATTLE offers the fights', duel.includes('ranked-match') && duel.includes('private-open') && duel.includes('arcade-2v2') && duel.includes('arcade-ffa'), duel.join(','));
-const info = await wrap(`buttons('info')`);
-check('the house offers club + locker + shop', info.includes('open-pub') && info.includes('open-custom') && info.includes('open-shop'), info.join(','));
-
-console.log('\n=== pre-tutorial seal ===');
-const liveTrain = await wrap(`live('train')`);
+console.log('\n=== the root: three doors, nothing more ===');
 const tutorialDone = await page.evaluate(() => localStorage.getItem('ff-tutorial-done') === '1');
+let root = await wrap(`buttons('train')`);
 if (!tutorialDone) {
-  check('only the tutorial answers on a fresh save', liveTrain.length === 1 && liveTrain[0] === 'start-tutorial', liveTrain.join(','));
-} else {
-  check('a finished save unseals the arcade', liveTrain.length > 1, liveTrain.join(','));
+  check('a fresh save leads with the tutorial', root.includes('start-tutorial'), root.join(','));
+  const live = await wrap(`live('train')`);
+  check('and ONLY the tutorial answers', live.length === 1 && live[0] === 'start-tutorial', live.join(','));
+  // Unseal for the rest of the walk.
+  await page.evaluate(() => localStorage.setItem('ff-tutorial-done', '1'));
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
+  await page.click('#enter-vr');
+  await page.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 20000 });
+  await page.waitForTimeout(2200);
+  root = await wrap(`buttons('train')`);
 }
+check('the root offers FIGHT · ARCADE · CLUB', root.includes('wrap:fight') && root.includes('wrap:arcade') && root.includes('open-pub'), root.join(','));
+check('and nothing else is presented', root.length === 3, String(root.length));
 
-console.log('\n=== walking the BATTLE faces ===');
+console.log('\n=== the wings stay quiet ===');
+const town = await wrap(`live('duel')`);
+check('THE TOWN board has no buttons at all', town.length === 0, town.join(','));
+const you = await wrap(`buttons('info')`);
+check('YOU offers body · shop · rename, no club door', you.includes('open-custom') && you.includes('open-shop') && you.includes('rename') && !you.includes('open-pub'), you.join(','));
+
+console.log('\n=== through the FIGHT door ===');
+await wrap(`act('wrap:fight')`);
+let face = await wrap(`buttons('train')`);
+check('FIGHT: modes + the demoted ONLY BOTS + back', ['quick-match', 'ranked-match', 'private-open', 'arcade-2v2', 'arcade-ffa', 'toggle-onlybots', 'wrap:back'].every((b) => face.includes(b)), face.join(','));
 await wrap(`act('private-open')`);
-await page.waitForTimeout(300);
-let face = await wrap(`buttons('duel')`);
-check('PRIVATE face: format chips + create + enter', face.includes('private-mode-1v1') && face.includes('private-create') && face.includes('private-enter'), face.join(','));
+face = await wrap(`buttons('train')`);
+check('PRIVATE face on the slab', face.includes('private-mode-1v1') && face.includes('private-create') && face.includes('private-enter'), face.join(','));
 await wrap(`act('private-enter')`);
-await page.waitForTimeout(300);
-face = await wrap(`buttons('duel')`);
-check('keypad face: digits + join', face.includes('kp-5') && face.includes('kp-join') && face.includes('kp-del'), face.join(','));
+face = await wrap(`buttons('train')`);
+check('keypad face on the slab', face.includes('kp-5') && face.includes('kp-join') && face.includes('kp-del'), face.join(','));
 await wrap(`act('private-back')`);
-await page.waitForTimeout(300);
-face = await wrap(`buttons('duel')`);
-check('BACK lands on the mode list', face.includes('quick-match') || face.includes('cancel-queue'), face.join(','));
+face = await wrap(`buttons('train')`);
+check('BACK lands on the FIGHT root', face.includes('quick-match') || face.includes('cancel-queue'), face.join(','));
+await wrap(`act('wrap:back')`);
+face = await wrap(`buttons('train')`);
+check('BACK again lands on the three doors', face.includes('wrap:fight') && face.length === 3, face.join(','));
+
+console.log('\n=== through the ARCADE door ===');
+await wrap(`act('wrap:arcade')`);
+face = await wrap(`buttons('train')`);
+check('ARCADE: modes + the demoted SHOOT BACK + back', ['start-tutorial', 'open-campaign', 'open-raid', 'start-training', 'toggle-shootback', 'wrap:back'].every((b) => face.includes(b)), face.join(','));
+await wrap(`act('wrap:back')`);
 
 if (shots) {
   console.log('\n=== saving canvases ===');
