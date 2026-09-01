@@ -3,17 +3,14 @@ name: Deploy to GitHub Pages
 # Pages source is set to "GitHub Actions", so whatever this workflow uploads
 # becomes the live site (https://yellkell.github.io/ff2/).
 #
-# The working branch is listed alongside main on purpose: FF2 is built there
-# and `main` still holds nothing but the initial commit, so a main-only
-# trigger would never fire. Drop the branch line once the work is merged.
-#
-# NOTE: deploying from a NON-DEFAULT branch also needs the `github-pages`
-# environment to allow it — Settings → Environments → github-pages →
-# Deployment branches. If a run fails with "not allowed to deploy ... due to
-# environment protection rules", that setting is why.
+# Deploys from `main` only. A feature branch can build here, but the
+# `github-pages` environment refuses the deploy step for any branch its
+# policy doesn't list (default: the default branch), so a run from
+# elsewhere fails instantly with no logs. Ship from main, or add the branch
+# under Settings → Environments → github-pages → Deployment branches.
 on:
   push:
-    branches: [main, claude/ff2-work-1tpabn]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
