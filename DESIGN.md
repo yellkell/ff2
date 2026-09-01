@@ -410,6 +410,13 @@ Each phase is shippable; nothing waits on everything.
    visuals; `pointer.ts`/`safety.ts` port when those screens move.)*
 3. **The mannequin** — new procedural blank over the existing rig +
    hitboxes; FF1 skins retired behind it; attachments shop v1.
+   *(v1 shipped: THE BLANK lives at `src/avatar/mannequin.ts` as the
+   'blank' chassis — primer-grey, wide shoulders, thin waist, sized to
+   the BODY_IK spheres, its materials untagged so recolours, the hue
+   wheel and accents all leave it primer. It leads the locker roster,
+   fresh saves are born in it, and the unskinned bot wears it. Still to
+   come in this phase: the attachments shop, and actually retiring the
+   FF1 animal skins from the store shelf.)*
 4. **The paint** — stripe data model, per-part bake, locker paint mode,
    cosmetics sync. (The moment "lasting through games" works, ship it.)
 5. **The venue + THE BELL** — new club on RAVE RAID's club architecture,

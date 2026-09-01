@@ -112,8 +112,9 @@ export function ownAvatar(id: string): void {
 
 /** The saved equipped avatar, or the panther if the saved one isn't owned. */
 function loadEquippedAvatar(): string {
-  const id = avatarSkin(load('ff-skin-avatar', 'crimson')).id;
-  return ownedAvatars.has(id) ? id : 'crimson';
+  // Born blank: FF2's factory body is the default; a saved FF1 pick stays.
+  const id = avatarSkin(load('ff-skin-avatar', 'blank')).id;
+  return ownedAvatars.has(id) ? id : 'blank';
 }
 
 export const customization = {

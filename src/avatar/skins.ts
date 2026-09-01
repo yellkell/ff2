@@ -87,9 +87,14 @@ export const DEFAULT_SLAB_METAL = 0.92;
 /** Platform skins owned from the start (no purchase needed). */
 export const FREE_PLATFORMS = ['azure', 'inferno', 'ember'];
 /** Avatar skins owned from the start — the rest are shop unlocks. */
-export const FREE_AVATARS = ['cobalt', 'crimson', 'valkyrie'];
+export const FREE_AVATARS = ['blank', 'cobalt', 'crimson', 'valkyrie'];
 
 export const AVATAR_SKINS: AvatarSkin[] = [
+  // THE BLANK — FF2's mannequin, the body everyone is born in (DESIGN.md
+  // §5.1). Its geometry carries no role/accent tags, so these palette
+  // fields only paint its SHOP TILE — the body itself stays primer no
+  // matter what the recolour machinery does. Colour comes from paint alone.
+  { id: 'blank', name: 'THE BLANK', chassis: 0x98948b, trim: 0x4e4b45, accent: 0xd8d4ca },
   // ids are stable (saved prefs + per-skin geometry tags key off them); the
   // display names follow the metallic-animal heads buildBoxer gives each one.
   { id: 'cobalt', name: 'BIGGY', chassis: 0x122039, trim: 0x0a111e, accent: 0x4fb7ff },
@@ -184,9 +189,10 @@ export const PLATFORM_SKINS: PlatformSkin[] = [
 
 /** How the OPPONENT looks when they haven't picked (bot bouts): team blue. */
 export const OPPONENT_DEFAULT_AVATAR: AvatarSkin = {
-  // id matches the PANTHER tag so an unskinned opponent (the bot) still gets a
-  // full animal head — in the default cool-blue team colours.
-  id: 'crimson', name: '', chassis: 0x1c1f25, trim: 0x121419, accent: PALETTE.coolFlame,
+  // An unskinned opponent (the bot) is a BLANK too — in FF2 everyone is
+  // born the same primer mannequin; the palette here only matters to
+  // role-tagged geometry, which the blank deliberately has none of.
+  id: 'blank', name: '', chassis: 0x98948b, trim: 0x4e4b45, accent: PALETTE.coolFlame,
 };
 export const OPPONENT_DEFAULT_PLATFORM: PlatformSkin = {
   id: 'opp-default', name: '', neon: PALETTE.coolFlame,
@@ -194,7 +200,8 @@ export const OPPONENT_DEFAULT_PLATFORM: PlatformSkin = {
 
 export function avatarSkin(id: string): AvatarSkin {
   const s = AVATAR_SKINS.find((x) => x.id === id);
-  return s && !s.locked ? s : AVATAR_SKINS[1]; // crimson default
+  // An unknown/locked id falls back to THE BLANK — FF2's factory body.
+  return s && !s.locked ? s : AVATAR_SKINS[0];
 }
 
 export function platformSkin(id: string): PlatformSkin {

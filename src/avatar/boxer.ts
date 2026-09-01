@@ -27,6 +27,7 @@ import {
   SphereGeometry,
   Vector3,
 } from 'three';
+import { buildMannequinChest, buildMannequinHead, buildMannequinPelvis } from './mannequin.js';
 import { BODY_IK, PALETTE, teamColor } from '../config.js';
 import { collapseStatic } from '../arena/merge.js';
 import { buildHand } from './hands.js';
@@ -2386,6 +2387,7 @@ function buildOswaldPelvis(accent: number): Group {
 /** Per-skin builders, keyed by skin id — pick one (a fixed wearer) or all
  *  of them (the customisation mirror, which toggles between them live). */
 const HEAD_BUILDERS: Record<string, (accent: number) => Group> = {
+  blank: buildMannequinHead,
   cobalt: buildBearHead,
   crimson: buildPantherHead,
   valkyrie: buildEagleHead,
@@ -2396,6 +2398,7 @@ const HEAD_BUILDERS: Record<string, (accent: number) => Group> = {
   bunny: buildOswaldHead,
 };
 const CHEST_BUILDERS: Record<string, (accent: number) => Group> = {
+  blank: buildMannequinChest,
   cobalt: buildBearChest,
   crimson: buildPantherChest,
   valkyrie: buildEagleChest,
@@ -2406,6 +2409,7 @@ const CHEST_BUILDERS: Record<string, (accent: number) => Group> = {
   bunny: buildOswaldChest,
 };
 const PELVIS_BUILDERS: Record<string, (accent: number) => Group> = {
+  blank: buildMannequinPelvis,
   cobalt: buildBearPelvis,
   crimson: buildPantherPelvis,
   valkyrie: buildEaglePelvis,
@@ -2415,7 +2419,7 @@ const PELVIS_BUILDERS: Record<string, (accent: number) => Group> = {
   frog: buildFrogPelvis,
   bunny: buildOswaldPelvis,
 };
-const ALL_SKIN_IDS = ['cobalt', 'crimson', 'valkyrie', 'knight', 'stallion', 'wolf', 'frog', 'bunny'];
+const ALL_SKIN_IDS = ['blank', 'cobalt', 'crimson', 'valkyrie', 'knight', 'stallion', 'wolf', 'frog', 'bunny'];
 
 /**
  * Build the full opponent rig. Pieces start hidden; add them to the scene.

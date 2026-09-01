@@ -19,6 +19,9 @@ export function drawAvatarIcon(ctx: CanvasRenderingContext2D, id: string, cx: nu
   ctx.strokeStyle = color;
   ctx.lineJoin = 'round';
   switch (id) {
+    case 'blank':
+      drawBust(ctx, cx, cy, r);
+      break;
     case 'cobalt':
       drawBear(ctx, cx, cy, r);
       break;
@@ -46,6 +49,29 @@ export function drawAvatarIcon(ctx: CanvasRenderingContext2D, id: string, cx: nu
       break;
   }
   ctx.restore();
+}
+
+/** THE BLANK's tile: a tailor's-dummy bust — featureless egg head over wide
+ *  shoulders pinching to the thin waist. Deliberately the plainest icon on
+ *  the shelf: the mannequin's whole pitch is what ISN'T there yet. */
+function drawBust(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+  const x = (u: number): number => cx + u * r;
+  const y = (v: number): number => cy + v * r;
+  // Egg head.
+  ctx.beginPath();
+  ctx.ellipse(x(0), y(-0.62), r * 0.34, r * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // Shoulders → waist, one closed sweep.
+  ctx.beginPath();
+  ctx.moveTo(x(-0.95), y(0.12)); // left shoulder point
+  ctx.quadraticCurveTo(x(-0.98), y(-0.18), x(-0.55), y(-0.2)); // deltoid
+  ctx.quadraticCurveTo(x(0), y(-0.34), x(0.55), y(-0.2)); // clavicle line
+  ctx.quadraticCurveTo(x(0.98), y(-0.18), x(0.95), y(0.12)); // right deltoid
+  ctx.quadraticCurveTo(x(0.6), y(0.5), x(0.34), y(1.0)); // taper in
+  ctx.lineTo(x(-0.34), y(1.0)); // the thin waist
+  ctx.quadraticCurveTo(x(-0.6), y(0.5), x(-0.95), y(0.12));
+  ctx.closePath();
+  ctx.fill();
 }
 
 /** Wolf head-on: a single lean silhouette — tall pricked ears, jagged cheek
