@@ -31,6 +31,39 @@ const firebaseConfig = {
 const XP_PER_GAME = 25; // PROGRESSION.matchPlay — a bout banks ~25 XP win or lose
 const ACTIVE_WINDOW_MS = 26 * 60 * 60 * 1000; // "fought recently" — a touch over a day
 
+// THE PAINT's palette NAMES, index-parallel to src/config.ts PAINT.colourNames
+// (this script is plain node and can't import the TS config — keep in step).
+const PAINT_NAMES = [
+  'BONE WHITE', 'JET BLACK', 'OXBLOOD', 'RUST', 'BRASS', 'OLIVE DRAB', 'NAVY', 'UMBER',
+  'AMBER', 'EMBER', 'HOT MAGENTA', 'CYAN', 'VIOLET', 'LIME', 'TEAL', 'PINK',
+  'ICE BLUE', 'VOLT YELLOW', 'MINT', 'SIGNAL RED',
+  'GOLD LEAF', 'PEARL', 'VOID BLACK', 'CHROME',
+];
+
+/**
+ * A player's painting as WORDS: decode their packed look (base64; one format
+ * byte, then 8 bytes per placed unit — byte 1 of each unit is the palette
+ * index; see docs/paint.md §3) into its most-used colour names, heaviest
+ * first. Anything malformed → [] — an unpainted or unreadable body simply
+ * has no colours to report.
+ */
+function paintColours(wire, max = 3) {
+  if (typeof wire !== 'string' || wire.length === 0 || wire.length > 1024) return [];
+  let bytes;
+  try {
+    bytes = Buffer.from(wire, 'base64');
+  } catch {
+    return [];
+  }
+  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || bytes[0] !== 1) return [];
+  const tally = new Map();
+  for (let o = 1; o + 8 <= bytes.length; o += 8) {
+    const c = bytes[o + 1];
+    if (c < PAINT_NAMES.length) tally.set(c, (tally.get(c) ?? 0) + 1);
+  }
+  return [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([c]) => PAINT_NAMES[c]);
+}
+
 const db = getFirestore(initializeApp(firebaseConfig));
 
 /** Read the top players by cumulative XP, with the fields the paper cares about. */
@@ -46,6 +79,8 @@ async function readPlayers() {
       score: x.score ?? 0,
       duo: x.duo ?? 0,
       ffa: x.ffa ?? 0,
+      look: x.look ?? '',
+      tone: x.tone ?? 'blank',
       updatedAt: x.updatedAt?.toMillis?.() ?? 0,
     };
   });
@@ -137,6 +172,10 @@ const rows = players.map((p, i) => {
     // not punch down at players who dropped a place; null = no climb to note.
     rankChange: prevRank && prevRank > i + 1 ? prevRank - (i + 1) : null,
     activeRecently: p.updatedAt > 0 && now - p.updatedAt < ACTIVE_WINDOW_MS,
+    // THE PAINT: what this Clanker's iron actually looks like — base tone
+    // plus their most-used paint colours (empty = still factory blank).
+    tone: p.tone === 'onyx' ? 'onyx black' : 'bone white',
+    colours: paintColours(p.look),
   };
 });
 
@@ -163,6 +202,8 @@ const brief = {
     gamesApprox: 'ESTIMATED bouts fought since the last edition (round(xpGained / 25)) — THIS is the matches-played figure',
     raids:
       'squads that marched OUT of town and FELLED the wild machines since the last edition — kind "titans" is the five-boss raid (RUSTHOOK → GOLIATH), kind "goopliath" is the gel-beast. VICTORIES ONLY: beaten squads are never recorded, so no raid in this list failed. hardcore = no healing between titans; difficulty is normal/hard/blazing. Name the squad callsigns together — a raid is one deed by the whole posse.',
+    colours:
+      "each player's PAINT: `tone` is their body's base (bone white or onyx black) and `colours` their most-used paint colours, heaviest first. An empty colours list means a factory-blank body — unpainted iron, nobody's made it theirs yet. Cole can describe a champion by their war paint ('the EMBER-and-CYAN machine', 'that GOLD LEAF dandy'); colours are decoration the players chose, never a score.",
   },
   // Cole's favourite kind of day: nobody threw a single iron ball — and no
   // war party went monster-hunting in the wastes either.

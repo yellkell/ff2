@@ -20,9 +20,13 @@
  */
 
 import { chromium } from 'playwright';
+import { writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const base = process.env.PREVIEW_BASE ?? 'http://localhost:5173';
 const pubWs = process.env.PUB_WS ?? 'ws://localhost:8788';
+const here = dirname(fileURLToPath(import.meta.url));
 
 async function launch() {
   const args = ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--ignore-certificate-errors'];
@@ -91,6 +95,27 @@ console.log('=== the wire: pack / unpack ===');
   check('oversized wire string is refused', wire.long === 0);
   check('tampered colour byte drops that unit only', wire.tampered === 11, String(wire.tampered));
   check('fields survive quantization (chest stripe at u≈0.72)', wire.first.kind === 'stripe' && wire.first.part === 'chest' && Math.abs(wire.first.u - 0.72) < 0.01, JSON.stringify(wire.first));
+
+  // THE RECORD (P4): the look as words + as the profile-card banner.
+  console.log('\n=== the record: colour words + the banner ===');
+  const record = await page.evaluate(() => {
+    const p = window.__ff2.paint;
+    p.demo();
+    const packed = p.pack();
+    const names = p.names(packed);
+    const bannerWhite = p.banner(packed, 'blank');
+    const bannerOnyx = p.banner(packed, 'onyx');
+    const bare = p.banner('', 'blank');
+    p.clear();
+    return { names, bannerWhite, bannerOnyx, bare };
+  });
+  check('the demo look speaks its colours', record.names.length === 3, record.names.join(' · '));
+  check('a painted look yields a banner (both tones)', record.bannerWhite.startsWith('data:image/png') && record.bannerOnyx.startsWith('data:image/png'));
+  check('an unpainted look yields NO banner (clean card)', record.bare === '');
+  for (const [name, url] of [['banner-white', record.bannerWhite], ['banner-onyx', record.bannerOnyx]]) {
+    if (url) writeFileSync(join(here, `paint-${name}.png`), Buffer.from(url.split(',')[1], 'base64'));
+  }
+
   check('no page errors (stage 1)', errors.length === 0, errors.join(' | '));
   await page.close();
 }

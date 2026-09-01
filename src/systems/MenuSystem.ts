@@ -118,6 +118,7 @@ import {
   setPlayerName,
   setPlayerNote,
   setProfileView,
+  syncLookMirror,
 } from '../net/leaderboard.js';
 import { gazette, markGazetteRead, refreshGazette } from '../net/gazette.js';
 import { hueToColor, pubUrl, teamColor } from '../config.js';
@@ -1335,6 +1336,9 @@ export class MenuSystem extends createSystem({}) {
         const obj = this.scene.getObjectByName(name);
         if (obj) applyLook(obj, look);
       }
+      // THE RECORD (paint P4): the doc mirror follows every look/tone change
+      // (keyed inside — repeated calls with nothing new never write).
+      syncLookMirror();
     }
     if (!skinChanged && !accentChanged) return;
 

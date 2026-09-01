@@ -25,7 +25,7 @@ import { coinImage } from './coinIcon.js';
 import { canAfford, coins } from './wallet.js';
 import { tierForXp } from './progression.js';
 import { AVATAR_SKINS, PLATFORM_SKINS, type AvatarSkin, type PlatformSkin } from '../avatar/skins.js';
-import { paintHiddenAll } from '../avatar/paint.js';
+import { paintBanner, paintHiddenAll } from '../avatar/paint.js';
 import { drawAvatarIcon, drawPlatformIcon } from './skinIcons.js';
 import { BOSSES } from '../campaign/bosses.js';
 import { drawBossIcon } from '../campaign/icons.js';
@@ -1286,6 +1286,29 @@ function drawProfile(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | nu
   const row = leaderboard.viewRow ?? myProfileRow();
   const own = row.me;
   const tier = tierForXp(row.xp);
+
+  // --- THE PAINTING, behind the name (docs/paint.md P4). The banner is the
+  // front of the part they painted most, rendered by the same bake their
+  // body wears — an unpainted fighter keeps today's clean card. A dark
+  // scrim keeps the name legible over hot paint.
+  const banner = paintBanner(row.look, row.tone, 400, 108);
+  if (banner) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.roundRect(56, 148, BW - 112, 108, 12);
+    ctx.clip();
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(banner, 56, 148, BW - 112, 108);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(10,11,15,0.52)';
+    ctx.fillRect(56, 148, BW - 112, 108);
+    ctx.restore();
+    ctx.beginPath();
+    ctx.roundRect(56, 148, BW - 112, 108, 12);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(172,182,198,0.35)';
+    ctx.stroke();
+  }
 
   // --- WHO ---
   ctx.textAlign = 'center';

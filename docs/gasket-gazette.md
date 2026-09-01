@@ -16,7 +16,10 @@ button wears a **red notification dot** until you've read the latest edition.
            diffs `newspaper/_snapshot`, pulls the RAID WIRE (`runRaid` +
            `runGoopliath` clears since the last edition — victories only, the
            game never records a beaten squad), prints a JSON "wire report"
-           (climbers + busiest only — never who fell; the paper won't punch down)
+           (climbers + busiest only — never who fell; the paper won't punch down).
+           Since THE PAINT (docs/paint.md P4) each row also carries the
+           player's `tone` + most-used paint `colours`, so Cole can describe
+           a champion by their war paint ("the EMBER-and-CYAN machine")
         2. Claude writes the editorial in Sheriff Cole Ironside's voice
         3. node scripts/publish-gazette.mjs → writes `newspaper/latest`
            (edition bumped, publish timestamp) + rolls `_snapshot` forward

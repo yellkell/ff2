@@ -123,6 +123,11 @@
   .b-hard    { background: #4a3208; color: #ffb02e; }
   .b-blazing { background: #4a1508; color: #ff6a3d; }
   .b-hc      { background: #3d0e0a; color: var(--hc); }
+  /* THE PAINT: a boxer's most-used paint colours ride beside their name. */
+  .chip {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-left: 5px; vertical-align: -1px; border: 1px solid rgba(255,255,255,.25);
+  }
   .grade { font-weight: 900; width: 40px; text-align: center; }
   .g-S { color: #ffd700; } .g-A { color: #3dfff0; } .g-B { color: #7ee081; }
   .g-C { color: #c9ced6; } .g-F { color: #ff4b3e; }
@@ -222,6 +227,32 @@ const clock = (s) => {
 };
 const rowClass = (i) => (i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '');
 
+/* THE PAINT (docs/paint.md §3): the sold palette, index-parallel to
+ * src/config.ts PAINT.colours — keep in step when the racks grow. */
+const PAINT_HEX = [
+  '#f4f2ee','#17171a','#8c1d18','#b35b1e','#c2a24b','#4f5d33','#24354f','#4a3524',
+  '#ffb02e','#ff5a1f','#ff2ad5','#4fb7ff','#b06bff','#8fff3d','#2be2c2','#ff4f8e',
+  '#9fdcff','#ffe94a','#6fffb0','#e8352a',
+  '#d8b24a','#e9e2f2','#050507','#c9d2dd',
+];
+
+/* A row's paint chips: decode the packed look (base64; 1 format byte then
+ * 8 bytes per unit, byte 1 = palette index) into the boxer's most-used
+ * colours, heaviest first. Malformed or absent → no chips at all. */
+function paintChips(wire, max = 4) {
+  if (typeof wire !== 'string' || !wire || wire.length > 1024) return '';
+  let bin;
+  try { bin = atob(wire); } catch { return ''; }
+  if (bin.length < 9 || (bin.length - 1) % 8 !== 0 || bin.charCodeAt(0) !== 1) return '';
+  const tally = new Map();
+  for (let o = 1; o + 8 <= bin.length; o += 8) {
+    const c = bin.charCodeAt(o + 1);
+    if (c < PAINT_HEX.length) tally.set(c, (tally.get(c) || 0) + 1);
+  }
+  return [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, max)
+    .map(([c]) => `<span class="chip" style="background:${PAINT_HEX[c]}"></span>`).join('');
+}
+
 /* ── FIRE FIGHT ─────────────────────────────────────────────────────────── */
 
 /* The season ladder writes score_s<N>; mirror the game's clock exactly
@@ -274,7 +305,7 @@ async function loadFf() {
           from: [{ collectionId: 'players' }],
           orderBy: [orderBy(f, 'DESCENDING')],
           limit: 50,
-        })).map((d) => ({ name: d.data.name || '???', value: d.data[f] || 0 }))
+        })).map((d) => ({ name: d.data.name || '???', value: d.data[f] || 0, look: d.data.look || '' }))
           .filter((r) => r.value > 0);
       } else {
         const raw = (await runQuery(FF, {
@@ -305,7 +336,7 @@ async function loadFf() {
     if (board.kind === 'player') {
       table.innerHTML = `<tr><th>#</th><th>Boxer</th><th style="text-align:right;padding-right:18px">${board.col}</th></tr>` +
         rows.map((r, i) =>
-          `<tr class="${rowClass(i)}"><td class="rank">${i + 1}</td><td>${esc(r.name)}</td><td class="val">${num(r.value)}</td></tr>`).join('');
+          `<tr class="${rowClass(i)}"><td class="rank">${i + 1}</td><td>${esc(r.name)}${paintChips(r.look)}</td><td class="val">${num(r.value)}</td></tr>`).join('');
     } else {
       table.innerHTML = `<tr><th>#</th><th>Squad</th><th style="text-align:right;padding-right:18px">TIME</th></tr>` +
         rows.map((r, i) => {

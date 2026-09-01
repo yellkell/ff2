@@ -211,3 +211,18 @@ Free placement can draw things we don't want in a room:
    repaint mid-visit.
 4. **P4 — the record**: Firestore mirror, profile card rendering, the
    gazette learning to describe a champion's colours.
+   **SHIPPED**: the player doc mirrors `look` (the packed wire string) +
+   `tone`, written by `syncLookMirror` only when they actually change
+   (seeded from the boot read so an unchanged look never re-writes; a
+   look painted offline catches up at boot). The leaderboard rows carry
+   both back down, and the PROFILE card now renders **the painting
+   behind the name**: `paintBanner` bakes the front of the most-painted
+   part flat — the same drawUnit pipeline the body wears — under a
+   legibility scrim; an unpainted fighter keeps the clean card. The look
+   also became WORDS: the palette gained index-parallel `colourNames`
+   (BONE WHITE … CHROME), `paintColourNames` ranks a look's most-used
+   colours, the gazette's wire report (scripts/ladder-brief.mjs) now
+   carries every player's `tone` + `colours` so Cole can write "the
+   EMBER-and-CYAN machine", and stats.html rows wear paint chips decoded
+   from the same doc field. Probed in `npm run check:paint`'s record
+   stage (colour words + banner render both tones + no-banner-when-bare).

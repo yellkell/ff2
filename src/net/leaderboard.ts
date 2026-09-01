@@ -17,6 +17,8 @@
 
 import { FIREBASE_ENABLED, firebaseConfig } from './firebaseConfig.js';
 import { xpForArcade, xpForBot, xpForCampaign, xpForMatch, xpForTraining, xpForTutorial } from '../menu/progression.js';
+import { myPackedLook } from '../avatar/paint.js';
+import { customization } from '../menu/customization.js';
 import { addCoins } from '../menu/wallet.js';
 import { CURRENCY, LADDER, seasonIndex, seasonScoreField, type ArcadeMode, type Difficulty } from '../config.js';
 
@@ -48,6 +50,11 @@ export interface LbRow {
   goopBest: number;
   /** The player's self-written note, shown on their profile. */
   note: string;
+  /** Their packed paint look (avatar/paint.ts wire form; '' = unpainted) —
+   *  the profile card renders the painting behind the name from this. */
+  look: string;
+  /** Their base tone ('blank' | 'onyx'), for the banner's ground. */
+  tone: string;
 }
 
 /** The season-end honours, best first. */
@@ -174,6 +181,8 @@ export function myProfileRow(): LbRow {
     raidBestHc: profile.raidBestHc,
     goopBest: profile.goopBest,
     note: profile.note,
+    look: myPackedLook(),
+    tone: customization.avatar,
   };
 }
 
@@ -426,6 +435,9 @@ export function initLeaderboard(): void {
         profile.raidBest = (d.raidBest as number) ?? 0;
         profile.raidBestHc = (d.raidBestHc as number) ?? 0;
         profile.goopBest = (d.goopBest as number) ?? 0;
+        // Seed the look-mirror key so an unchanged look never re-writes; the
+        // syncLookMirror() below then catches up a look painted offline.
+        mirroredLook = `${(d.tone as string) ?? ''}|${(d.look as string) ?? ''}`;
         // A rename FILED FOR this account rides `renameTo`/`renameAt` — doc
         // fields the client's ordinary writes never touch, so a correction
         // survives however many times an old build's name re-sync (below)
@@ -474,16 +486,39 @@ export function initLeaderboard(): void {
           raidBest: 0,
           raidBestHc: 0,
           goopBest: 0,
+          look: myPackedLook(),
+          tone: customization.avatar,
           lastPlayedAt: Date.now(),
           updatedAt: h.fs.serverTimestamp(),
         });
+        mirroredLook = `${customization.avatar}|${myPackedLook()}`;
       }
     } catch {
       leaderboard.status = 'leaderboard unreachable';
     }
     loaded = true; // XP is now real (or the load failed) — safe to baseline
+    syncLookMirror(); // a look painted since the doc's last visit catches up
     void refreshLeaderboard(true);
   })();
+}
+
+/** The mirrored `${tone}|${look}` last written to (or read off) my doc —
+ *  null until boot settles, so pre-load sync calls wait for the seed. */
+let mirroredLook: string | null = null;
+
+/**
+ * THE RECORD (docs/paint.md P4): mirror my packed look + base tone onto my
+ * player doc whenever they change, so the profile card, stats.html and the
+ * gazette can show the painting behind the name. Cheap to call on every
+ * repaint — it early-outs on the `${tone}|${look}` key and never writes
+ * before the boot read has seeded it (the boot call above catches up).
+ */
+export function syncLookMirror(): void {
+  if (!FIREBASE_ENABLED || mirroredLook === null || !profile.id) return;
+  const key = `${customization.avatar}|${myPackedLook()}`;
+  if (key === mirroredLook) return;
+  mirroredLook = key;
+  writeMine({ look: myPackedLook(), tone: customization.avatar });
 }
 
 let lastFetch = -Infinity;
@@ -514,6 +549,8 @@ export async function refreshLeaderboard(force = false): Promise<void> {
           raidBestHc: (d.data().raidBestHc as number) ?? 0,
           goopBest: (d.data().goopBest as number) ?? 0,
           note: (d.data().note as string) ?? '',
+          look: (d.data().look as string) ?? '',
+          tone: (d.data().tone as string) ?? 'blank',
         }))
         // Every board shows anyone who's banked anything. (RANKED is ladder
         // points now — per-season, and raw ELO stays hidden for matchmaking.)

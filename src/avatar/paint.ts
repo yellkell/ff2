@@ -499,6 +499,71 @@ export function applyLook(root: Object3D, look: Look): void {
   });
 }
 
+/* ── the record (P4): the painting as a picture and as words ──────────── */
+//
+// The profile card (and anything else that shows a player's name) can show
+// the painting BEHIND the name: a flat render of the front of the part they
+// painted most, straight from the same drawUnit bake the body uses — the
+// banner IS their paint, not a swatch of it. And the gazette gets the look
+// as WORDS: the palette's names for their most-used colours.
+
+/** Bake one part of a look flat (no mesh) — the unwrap as a picture. */
+function bakeFlat(look: Look, part: PaintPart, tone: 'white' | 'onyx', size: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext('2d')!;
+  g.fillStyle = TONE_FILL[tone];
+  g.fillRect(0, 0, size, size);
+  for (const p of look.paint) {
+    if (p.part === part) drawUnit(g, p, size, size);
+  }
+  return canvas;
+}
+
+const bannerCache = new Map<string, HTMLCanvasElement | null>();
+
+/**
+ * A banner of this look for a profile card: the FRONT of the most-painted
+ * part (u 0.5..1 of the unwrap — the face you'd see squaring up to them),
+ * mid-band of v so it reads as a chest, not a squashed whole loft. Null for
+ * an unpainted look — the card stays clean. `tone` takes the skin id
+ * ('blank'/'onyx'). Cached per look; the repaint-key discipline applies.
+ */
+export function paintBanner(wire: string, tone: string, w = 400, h = 120): HTMLCanvasElement | null {
+  if (!wire) return null;
+  const key = `${tone}|${w}x${h}|${wire}`;
+  const hit = bannerCache.get(key);
+  if (hit !== undefined) return hit;
+  const look = unpackLook(wire);
+  let out: HTMLCanvasElement | null = null;
+  if (look.paint.length) {
+    const counts: Record<PaintPart, number> = { head: 0, chest: 0, pelvis: 0 };
+    for (const p of look.paint) counts[p.part] += 1;
+    const part: PaintPart = counts.chest > 0 ? 'chest' : counts.head >= counts.pelvis ? 'head' : 'pelvis';
+    const size = PAINT.canvas[part] ?? 256;
+    const flat = bakeFlat(look, part, tone === 'onyx' ? 'onyx' : 'white', size);
+    out = document.createElement('canvas');
+    out.width = w;
+    out.height = h;
+    out.getContext('2d')!.drawImage(flat, size * 0.5, size * 0.2, size * 0.5, size * 0.6, 0, 0, w, h);
+  }
+  if (bannerCache.size > 24) bannerCache.clear();
+  bannerCache.set(key, out);
+  return out;
+}
+
+/** The look as words — its most-used colours by the palette's own names,
+ *  heaviest first (e.g. ['EMBER', 'CYAN', 'GOLD LEAF']). */
+export function paintColourNames(wire: string, max = 3): string[] {
+  const tally = new Map<number, number>();
+  for (const p of unpackLook(wire).paint) tally.set(p.colour, (tally.get(p.colour) ?? 0) + 1);
+  return [...tally.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, max)
+    .map(([c]) => PAINT.colourNames[c] ?? '')
+    .filter((n) => n !== '');
+}
+
 /* ── the demo look (dev + probes: prove the pipeline makes cool art) ──── */
 
 export function demoLook(): Look {
@@ -554,5 +619,9 @@ export function installPaintDevHook(): void {
     unpack: (wire: unknown): Look => unpackLook(wire),
     hideAll: (): boolean => paintHiddenAll(),
     toggleHide: (): void => togglePaintHiddenAll(),
+    // P4 record verbs: the look as words and as a banner (PNG data URL,
+    // '' for an unpainted look — probes save it and eyeball the painting).
+    names: (wire: string): string[] => paintColourNames(wire),
+    banner: (wire: string, tone: string): string => paintBanner(wire, tone)?.toDataURL() ?? '',
   };
 }
