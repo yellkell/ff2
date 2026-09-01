@@ -87,7 +87,7 @@ export const DEFAULT_SLAB_METAL = 0.92;
 /** Platform skins owned from the start (no purchase needed). */
 export const FREE_PLATFORMS = ['azure', 'inferno', 'ember'];
 /** Avatar skins owned from the start — the rest are shop unlocks. */
-export const FREE_AVATARS = ['blank'];
+export const FREE_AVATARS = ['blank', 'onyx'];
 
 export const AVATAR_SKINS: AvatarSkin[] = [
   // THE BLANK — the only body in town (DESIGN.md §5.1). FF2 retired the
@@ -97,7 +97,10 @@ export const AVATAR_SKINS: AvatarSkin[] = [
   // all resolve here through avatarSkin()'s fallback.
   // The palette fields only paint its SHOP TILE — the body's materials are
   // untagged, so it stays primer no matter what the recolour machinery does.
-  { id: 'blank', name: 'THE BLANK', chassis: 0x98948b, trim: 0x4e4b45, accent: 0xd8d4ca },
+  { id: 'blank', name: 'THE BLANK', chassis: 0xf4f2ee, trim: 0xd8d5cf, accent: 0xf4f2ee },
+  // …and its midnight twin: the same body in factory black. The base tone
+  // is the ONE choice the body itself offers — everything else is paint.
+  { id: 'onyx', name: 'THE ONYX', chassis: 0x17171a, trim: 0x0c0c0e, accent: 0x8f8f98 },
 ];
 
 export const PLATFORM_SKINS: PlatformSkin[] = [

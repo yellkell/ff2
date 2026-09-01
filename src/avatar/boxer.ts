@@ -269,15 +269,18 @@ export function setGloveLit(glove: Group, lit: boolean, delta: number): void {
 // lofted steel) retired with the skins system; the mannequin is the one
 // entry every table serves, and the paint system owns identity from here.
 const HEAD_BUILDERS: Record<string, (accent: number) => Group> = {
-  blank: buildMannequinHead,
+  blank: () => buildMannequinHead('white'),
+  onyx: () => buildMannequinHead('onyx'),
 };
 const CHEST_BUILDERS: Record<string, (accent: number) => Group> = {
-  blank: buildMannequinChest,
+  blank: () => buildMannequinChest('white'),
+  onyx: () => buildMannequinChest('onyx'),
 };
 const PELVIS_BUILDERS: Record<string, (accent: number) => Group> = {
-  blank: buildMannequinPelvis,
+  blank: () => buildMannequinPelvis('white'),
+  onyx: () => buildMannequinPelvis('onyx'),
 };
-const ALL_SKIN_IDS = ['blank'];
+const ALL_SKIN_IDS = ['blank', 'onyx'];
 
 /**
  * Build the full opponent rig. Pieces start hidden; add them to the scene.
@@ -422,7 +425,7 @@ export function solveTorso(
  * `setAvatarAccent` on it to recolour live.
  */
 export function buildBoxerPreview(accent: number): Group {
-  const rig = buildBoxer(0, 'cobalt');
+  const rig = buildBoxer(0, 'blank');
 
   rig.pelvis.position.set(0, 0, 0);
   rig.chest.position.set(0, 0.4, 0);

@@ -422,7 +422,14 @@ Each phase is shippable; nothing waits on everything.
    CTA — THE PODIUM stands your dressed blank on a slowly turning plinth
    beside it whenever the lobby is up, and the locker's COLOUR tab keeps
    only the gauntlet neon, with "THE BLANK TAKES NO DYE" written where
-   the armour sliders were. Still to come: the attachments shop.)*
+   the armour sliders were. Polish pass v3: the body is rebuilt as ONE smooth
+   loft per piece — no crossing primitives at neck or shoulders, no seam
+   bands, a single uniform material — and it starts ALL WHITE or ALL
+   BLACK ('blank'/'onyx' skin ids, the base pick on the locker's COLOUR
+   tab, synced over the existing skin wire). Below the hips the loft is
+   monotonic: hips, then only narrower, closing at a rounded tip — the
+   silhouette finally agrees with the hitbox, which always ended at the
+   pelvis sphere. Still to come: the attachments shop.)*
 4. **The paint** — stripe data model, per-part bake, locker paint mode,
    cosmetics sync. (The moment "lasting through games" works, ship it.)
 5. **The venue + THE BELL** — new club on RAVE RAID's club architecture,

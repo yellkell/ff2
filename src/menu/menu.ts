@@ -184,6 +184,9 @@ export type MenuAction =
   | 'accent-light'
   /** Reset the avatar-accent (neon) hue to the house ember default. */
   | 'accent-default'
+  /** The body's ONE choice: start all white, or all black. */
+  | 'base-white'
+  | 'base-black'
   /** The header tab pair: STORE (all items) ⇄ LOCKER (your inventory). */
   | 'open-shop'
   | 'open-locker'
@@ -3248,6 +3251,8 @@ const HEAD_TABS: Array<{ label: string; action: MenuAction }> = [
 // each with a hue track and a lightness track beneath it.
 const ARMOUR_BAR = { x: 40, y: 168, w: PAN_W - 210, h: 38 };
 const ARMOUR_LIGHT_BAR = { x: 40, y: 250, w: PAN_W - 80, h: 38 };
+const BASE_WHITE = { x: 40, y: 168, w: (PAN_W - 100) / 2, h: 64 };
+const BASE_BLACK = { x: 60 + (PAN_W - 100) / 2, y: 168, w: (PAN_W - 100) / 2, h: 64 };
 const ACCENT_BAR = { x: 40, y: 348, w: PAN_W - 210, h: 38 };
 const ACCENT_DEF = { x: PAN_W - 156, y: 348, w: 116, h: 38 };
 const ACCENT_LIGHT_BAR = { x: 40, y: 430, w: PAN_W - 80, h: 38 };
@@ -3575,14 +3580,34 @@ function drawColourTab(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | 
     ctx.fillText(text, 40, y);
   };
 
-  // FF2: no armour dye — THE BLANK takes colour from placed PAINT only
-  // (DESIGN.md §5.3). What survives here is the GAUNTLET neon.
-  ctx.font = '700 22px system-ui, sans-serif';
+  // FF2: the body's ONE choice — start all white or all black. Everything
+  // past the base tone is the paint system's job (DESIGN.md §5.3).
+  label('THE BASE', BASE_WHITE.y - 14);
+  const onyx = customization.avatar === 'onyx';
+  const chip = (rect: PanRect, text: string, fill: string, ink: string, on: boolean, hovered: boolean): void => {
+    plate(ctx, rect.x, rect.y, rect.w, rect.h, {
+      cut: 12,
+      fill,
+      stroke: on ? UI.amber : hovered ? UI.text : UI.steelDim,
+      rivets: false,
+    });
+    ctx.font = '800 24px system-ui, sans-serif';
+    ctx.fillStyle = ink;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, rect.x + rect.w / 2, rect.y + rect.h / 2 + (on ? -8 : 0));
+    if (on) {
+      ctx.font = '700 14px system-ui, sans-serif';
+      ctx.fillStyle = UI.amber;
+      ctx.fillText('WORN', rect.x + rect.w / 2, rect.y + rect.h / 2 + 18);
+    }
+  };
+  chip(BASE_WHITE, 'ALL WHITE', 'rgba(240,238,232,0.92)', '#16140f', !onyx, hoverAction === 'base-white');
+  chip(BASE_BLACK, 'ALL BLACK', 'rgba(12,12,15,0.95)', '#e8e6e0', onyx, hoverAction === 'base-black');
+  ctx.font = '600 17px system-ui, sans-serif';
   ctx.fillStyle = UI.textDim;
   ctx.textAlign = 'left';
-  ctx.fillText('THE BLANK TAKES NO DYE.', 40, ARMOUR_BAR.y + 8);
-  ctx.font = '600 18px system-ui, sans-serif';
-  ctx.fillText('your body colours with PAINT, stripe by stripe — coming soon', 40, ARMOUR_BAR.y + 40);
+  ctx.fillText('the rest of your colour is PAINT, stripe by stripe — coming soon', 40, BASE_WHITE.y + BASE_WHITE.h + 34);
 
   label('GAUNTLET NEON', ACCENT_BAR.y - 14);
   drawHueBar(ctx, ACCENT_BAR, app.accentHue, true);
@@ -3771,9 +3796,10 @@ function hitLocker(u: number, v: number): MenuAction | null {
   if (t !== null) return t === 0 ? 'tab-platforms' : t === 1 ? 'tab-colour' : 'tab-arena';
   const tab = activeTab(true);
   if (tab === 'colour') {
-    // FF2: the armour-dye zones are gone — THE BLANK takes no dye, so the
-    // COLOUR tab is the gauntlet neon only (body colour is the paint
-    // system's job, DESIGN.md §5.3).
+    // FF2: the armour dye is gone; the body offers exactly one choice —
+    // the base tone — and then the gauntlet neon. Paint does the rest.
+    if (inPanRect(x, y, BASE_WHITE)) return 'base-white';
+    if (inPanRect(x, y, BASE_BLACK)) return 'base-black';
     if (inPanRect(x, y, ACCENT_DEF)) return 'accent-default';
     if (inPanRect(x, y, ACCENT_BAR)) return 'accent-color';
     if (inPanRect(x, y, ACCENT_LIGHT_BAR)) return 'accent-light';

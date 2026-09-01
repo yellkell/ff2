@@ -923,6 +923,12 @@ export class MenuSystem extends createSystem({}) {
       case 'pub-back':
         app.infoView = 'root';
         break;
+      case 'base-white':
+        setAvatarSkin('blank'); // applyOwnSkins swaps every rig next frame
+        break;
+      case 'base-black':
+        setAvatarSkin('onyx');
+        break;
       case 'open-custom':
         // Opens onto the LOCKER (your inventory + colours).
         customization.open = true;

@@ -1,148 +1,191 @@
 /**
- * THE BLANK — FIRE FIGHT 2's mannequin body (DESIGN.md §5.1).
+ * THE BLANK — FIRE FIGHT 2's mannequin body (DESIGN.md §5.1), the polish
+ * pass: smooth, symmetrical, basic, uniform.
  *
- * One bland humanoid, primer-grey, sized honestly to the BODY_IK hitbox
- * spheres: wide shoulders, thin waist, the silhouette everyone reads in a
- * fight. Everyone starts identical and unpainted; shape comes later from
- * bought attachments and colour ONLY from placed paint stripes (§5.3), so
- * the blank itself must stay mute — clean forms, no glow, no branding.
+ * One body, TWO base tones — you start ALL WHITE ('blank') or ALL BLACK
+ * ('onyx'), picked on the locker's COLOUR tab, and everything past that is
+ * the paint system's job. Each tone is its own skin id riding the existing
+ * skin machinery, so the pick syncs to rivals and squadmates over the same
+ * wire every FF1 skin used.
  *
- * It plugs into the existing skin machinery as the 'blank' chassis: three
- * builders registered in boxer.ts's HEAD/CHEST/PELVIS tables, a skinTag
- * group each so applyAvatarSkin's show-one-skin toggle works unchanged.
- * DELIBERATELY different from every other skin: its materials carry NO
- * `userData.role` and NO accent tags, so skin recolours, the locker's hue
- * wheel and setAvatarAccent all leave it primer — a blank is not a
- * colourway, and the only way it will ever take colour is the paint system.
+ * THE CONSTRUCTION RULES (each one answers a real complaint):
+ *  - ONE material per body. No trim tone, no joint rubber, no seam bands —
+ *    a uniform shell, so nothing can read as "parts".
+ *  - ONE surface per piece. Chest and pelvis are each a single LOFT — a
+ *    stack of elliptical rings stitched into one indexed mesh with smooth
+ *    shared-vertex normals — instead of bars, caps and sockets crossing
+ *    each other. Nothing overlaps because there is nothing TO overlap;
+ *    symmetry is by construction (every ring is centred).
+ *  - NO BULGE below the hips. The pelvis loft is monotonic after its
+ *    widest ring: hips, then a smooth unbroken taper to a rounded tip.
+ *    (The hitbox never bulged — it ends at the BODY_IK pelvis sphere —
+ *    and now the body's silhouette says the same thing.)
+ *  - The head is a bare egg; its short neck stub rides IN the head group,
+ *    entering the egg from below at near-tangent — the one visible joint,
+ *    and it reads as a mannequin's ball joint, not a crossing part.
  *
- * Front faces −z (the house convention). Hitboxes are the BODY_IK spheres
- * and never change — the blank is exactly as hittable as every FF1 skin.
+ * Materials carry NO role/accent tags: recolours, the hue wheel and
+ * setAvatarAccent all leave the base tones alone. Front faces −z. The
+ * BODY_IK hitbox spheres never change — the blank stays exactly as
+ * hittable as everything before it, and the visual runs INSIDE them.
  */
 
-import { CylinderGeometry, Group, LatheGeometry, Mesh, MeshStandardMaterial, SphereGeometry, Vector2 } from 'three';
+import {
+  BufferAttribute,
+  BufferGeometry,
+  CylinderGeometry,
+  Group,
+  Mesh,
+  MeshStandardMaterial,
+  SphereGeometry,
+} from 'three';
 import { BODY_IK } from '../config.js';
 
-/** Primer: matte workshop grey with the faintest warm cast — reads as an
- *  unpainted factory shell under the arena's IBL, never as a colour. */
-function primerMat(): MeshStandardMaterial {
+export type BlankTone = 'white' | 'onyx';
+
+/** The two factory finishes. WHITE is a soft matte porcelain; ONYX keeps a
+ *  little sheen and metal so a black body still draws its silhouette from
+ *  the room's light instead of vanishing into a dark arena. */
+function toneMat(tone: BlankTone): MeshStandardMaterial {
   // No userData.role / accent: immune to applyAvatarSkin + setAvatarAccent.
-  return new MeshStandardMaterial({ color: 0x98948b, roughness: 0.82, metalness: 0.06 });
+  return tone === 'white'
+    ? new MeshStandardMaterial({ color: 0xf4f2ee, roughness: 0.72, metalness: 0.02 })
+    : new MeshStandardMaterial({ color: 0x17171a, roughness: 0.4, metalness: 0.3 });
 }
 
-/** Joint shadow: the darker rubber at neck and seams that gives the primer
- *  forms their read without a single painted line. */
-function jointMat(): MeshStandardMaterial {
-  return new MeshStandardMaterial({ color: 0x4e4b45, roughness: 0.9, metalness: 0.04 });
+/** The skin id each tone answers to (skinTag drives applyAvatarSkin's
+ *  show-one-body toggle, exactly like the FF1 roster did). */
+export function toneSkinId(tone: BlankTone): string {
+  return tone === 'white' ? 'blank' : 'onyx';
 }
 
-function tagged(): Group {
+function tagged(tone: BlankTone): Group {
   const g = new Group();
-  g.userData.skinTag = 'blank';
+  g.userData.skinTag = toneSkinId(tone);
   g.visible = false;
   return g;
 }
 
-/** A featureless smooth head: an egg with a hairline visor seam and a
- *  rubber neck — a face for the paint to land on later, not a character. */
-export function buildMannequinHead(_accent: number): Group {
-  const r = BODY_IK.headRadius;
-  const g = tagged();
+/** One elliptical cross-section of a loft: centred at x=z=0 (symmetry by
+ *  construction), `w`/`d` are half-width/half-depth at height `y`. */
+interface Ring {
+  y: number;
+  w: number;
+  d: number;
+}
 
-  // The egg: cranium fuller than the jaw, front barely flattened.
-  const skull = new Mesh(new SphereGeometry(r, 24, 18), primerMat());
-  skull.scale.set(0.84, 1.1, 0.93);
-  skull.position.y = r * 0.06;
+const SEG = 36;
+
+/**
+ * Stitch rings into ONE smooth closed surface: shared vertices ring to
+ * ring, capped flat top and bottom, normals computed over the whole
+ * indexed mesh so the shading rolls continuously — no crossing primitives,
+ * no visible seams, mirror-symmetric on both axes by construction.
+ */
+function loft(rings: Ring[], mat: MeshStandardMaterial): Mesh {
+  const pos: number[] = [];
+  const idx: number[] = [];
+  for (const r of rings) {
+    for (let s = 0; s < SEG; s++) {
+      const t = (s / SEG) * Math.PI * 2;
+      pos.push(Math.cos(t) * r.w, r.y, Math.sin(t) * r.d);
+    }
+  }
+  for (let k = 0; k < rings.length - 1; k++) {
+    const a0 = k * SEG;
+    const b0 = (k + 1) * SEG;
+    for (let s = 0; s < SEG; s++) {
+      const s1 = (s + 1) % SEG;
+      idx.push(a0 + s, b0 + s, b0 + s1, a0 + s, b0 + s1, a0 + s1);
+    }
+  }
+  // Flat caps close the tube (the end rings are small, so the cap is a
+  // sliver — the averaged normals round it off rather than crease it).
+  const top = pos.length / 3;
+  pos.push(0, rings[0].y, 0);
+  const bottom = top + 1;
+  pos.push(0, rings[rings.length - 1].y, 0);
+  for (let s = 0; s < SEG; s++) {
+    const s1 = (s + 1) % SEG;
+    idx.push(top, s1, s);
+    const l0 = (rings.length - 1) * SEG;
+    idx.push(bottom, l0 + s, l0 + s1);
+  }
+  const geo = new BufferGeometry();
+  geo.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return new Mesh(geo, mat);
+}
+
+/** The bare egg, and the ball-joint neck stub that rides with it. */
+export function buildMannequinHead(tone: BlankTone): Group {
+  const r = BODY_IK.headRadius;
+  const g = tagged(tone);
+  const mat = toneMat(tone);
+
+  const skull = new Mesh(new SphereGeometry(r, 28, 22), mat);
+  skull.scale.set(0.84, 1.08, 0.93);
+  skull.position.y = r * 0.05;
   g.add(skull);
 
-  // Hairline seam at the sight line — the one mark on the whole head, so a
-  // fighter still reads WHERE it is looking from silhouette alone.
-  const seam = new Mesh(new CylinderGeometry(1, 1, r * 0.06, 24, 1, true), jointMat());
-  seam.scale.set(r * 0.845, 1, r * 0.935);
-  seam.position.y = r * 0.1;
-  g.add(seam);
-
-  // Rubber neck stub.
-  const neck = new Mesh(new CylinderGeometry(r * 0.38, r * 0.48, r * 1.05, 14), jointMat());
-  neck.position.y = -r * 1.2;
+  // The neck: a short column entering the egg from below at near-tangent —
+  // in the HEAD group so it follows every nod and turn, closing the gap to
+  // the chest's neck root. Rounded off underneath by its own small cap.
+  const neck = new Mesh(new CylinderGeometry(r * 0.4, r * 0.44, r * 1.1, 20), mat);
+  neck.position.y = -r * 0.95;
   g.add(neck);
+  const neckCap = new Mesh(new SphereGeometry(r * 0.44, 20, 12), mat);
+  neckCap.scale.y = 0.5;
+  neckCap.position.y = -r * 1.5;
+  g.add(neckCap);
 
   return g;
 }
 
-/** Wide shoulders down to a thin waist: a lofted trunk hugged by a clavicle
- *  bar and deltoid caps. Widest point ≈ the chest hitbox sphere. */
-export function buildMannequinChest(_accent: number): Group {
-  const g = tagged();
-  const R = BODY_IK.chestRadius; // 0.2 — the honest envelope
-
-  // The trunk: one lathe from upper chest to the waist pinch. (radius, y)
-  // pairs; the lathe is circular, squashed to an elliptical section below.
-  // Slender by appearance: the visual trunk runs well INSIDE the chest
-  // hitbox sphere (R = 0.2) — like FF1's SHADOW, looks slimmer, hits the
-  // same. Only the shoulder line keeps its width; everything below tapers.
-  const profile: Array<[number, number]> = [
-    [0.08, 0.155], // neck root
-    [0.148, 0.12], // upper chest shelf
-    [R * 0.82, 0.045], // pecs — the widest ring, slimmed
-    [0.158, -0.01], // ribcage holding its line
-    [0.126, -0.085], // the drop into the waist
-    [0.09, -0.15], // THE WAIST — properly thin
-    [0.09, -0.17],
-    [0.094, -0.19], // slight flare handing off to the pelvis
-  ];
-  const trunk = new Mesh(new LatheGeometry(profile.map(([x, y]) => new Vector2(x, y)), 28), primerMat());
-  trunk.scale.set(1, 1, 0.68); // chest section: wider than deep
-  g.add(trunk);
-
-  // Clavicle bar: the width. A lying capsule spanning shoulder to shoulder.
-  const bar = new Mesh(new CylinderGeometry(0.058, 0.058, 0.46, 14), primerMat());
-  bar.rotation.z = Math.PI / 2;
-  bar.position.set(0, 0.095, 0.005);
-  g.add(bar);
-
-  // Deltoid caps: wide shoulders, rounded — the mannequin's signature line.
-  for (const side of [-1, 1]) {
-    const cap = new Mesh(new SphereGeometry(0.09, 18, 14), primerMat());
-    cap.scale.set(1, 0.94, 0.94);
-    cap.position.set(side * 0.265, 0.09, 0.005);
-    g.add(cap);
-    // Arm-socket shadow under each cap — the seam where a pauldron
-    // attachment will one day bolt on.
-    const socket = new Mesh(new CylinderGeometry(0.058, 0.064, 0.055, 12, 1, true), jointMat());
-    socket.rotation.z = side * (Math.PI / 2 - 0.25);
-    socket.position.set(side * 0.315, 0.05, 0.005);
-    g.add(socket);
-  }
-
+/** The trunk: ONE loft from neck root over the shoulder line down to the
+ *  waist — wide shoulders and a thin waist in a single unbroken surface. */
+export function buildMannequinChest(tone: BlankTone): Group {
+  const g = tagged(tone);
+  // (y, halfW, halfD) — widest ring stays inside the 0.2 chest hitbox
+  // sphere; the shoulder line carries the width, the waist the pinch.
+  g.add(
+    loft(
+      [
+        { y: 0.185, w: 0.052, d: 0.046 }, // neck root
+        { y: 0.155, w: 0.07, d: 0.055 },
+        { y: 0.125, w: 0.16, d: 0.078 }, // trapezius spreading
+        { y: 0.095, w: 0.252, d: 0.09 }, // THE SHOULDER LINE — widest
+        { y: 0.05, w: 0.232, d: 0.098 },
+        { y: -0.015, w: 0.166, d: 0.1 }, // chest
+        { y: -0.085, w: 0.124, d: 0.09 },
+        { y: -0.148, w: 0.094, d: 0.077 }, // THE WAIST — thin
+        { y: -0.175, w: 0.093, d: 0.076 },
+        { y: -0.195, w: 0.097, d: 0.079 }, // hem, handing off to the hips
+      ],
+      toneMat(tone),
+    ),
+  );
   return g;
 }
 
-/** The hip block under the waist: rounded, legless (on brand), fading out
- *  below like every fighter in town. */
-export function buildMannequinPelvis(_accent: number): Group {
-  const g = tagged();
-  const R = BODY_IK.pelvisRadius; // 0.17
-
-  // Waist coupler: the thin ring the trunk hands down to.
-  const coupler = new Mesh(new CylinderGeometry(0.084, 0.104, 0.09, 20), jointMat());
-  coupler.position.y = 0.09;
-  coupler.scale.z = 0.76;
-  g.add(coupler);
-
-  // The hips: one squashed sphere, slimmer than the hitbox sphere it sits
-  // in (the pelvis hitbox is R and never changes — hips this slender are a
-  // pure appearance call, same as FF1's SHADOW).
-  const hips = new Mesh(new SphereGeometry(R * 0.86, 22, 16), primerMat());
-  hips.scale.set(1.0, 0.76, 0.8);
-  g.add(hips);
-
-  // The close: a slim taper fading the body out underneath — NOT a bulge.
-  // The hitbox ends at the pelvis sphere; nothing down here is hittable,
-  // so nothing down here should look like it is.
-  const close = new Mesh(new CylinderGeometry(0.098, 0.024, 0.16, 18), jointMat());
-  close.scale.z = 0.78;
-  close.position.y = -R * 0.68;
-  g.add(close);
-
+/** The hips: ONE loft — waist in, hips barely out, then a smooth monotonic
+ *  taper to a rounded tip. Nothing below the hip line gets wider again. */
+export function buildMannequinPelvis(tone: BlankTone): Group {
+  const g = tagged(tone);
+  g.add(
+    loft(
+      [
+        { y: 0.115, w: 0.09, d: 0.074 }, // tucks up inside the chest hem
+        { y: 0.06, w: 0.112, d: 0.09 },
+        { y: 0.0, w: 0.132, d: 0.104 }, // the hip line — widest, subtle
+        { y: -0.07, w: 0.115, d: 0.092 }, // and from here: only narrower
+        { y: -0.135, w: 0.078, d: 0.065 },
+        { y: -0.19, w: 0.04, d: 0.035 },
+        { y: -0.225, w: 0.014, d: 0.013 }, // the rounded tip
+      ],
+      toneMat(tone),
+    ),
+  );
   return g;
 }

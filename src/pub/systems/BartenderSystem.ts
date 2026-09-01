@@ -52,12 +52,12 @@ const WALK_SPEED = 1.1;
 const DELIVER_SPEED = 2.6;
 const AISLE_MIN = -2.35;
 const AISLE_MAX = 2.35;
-// His look: the BEAR shape ('cobalt' is the skin id whose head/torso builders
-// give the bear silhouette — see boxer.ts HEAD_BUILDERS) in house-brown steel
-// with the amber trim every fixture in the pub wears.
+// His look: FF2 retired the animal roster, so UNIT-86 wears THE BLANK like
+// everyone else (the palette below only matters to role-tagged geometry,
+// which the blank deliberately has none of — he serves in factory white).
 const BARTENDER_BEAR_SKIN: AvatarSkin = {
-  id: 'cobalt',
-  name: 'BEAR',
+  id: 'blank',
+  name: 'BLANK',
   chassis: 0x2a2113,
   trim: 0x120d08,
   accent: PALETTE.amber,
