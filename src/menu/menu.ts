@@ -3247,7 +3247,6 @@ const HEAD_TABS: Array<{ label: string; action: MenuAction }> = [
 // COLOUR-tab tracks (locker only): armour repaints the suit, accent the neon,
 // each with a hue track and a lightness track beneath it.
 const ARMOUR_BAR = { x: 40, y: 168, w: PAN_W - 210, h: 38 };
-const ARMOUR_DEF = { x: PAN_W - 156, y: 168, w: 116, h: 38 };
 const ARMOUR_LIGHT_BAR = { x: 40, y: 250, w: PAN_W - 80, h: 38 };
 const ACCENT_BAR = { x: 40, y: 348, w: PAN_W - 210, h: 38 };
 const ACCENT_DEF = { x: PAN_W - 156, y: 348, w: 116, h: 38 };
@@ -3295,7 +3294,10 @@ export function accentBarLight(u: number): number {
  *  falls back to avatars for either. */
 function activeTab(locker: boolean): 'avatars' | 'platforms' | 'colour' | 'arena' {
   const t = customization.tab;
-  return !locker && (t === 'colour' || t === 'arena') ? 'avatars' : t;
+  // FF2: THE BLANK is the only body — the AVATARS shelf is gone from both
+  // faces. Anything that still says 'avatars' (old saves) reads PLATFORMS.
+  if (t === 'avatars') return 'platforms';
+  return !locker && (t === 'colour' || t === 'arena') ? 'platforms' : t;
 }
 
 interface DisplayItem {
@@ -3573,13 +3575,16 @@ function drawColourTab(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | 
     ctx.fillText(text, 40, y);
   };
 
-  label('ARMOUR COLOUR', ARMOUR_BAR.y - 14);
-  drawHueBar(ctx, ARMOUR_BAR, customization.colorHue, false);
-  drawResetBtn(ctx, ARMOUR_DEF, customization.colorHue < 0, hoverAction === 'av-uncolor');
-  label('LIGHTNESS', ARMOUR_LIGHT_BAR.y - 14);
-  drawLightBar(ctx, ARMOUR_LIGHT_BAR, customization.colorLight, customization.colorHue, false);
+  // FF2: no armour dye — THE BLANK takes colour from placed PAINT only
+  // (DESIGN.md §5.3). What survives here is the GAUNTLET neon.
+  ctx.font = '700 22px system-ui, sans-serif';
+  ctx.fillStyle = UI.textDim;
+  ctx.textAlign = 'left';
+  ctx.fillText('THE BLANK TAKES NO DYE.', 40, ARMOUR_BAR.y + 8);
+  ctx.font = '600 18px system-ui, sans-serif';
+  ctx.fillText('your body colours with PAINT, stripe by stripe — coming soon', 40, ARMOUR_BAR.y + 40);
 
-  label('NEON ACCENT', ACCENT_BAR.y - 14);
+  label('GAUNTLET NEON', ACCENT_BAR.y - 14);
   drawHueBar(ctx, ACCENT_BAR, app.accentHue, true);
   drawResetBtn(ctx, ACCENT_DEF, Math.abs(app.accentHue - DEFAULT_ACCENT_HUE) < 0.005, hoverAction === 'accent-default');
   label('LIGHTNESS', ACCENT_LIGHT_BAR.y - 14);
@@ -3716,10 +3721,8 @@ function drawShop(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null)
   ctx.fillStyle = UI.amber;
   ctx.fillText(String(coins.balance), PAN_W - 110, 39);
 
-  const tab = activeTab(false);
   drawTabs(ctx, [
-    { label: 'AVATARS', action: 'tab-avatars', active: tab === 'avatars' },
-    { label: 'PLATFORMS', action: 'tab-platforms', active: tab === 'platforms' },
+    { label: 'PLATFORMS', action: 'tab-platforms', active: true },
   ], hoverAction);
   drawGrid(ctx, false, hoverAction);
 
@@ -3734,8 +3737,8 @@ function hitShop(u: number, v: number): MenuAction | null {
   const head = hitHeaderTabs(x, y);
   if (head) return head;
   if (inPanRect(x, y, FOOT_CLOSE)) return 'custom-close';
-  const t = tabHit(x, y, 2);
-  if (t !== null) return t === 0 ? 'tab-avatars' : 'tab-platforms';
+  const t = tabHit(x, y, 1);
+  if (t !== null) return 'tab-platforms';
   return gridHit(x, y, false);
 }
 
@@ -3745,7 +3748,6 @@ function drawLocker(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | nul
   drawHeaderTabs(ctx, 0, hoverAction);
   const tab = activeTab(true);
   drawTabs(ctx, [
-    { label: 'AVATARS', action: 'tab-avatars', active: tab === 'avatars' },
     { label: 'PLATFORMS', action: 'tab-platforms', active: tab === 'platforms' },
     { label: 'COLOUR', action: 'tab-colour', active: tab === 'colour' },
     { label: 'ARENA', action: 'tab-arena', active: tab === 'arena' },
@@ -3765,14 +3767,14 @@ function hitLocker(u: number, v: number): MenuAction | null {
   const head = hitHeaderTabs(x, y);
   if (head) return head;
   if (inPanRect(x, y, FOOT_CLOSE)) return 'custom-close';
-  const t = tabHit(x, y, 4);
-  if (t !== null) return t === 0 ? 'tab-avatars' : t === 1 ? 'tab-platforms' : t === 2 ? 'tab-colour' : 'tab-arena';
+  const t = tabHit(x, y, 3);
+  if (t !== null) return t === 0 ? 'tab-platforms' : t === 1 ? 'tab-colour' : 'tab-arena';
   const tab = activeTab(true);
   if (tab === 'colour') {
-    if (inPanRect(x, y, ARMOUR_DEF)) return 'av-uncolor';
+    // FF2: the armour-dye zones are gone — THE BLANK takes no dye, so the
+    // COLOUR tab is the gauntlet neon only (body colour is the paint
+    // system's job, DESIGN.md §5.3).
     if (inPanRect(x, y, ACCENT_DEF)) return 'accent-default';
-    if (inPanRect(x, y, ARMOUR_BAR)) return 'av-color';
-    if (inPanRect(x, y, ARMOUR_LIGHT_BAR)) return 'av-light';
     if (inPanRect(x, y, ACCENT_BAR)) return 'accent-color';
     if (inPanRect(x, y, ACCENT_LIGHT_BAR)) return 'accent-light';
     return null;

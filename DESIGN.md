@@ -410,13 +410,19 @@ Each phase is shippable; nothing waits on everything.
    visuals; `pointer.ts`/`safety.ts` port when those screens move.)*
 3. **The mannequin** — new procedural blank over the existing rig +
    hitboxes; FF1 skins retired behind it; attachments shop v1.
-   *(v1 shipped: THE BLANK lives at `src/avatar/mannequin.ts` as the
-   'blank' chassis — primer-grey, wide shoulders, thin waist, sized to
-   the BODY_IK spheres, its materials untagged so recolours, the hue
-   wheel and accents all leave it primer. It leads the locker roster,
-   fresh saves are born in it, and the unskinned bot wears it. Still to
-   come in this phase: the attachments shop, and actually retiring the
-   FF1 animal skins from the store shelf.)*
+   *(v2 shipped: THE BLANK is the ONLY body — the FF1 animal chassis
+   (~2,100 lines) and their icons are deleted outright, AVATAR_SKINS is
+   one entry, every stored or remote skin id resolves to the blank, and
+   the AVATARS shelf is gone from both locker and store. The blank got
+   its slender pass — visual trunk/hips run inside the hitbox spheres
+   like FF1's SHADOW precedent, and the under-hip bulb became a clean
+   closing taper (the hitbox never bulged: it ends at the BODY_IK pelvis
+   sphere, and now the body looks like it). The menus centre the avatar:
+   the right wing is YOU — name plate up top, YOUR BLANK as the primary
+   CTA — THE PODIUM stands your dressed blank on a slowly turning plinth
+   beside it whenever the lobby is up, and the locker's COLOUR tab keeps
+   only the gauntlet neon, with "THE BLANK TAKES NO DYE" written where
+   the armour sliders were. Still to come: the attachments shop.)*
 4. **The paint** — stripe data model, per-part bake, locker paint mode,
    cosmetics sync. (The moment "lasting through games" works, ship it.)
 5. **The venue + THE BELL** — new club on RAVE RAID's club architecture,

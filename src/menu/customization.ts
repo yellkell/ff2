@@ -133,7 +133,7 @@ export const customization = {
   /** The STORE face is up (a sub-modal of the locker); false = the LOCKER. */
   shopOpen: false,
   /** Which tab the shop / locker shows. 'colour' and 'arena' are locker-only. */
-  tab: 'avatars' as 'avatars' | 'platforms' | 'colour' | 'arena',
+  tab: 'platforms' as 'avatars' | 'platforms' | 'colour' | 'arena',
   /** STORE try-on: the unowned skin the mirror (avatar) or your pad (platform)
    *  is modelling right now; its tile grows a BUY button. Nothing is owned or
    *  equipped until the buy — cleared on purchase and when the store closes. */

@@ -50,14 +50,14 @@ export function buildMannequinHead(_accent: number): Group {
 
   // The egg: cranium fuller than the jaw, front barely flattened.
   const skull = new Mesh(new SphereGeometry(r, 24, 18), primerMat());
-  skull.scale.set(0.88, 1.08, 0.96);
+  skull.scale.set(0.84, 1.1, 0.93);
   skull.position.y = r * 0.06;
   g.add(skull);
 
   // Hairline seam at the sight line — the one mark on the whole head, so a
   // fighter still reads WHERE it is looking from silhouette alone.
   const seam = new Mesh(new CylinderGeometry(1, 1, r * 0.06, 24, 1, true), jointMat());
-  seam.scale.set(r * 0.885, 1, r * 0.965);
+  seam.scale.set(r * 0.845, 1, r * 0.935);
   seam.position.y = r * 0.1;
   g.add(seam);
 
@@ -77,27 +77,32 @@ export function buildMannequinChest(_accent: number): Group {
 
   // The trunk: one lathe from upper chest to the waist pinch. (radius, y)
   // pairs; the lathe is circular, squashed to an elliptical section below.
+  // Slender by appearance: the visual trunk runs well INSIDE the chest
+  // hitbox sphere (R = 0.2) — like FF1's SHADOW, looks slimmer, hits the
+  // same. Only the shoulder line keeps its width; everything below tapers.
   const profile: Array<[number, number]> = [
-    [0.085, 0.155], // neck root
-    [0.165, 0.12], // upper chest shelf
-    [R * 0.94, 0.035], // pecs — the widest ring
-    [0.155, -0.05],
-    [0.108, -0.155], // THE WAIST — thin
-    [0.112, -0.19], // slight flare handing off to the pelvis
+    [0.08, 0.155], // neck root
+    [0.148, 0.12], // upper chest shelf
+    [R * 0.82, 0.045], // pecs — the widest ring, slimmed
+    [0.158, -0.01], // ribcage holding its line
+    [0.126, -0.085], // the drop into the waist
+    [0.09, -0.15], // THE WAIST — properly thin
+    [0.09, -0.17],
+    [0.094, -0.19], // slight flare handing off to the pelvis
   ];
   const trunk = new Mesh(new LatheGeometry(profile.map(([x, y]) => new Vector2(x, y)), 28), primerMat());
-  trunk.scale.set(1, 1, 0.74); // chest section: wider than deep
+  trunk.scale.set(1, 1, 0.68); // chest section: wider than deep
   g.add(trunk);
 
   // Clavicle bar: the width. A lying capsule spanning shoulder to shoulder.
-  const bar = new Mesh(new CylinderGeometry(0.066, 0.066, 0.46, 14), primerMat());
+  const bar = new Mesh(new CylinderGeometry(0.058, 0.058, 0.46, 14), primerMat());
   bar.rotation.z = Math.PI / 2;
   bar.position.set(0, 0.095, 0.005);
   g.add(bar);
 
   // Deltoid caps: wide shoulders, rounded — the mannequin's signature line.
   for (const side of [-1, 1]) {
-    const cap = new Mesh(new SphereGeometry(0.098, 18, 14), primerMat());
+    const cap = new Mesh(new SphereGeometry(0.09, 18, 14), primerMat());
     cap.scale.set(1, 0.94, 0.94);
     cap.position.set(side * 0.265, 0.09, 0.005);
     g.add(cap);
@@ -119,21 +124,25 @@ export function buildMannequinPelvis(_accent: number): Group {
   const R = BODY_IK.pelvisRadius; // 0.17
 
   // Waist coupler: the thin ring the trunk hands down to.
-  const coupler = new Mesh(new CylinderGeometry(0.1, 0.125, 0.09, 20), jointMat());
+  const coupler = new Mesh(new CylinderGeometry(0.084, 0.104, 0.09, 20), jointMat());
   coupler.position.y = 0.09;
-  coupler.scale.z = 0.8;
+  coupler.scale.z = 0.76;
   g.add(coupler);
 
-  // The hips: one squashed sphere, a touch wider than deep.
-  const hips = new Mesh(new SphereGeometry(R, 22, 16), primerMat());
-  hips.scale.set(1.08, 0.72, 0.84);
+  // The hips: one squashed sphere, slimmer than the hitbox sphere it sits
+  // in (the pelvis hitbox is R and never changes — hips this slender are a
+  // pure appearance call, same as FF1's SHADOW).
+  const hips = new Mesh(new SphereGeometry(R * 0.86, 22, 16), primerMat());
+  hips.scale.set(1.0, 0.76, 0.8);
   g.add(hips);
 
-  // The fade: a smaller dark bulb closing the body off underneath.
-  const fade = new Mesh(new SphereGeometry(R * 0.72, 18, 12), jointMat());
-  fade.scale.set(0.86, 0.55, 0.78);
-  fade.position.y = -R * 0.62;
-  g.add(fade);
+  // The close: a slim taper fading the body out underneath — NOT a bulge.
+  // The hitbox ends at the pelvis sphere; nothing down here is hittable,
+  // so nothing down here should look like it is.
+  const close = new Mesh(new CylinderGeometry(0.098, 0.024, 0.16, 18), jointMat());
+  close.scale.z = 0.78;
+  close.position.y = -R * 0.68;
+  g.add(close);
 
   return g;
 }

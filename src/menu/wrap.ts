@@ -27,7 +27,6 @@ import { app } from './appState.js';
 import { coins } from './wallet.js';
 import { tierForXp } from './progression.js';
 import { myStats } from '../net/leaderboard.js';
-import { GAME_TITLE } from '../config.js';
 import { PUB_REGIONS } from '../pub/config.js';
 
 /** One face of a wrap panel: everything Panel.paint needs. */
@@ -366,41 +365,36 @@ function houseRoot(): Face {
   const stats = myStats();
   const tier = tierForXp(stats.xp);
   const buttons: PanelButton[] = [
+    // YOU, above everything: the name plate is the panel's headline.
     {
-      id: 'open-pub',
-      label: 'IRON BALLS CLUB',
-      sub: lock ? SEAL_SUB : app.pubCount > 0 ? `${app.pubCount} in the club right now` : 'the social scene',
-      x: LX, y: 150, w: LWIDE, h: 116,
-      primary: !lock,
-      disabled: lock,
-      tone: app.pubCount > 0 ? KIT.positive : undefined,
+      id: 'you-name',
+      label: stats.name,
+      sub: `${tier.name} · ${stats.xp} XP`,
+      x: LX, y: 140, w: LWIDE, h: 110,
+      display: true,
+      px: 52,
     },
+    // The body is the product now: the LOCKER leads.
     {
       id: 'open-custom',
-      label: 'LOCKER',
-      sub: lock ? SEAL_SUB : 'skins · colours · loadout',
-      x: LX, y: 296, w: LWIDE, h: 100,
+      label: 'YOUR BLANK',
+      sub: lock ? SEAL_SUB : 'gauntlet neon · pads · arena — paint bay coming',
+      x: LX, y: 282, w: LWIDE, h: 116,
+      primary: !lock,
       disabled: lock,
     },
     {
       id: 'open-shop',
       label: 'SHOP',
-      sub: lock ? SEAL_SUB : 'spend your bolt-dollars',
-      x: LX, y: 416, w: LWIDE, h: 100,
+      sub: lock ? SEAL_SUB : 'attachments and pads — spend your bolt-dollars',
+      x: LX, y: 422, w: LWIDE, h: 100,
       disabled: lock,
-    },
-    {
-      id: 'you-name',
-      label: stats.name,
-      sub: `${tier.name} · ${stats.xp} XP`,
-      x: LX, y: 576, w: LWIDE, h: 96,
-      display: true,
     },
     {
       id: 'you-coins',
       label: `$ ${coins.balance}`,
       sub: 'bolt-dollars',
-      x: LX, y: 692, w: 304, h: 88,
+      x: LX, y: 552, w: 304, h: 88,
       display: true,
       small: true,
       tone: KIT.accent,
@@ -409,9 +403,17 @@ function houseRoot(): Face {
       id: 'you-record',
       label: `${app.stats.wins}W — ${app.stats.losses}L`,
       sub: 'lifetime',
-      x: LX + 336, y: 692, w: 304, h: 88,
+      x: LX + 336, y: 552, w: 304, h: 88,
       display: true,
       small: true,
+    },
+    {
+      id: 'open-pub',
+      label: 'IRON BALLS CLUB',
+      sub: lock ? SEAL_SUB : app.pubCount > 0 ? `${app.pubCount} in the club right now` : 'the social scene',
+      x: LX, y: 682, w: LWIDE, h: 100,
+      disabled: lock,
+      tone: app.pubCount > 0 ? KIT.positive : undefined,
     },
     {
       id: 'rename',
@@ -422,8 +424,8 @@ function houseRoot(): Face {
     },
   ];
   return {
-    title: GAME_TITLE,
-    body: note('the leaderboard hangs behind you', 940, LW),
+    title: 'YOU',
+    body: note("that's you on the podium — everyone sees this body", 940, LW),
     buttons,
   };
 }

@@ -25,10 +25,13 @@ carried over verbatim: everything in it still applies to this code.
   kit panels on an arc replacing the legacy BATTLE / ARCADE / house plates
   (`src/menu/wrap.ts`), every existing flow intact. Headless probe:
   `npm run dev` then `npm run check:wrap` (add `--shots` for panel PNGs).
-- **THE BLANK** — the mannequin (DESIGN.md §5, phase 3 v1):
-  `src/avatar/mannequin.ts`, the primer-grey body everyone is born in —
-  wide shoulders, thin waist, honest to the hitboxes, immune to every
-  recolour. Preview: `/skin-preview.html?skins=blank`.
+- **THE BLANK** — the mannequin (DESIGN.md §5, phase 3 v2):
+  `src/avatar/mannequin.ts`, the primer-grey body everyone wears — the
+  ONLY body: the FF1 animal skins are deleted, every old skin id resolves
+  to the blank. Slender by appearance, honest to the hitboxes, immune to
+  every recolour; colour will come from paint alone. THE PODIUM shows
+  your dressed blank beside the YOU wing whenever the lobby is up.
+  Preview: `/skin-preview.html?skins=blank`.
 
 ## Run it
 

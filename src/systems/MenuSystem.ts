@@ -13,11 +13,13 @@
 import { createSystem, InputComponent } from '@iwsdk/core';
 import {
   BufferGeometry,
+  CylinderGeometry,
   Group,
   Line,
   LineBasicMaterial,
   Mesh,
   MeshBasicMaterial,
+  MeshStandardMaterial,
   Object3D,
   Quaternion,
   Raycaster,
@@ -166,6 +168,9 @@ export class MenuSystem extends createSystem({}) {
   /** Whether the keyboard is editing your callsign or your profile note. */
   private kbMode: 'name' | 'note' | 'report' = 'name';
   private mirror?: { group: Group; rig: BoxerRig };
+  /** THE PODIUM: your blank standing beside the YOU wing, always on show
+   *  in the lobby — the avatar IS the menu's centrepiece now. */
+  private podium?: Group;
   private skinVersion = 0;
   /** The opponent pad is modelling a STORE platform try-on (needs restoring). */
   private oppPadPreviewed = false;
@@ -242,6 +247,7 @@ export class MenuSystem extends createSystem({}) {
     // place (same ids, same slots) — see menu/wrap.ts. The second argument
     // lets the headless dev hook (__ff2.wrap.act) fire real actions.
     this.wrap = installWrap(this.menu, (a) => this.run(a));
+    this.buildPodium();
     this.panel = createActionPanel(this.scene);
     this.keyboard = createNameKeyboard(this.scene);
     this.pointers.left = this.makePointer();
@@ -355,6 +361,14 @@ export class MenuSystem extends createSystem({}) {
     // The mirror stands beside both the customise plate AND the shop, so avatar
     // changes preview live wherever you pick them.
     if (this.mirror) this.mirror.group.visible = customization.open;
+    // The podium shows with the lobby arc and steps aside for every modal
+    // (the locker brings its own mirror); it turns like a display stand.
+    if (this.podium) {
+      const arcUp = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings;
+      this.podium.visible = arcUp;
+      this.podium.userData.beat = (this.podium.userData.beat ?? 0) + 1;
+      if (arcUp) this.podium.rotation.y += delta * 0.3;
+    }
 
     // Lobby / queueing: hover + click the panels.
     let hover: PanelId | null = null;
@@ -1127,6 +1141,60 @@ export class MenuSystem extends createSystem({}) {
   // --- customisation: the avatar mirror + live skin application ---------------
 
   /**
+   * THE PODIUM — your blank on a plinth beside the YOU wing, slowly
+   * turning, dressed live by applyOwnSkins (the 'podium-avatar' name is on
+   * its roster). Parented to the menu group so bouts hide it for free;
+   * per-frame visibility follows the lobby arc (modals swap it out for the
+   * locker mirror).
+   */
+  private buildPodium(): void {
+    if (this.podium) return;
+    const rig = buildBoxer(0);
+    const stand = new Group();
+    stand.name = 'podium-avatar';
+    for (const piece of rig.all) {
+      piece.visible = true;
+      stand.add(piece);
+    }
+    solveTorso(rig, new Vector3(0, 1.5, 0), new Quaternion(), 0, 0, _dir, _end);
+    rig.gloves[0].position.set(-0.24, 1.05, -0.2);
+    rig.gloves[1].position.set(0.24, 1.05, -0.2);
+    // The plinth: a low dark drum with a primer top ring — display
+    // furniture, not a platform.
+    const drum = new Mesh(
+      new CylinderGeometry(0.42, 0.48, 0.16, 24),
+      new MeshStandardMaterial({ color: 0x15171b, metalness: 0.85, roughness: 0.35 }),
+    );
+    drum.position.y = 0.08;
+    stand.add(drum);
+    const ring = new Mesh(
+      new CylinderGeometry(0.425, 0.425, 0.018, 24),
+      new MeshStandardMaterial({ color: 0x98948b, metalness: 0.1, roughness: 0.8 }),
+    );
+    ring.position.y = 0.168;
+    stand.add(ring);
+    const podium = new Group();
+    podium.name = 'podium-root';
+    podium.add(stand);
+    stand.position.y = 0.17; // the blank stands ON the plinth top
+    podium.position.set(1.72, 0, -0.52);
+    podium.rotation.y = -0.9; // opening pose; update() turns it slowly
+    this.menu.group.add(podium);
+    this.podium = podium;
+    // Headless probes ask after the podium through the shared dev hook.
+    const hook = window.__ff2 as (typeof window.__ff2 & { podium?: unknown }) | undefined;
+    if (hook) {
+      hook.podium = {
+        up: () => podium.visible && this.menu.group.visible,
+        raw: () => ({ pod: podium.visible, grp: this.menu.group.visible, custom: customization.open, beat: podium.userData.beat ?? 0 }),
+        at: () => podium.position.toArray(),
+        pieces: () => podium.children[0]?.children.length ?? 0,
+      };
+    }
+    this.skinVersion = -1; // dress the new rig on the next applyOwnSkins
+  }
+
+  /**
    * The "mirror": your full boxer rig standing beside the customisation
    * panel in a relaxed guard, re-skinned live as you click chips — so you
    * see exactly how you'll look across the gap.
@@ -1165,7 +1233,7 @@ export class MenuSystem extends createSystem({}) {
     const accentChanged = app.accentHue !== this.accentHue || app.accentLight !== this.accentLight;
     if (!skinChanged && !accentChanged) return;
 
-    const names = ['player-torso', 'player-glove-left', 'player-glove-right', 'mirror-avatar'];
+    const names = ['player-torso', 'player-glove-left', 'player-glove-right', 'mirror-avatar', 'podium-avatar'];
     if (skinChanged) {
       this.skinVersion = customization.version;
       const av = myAvatarSkin(); // chosen shape + custom colour
@@ -1177,6 +1245,7 @@ export class MenuSystem extends createSystem({}) {
       for (const name of names) {
         const obj = this.scene.getObjectByName(name);
         if (obj) applyAvatarSkin(obj, name === 'mirror-avatar' ? mirrorAv : av);
+        // (the podium wears what you actually own, like your own body)
       }
       const pad = this.scene.getObjectByName('player-platform');
       if (pad) applyPlatformSkin(pad, platformSkin(customization.platform));

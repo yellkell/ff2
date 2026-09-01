@@ -87,42 +87,17 @@ export const DEFAULT_SLAB_METAL = 0.92;
 /** Platform skins owned from the start (no purchase needed). */
 export const FREE_PLATFORMS = ['azure', 'inferno', 'ember'];
 /** Avatar skins owned from the start — the rest are shop unlocks. */
-export const FREE_AVATARS = ['blank', 'cobalt', 'crimson', 'valkyrie'];
+export const FREE_AVATARS = ['blank'];
 
 export const AVATAR_SKINS: AvatarSkin[] = [
-  // THE BLANK — FF2's mannequin, the body everyone is born in (DESIGN.md
-  // §5.1). Its geometry carries no role/accent tags, so these palette
-  // fields only paint its SHOP TILE — the body itself stays primer no
-  // matter what the recolour machinery does. Colour comes from paint alone.
+  // THE BLANK — the only body in town (DESIGN.md §5.1). FF2 retired the
+  // FF1 animal-skin roster outright: everyone is born the same primer
+  // mannequin, and identity comes from attachments and paint, never from
+  // a catalogue of bodies. Saved FF1 picks and remote peers' old skin ids
+  // all resolve here through avatarSkin()'s fallback.
+  // The palette fields only paint its SHOP TILE — the body's materials are
+  // untagged, so it stays primer no matter what the recolour machinery does.
   { id: 'blank', name: 'THE BLANK', chassis: 0x98948b, trim: 0x4e4b45, accent: 0xd8d4ca },
-  // ids are stable (saved prefs + per-skin geometry tags key off them); the
-  // display names follow the metallic-animal heads buildBoxer gives each one.
-  { id: 'cobalt', name: 'BIGGY', chassis: 0x122039, trim: 0x0a111e, accent: 0x4fb7ff },
-  // SHADOW (the panther) wears a slightly slimmer, more feminine silhouette.
-  // This is the ONE deliberate exception to "visual matches hitbox": the armour
-  // groups scale in, but the BODY_IK hitbox spheres are unchanged, so it's no
-  // harder to hit.
-  { id: 'crimson', name: 'SHADOW', chassis: 0x2e1013, trim: 0x170809, accent: 0xff3b4e, slim: true },
-  // Full silhouette — its visual body matches the shared hitbox.
-  { id: 'valkyrie', name: 'FLY GUY', chassis: 0x261b33, trim: 0x120d1a, accent: 0xff9ad5 },
-  // Polished steel knight in heraldic gold — a shop unlock.
-  { id: 'knight', name: 'KNIGHT', chassis: 0x2d333d, trim: 0x14181f, accent: 0xffcf6e, price: 100 },
-  // The stallion: long sculpted muzzle, pricked ears, a swept mane crest and
-  // tack-strap cuirass. Derby-green steel with a minted glow.
-  { id: 'stallion', name: 'STALLION', chassis: 0x1c2a21, trim: 0x0e1611, accent: 0x53ffa0, price: 500 },
-  // The wolf: lean tapered muzzle, pinned-back ears, a snarling scowl and a
-  // crescent of moon-embers on the chest. Night-grey steel, cold moonlit glow.
-  { id: 'wolf', name: 'KAVIC', chassis: 0x252b34, trim: 0x12161d, accent: 0xa8e0ff, price: 250 },
-  // The frog: broad flat head with dome eye-turrets on top, a wide smile
-  // line, a throat sac, and a banded belly plate. Pond-green gel-smooth
-  // armour with a lily-bright glow.
-  { id: 'frog', name: 'LEGS', chassis: 0x1b3a26, trim: 0x0c1d12, accent: 0x86ff70, price: 250 },
-  // OSWALD, the lucky rabbit in iron: the biggest head on the roster, the
-  // white muzzle mask, big close-set eyes, neon buck teeth, a puff tail, and
-  // two TALL STAND-UP ears breaking back near the tip. Black-and-white by
-  // design — near-black steel under a bone-white glow, the rubber-hose read.
-  // (id stays 'bunny' — it's the save key for owned/worn prefs.)
-  { id: 'bunny', name: 'OSWALD', chassis: 0x1b1a1e, trim: 0x0b0b0d, accent: 0xf4f1e4, price: 250 },
 ];
 
 export const PLATFORM_SKINS: PlatformSkin[] = [
