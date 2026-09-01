@@ -185,7 +185,7 @@ export function runBootIntro(camera: PerspectiveCamera, scene: Scene, onMusicCue
   const sign = new Image();
   sign.decoding = 'async';
   sign.onload = () => logo.redraw((ctx, w, h) => drawMark(ctx, w, h, sign));
-  sign.src = '/signs/fire-fight.png';
+  sign.src = 'signs/fire-fight.png'; // relative — see LoadingOverlay (subpath hosting)
 
   // The lobby banner's living glow, recreated behind the sign card: a wide
   // haze + a hot core (normal blending like banner.ts so it reads on the

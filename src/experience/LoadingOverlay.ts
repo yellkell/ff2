@@ -30,7 +30,10 @@ export class LoadingOverlay {
     this.texture.colorSpace = SRGBColorSpace;
     this.logo.decoding = 'async';
     this.logo.onload = () => this.draw();
-    this.logo.src = '/signs/fire-fight.png';
+    // Relative, like every other public-asset load (arena/banner.ts): a
+    // leading slash pins it to the domain root, which 404s the moment the
+    // build is served from a subpath (GitHub Pages at /ff2/).
+    this.logo.src = 'signs/fire-fight.png';
 
     const shade = new Mesh(
       // Oversized on purpose: cover the complete per-eye XR frustum so no

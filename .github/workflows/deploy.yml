@@ -1,8 +1,19 @@
 name: Deploy to GitHub Pages
 
+# Pages source is set to "GitHub Actions", so whatever this workflow uploads
+# becomes the live site (https://yellkell.github.io/ff2/).
+#
+# The working branch is listed alongside main on purpose: FF2 is built there
+# and `main` still holds nothing but the initial commit, so a main-only
+# trigger would never fire. Drop the branch line once the work is merged.
+#
+# NOTE: deploying from a NON-DEFAULT branch also needs the `github-pages`
+# environment to allow it — Settings → Environments → github-pages →
+# Deployment branches. If a run fails with "not allowed to deploy ... due to
+# environment protection rules", that setting is why.
 on:
   push:
-    branches: [main]
+    branches: [main, claude/ff2-work-1tpabn]
   workflow_dispatch:
 
 permissions:
@@ -25,6 +36,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+
+      # Pages serves this project from /ff2/, not from a domain root, so any
+      # asset reference written with a leading slash 404s in production while
+      # working fine in local dev. Two things Vite can't save us from: string
+      # literals in TS (it only rewrites references in its HTML inputs) and
+      # files copied verbatim out of public/. Fail the deploy instead of
+      # shipping a site with no logo. (`npm run check:pages` is the fuller
+      # version of this — it boots the built site under /ff2/ in a browser.)
+      - name: Guard against root-absolute asset paths
+        run: |
+          if grep -rEn '(src|href)="/[^/]' dist --include='*.html' \
+            || grep -rEo '"/(signs|posters|icons)/[^"]*"' dist/assets; then
+            echo "::error::Root-absolute asset paths found — these 404 under the /ff2/ subpath. Make them relative."
+            exit 1
+          fi
+          echo "clean — every asset reference is relative"
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

@@ -73,6 +73,22 @@ npm run server:pub # optional: the club room server on :8788
 On a Quest, open the dev URL in the headset browser. On desktop, the IWSDK
 dev plugin provides a WebXR emulator (WASD + mouse).
 
-> Note: the Firebase Hosting deploy workflow is parked on manual dispatch —
-> it still points at FF1's live project. FF2 needs its own Firebase project
-> before automatic deploys switch on.
+## Deploying
+
+The live site is **GitHub Pages, published by GitHub Actions**
+(`.github/workflows/deploy.yml` → https://yellkell.github.io/ff2/). A push
+builds `dist/` and uploads it; no Firebase involved.
+
+Pages serves the game from a **subpath** (`/ff2/`), not a domain root, so
+every reference to a file in `public/` must be written **relatively**
+(`signs/fire-fight.png`, never `/signs/fire-fight.png`). Vite rewrites
+references inside its HTML inputs, but *not* string literals in TypeScript
+and *not* files copied verbatim out of `public/` — both have already
+shipped this bug once. `npm run build && npm run check:pages` serves the
+build under `/ff2/` in a real browser and fails on any 404; the deploy
+workflow runs a fast static version of the same guard.
+
+> Firebase is still used for **Firestore** (leaderboards, matchmaking, the
+> gazette) — only hosting moved. `firebase-deploy.yml` remains parked on
+> manual dispatch and still points at FIRE FIGHT 1's project, so it must
+> not be run from this repo.
