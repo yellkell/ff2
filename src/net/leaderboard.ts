@@ -57,6 +57,8 @@ export interface LbRow {
   tone: string;
   /** Their worn gear, packed (avatar/gear.ts) — the profile card names it. */
   gear: string;
+  /** The deck they fight on (a PLATFORM_SKINS id) — the gazette names it. */
+  pad: string;
 }
 
 /** The season-end honours, best first. */
@@ -186,6 +188,7 @@ export function myProfileRow(): LbRow {
     look: myPackedLook(),
     tone: customization.avatar,
     gear: myPackedGear(),
+          pad: customization.platform,
   };
 }
 
@@ -492,10 +495,11 @@ export function initLeaderboard(): void {
           look: myPackedLook(),
           tone: customization.avatar,
           gear: myPackedGear(),
+          pad: customization.platform,
           lastPlayedAt: Date.now(),
           updatedAt: h.fs.serverTimestamp(),
         });
-        mirroredLook = `${customization.avatar}|${myPackedLook()}|${myPackedGear()}`;
+        mirroredLook = `${customization.avatar}|${myPackedLook()}|${myPackedGear()}|${customization.platform}`;
       }
     } catch {
       leaderboard.status = 'leaderboard unreachable';
@@ -519,10 +523,10 @@ let mirroredLook: string | null = null;
  */
 export function syncLookMirror(): void {
   if (!FIREBASE_ENABLED || mirroredLook === null || !profile.id) return;
-  const key = `${customization.avatar}|${myPackedLook()}|${myPackedGear()}`;
+  const key = `${customization.avatar}|${myPackedLook()}|${myPackedGear()}|${customization.platform}`;
   if (key === mirroredLook) return;
   mirroredLook = key;
-  writeMine({ look: myPackedLook(), tone: customization.avatar, gear: myPackedGear() });
+  writeMine({ look: myPackedLook(), tone: customization.avatar, gear: myPackedGear(), pad: customization.platform });
 }
 
 let lastFetch = -Infinity;
@@ -556,6 +560,7 @@ export async function refreshLeaderboard(force = false): Promise<void> {
           look: (d.data().look as string) ?? '',
           tone: (d.data().tone as string) ?? 'blank',
           gear: (d.data().gear as string) ?? '',
+          pad: (d.data().pad as string) ?? '',
         }))
         // Every board shows anyone who's banked anything. (RANKED is ladder
         // points now — per-season, and raw ELO stays hidden for matchmaking.)

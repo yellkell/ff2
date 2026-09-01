@@ -68,11 +68,20 @@ carried over verbatim: everything in it still applies to this code.
   reads as debris.
   Preview: `/env-preview.html?env=desert&site=trailhead|flats|boneyard`;
   probe: `npm run check:desert` (add `--shots`).
-- **THE STAGE DECK** — the diamond-plate pedestals retired: fighting
-  platforms are now the club stage's realistic waxed-oak planking (boards
-  running at your foe, brass corner screws, the team-neon tube as edge
-  lighting). Skins stain the boards instead of tinting steel.
-  Preview: `/deck-preview.html?shape=gate|donut|x|routine`.
+- **THE PADS** — the platform shop rebuilt from scratch. A pad is what it
+  is MADE OF now (`src/arena/decks.ts`, thirteen procedural deck
+  materials with colour + bump from one seeded noise): the free three are
+  charred oak (SMOULDER), pale ash (AZURE) and redwood (INFERNO); the shop
+  climbs from WALNUT through SLATE flagstones, veined MARBLE, FROST (river
+  ice), OBSIDIAN (black glass) and JADE to BULLION (gold leaf, laid square
+  by square); CHAMPION is crimson lacquer with a gold inlay, TIDEBREAKER
+  wet green stone under GOOPLIATH's pool, BLAZING scorched boards under
+  the burning rail. Each skin also picks the neon tube's colour and the
+  corner screws' metal. The tint-era ornaments (the XD grin, VOLT's bolt,
+  SYNTHWAVE's grid, GOLD RUSH's medallion) are gone with their skins; a
+  saved retired id falls back to SMOULDER. Tiles show a material swatch.
+  Preview: `/skin-preview.html?pads=slate,marble,bullion`; the deck's
+  telegraph shapes still at `/deck-preview.html?shape=gate|donut|x|routine`.
 - **THE GASKET GAZETTE'S VOICE** — Sheriff Cole Ironside has a bible now
   ([`docs/gazette-voice.md`](docs/gazette-voice.md)): who he is (a tin-star
   who despises the Clankers and is one), how he sounds, what he never does

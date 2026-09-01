@@ -610,7 +610,7 @@ export class FightSystem extends createSystem({}) {
       const pf = pfFor(side);
       const skin: PlatformSkin = pf
         ? platformSkin(pf)
-        : { id: '', name: '', neon: teamColor(side) };
+        : { id: '', name: '', deck: 'charred', neon: teamColor(side), trim: 0x4a4c52, blurb: '' };
       applyPlatformSkin(platforms[side], skin);
     });
   }

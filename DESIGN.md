@@ -319,12 +319,27 @@ The STORE and LOCKER grew a GEAR tab (try-on dresses the mirror, a buy
 goes straight on, a locker tap wears or removes), and the worn set rides
 every cosmetics channel packed as a short comma list — the duel `iam`,
 the mesh `iam` (`mesh.cosmetics`), the club hello + the LOOK event, the
-raid pit body, and the player doc (`gear`) — re-validated on arrival by
+raid pit body, and the player doc (`gear`, beside `pad`, the deck) — re-validated on arrival by
 `cleanGear` (unknown ids dropped, one per slot, hard length cap: the
 paint's fail-soft law). Probes: `check:wrap` dresses the podium through
 `__ff2.gear` and asserts the wire form; `check:paint`'s two-client room
 sees a punter's gear arrive on the hello. Not yet: gear as a PAINT
 surface (stripes stay on the body and head for now).
+
+**SHIPPED — THE PADS, rebuilt entire.** The platform shop no longer sells
+neon tints over one steel slab with a grin, a bolt and a grid on top. A
+platform skin is a MATERIAL (`arena/decks.ts`): thirteen procedural
+decks — charred oak, pale ash, redwood, walnut, slate flagstones, veined
+marble, black glass, river ice, jade, gold leaf, crimson lacquer, wet
+green stone — each a colour map and a bump map cut from one seeded noise,
+shared per style so swapping skins never uploads. The catalogue is the
+material ladder: SMOULDER / AZURE / INFERNO free; WALNUT, SLATE, MARBLE,
+FROST, OBSIDIAN, JADE, BULLION for coins; CHAMPION, TIDEBREAKER and
+BLAZING earned as before (their living FX — the burning rail, the pool —
+kept; everything decorative retired). Each skin also sets the neon tube's
+colour and the corner screws' metal (iron, brass, chrome, gold). Tiles
+show a swatch of the material. The player doc mirrors the worn deck as
+`pad` so the gazette can say what a champion stands on.
 
 ### 5.3 The paint — the important part
 

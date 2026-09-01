@@ -10,6 +10,7 @@
 
 import { Color, Mesh, MeshStandardMaterial, type Object3D } from 'three';
 import { PALETTE } from '../config.js';
+import { deckLook, type DeckStyle } from '../arena/decks.js';
 
 export interface AvatarSkin {
   id: string;
@@ -32,62 +33,33 @@ export interface PlatformSkin {
   id: string;
   name: string;
   locked?: boolean;
-  /** Neon rim piping + slab emissive tint. */
+  /** What the deck is MADE OF (arena/decks.ts) — the skin's identity. The
+   *  shop sells materials now, not tints: charred oak, pale ash, quarried
+   *  slate, veined marble, black glass, river ice, jade, gold leaf. */
+  deck: DeckStyle;
+  /** The neon tube round the edge — the light the deck stands in. */
   neon: number;
-  /**
-   * Shop price in coins (the bolt-dollar currency). Omitted = free / owned by
-   * default (the three launch skins). 100 = a recolour or the premium GOLD
-   * RUSH pad (≈10 games of play each).
-   */
+  /** The corner screws' metal (TRIM): iron, brass, chrome, gold. */
+  trim: number;
+  /** Shop price in coins. Omitted = free / owned from the start. */
   price?: number;
-  /**
-   * Premium platforms repaint the diamond-plate SLAB base too (not just the
-   * neon), for a look the plain recolours don't get. Omitted = the default
-   * gunmetal steel (DEFAULT_SLAB_TINT).
-   */
-  slab?: number;
-  /**
-   * The slab's EMISSIVE tint. The deck normally glows faintly in the neon
-   * colour, but over a near-black slab a saturated neon (e.g. VOLT's yellow)
-   * washes the whole deck that colour. Set this to keep the deck truly black
-   * (0x000000) while the rim + any decal still burn the neon. Omitted = neon.
-   */
-  slabEmissive?: number;
-  /** Stronger deck bloom for rare earned pads; ordinary steel rests at 0.08. */
-  slabGlow?: number;
-  /**
-   * Deck roughness. Steel sits at DEFAULT_SLAB_ROUGH; a POLISHED pad wants a
-   * little less, because on a metal surface part of the read of "precious" is
-   * specular — gold at steel's roughness is a mustard-coloured floor.
-   */
-  slabRough?: number;
-  /**
-   * Deck metalness. Steel sits at DEFAULT_SLAB_METAL (0.92), where the surface
-   * takes essentially ALL its colour from what it reflects — which in a dim
-   * arena means a gold tint renders as good as black however bright the tint
-   * is. Dropping this lets the tint show diffusely, so the pad reads gold in
-   * the room it is actually standing in rather than only under a studio light.
-   */
-  slabMetal?: number;
-  /**
-   * Earned, never sold: how this skin is won (shown on its shop tile in place
-   * of a price; tapping it there does nothing until it's yours). The CHAMPION
-   * pad carries 'FELL GOLIATH'.
-   */
+  /** Earned, never sold: how this skin is won (shown on its shop tile in
+   *  place of a price; tapping it there does nothing until it's yours). */
   earnedBy?: string;
+  /** One line for the tile. */
+  blurb: string;
 }
 
-/** The makePlatform() slab base tint — restored when a non-premium skin is
- *  worn. Neutral white: THE STAGE DECK is waxed oak now (the map carries the
- *  wood's own colour), and a premium skin's slab tint STAINS the boards. */
-export const DEFAULT_SLAB_TINT = 0xffce9a;
-/** The makePlatform() slab roughness — waxed boards, not varnish. */
-export const DEFAULT_SLAB_ROUGH = 0.55;
-/** The makePlatform() slab metalness — wood, not steel. */
-export const DEFAULT_SLAB_METAL = 0.05;
+/** The corner screws' metals. */
+export const TRIM = {
+  brass: 0xc9a86a,
+  iron: 0x4a4c52,
+  chrome: 0xd8dde6,
+  gold: 0xf1c75a,
+} as const;
 
 /** Platform skins owned from the start (no purchase needed). */
-export const FREE_PLATFORMS = ['azure', 'inferno', 'ember'];
+export const FREE_PLATFORMS = ['ember', 'azure', 'inferno'];
 /** Avatar skins owned from the start — the rest are shop unlocks. */
 export const FREE_AVATARS = ['blank', 'onyx'];
 
@@ -106,65 +78,27 @@ export const AVATAR_SKINS: AvatarSkin[] = [
 ];
 
 export const PLATFORM_SKINS: PlatformSkin[] = [
-  // The three launch skins — free, owned from the start. SMOULDER (the
-  // default) burns your fire's ember over a CHARRED deck — coals, not
-  // polish — which also keeps it a room apart from GOLD RUSH's gold-on-gold
-  // (the two warm pads used to read as twins on the same gunmetal).
-  { id: 'azure', name: 'AZURE', neon: 0x4fb7ff },
-  { id: 'inferno', name: 'INFERNO', neon: 0xff3b30 },
-  { id: 'ember', name: 'SMOULDER', neon: PALETTE.ember, slab: 0x1a1412 },
-  // Shop: two basic recolours…
-  { id: 'toxic', name: 'TOXIC', neon: PALETTE.venom, price: 100 },
-  { id: 'plasma', name: 'PLASMA', neon: PALETTE.violet, price: 100 },
-  // …the fancier premium pad. Gold is a SPECULAR read, not a hue: the old
-  // 0xb8902c tint over the diamond-plate map, at steel roughness and washed by
-  // a yellow emissive, came out a flat mustard-olive floor with no glint in it
-  // at all. A bright bullion tint, a deep warm emissive so the deck stops going
-  // olive, and a POLISHED surface so it actually catches the light — plus the
-  // struck medallion and border ring built in arena.ts under this id.
-  // (Roughness kept near steel's: at 0.1 a metalness-0.92 deck becomes a MIRROR
-  // of a mostly dark room and the gold goes black. The read comes from the
-  // bright bullion tint plus a warm self-glow, with just a little extra polish.)
-  {
-    id: 'goldrush',
-    name: 'GOLD RUSH',
-    neon: 0xffd84a,
-    slab: 0xffd071,
-    slabEmissive: 0x6b4400,
-    slabGlow: 0.26,
-    slabRough: 0.26,
-    slabMetal: 0.55,
-    price: 100,
-  },
-  // …two more premium repaints. FROSTBITE is FROZEN OVER: glacier piping on a
-  // pale rimed deck — the light slab is what keeps it from reading as just
-  // AZURE again (both wore blue neon on dark steel and told apart badly).
-  { id: 'frostbite', name: 'FROSTBITE', neon: 0x8ae4ff, slab: 0xcfe3ea, slabEmissive: 0x10262e, price: 250 },
-  // SYNTHWAVE: hot-pink piping over a midnight-purple deck, plus a raised
-  // neon GRID etched across it (built in arena.ts, shown by its skinTag) —
-  // the grid is what separates it from PLASMA's plain violet recolour.
-  { id: 'synthwave', name: 'SYNTHWAVE', neon: 0xff4fd8, slab: 0x251043, price: 250 },
-  // …the storm pad: electric-yellow piping + a big lightning bolt over a
-  // jet-black deck (slabEmissive black so the yellow rim doesn't wash the
-  // whole deck olive).
-  { id: 'volt', name: 'VOLT', neon: 0xffe94a, slab: 0x080808, slabEmissive: 0x000000, price: 1000 },
-  // …and the top-shelf flex: a jet-black deck with a big white XD painted on
-  // it. slabEmissive black so the white rim doesn't wash the deck grey — the
-  // deck reads truly black, like VOLT. The face mesh is built into every
-  // platform, tagged with this id and shown only when it's worn.
-  { id: 'xdface', name: 'XD', neon: 0xf4f6fb, slab: 0x080808, slabEmissive: 0x000000, price: 5000 },
-  // The CHAMPION pad — never sold. Awarded the first time GOLIATH, king of
-  // the ARCADE campaign's titan gauntlet, is felled: white-hot piping over a
-  // championship-crimson deck.
-  { id: 'champion', name: 'CHAMPION', neon: 0xfff3cf, slab: 0x8c2620, earnedBy: 'FELL GOLIATH' },
-  // TIDEBREAKER — never sold. Felling GOOPLIATH with a raid squad slicks the
-  // deck bottle-green under bright gel piping, GOOPLIATH's pool surging across
-  // it with wave crests, bubbles and hanging drips (arena.ts).
-  { id: 'tidebreaker', name: 'TIDEBREAKER', neon: 0x5aff7a, slab: 0x0d3f2b, slabGlow: 0.14, earnedBy: 'FELL RAID GOOPLIATH' },
-  // BLAZING — never sold. Clear any run or raid on the blazing breaker:
-  // fire-red piping over scorched steel, wearing a burning rail, corner flame
-  // crowns and airborne embers (arena.ts).
-  { id: 'blazing', name: 'BLAZING', neon: 0xff4a26, slab: 0x210605, slabGlow: 0.15, earnedBy: 'WIN ON BLAZING' },
+  // ── free: the three you're born with ──────────────────────────────────
+  { id: 'ember', name: 'SMOULDER', deck: 'charred', neon: PALETTE.ember, trim: TRIM.iron, blurb: 'charred oak, still warm underfoot' },
+  { id: 'azure', name: 'AZURE', deck: 'ash', neon: 0x4fb7ff, trim: TRIM.chrome, blurb: 'pale ash boards under a cold tube' },
+  { id: 'inferno', name: 'INFERNO', deck: 'redwood', neon: 0xff3b30, trim: TRIM.brass, blurb: 'redwood, red light' },
+  // ── the shop: materials, cheap to precious ────────────────────────────
+  { id: 'walnut', name: 'WALNUT', deck: 'walnut', neon: 0xffb347, trim: TRIM.brass, price: 100, blurb: 'dark figured boards, waxed' },
+  { id: 'slate', name: 'SLATE', deck: 'slate', neon: 0x5ff2ff, trim: TRIM.iron, price: 150, blurb: 'quarried flagstones, cleaved' },
+  { id: 'marble', name: 'MARBLE', deck: 'marble', neon: 0xffd84a, trim: TRIM.brass, price: 250, blurb: 'white stone, grey veins' },
+  { id: 'frost', name: 'FROST', deck: 'frost', neon: 0x8ae4ff, trim: TRIM.chrome, price: 400, blurb: 'river ice, bubbles frozen in' },
+  { id: 'obsidian', name: 'OBSIDIAN', deck: 'obsidian', neon: 0xb06bff, trim: TRIM.iron, price: 600, blurb: 'black glass, rippled where it cooled' },
+  { id: 'jade', name: 'JADE', deck: 'jade', neon: 0x7dffc2, trim: TRIM.brass, price: 800, blurb: 'green stone with a cloud in it' },
+  { id: 'bullion', name: 'BULLION', deck: 'bullion', neon: 0xfff1c9, trim: TRIM.gold, price: 2000, blurb: 'gold leaf, laid square by square' },
+  // ── earned, never sold ────────────────────────────────────────────────
+  // CHAMPION: the first fell of GOLIATH, king of the titan gauntlet.
+  { id: 'champion', name: 'CHAMPION', deck: 'lacquer', neon: 0xfff3cf, trim: TRIM.gold, earnedBy: 'FELL GOLIATH', blurb: 'crimson lacquer, gold inlay' },
+  // TIDEBREAKER: fell GOOPLIATH with a raid squad — the pool still surges
+  // across it (arena.ts keeps the tide FX under this id).
+  { id: 'tidebreaker', name: 'TIDEBREAKER', deck: 'tide', neon: 0x5aff7a, trim: TRIM.iron, earnedBy: 'FELL RAID GOOPLIATH', blurb: 'wet green stone under the pool' },
+  // BLAZING: clear any run or raid on the blazing breaker — the burning
+  // rail and corner flame crowns stay (arena.ts).
+  { id: 'blazing', name: 'BLAZING', deck: 'charred', neon: 0xff4a26, trim: TRIM.iron, earnedBy: 'WIN ON BLAZING', blurb: 'scorched boards under a burning rail' },
 ];
 
 /** How the OPPONENT looks when they haven't picked (bot bouts): team blue. */
@@ -175,7 +109,7 @@ export const OPPONENT_DEFAULT_AVATAR: AvatarSkin = {
   id: 'blank', name: '', chassis: 0x98948b, trim: 0x4e4b45, accent: PALETTE.coolFlame,
 };
 export const OPPONENT_DEFAULT_PLATFORM: PlatformSkin = {
-  id: 'opp-default', name: '', neon: PALETTE.coolFlame,
+  id: 'opp-default', name: '', deck: 'charred', neon: PALETTE.coolFlame, trim: TRIM.iron, blurb: '',
 };
 
 export function avatarSkin(id: string): AvatarSkin {
@@ -186,7 +120,9 @@ export function avatarSkin(id: string): AvatarSkin {
 
 export function platformSkin(id: string): PlatformSkin {
   const s = PLATFORM_SKINS.find((x) => x.id === id);
-  return s && !s.locked ? s : PLATFORM_SKINS[2]; // ember default
+  // Unknown — or one of FF1's retired tints (TOXIC, VOLT, XD…) — falls
+  // back to SMOULDER, the house deck.
+  return s && !s.locked ? s : PLATFORM_SKINS[0];
 }
 
 /**
@@ -261,24 +197,39 @@ export function applyAvatarSkin(root: Object3D, skin: AvatarSkin): void {
   // silhouette is the mannequin's own — see avatar/mannequin.ts.)
 }
 
-/** Recolour a platform group's neon piping + slab tint to a skin. */
+/**
+ * Dress a platform in a skin: the deck's MATERIAL (maps, finish, glow —
+ * arena/decks.ts), the corner screws' metal, the neon tube's colour, and
+ * the per-skin FX (BLAZING's fire, TIDEBREAKER's pool) by their tag. The
+ * deck textures are shared per style, so swapping skins never uploads.
+ */
 export function applyPlatformSkin(root: Object3D, skin: PlatformSkin): void {
   if (skin.locked) return;
+  const look = deckLook(skin.deck);
   root.traverse((o) => {
     if (o.userData?.skinTag) o.visible = o.userData.skinTag === skin.id;
     const m = (o as Mesh).material as MeshStandardMaterial | undefined;
     if (!m || Array.isArray(m) || !m.userData?.role) return;
     switch (m.userData.role) {
       case 'slab':
-        // slabEmissive overrides the neon (VOLT wants a black deck under
-        // its yellow rim, not olive). The default glow dropped with the
-        // wood decks: boards take lamp light, they don't emit team colour.
-        m.emissive.setHex(skin.slabEmissive ?? skin.neon);
-        m.emissiveIntensity = skin.slabGlow ?? 0.02;
-        // Premium pads repaint the steel; plain recolours restore the default.
-        m.color.setHex(skin.slab ?? DEFAULT_SLAB_TINT);
-        m.roughness = skin.slabRough ?? DEFAULT_SLAB_ROUGH;
-        m.metalness = skin.slabMetal ?? DEFAULT_SLAB_METAL;
+        if (m.userData.deck !== skin.deck) {
+          m.userData.deck = skin.deck;
+          m.map = look.map;
+          m.bumpMap = look.bump;
+          m.needsUpdate = true;
+        }
+        m.color.setHex(look.color);
+        m.roughness = look.roughness;
+        m.metalness = look.metalness;
+        m.bumpScale = look.bumpScale;
+        m.envMapIntensity = look.envMapIntensity;
+        // A deck that burns or shines from within says so; otherwise the
+        // faintest trace of the tube's colour, so the board edges read lit.
+        m.emissive.setHex(look.emissive ?? skin.neon);
+        m.emissiveIntensity = look.emissiveIntensity ?? 0.02;
+        break;
+      case 'trim':
+        m.color.setHex(skin.trim);
         break;
       case 'neon-core':
         m.color.copy(new Color(skin.neon).lerp(_white, 0.45));

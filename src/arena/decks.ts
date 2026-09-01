@@ -49,6 +49,9 @@ export interface DeckLook {
   repeat: [number, number];
   /** Rotate the map a quarter turn so boards run at the foe (planks only). */
   rotate?: boolean;
+  /** Texture offset — a CENTRED design (the lacquer's inlay ring) needs its
+   *  tile centre on the deck's origin, not half a tile off it. */
+  offset?: [number, number];
 }
 
 const cache = new Map<DeckStyle, { map: CanvasTexture; bump: CanvasTexture }>();
@@ -253,7 +256,27 @@ function tideSkin(): { map: CanvasTexture; bump: CanvasTexture } {
 
 /* ── the looks ───────────────────────────────────────────────────────── */
 
+const tuned = new Set<DeckStyle>();
+
+/** The look for a deck style. The textures are shared per style and tuned
+ *  once — repeat in tiles per metre (ExtrudeGeometry UVs are shape units)
+ *  and, for planks, a quarter turn so the boards run at the foe. */
 export function deckLook(style: DeckStyle): DeckLook {
+  const look = rawLook(style);
+  if (!tuned.has(style)) {
+    tuned.add(style);
+    for (const t of [look.map, look.bump]) {
+      t.repeat.set(look.repeat[0], look.repeat[1]);
+      t.center.set(0.5, 0.5);
+      t.rotation = look.rotate ? Math.PI / 2 : 0;
+      if (look.offset) t.offset.set(look.offset[0], look.offset[1]);
+      t.needsUpdate = true;
+    }
+  }
+  return look;
+}
+
+function rawLook(style: DeckStyle): DeckLook {
   switch (style) {
     case 'oak':
       return { ...planks('oak', 1001, [0.72, 0.5, 0.3], 0.14, 0.55), color: 0xffce9a, roughness: 0.55, metalness: 0.05, bumpScale: 0.5, envMapIntensity: 0.25, repeat: [1.05, 1.05], rotate: true };
@@ -278,7 +301,7 @@ export function deckLook(style: DeckStyle): DeckLook {
     case 'bullion':
       return { ...bullionSkin(), color: 0xffffff, roughness: 0.32, metalness: 0.85, bumpScale: 0.2, envMapIntensity: 0.8, emissive: 0x3a2400, emissiveIntensity: 0.25, repeat: [1, 1] };
     case 'lacquer':
-      return { ...lacquerSkin(), color: 0xffffff, roughness: 0.18, metalness: 0.08, bumpScale: 0.15, envMapIntensity: 0.6, emissive: 0x3a0606, emissiveIntensity: 0.18, repeat: [0.5, 0.5] };
+      return { ...lacquerSkin(), color: 0xffffff, roughness: 0.18, metalness: 0.08, bumpScale: 0.15, envMapIntensity: 0.6, emissive: 0x3a0606, emissiveIntensity: 0.18, repeat: [0.5, 0.5], offset: [0.25, 0.25] };
     case 'tide':
       return { ...tideSkin(), color: 0xffffff, roughness: 0.2, metalness: 0.05, bumpScale: 0.3, envMapIntensity: 0.7, emissive: 0x0d3f2b, emissiveIntensity: 0.14, repeat: [0.8, 0.8] };
   }
