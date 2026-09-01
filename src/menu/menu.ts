@@ -65,6 +65,8 @@ export type PanelId =
   | 'train'
   | 'duel'
   | 'info'
+  /** THE PAINT BAY (a kit panel modal — src/menu/paintbay.ts). */
+  | 'paintbay'
   | 'board'
   | 'custom'
   | 'loadout'
@@ -187,6 +189,9 @@ export type MenuAction =
   /** The body's ONE choice: start all white, or all black. */
   | 'base-white'
   | 'base-black'
+  /** Open / close THE PAINT BAY (the stripe-and-splotch modal). */
+  | 'open-paintbay'
+  | 'paintbay-close'
   /** The header tab pair: STORE (all items) ⇄ LOCKER (your inventory). */
   | 'open-shop'
   | 'open-locker'

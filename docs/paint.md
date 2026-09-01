@@ -174,6 +174,18 @@ Free placement can draw things we don't want in a room:
 2. **P2 — the bay**: tray panel, take/place/adjust/pick-up/return verbs,
    layer swap; shop sells stripes+splotches in the first two colour
    tiers; the graduation stripe.
+   **SHIPPED** (layer swap deferred): THE PAINT BAY opens from the YOU
+   wing — a kit modal (`src/menu/paintbay.ts`) beside the locker mirror
+   with THE TRAY (owned counts) and THE RACK (base + neon racks priced
+   off the PAINT config, wallet-debited). The body itself is the
+   canvas: MenuSystem raycasts the mirror's paint surfaces — a held
+   unit ghost-previews under the ray (throttled bakes), trigger places,
+   the thumbstick twists and sizes (grip switches to width), pointing
+   at placed paint and squeezing lifts it back into the hand, B returns
+   it to the tray, and closing the bay never strands a held unit. The
+   tutorial's graduation now grants the contrast stripe. Headless bay
+   verbs on `__ff2.paint` + `__ff2.bayClick` walk the whole
+   buy→take→place→lift→return loop in CI.
 3. **P3 — the room sees you**: pack/validate/sync over `iam` +
    `mesh.cosmetics` + pub hello; bake-on-join; hide-paint toggles;
    report-paint.

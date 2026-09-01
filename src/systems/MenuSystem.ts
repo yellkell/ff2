@@ -59,7 +59,9 @@ import {
 } from '../menu/menu.js';
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, type Wrap } from '../menu/wrap.js';
-import { applyLook, installPaintDevHook, myLook, paintState } from '../avatar/paint.js';
+import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, type PaintPart } from '../avatar/paint.js';
+import { KitMenuPanel } from '../menu/wrap.js';
+import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey } from '../menu/paintbay.js';
 import {
   avatarOwned,
   clearShopPreview,
@@ -148,6 +150,11 @@ export class MenuSystem extends createSystem({}) {
   private menu!: Menu;
   private wrap!: Wrap;
   private paintVersionSeen = 0;
+  private bayPanel!: KitMenuPanel;
+  private bayKey = '';
+  private bayMeshes: Object3D[] = [];
+  private bayGhostAt = 0;
+  private bayGhostOn = false;
   /** Last lobby-ness handed to the music (null = never) — see applyState(). */
   private musicInLobby: boolean | null = null;
   private ray = new Raycaster();
@@ -249,7 +256,21 @@ export class MenuSystem extends createSystem({}) {
     // place (same ids, same slots) — see menu/wrap.ts. The second argument
     // lets the headless dev hook (__ff2.wrap.act) fire real actions.
     this.wrap = installWrap(this.menu, (a) => this.run(a));
+    // THE PAINT BAY: a kit modal panel beside the locker mirror. Local
+    // pb:* ids settle in bayClick; real actions go through run().
+    this.bayPanel = new KitMenuPanel('paintbay', 0.84, 0.99, BAY_W, BAY_H, bayFace, (id) => {
+      if (!bayClick(id)) this.run(id as MenuAction);
+    });
+    this.bayPanel.mesh.position.set(0.6, 1.42, -1.06);
+    this.bayPanel.mesh.rotation.y = -0.26;
+    this.bayPanel.mesh.visible = false;
+    this.menu.panels.push(this.bayPanel);
+    this.menu.group.add(this.bayPanel.mesh);
     installPaintDevHook(); // __ff2.paint — THE PAINT's dev/probe verbs
+    // Probe-only: drive the bay panel's own click path (wallet included).
+    (window.__ff2 as unknown as Record<string, unknown>).bayClick = (id: string): void => {
+      if (!bayClick(id)) this.run(id as MenuAction);
+    };
     // Probe-only: dump a rig's baked part canvas for inspection.
     (window.__ff2 as unknown as Record<string, unknown>).paintSnap = (rootName: string, part: string): string => {
       const obj = this.scene.getObjectByName(rootName);
@@ -277,6 +298,7 @@ export class MenuSystem extends createSystem({}) {
     // Advance the wrap's kit transitions (hover eases, press flashes, the
     // halo breath) every frame — a no-op while nothing moves.
     this.wrap.tick(delta);
+    this.bayPanel?.tick(delta, 0);
 
     // The BOOT INTRO owns the view: the lobby is live behind the black shade,
     // so without this the pointers sweep panels nobody can see — chirping the
@@ -355,10 +377,13 @@ export class MenuSystem extends createSystem({}) {
         case 'settings':
           show = modalSettings;
           break;
+        case 'paintbay':
+          show = app.paintBayOpen;
+          break;
         default:
           // The arc (train/duel/info), the paper button AND the coin readout:
           // the lobby's face, gone while any modal is open.
-          show = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings;
+          show = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings && !app.paintBayOpen;
           break;
       }
       if (p.mesh.visible !== show) {
@@ -373,11 +398,11 @@ export class MenuSystem extends createSystem({}) {
     }
     // The mirror stands beside both the customise plate AND the shop, so avatar
     // changes preview live wherever you pick them.
-    if (this.mirror) this.mirror.group.visible = customization.open;
+    if (this.mirror) this.mirror.group.visible = customization.open || app.paintBayOpen;
     // The podium shows with the lobby arc and steps aside for every modal
     // (the locker brings its own mirror); it turns like a display stand.
     if (this.podium) {
-      const arcUp = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings;
+      const arcUp = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings && !app.paintBayOpen;
       this.podium.visible = arcUp;
       this.podium.userData.beat = (this.podium.userData.beat ?? 0) + 1;
       if (arcUp) this.podium.rotation.y += delta * 0.3;
@@ -392,12 +417,20 @@ export class MenuSystem extends createSystem({}) {
     let newsScrollAxis = 0;
     let dragged = false;
     let clicked = false;
-    if (visChanged) this.rayTargets = this.menu.panels.filter((p) => p.mesh.visible).map((p) => p.mesh);
+    if (visChanged) {
+      this.rayTargets = this.menu.panels.filter((p) => p.mesh.visible).map((p) => p.mesh);
+      // THE PAINT BAY raycasts the body itself: the mirror's paint
+      // surfaces join the targets so the ray lands ON the blank.
+      if (app.paintBayOpen) this.rayTargets.push(...this.bayMeshes);
+    }
     for (const hand of ['left', 'right'] as const) {
       const hit = this.updatePointer(hand, this.rayTargets);
       if (!hit) continue;
       const panel = this.menu.panels.find((p) => p.mesh === hit.object);
-      if (!panel) continue;
+      if (!panel) {
+        if (app.paintBayOpen && hit.object.userData?.paintPart && hit.uv) this.bayBodyHit(hand, hit);
+        continue;
+      }
       if (panel.id === 'board') {
         boardPointed = true;
         const axis = this.input.xr.gamepads[hand]?.getAxesValues(InputComponent.Thumbstick)?.y ?? 0;
@@ -518,6 +551,26 @@ export class MenuSystem extends createSystem({}) {
     } else if (this.draggingHue) {
       this.draggingHue = false;
       saveAccentHue();
+    }
+
+    // THE PAINT BAY's own freshness + hand upkeep.
+    if (app.paintBayOpen) {
+      const key = bayFaceKey();
+      if (key !== this.bayKey) {
+        this.bayKey = key;
+        this.bayPanel.redraw(this.hovered === 'paintbay' ? this.hoveredAction : null);
+      }
+      // B (either hand) returns the held unit to the tray.
+      const bDown =
+        (this.input.xr.gamepads.left?.getButtonDown(InputComponent.B_Button) ?? false) ||
+        (this.input.xr.gamepads.right?.getButtonDown(InputComponent.B_Button) ?? false);
+      if (bDown && bay.held) {
+        handReturn();
+        this.bakeGhost(null); // wipe any ghost preview
+      }
+      // The ray left the body this frame: clear a lingering ghost once.
+      if (!bay.hover && this.bayGhostOn) this.bakeGhost(null);
+      bay.hover = null; // re-established by bayBodyHit next frame
     }
 
     // Freshness tick for live text (queue status, pub counts, room lists…):
@@ -941,6 +994,19 @@ export class MenuSystem extends createSystem({}) {
         break;
       case 'base-black':
         setAvatarSkin('onyx');
+        break;
+      case 'open-paintbay':
+        app.paintBayOpen = true;
+        this.ensureMirror();
+        this.bayMeshes = [];
+        this.mirror?.group.traverse((o) => {
+          if (o.userData?.paintPart) this.bayMeshes.push(o);
+        });
+        this.bayKey = '';
+        break;
+      case 'paintbay-close':
+        handReturn(); // never strand a unit in the hand
+        app.paintBayOpen = false;
         break;
       case 'open-custom':
         // Opens onto the LOCKER (your inventory + colours).
@@ -1669,6 +1735,54 @@ export class MenuSystem extends createSystem({}) {
   }
 
   /** Point the laser down the hand's ray, snap its end + dot to any hit. */
+  /** The ray is ON the blank in the paint bay: ghost/adjust/place/lift. */
+  private bayBodyHit(hand: 'left' | 'right', hit: Intersection): void {
+    const part = hit.object.userData.paintPart as PaintPart;
+    const u = hit.uv!.x;
+    const v = hit.uv!.y;
+    bay.hover = { part, u, v };
+    const gp = this.input.xr.gamepads[hand];
+    const down = gp?.getButtonDown(InputComponent.Trigger) ?? false;
+    if (bay.held) {
+      // THE MINUTELY: stick x twists, stick y sizes (grip → width).
+      const axes = gp?.getAxesValues(InputComponent.Thumbstick);
+      const grip = gp?.getButtonPressed(InputComponent.Squeeze) ?? false;
+      if (axes) {
+        const dt = 1 / 60;
+        if (Math.abs(axes.x) > 0.25) bay.held.angle = (bay.held.angle + axes.x * dt * 0.25 + 1) % 1;
+        if (Math.abs(axes.y) > 0.25) {
+          const k = grip ? 'wid' : 'len';
+          bay.held[k] = Math.max(0.02, Math.min(1, bay.held[k] - axes.y * dt * 0.5));
+        }
+      }
+      if (down) {
+        handPlace(part, u, v); // setLook → the real bake replaces the ghost
+        this.bayGhostOn = false;
+        sfx.uiClick();
+      } else {
+        this.bakeGhost({ part, u, v });
+      }
+    } else if (down) {
+      if (handLift(part, u, v)) sfx.uiClick();
+    }
+  }
+
+  /** Preview the held unit at the hover spot (throttled), or wipe it. */
+  private bakeGhost(at: { part: PaintPart; u: number; v: number } | null): void {
+    const root = this.mirror?.group;
+    if (!root) return;
+    if (!at) {
+      applyLook(root, myLook());
+      this.bayGhostOn = false;
+      return;
+    }
+    const now = performance.now();
+    if (this.bayGhostOn && now - this.bayGhostAt < 90) return;
+    this.bayGhostAt = now;
+    this.bayGhostOn = true;
+    applyLook(root, { paint: [...myLook().paint, { ...bay.held!, ...at }] });
+  }
+
   private updatePointer(hand: 'left' | 'right', targets: Object3D[]): Intersection | undefined {
     const p = this.pointers[hand];
     const rayObj = this.world.playerSpaceEntities.raySpaces[hand]?.object3D;

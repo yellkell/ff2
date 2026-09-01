@@ -66,6 +66,8 @@ import {
 import { updateVoiceListener } from '../pub/voice/playback.js';
 import { goTelegraph, type Telegraph } from '../campaign/telegraphs.js';
 import { LINES, PRAISE_POOL, type LineKey } from '../tutorial/script.js';
+import { grantGraduationStripe } from '../avatar/paint.js';
+import { customization } from '../menu/customization.js';
 import { BALL_H, BALL_W, clickBalls, drawBalls, wrapText } from '../menu/menu.js';
 
 /** The bot's health in tutorial — deliberately low so a beginner can win. */
@@ -673,6 +675,9 @@ export class TutorialSystem extends createSystem({
         saveTutorialDone();
         reportTutorial();
         playCash(); // the money sting — she DID say to get some drip
+        // …and one stripe in the contrast tone, so every graduate has
+        // touched the paint bay once (docs/paint.md §1).
+        grantGraduationStripe(customization.avatar === 'onyx');
       }
       this.end(false); // her voice (if a clip is playing) finishes on its own
       app.tutorial = false;

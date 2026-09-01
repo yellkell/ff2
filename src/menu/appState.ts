@@ -159,6 +159,9 @@ export const app: {
   pubRegionCounts: Record<string, number>;
   /** Which face the lobby info panel shows: its doors, or the pub-region picker. */
   infoView: 'root' | 'pubpick';
+  /** THE PAINT BAY is open over the lobby (modal, like customisation —
+   *  the locker mirror stands beside it so placement is live). */
+  paintBayOpen: boolean;
   /** The Gasket Gazette is open over the lobby (modal, like customisation). */
   gazetteOpen: boolean;
   /** The SETTINGS panel (audio sliders + music mute + voice toggle) is open
@@ -274,6 +277,7 @@ export const app: {
   pubCount: -1,
   pubRegionCounts: {},
   infoView: 'root',
+  paintBayOpen: false,
   gazetteOpen: false,
   settingsOpen: false,
   campaignOpen: false,

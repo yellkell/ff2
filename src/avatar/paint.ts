@@ -113,6 +113,151 @@ export function clearLook(): void {
   setLook({ paint: [] });
 }
 
+/* ── the locker: owned, unplaced paint ────────────────────────────────── */
+
+const INV_KEY = 'ff2-paint-inv';
+
+/** Owned-but-unplaced unit counts, keyed `<kind>:<colour>`. Placing takes
+ *  a unit out; lifting a placed unit puts it IN YOUR HAND, not back here —
+ *  RETURN does that. Paint is never consumed (docs/paint.md §1). */
+export const invState = { version: 1 };
+
+let inv: Record<string, number> | null = null;
+
+function loadInv(): Record<string, number> {
+  if (inv) return inv;
+  inv = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(INV_KEY) ?? '{}') as Record<string, unknown>;
+    for (const [k, v] of Object.entries(raw)) {
+      if (typeof v === 'number' && v > 0 && /^(stripe|splotch):\d+$/.test(k)) inv[k] = Math.min(999, Math.floor(v));
+    }
+  } catch {
+    /* empty locker */
+  }
+  return inv;
+}
+
+function saveInv(): void {
+  try {
+    localStorage.setItem(INV_KEY, JSON.stringify(loadInv()));
+  } catch {
+    /* private mode */
+  }
+  invState.version += 1;
+}
+
+export function ownedCount(kind: PaintKind, colour: number): number {
+  return loadInv()[`${kind}:${colour}`] ?? 0;
+}
+
+export function unitPrice(kind: PaintKind, colour: number): number {
+  return PAINT.price[kind] * PAINT.tierMult[PAINT.tierOf(colour)];
+}
+
+/** Add one unit to the locker (a purchase or a grant). */
+export function grantUnit(kind: PaintKind, colour: number): void {
+  const store = loadInv();
+  store[`${kind}:${colour}`] = (store[`${kind}:${colour}`] ?? 0) + 1;
+  saveInv();
+}
+
+/** Take one unit out of the locker (into the hand). False if none owned. */
+export function takeUnit(kind: PaintKind, colour: number): boolean {
+  const store = loadInv();
+  const k = `${kind}:${colour}`;
+  if (!store[k]) return false;
+  store[k] -= 1;
+  if (!store[k]) delete store[k];
+  saveInv();
+  return true;
+}
+
+/** THE HAND — the one unit currently held on the ray in the bay, plus the
+ *  live body-hover it would land on. MenuSystem drives this; the bay face
+ *  reads it. */
+export const bay = {
+  held: null as PlacedPaint | null,
+  /** Where the ray touches the body this frame (null = not on the body). */
+  hover: null as { part: PaintPart; u: number; v: number } | null,
+  version: 1,
+};
+
+/** Take a fresh unit from the locker into the hand (returns any held unit
+ *  first). Default pose: modest size, upright. */
+export function handTake(kind: PaintKind, colour: number): boolean {
+  if (bay.held) handReturn();
+  if (!takeUnit(kind, colour)) return false;
+  bay.held = {
+    kind,
+    colour,
+    variant: Math.floor(Math.random() * 8),
+    part: 'chest',
+    u: 0.75,
+    v: 0.5,
+    angle: 0,
+    len: kind === 'stripe' ? 0.3 : 0.35,
+    wid: kind === 'stripe' ? 0.12 : 0.5,
+  };
+  bay.version += 1;
+  return true;
+}
+
+/** Put the held unit back in the locker. */
+export function handReturn(): void {
+  if (!bay.held) return;
+  grantUnit(bay.held.kind, bay.held.colour);
+  bay.held = null;
+  bay.version += 1;
+}
+
+/** Commit the held unit onto the body at the hovered spot. */
+export function handPlace(part: PaintPart, u: number, v: number): boolean {
+  if (!bay.held) return false;
+  const look = myLook();
+  if (look.paint.length >= PAINT.maxUnits) return false;
+  setLook({ paint: [...look.paint, { ...bay.held, part, u, v }] });
+  bay.held = null;
+  bay.version += 1;
+  return true;
+}
+
+/** Lift the placed unit nearest (part, u, v) into the hand. u distance
+ *  wraps; the pick radius is generous — a stripe is a thin target. */
+export function handLift(part: PaintPart, u: number, v: number): boolean {
+  if (bay.held) return false;
+  const look = myLook();
+  let best = -1;
+  let bestD = 0.16; // pick radius in uv space
+  look.paint.forEach((p, i) => {
+    if (p.part !== part) return;
+    const du = Math.min(Math.abs(p.u - u), 1 - Math.abs(p.u - u));
+    const d = Math.hypot(du, p.v - v);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  if (best < 0) return false;
+  const paint = [...look.paint];
+  const [unit] = paint.splice(best, 1);
+  setLook({ paint });
+  bay.held = unit;
+  bay.version += 1;
+  return true;
+}
+
+/** The tutorial's graduation gift: one stripe in the contrast tone, once. */
+export function grantGraduationStripe(onyxBase: boolean): void {
+  try {
+    if (localStorage.getItem('ff2-grad-paint') === '1') return;
+    localStorage.setItem('ff2-grad-paint', '1');
+  } catch {
+    /* still grant in-session */
+  }
+  grantUnit('stripe', onyxBase ? 0 : 1); // white on onyx, black on white
+}
+
 /* ── the bake ─────────────────────────────────────────────────────────── */
 
 const TONE_FILL: Record<string, string> = { white: '#f4f2ee', onyx: '#17171a' };
@@ -269,5 +414,13 @@ export function installPaintDevHook(): void {
     clear: (): void => clearLook(),
     count: (): number => myLook().paint.length,
     set: (look: Look): void => setLook(look),
+    // THE BAY, headless: the same ops the controllers drive.
+    grant: (kind: PaintKind, colour: number): void => grantUnit(kind, colour),
+    owned: (kind: PaintKind, colour: number): number => ownedCount(kind, colour),
+    take: (kind: PaintKind, colour: number): boolean => handTake(kind, colour),
+    place: (part: PaintPart, u: number, v: number): boolean => handPlace(part, u, v),
+    lift: (part: PaintPart, u: number, v: number): boolean => handLift(part, u, v),
+    ret: (): void => handReturn(),
+    held: (): PlacedPaint | null => bay.held,
   };
 }

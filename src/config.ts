@@ -130,6 +130,12 @@ export const PAINT = {
   maxUnits: 64,
   /** Paint canvas size per body part (px, square). */
   canvas: { head: 256, chest: 512, pelvis: 256 } as Record<string, number>,
+  /** Unit prices in coins; racks multiply (see tierOf). A basic stripe is
+   *  two games' pay — a first paint job lands around a session of play. */
+  price: { stripe: 20, splotch: 30 },
+  tierMult: [1, 2, 10], // base rack · neon rack · top shelf
+  /** Rack boundaries by colour index: 0–7 base, 8–19 neon, 20+ top. */
+  tierOf: (colour: number): number => (colour < 8 ? 0 : colour < 20 ? 1 : 2),
   /** The sold colours. */
   colours: [
     // the base rack

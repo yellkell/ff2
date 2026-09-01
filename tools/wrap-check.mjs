@@ -83,7 +83,7 @@ console.log('\n=== the wings stay quiet ===');
 const town = await wrap(`live('duel')`);
 check('THE TOWN board has no buttons at all', town.length === 0, town.join(','));
 const you = await wrap(`buttons('info')`);
-check('YOU offers body · shop · rename, no club door', you.includes('open-custom') && you.includes('open-shop') && you.includes('rename') && !you.includes('open-pub'), you.join(','));
+check('YOU leads with the paint bay + body, no club door', you.includes('open-paintbay') && you.includes('open-custom') && you.includes('rename') && !you.includes('open-pub'), you.join(','));
 
 console.log('\n=== through the FIGHT door ===');
 await wrap(`act('wrap:fight')`);

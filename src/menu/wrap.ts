@@ -44,10 +44,11 @@ interface Face {
 }
 
 /** A kit panel wearing FF1's MenuPanel contract. `onClick` receives every
- *  pressed button id (local `wrap:*` or a real MenuAction) — defining
- *  MenuPanel.click keeps MenuSystem's pre-tutorial gate in front of us
- *  while letting the wrap route ids itself. */
-class WrapPanel implements MenuPanel {
+ *  pressed button id (a local namespace id or a real MenuAction) —
+ *  defining MenuPanel.click keeps MenuSystem's pre-tutorial gate in front
+ *  while letting the owner route ids itself. Exported: the paint bay (and
+ *  every future kit modal) rides the same adapter. */
+export class KitMenuPanel implements MenuPanel {
   readonly kit: Panel;
   readonly mesh;
   click?: (u: number, v: number) => boolean;
@@ -427,17 +428,17 @@ function youFace(): Face {
     buttons: [
       { id: 'you-name', label: stats.name, sub: `${tier.name} · ${stats.xp} XP`, x: X, y: 150, w: W, h: 120, display: true, px: 52 },
       {
-        id: 'open-custom',
-        label: 'YOUR BLANK',
-        sub: lock ? SEAL_SUB : 'base tone · gauntlet neon · pads · arena',
+        id: 'open-paintbay',
+        label: 'THE PAINT BAY',
+        sub: lock ? SEAL_SUB : 'stripes & splotches — make the body yours',
         x: X, y: 310, w: W, h: 130,
         primary: !lock,
         disabled: lock,
       },
       {
-        id: 'open-shop',
-        label: 'SHOP',
-        sub: lock ? SEAL_SUB : 'attachments and pads — spend your bolt-dollars',
+        id: 'open-custom',
+        label: 'YOUR BLANK',
+        sub: lock ? SEAL_SUB : 'base tone · gauntlet neon · pads · arena',
         x: X, y: 470, w: W, h: 110,
         disabled: lock,
       },
@@ -493,9 +494,9 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
     act?.(id as MenuAction);
   };
 
-  const slab = new WrapPanel('train', 1.42, 0.95, CW, 1024, centerFace, dispatch);
-  const town = new WrapPanel('duel', 0.74, 0.91, LW, 1024, townFace, dispatch);
-  const you = new WrapPanel('info', 0.74, 0.91, LW, 1024, youFace, dispatch);
+  const slab = new KitMenuPanel('train', 1.42, 0.95, CW, 1024, centerFace, dispatch);
+  const town = new KitMenuPanel('duel', 0.74, 0.91, LW, 1024, townFace, dispatch);
+  const you = new KitMenuPanel('info', 0.74, 0.91, LW, 1024, youFace, dispatch);
 
   const y = 1.45;
   slab.mesh.position.set(0, y, -1.26);
@@ -515,7 +516,7 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
     p.redraw(null);
   }
 
-  const byId = (id: string): WrapPanel | undefined => panels.find((p) => p.id === id);
+  const byId = (id: string): KitMenuPanel | undefined => panels.find((p) => p.id === id);
   window.__ff2 = {
     wrap: {
       buttons: (id) => byId(id)?.kit.buttonIds() ?? [],
