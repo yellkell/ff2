@@ -245,8 +245,24 @@ every client), the telegraph kit (gate/donut/X/rail/lane + THE ROUTINE's
 marks, quarter lines and falling blocks, octagon-masked), CampaignSystem's
 grammar path (windows so a cascade's later reads open as earlier steps
 fire; per-shape strikes; head-judged routine commitment), and the per-boss
-subsets above. Headless: `npm run check:grammar`. Boss-side ANIMATION
-language for the new moves (bespoke gestures per shape) is the next pass.
+subsets above. Headless: `npm run check:grammar`.
+**SHIPPED (second pass — THE GESTURE LANGUAGE)**: `campaign/gestures.ts`.
+The floor is the near tell; the titan's silhouette is the far one, and
+every grammar shape now has its own: the lane's POINT (one arm levelled
+down the strip, the other tucked), THE X's crossed arms, the rail's
+SCISSOR (wings out, snapping across), the gate's PRESS (arms spread, then
+closing either side of the gap that lives), the donut's RING (hands meeting
+overhead, up on the toes), THE ROUTINE's TEACH (the king points at each
+taught corner in turn), the wave's MARCH (the piston drumline pumping on
+the beat) and the duckdonut's blade (the sweep's own wind-out). Each is a
+pure function of the read's fill — the same seed animates the same pose on
+every client — with a body lean, a lift, a GAZE that turns the head from
+the player to the marked spot as the read fills, a follow-through on the
+landing (the point jabs, the press claps — `sfx.clap` — the ring slams
+down wide) that decays into the next step's windup so a cascade breathes
+like RAVE RAID's bosses did, and a temperament per chassis (the press
+snaps, the king reaches). `check:grammar` now asserts every forced move
+raises the arms and that no two shapes' silhouettes come within 0.4 rad.
 
 Raid escalation carries over unchanged for the classic kinds (solo-target
 → two marks → whole squad, DECREE-style shared bearings, the resurrection
@@ -372,6 +388,32 @@ survives, rebuilt beautiful:
 
 The factory and salt flats get the same pass in later sessions; new venues
 (the club itself is an environment) follow the same layered recipe.
+
+**THE SITES** *(shipped)*: one desert, three places, and the game walks you
+between them by what you're doing (`arena/desert/sites.ts`, driven by
+DesertSystem off the app state). **THE TRAILHEAD** is the lobby — the edge
+of GASKET: the signpost under its own buzzing hooded lamp, the broken
+fence, a campfire burning low on the TOWN board's side, a windmill turning
+against the last light, telegraph poles marching off toward town. **THE
+FLATS** are every match and Aim Training — open ground: the skull (now
+glinting), a dead tree throwing the longest shadow in the game, the ribs
+of something enormous half under the sand. **THE BONEYARD** is every
+campaign fight and every raid — where titans are broken: a ring of
+standing wreck-plates around the pit, oil drums burning (two lit — the
+light budget), RUSTHOOK's own hook buried to the shank, scrap heaped
+where it fell — all of it clear of the five-seat arc. Only one site is
+visible at a time and each collapses to a few static draws; the far layer
+(sky, sun, ground, mesas, weather) is shared and simply YAWED per site, so
+the skyline sits somewhere new too: the lobby's sun hangs to your left, a
+rival stands backlit against it, a titan is lit full in the face with the
+light at the squad's back. **Pass 2 of the look** landed with it: the
+mesas are no longer stacked drums but one wind-carved loft each (two
+octaves of radial noise, ledges where a stratum held, the bands baked into
+vertex colour and merged to one draw — the static merge learned to keep
+`color`), a heat-haze band swims along the horizon (one additive draw,
+no render target), dust motes hang in the arena's light cone, and bone
+catches the light. Preview: `env-preview.html?env=desert&site=…`;
+headless: `npm run check:desert` (add `--shots`).
 
 ### 6.2 The bar
 
@@ -521,9 +563,11 @@ Each phase is shippable; nothing waits on everything.
    material is smooth matte clay, dunes at higher vertex density so the
    dusk light rolls instead of snapping facet to facet. Every landmark
    kept: the sign, the skull, the fence, the tumbleweeds, the mesas, the
-   vultures, the dust devils. Next passes: real material variation on
-   the mesas, the lit sign lamp, heat-haze at the horizon, and the same
-   treatment for the salt flats and factory.)*
+   vultures, the dust devils. Second pass shipped: THE SITES — the
+   trailhead / the flats / the boneyard, swapped by activity, the far layer
+   turned per site — plus wind-carved vertex-coloured mesas, the sign's
+   lamp, the horizon haze band, dust motes in the arena light and glinting
+   bone (§6.1). Next: the same treatment for the salt flats and factory.)*
 10. **Links & Discord** — `?join=` everywhere, QR on the lobby, bot write
     path.
 

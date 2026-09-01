@@ -42,6 +42,7 @@ type AnyMaterial = Material & {
   roughnessMap?: { uuid: string } | null;
   bumpMap?: { uuid: string } | null;
   emissiveMap?: { uuid: string } | null;
+  vertexColors?: boolean;
 };
 
 /** A stable key for "these materials render identically AND retint identically",
@@ -62,6 +63,9 @@ function materialKey(m: Material): string {
     m.transparent,
     m.opacity,
     s.depthWrite ?? '',
+    // A vertex-coloured material (the DESERT 2.0 mesas) needs its colour
+    // attribute kept through the merge — never bucket it with plain meshes.
+    s.vertexColors ?? '',
     // Never merge two different textures together.
     s.map?.uuid ?? '',
     s.roughnessMap?.uuid ?? '',
@@ -120,11 +124,19 @@ export function collapseStatic(root: Object3D, skip?: (o: Object3D) => boolean):
     if (geo.index) geo = geo.toNonIndexed();
     geo.applyMatrix4(new Matrix4().copy(invRoot).multiply(m.matrixWorld));
     geo.clearGroups();
-    // Keep only the attributes every primitive shares, so the merge never trips.
+    // Keep only the attributes every primitive shares, so the merge never trips
+    // — plus `color` when the material actually READS it (vertex-coloured
+    // meshes render black without it).
+    const wantsColor = !!(mat as AnyMaterial).vertexColors;
     for (const name of Object.keys(geo.attributes)) {
-      if (name !== 'position' && name !== 'normal' && name !== 'uv') geo.deleteAttribute(name);
+      if (name !== 'position' && name !== 'normal' && name !== 'uv' && !(name === 'color' && wantsColor)) geo.deleteAttribute(name);
     }
     if (!geo.attributes.normal) geo.computeVertexNormals();
+    if (wantsColor && !geo.attributes.color) {
+      // An uncoloured mesh in a vertex-colour bucket: paint it white so the
+      // attribute sets still match and the material colour shows through.
+      geo.setAttribute('color', new Float32BufferAttribute(new Float32Array(geo.attributes.position.count * 3).fill(1), 3));
+    }
     // Attribute sets must MATCH inside a bucket or mergeGeometries returns
     // null and the whole batch vanishes. Textured materials keep uv — lofted
     // geometry without any gets zeros, which samples the same single texel

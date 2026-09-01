@@ -1,5 +1,7 @@
 <!doctype html>
-<!-- DEV-ONLY harness: renders an arena backdrop for screenshots. Not shipped. -->
+<!-- DEV-ONLY harness: renders an arena backdrop for screenshots. Not shipped.
+     ?env=desert|saltflats  ?site=trailhead|flats|boneyard  ?yaw=<rad>  ?pitch=<rad>
+     ?raid=1 lays out the five-seat raid arc + pit instead of the duel pair. -->
 <html>
   <body style="margin:0; background:#000">
     <script type="module">
@@ -13,11 +15,16 @@
       } from 'three';
       import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
       import { buildSaltFlats } from '/src/arena/saltflats/index.ts';
+      import { buildDesert } from '/src/arena/desert/index.ts';
       import { makePlatform } from '/src/arena/arena.ts';
+      import { MODE_LAYOUT, RAID_RING_RADIUS } from '/src/config.ts';
 
       const params = new URLSearchParams(location.search);
       const yaw = Number(params.get('yaw') ?? 0); // camera heading, radians
       const pitch = Number(params.get('pitch') ?? -0.05);
+      const which = params.get('env') ?? 'saltflats';
+      const site = params.get('site') ?? 'trailhead';
+      const raid = params.get('raid') === '1';
 
       const scene = new Scene();
       const renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -29,32 +36,60 @@
       document.body.appendChild(renderer.domElement);
       scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 
-      const env = buildSaltFlats();
-      env.root.visible = true;
-      scene.add(env.root);
-      scene.background = env.skyColor;
-      scene.fog = new Fog(env.skyColor.getHex(), 30, 700); // matches DesertSystem
+      let env;
+      if (which === 'desert') {
+        env = buildDesert();
+        env.setSite(site);
+        env.root.visible = true;
+        scene.add(env.root);
+        scene.background = null;
+        renderer.setClearColor(0x131b34, 1);
+      } else {
+        env = buildSaltFlats();
+        env.root.visible = true;
+        scene.add(env.root);
+        scene.background = env.skyColor;
+        scene.fog = new Fog(env.skyColor.getHex(), 30, 700); // matches DesertSystem
+      }
 
       // Show the fight pedestals so the raised-platform effect is visible.
       const mine = makePlatform(0xff7a18);
       scene.add(mine);
-      const foe = makePlatform(0x4fb7ff);
-      foe.position.set(0, 0, -3);
-      scene.add(foe);
+      if (raid) {
+        for (const seat of MODE_LAYOUT.raid.slice(1)) {
+          const pad = makePlatform(0x4fb7ff);
+          pad.position.set(seat.pos[0], seat.pos[1], seat.pos[2]);
+          pad.rotation.y = seat.yaw;
+          scene.add(pad);
+        }
+        const pit = makePlatform(0xe8352a, 2.4);
+        pit.position.set(0, 0, -RAID_RING_RADIUS);
+        pit.scale.set(2.4, 1, 2.4);
+        scene.add(pit);
+      } else {
+        const foe = makePlatform(0x4fb7ff);
+        foe.position.set(0, 0, -3);
+        scene.add(foe);
+      }
 
       const camera = new PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 2000);
-      camera.position.set(0, 1.6, 2.2); // standing on the pan, near the platform spot
+      camera.position.set(0, 1.6, 0.4); // standing on your own pad
       camera.rotation.order = 'YXZ';
       camera.rotation.y = yaw;
       camera.rotation.x = pitch;
 
-      renderer.render(scene, camera);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          renderer.render(scene, camera);
-          document.title = 'preview-ready';
-        });
-      });
+      // A few frames so the living parts (fire, windmill) settle into motion.
+      let frames = 0;
+      let last = performance.now();
+      const tick = () => {
+        const now = performance.now();
+        env.update((now - last) / 1000, now / 1000);
+        last = now;
+        renderer.render(scene, camera);
+        if (++frames < 6) requestAnimationFrame(tick);
+        else document.title = 'preview-ready';
+      };
+      requestAnimationFrame(tick);
     </script>
   </body>
 </html>

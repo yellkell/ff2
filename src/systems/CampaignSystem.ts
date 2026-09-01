@@ -50,6 +50,16 @@ import {
   type GrammarKind,
   type Park,
 } from '../campaign/grammar.js';
+import {
+  armFor,
+  gestureFocusOf,
+  gestureShapeOf,
+  gestureTemper,
+  grammarFollowThrough,
+  grammarGesture,
+  type GestureFocus,
+  type GestureShape,
+} from '../campaign/gestures.js';
 import { RoutineBlockfall } from '../campaign/blockfall.js';
 import { playBossVoice, preloadBossVoice } from '../audio/bossVoice.js';
 import { GelCreature } from '../goopliath/GelCreature.js';
@@ -307,6 +317,13 @@ export class CampaignSystem extends createSystem({
   private hitsOnPoint = 0;
   private invuln = 0; // player i-frames after eating a strike
   private strikeSwing: [number, number] = [0, 0]; // post-strike arm follow-through
+  /** What the live follow-through is FOR — a classic kind or a grammar
+   *  gesture shape (campaign/gestures.ts) — and where it was aimed. */
+  private swingShape: GestureShape | 'slam' | 'sweep' = 'slam';
+  private swingFocus: GestureFocus = { side: 0, fwd: 0 };
+  /** Attack clock of the last grammar swing — a raid's five-deck chord
+   *  detonates one zone per seat on the same frame, and is ONE swing. */
+  private swingAt = -1;
   private flinch = 0;
   private enraged = false;
   private lastBossHp = 0;
@@ -367,6 +384,19 @@ export class CampaignSystem extends createSystem({
         moves: (): string[] => Object.keys(this.def.grammar ?? {}),
         kind: (): string | null => this.attack?.kind ?? null,
         zones: (): string[] => this.attack?.zones.map((z) => z.kind) ?? [],
+        /** The live gesture: shape + read fill, and each arm's pivot delta
+         *  from rest [pitch, yaw] — the probe's silhouette check. */
+        pose: (): { shape: string | null; fill: number; arms: number[][]; lean: number } | null => {
+          const rig = this.rig;
+          if (!rig) return null;
+          const g = this.pendingGesture();
+          return {
+            shape: g?.shape ?? null,
+            fill: g?.fill ?? 0,
+            arms: rig.arms.map((a) => [a.pivot.rotation.x - a.restX, a.pivot.rotation.z - a.restZ]),
+            lean: rig.root.rotation.x,
+          };
+        },
         force: (kind: string, seed?: number): boolean => {
           if (this.phase !== 'fight') return false;
           this.buildAttack(kind as GrammarKind, [this.mySeatId()], {
@@ -1854,6 +1884,7 @@ export class CampaignSystem extends createSystem({
     params: { x?: number[]; z?: number[]; y?: number[]; a?: number[]; g?: number },
   ): void {
     this.disposeAttack(); // a straggling ratk never stacks two live attacks
+    this.swingAt = -1; // the swing de-dup is per attack clock, which restarts here
     if (!seats.length) seats = [this.mySeatId()];
     this.faceSeat = seats[0];
     const grammar = (GRAMMAR_KINDS as readonly string[]).includes(kind);
@@ -2489,6 +2520,23 @@ export class CampaignSystem extends createSystem({
     const mine = seat === this.mySeatId();
     const hit = mine && this.zoneTouchesPlayer(zone);
 
+    // The gesture keeps its promise: a grammar landing SWINGS the arm(s)
+    // its windup raised (campaign/gestures.ts) — once per landing beat, not
+    // once per seat, so a raid's five-deck chord is one swing, one sound.
+    const gshape = (GRAMMAR_KINDS as readonly string[]).includes(kind) ? gestureShapeOf(kind, zone) : null;
+    if (gshape && this.attack && this.attack.time - this.swingAt > 0.05) {
+      this.swingAt = this.attack.time;
+      const focus = gestureFocusOf(zone);
+      this.swingShape = gshape;
+      this.swingFocus = focus;
+      const both = gshape === 'x' || gshape === 'scissor' || gshape === 'press' || gshape === 'ring';
+      const arm: 0 | 1 = focus.side === 0 ? this.attack.arm : armFor(focus.side);
+      if (both) this.strikeSwing[0] = this.strikeSwing[1] = 0.6;
+      else this.strikeSwing[arm] = 0.6;
+      if (gshape === 'press') sfx.clap(); // the gauntlets meet either side of the gap
+      else if (gshape === 'ring') sfx.fistBump(); // the overhead hands part with a DONK
+    }
+
     // THE ENCORE's zones detonate by SHAPE (one grammar move mixes several).
     if (zone.kind === 'lane' || zone.kind === 'rail') {
       sfx.beamBlast();
@@ -2507,10 +2555,10 @@ export class CampaignSystem extends createSystem({
       // The duckdonut's blade / the swept routine — the classic cut.
       sfx.sweepWhoosh();
       this.spawnBladeSweep(zone.y, this.attack!.arm, seat);
-      this.strikeSwing[this.attack!.arm] = 0.6;
     } else if (kind === 'slam') {
       sfx.slamImpact();
       if (zone.kind === 'circle') this.spawnFistCrash(zone.x, zone.z, seat);
+      this.swingShape = 'slam';
       this.strikeSwing[this.attack!.arm] = 0.6;
       // A multi-platform slam alternates fists, landing to landing — both
       // hoisted hammers visibly take their turns.
@@ -2522,6 +2570,7 @@ export class CampaignSystem extends createSystem({
       if (zone.kind === 'sweep') this.spawnBladeSweep(zone.y, this.attack!.arm, seat);
       // (GOOPLIATH already coiled through the charge — his backfist telegraph
       // whips through on this beat; see goopTelegraph.)
+      this.swingShape = 'sweep';
       this.strikeSwing[this.attack!.arm] = 0.6;
       // The squad sweep: the titan whips through a FULL TURN while the blade
       // cascades around the arc — re-armed per landing so the spin carries
@@ -3087,9 +3136,44 @@ export class CampaignSystem extends createSystem({
 
   // --- titan animation ---------------------------------------------------------
 
+  /**
+   * The gesture the body should be making NOW (campaign/gestures.ts): the
+   * shape, focus and read fill of a grammar attack's next pending landing.
+   * Null for the classic kinds (their windups live in animateTitan) and
+   * with no attack. Between a cascade's steps — the next window not yet
+   * open — fill is 0, so the arms ease home and wind up again for the next
+   * read, which is exactly the rhythm RAVE RAID's bosses had.
+   */
+  private pendingGesture(): { shape: GestureShape; fill: number; focus: GestureFocus; seat: number } | null {
+    const a = this.attack;
+    if (!a || !(GRAMMAR_KINDS as readonly string[]).includes(a.kind)) return null;
+    let best = -1;
+    let bestDue = Infinity;
+    for (let i = 0; i < a.zones.length; i++) {
+      if (a.resolved[i]) continue;
+      const due = a.chargeTime + a.staggers[i];
+      if (due < bestDue) {
+        bestDue = due;
+        best = i;
+      }
+    }
+    if (best < 0) return null;
+    const zone = a.zones[best];
+    const shape = gestureShapeOf(a.kind, zone);
+    if (!shape) return null;
+    const window = Math.min(a.windows[best] ?? bestDue, bestDue);
+    const fill = clamp(1 - (bestDue - a.time) / window, 0, 1);
+    return { shape, fill, focus: gestureFocusOf(zone), seat: a.zoneSeats[best] ?? a.seats[0] };
+  }
+
   private animateTitan(delta: number): void {
     const rig = this.rig!;
     const fighting = this.phase === 'fight';
+    // A grammar move's gesture, once per frame: the pose drives the arms,
+    // the root's lean and lift, and where the head looks.
+    const gest = fighting ? this.pendingGesture() : null;
+    const temper = gestureTemper(this.def.style);
+    const pose = gest ? grammarGesture(gest.shape, gest.fill, gest.focus, this.time / (this.def.beat ?? 0.5), temper.amp) : null;
 
     // Idle drift + hover bob — fight only: the entrance and the fall own
     // the root transform outright (a sway lerp would drag the vulture's
@@ -3099,7 +3183,7 @@ export class CampaignSystem extends createSystem({
       const swayRate = this.enraged ? 0.85 : 0.45;
       const sway = Math.sin(this.time * swayRate) * this.def.swayAmp;
       rig.root.position.x += (sway - rig.root.position.x) * Math.min(1, delta * 1.6);
-      rig.root.position.y = Math.sin(this.time * 1.1) * 0.04 * this.def.scale;
+      rig.root.position.y = (Math.sin(this.time * 1.1) * 0.04 + (pose?.rise ?? 0)) * this.def.scale;
     }
 
     // Flinch: the whole chassis rocks back when the core takes fire.
@@ -3136,8 +3220,22 @@ export class CampaignSystem extends createSystem({
       }
     }
 
-    // The head tracks its prey (lookAt aims +Z; the visor lives on −Z, flip).
+    // The body LEANS into a gesture (pitch toward the player is +X under the
+    // π yaw) — a hair, eased, and only in the fight: the entrance and the
+    // fall own the root transform outright.
+    if (fighting) {
+      rig.root.rotation.x += ((pose?.lean ?? 0) - rig.root.rotation.x) * Math.min(1, delta * 5);
+    }
+
+    // The head tracks its prey (lookAt aims +Z; the visor lives on −Z, flip)
+    // — unless the gesture says LOOK THERE: the pointing shapes turn the
+    // gaze from the player toward the marked spot as the read fills, so the
+    // titan visibly eyes the lane / the corner / the gap before it burns.
     this.playerHeadOf(fighting ? this.faceSeat : this.mySeatId(), _head);
+    if (gest && pose && pose.gaze > 0) {
+      this.seatPoint(gest.seat, gest.focus.side * 0.6, 1.0, gest.focus.fwd * 0.5, _v);
+      _head.lerp(_v, pose.gaze * gest.fill * 0.8);
+    }
     rig.head.lookAt(_head.x, _head.y, _head.z);
     rig.head.rotateY(Math.PI);
 
@@ -3235,7 +3333,22 @@ export class CampaignSystem extends createSystem({
       // of marked platforms, or the wide double wind-out that precedes the
       // squad sweep's full-turn lash. One target keeps the single-arm tell.
       const bothArms = !!a && a.seats.length > 1;
-      if (a && (a.kind === 'nova' || a.kind === 'seesaw' || a.kind === 'surge')) {
+      // A GRAMMAR move: the shape's windup pose, blended under any live
+      // follow-through (a cascade's step fires while the next read opens —
+      // the strike decays into the next windup instead of cutting it).
+      const swingK = this.strikeSwing[i] > 0 ? this.strikeSwing[i] / 0.6 : 0;
+      const grammarSwing = swingK > 0 && this.swingShape !== 'slam' && this.swingShape !== 'sweep';
+      if (pose && (swingK === 0 || grammarSwing)) {
+        let px = pose.arms[i].x;
+        let pz = pose.arms[i].z;
+        if (grammarSwing) {
+          const ft = grammarFollowThrough(this.swingShape as GestureShape, swingK, i, this.swingFocus)[i];
+          px = px * (1 - swingK) + ft.x * swingK;
+          pz = pz * (1 - swingK) + ft.z * swingK;
+        }
+        targetX = arm.restX + px;
+        targetZ = arm.restZ + pz;
+      } else if (a && (a.kind === 'nova' || a.kind === 'seesaw' || a.kind === 'surge')) {
         // The nova and the flood attacks: BOTH arms hoist together and the
         // whole machine coils over the platform before it comes down.
         const fill = clamp(a.time / a.chargeTime, 0, 1);
@@ -3249,10 +3362,16 @@ export class CampaignSystem extends createSystem({
           targetZ = arm.restZ + (i === 0 ? -1 : 1) * 1.7 * fill; // wind out wide
           targetX = arm.restX - 0.4 * fill;
         }
+      } else if (grammarSwing) {
+        // A grammar landing's follow-through with no windup left to blend
+        // under (the move's last beat): the gesture keeps its promise.
+        const ft = grammarFollowThrough(this.swingShape as GestureShape, swingK, i, this.swingFocus)[i];
+        targetX = arm.restX + ft.x;
+        targetZ = arm.restZ + ft.z;
       } else if (this.strikeSwing[i] > 0) {
         const k = this.strikeSwing[i] / 0.6;
         // Follow-through: hammered down-and-through, or swung hard across.
-        if (this.lastKind === 'sweep') {
+        if (this.swingShape === 'sweep') {
           targetZ = arm.restZ + (i === 0 ? 1 : -1) * 1.4 * k; // crossed the body
           targetX = arm.restX + 0.3 * k;
         } else {
@@ -3260,7 +3379,8 @@ export class CampaignSystem extends createSystem({
           targetZ = arm.restZ * (1 - k);
         }
       }
-      const ease = Math.min(1, delta * (this.strikeSwing[i] > 0.45 ? 26 : 7));
+      // Each chassis snaps at its own speed (the press is all servo).
+      const ease = Math.min(1, delta * (this.strikeSwing[i] > 0.45 ? 26 : 7) * (pose ? temper.snap : 1));
       arm.pivot.rotation.x += (targetX - arm.pivot.rotation.x) * ease;
       arm.pivot.rotation.z += (targetZ - arm.pivot.rotation.z) * ease;
     }

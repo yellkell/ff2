@@ -1,13 +1,13 @@
 /**
- * Western set-dressing in papercraft (ported from yellkell/vrenv): a leaning
- * signpost, a sun-bleached cattle skull and a broken fence — just enough story.
+ * Western set-dressing (ported from yellkell/vrenv): a leaning signpost, a
+ * sun-bleached cattle skull and a broken fence — just enough story. The
+ * SITES (sites.ts) decide which of these stands where: the sign and fence
+ * belong to the trailhead, the skull to the flats.
  */
 
-import { BoxGeometry, CanvasTexture, ConeGeometry, CylinderGeometry, type Group as GroupT, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial } from 'three';
+import { BoxGeometry, CanvasTexture, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial } from 'three';
 import { CONFIG } from './config.js';
 import { makePaper } from './paper.js';
-import { desertHeight } from './terrain.js';
-import { collapseStatic } from '../merge.js';
 
 const P = CONFIG.palette;
 
@@ -124,7 +124,7 @@ function gasketSignTexture(): CanvasTexture {
   return tex;
 }
 
-function signpost(): Group {
+export function signpost(): Group {
   const g = new Group();
   const wood = makePaper(P.wood, 0.98);
   // The post stands BEHIND the board (negative z) so it never crosses the
@@ -143,9 +143,11 @@ function signpost(): Group {
   return g;
 }
 
-function skull(): Group {
+export function skull(): Group {
   const g = new Group();
-  const bone = makePaper(P.bone, 0.95);
+  // Bleached bone is the one glossy thing on the flats: it GLINTS.
+  const bone = makePaper(P.bone, 0.55);
+  bone.envMapIntensity = 0.9;
   const cranium = new Mesh(new IcosahedronGeometry(0.28, 0), bone);
   cranium.scale.set(1, 0.8, 1.1);
   cranium.position.y = 0.24;
@@ -167,7 +169,7 @@ function skull(): Group {
   return g;
 }
 
-function fence(): Group {
+export function fence(): Group {
   const g = new Group();
   const wood = makePaper(P.wood, 0.98);
   const n = 5;
@@ -186,25 +188,4 @@ function fence(): Group {
   }
   g.traverse((o) => (o.castShadow = true));
   return g;
-}
-
-export function buildProps(parent: GroupT): void {
-  // Set-dressing is static; collapse it (the wood across the signpost and fence
-  // shares one material, so it merges) — the painted sign keeps its own texture.
-  const group = new Group();
-  const place = (g: Group, x: number, z: number, ry: number): void => {
-    g.position.set(x, desertHeight(x, z), z);
-    g.rotateY(ry);
-    group.add(g);
-  };
-  // Placement must clear EVERY mode's floor, not just the duel: the 5-seat
-  // RAID arc runs platforms out to (±5.7, −4.15) around the pit at (0, −6),
-  // and the old spots — sign (4.5, −5), skull (−3.2, −3.5) — sat square
-  // inside that bowl, threading the GASKET sign between raid platforms.
-  // Both now stand just OUTSIDE the ring, still framing the sightline.
-  place(signpost(), 8.2, -2.0, -0.85);
-  place(skull(), -6.8, -1.6, 0.8);
-  place(fence(), -7, 6, 0.3);
-  collapseStatic(group);
-  parent.add(group);
 }

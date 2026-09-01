@@ -46,7 +46,22 @@ carried over verbatim: everything in it still applies to this code.
   ROUTINE (taught corners, then falling blocks). Ported with the laws
   that make it readable — never the same move twice, body-verbs damped,
   THE FLOOR MANAGER — fully seeded for the raid wire, act-gated so easy
-  bouts stay honest. Probe: `npm run check:grammar` (add `--shots`).
+  bouts stay honest. And every shape has its GESTURE now
+  (`src/campaign/gestures.ts`): the lane's point, THE X's crossed arms,
+  the rail's scissor, the gate's press, the donut's overhead ring, the
+  routine's teaching finger, the wave's piston march — windup, gaze,
+  follow-through, per chassis. Probe: `npm run check:grammar` (add
+  `--shots`; it also asserts seven distinct silhouettes).
+- **THE SITES** — one desert, three places (DESIGN.md §6.1): the lobby
+  waits at THE TRAILHEAD (the GASKET sign under its lamp, a campfire, a
+  windmill on the sun band), matches box on THE FLATS (the skull, a dead
+  tree, titan ribs in the sand), and every campaign fight and raid stands
+  in THE BONEYARD (a ring of wreck-plates and burning drums round the pit,
+  RUSTHOOK's hook buried to the shank). The far layer turns with the site
+  so the skyline moves too. With it, Desert 2.0's second pass: wind-carved
+  vertex-coloured mesas, a horizon heat-haze, dust in the arena light.
+  Preview: `/env-preview.html?env=desert&site=trailhead|flats|boneyard`;
+  probe: `npm run check:desert` (add `--shots`).
 - **THE STAGE DECK** — the diamond-plate pedestals retired: fighting
   platforms are now the club stage's realistic waxed-oak planking (boards
   running at your foe, brass corner screws, the team-neon tube as edge
