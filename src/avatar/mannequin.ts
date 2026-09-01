@@ -66,12 +66,15 @@ function tagged(tone: BlankTone): Group {
   return g;
 }
 
-/** One elliptical cross-section of a loft: centred at x=z=0 (symmetry by
- *  construction), `w`/`d` are half-width/half-depth at height `y`. */
+/** One elliptical cross-section of a loft: centred at x=0 (mirror symmetry
+ *  by construction), `w`/`d` are half-width/half-depth at height `y`.
+ *  `z` shifts the ring fore/aft — the neck-root rings lean FORWARD to meet
+ *  the head, which the IK deliberately hangs ahead of the spine. */
 interface Ring {
   y: number;
   w: number;
   d: number;
+  z?: number;
 }
 
 const SEG = 36;
@@ -88,7 +91,7 @@ function loft(rings: Ring[], mat: MeshStandardMaterial): Mesh {
   for (const r of rings) {
     for (let s = 0; s < SEG; s++) {
       const t = (s / SEG) * Math.PI * 2;
-      pos.push(Math.cos(t) * r.w, r.y, Math.sin(t) * r.d);
+      pos.push(Math.cos(t) * r.w, r.y, Math.sin(t) * r.d + (r.z ?? 0));
     }
   }
   for (let k = 0; k < rings.length - 1; k++) {
@@ -102,9 +105,9 @@ function loft(rings: Ring[], mat: MeshStandardMaterial): Mesh {
   // Flat caps close the tube (the end rings are small, so the cap is a
   // sliver — the averaged normals round it off rather than crease it).
   const top = pos.length / 3;
-  pos.push(0, rings[0].y, 0);
+  pos.push(0, rings[0].y, rings[0].z ?? 0);
   const bottom = top + 1;
-  pos.push(0, rings[rings.length - 1].y, 0);
+  pos.push(0, rings[rings.length - 1].y, rings[rings.length - 1].z ?? 0);
   for (let s = 0; s < SEG; s++) {
     const s1 = (s + 1) % SEG;
     idx.push(top, s1, s);
@@ -129,15 +132,19 @@ export function buildMannequinHead(tone: BlankTone): Group {
   skull.position.y = r * 0.05;
   g.add(skull);
 
-  // The neck: a short column entering the egg from below at near-tangent —
-  // in the HEAD group so it follows every nod and turn, closing the gap to
-  // the chest's neck root. Rounded off underneath by its own small cap.
-  const neck = new Mesh(new CylinderGeometry(r * 0.4, r * 0.44, r * 1.1, 20), mat);
-  neck.position.y = -r * 0.95;
+  // The neck: a short column entering the egg from below — in the HEAD
+  // group so it follows every nod and turn. The IK hangs the spine BEHIND
+  // the head (BODY_IK.spineSetBack), so the stub sits back toward +z and
+  // leans further back on the way down; with the chest's neck-root rings
+  // leaning forward to meet it, the column reads as ONE line from jaw to
+  // shoulders instead of a post standing in front of the body.
+  const neck = new Mesh(new CylinderGeometry(r * 0.4, r * 0.46, r * 1.2, 20), mat);
+  neck.position.set(0, -r * 0.92, r * 0.42);
+  neck.rotation.x = -0.32; // bottom swings toward the spine
   g.add(neck);
-  const neckCap = new Mesh(new SphereGeometry(r * 0.44, 20, 12), mat);
-  neckCap.scale.y = 0.5;
-  neckCap.position.y = -r * 1.5;
+  const neckCap = new Mesh(new SphereGeometry(r * 0.46, 20, 12), mat);
+  neckCap.scale.y = 0.55;
+  neckCap.position.set(0, -r * 1.48, r * 0.62);
   g.add(neckCap);
 
   return g;
@@ -152,9 +159,9 @@ export function buildMannequinChest(tone: BlankTone): Group {
   g.add(
     loft(
       [
-        { y: 0.185, w: 0.052, d: 0.046 }, // neck root
-        { y: 0.155, w: 0.07, d: 0.055 },
-        { y: 0.125, w: 0.16, d: 0.078 }, // trapezius spreading
+        { y: 0.185, w: 0.052, d: 0.046, z: -0.075 }, // neck root, leaning to the head
+        { y: 0.155, w: 0.07, d: 0.057, z: -0.05 },
+        { y: 0.125, w: 0.16, d: 0.078, z: -0.02 }, // trapezius spreading
         { y: 0.095, w: 0.252, d: 0.09 }, // THE SHOULDER LINE — widest
         { y: 0.05, w: 0.232, d: 0.098 },
         { y: -0.015, w: 0.166, d: 0.1 }, // chest
