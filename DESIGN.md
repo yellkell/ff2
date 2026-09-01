@@ -78,12 +78,32 @@ Panel roles:
 | **RIGHT — YOU** | The locker: your mannequin live-rendered, paint mode entry, the shop, wallet, rank, stats, settings. |
 
 **The few-doors law** (added when the first wrap proved too busy): the
-lobby never presents everything at once. The center slab's root offers
-exactly THREE doors — FIGHT, ARCADE, THE CLUB — and every other option
-is a sub-option behind its door, one BACK away. Preference breakers live
+lobby never presents everything at once. The center slab offers exactly
+THREE doors — FIGHT, ARCADE, THE CLUB — and every other option is a
+sub-option behind its door, one BACK away. Preference breakers live
 where they matter (ONLY BOTS inside FIGHT, SHOOT BACK inside ARCADE),
-never at top level. The left wing is THE TOWN, a buttonless live-status
-board; the right wing stays YOU.
+never at top level.
+
+**The tab grammar** (MENUS 2): the doors are TABS. Every panel wears a
+strip of horizontal tabs across its top — the Overwatch / Fortnite menu
+structure — so where you are is always one glance away and nothing hangs
+behind you any more. The kit's `tab` role draws them: an uppercase label
+on a shared baseline, the active one underlined in the accent, a red pip
+for the unread paper.
+
+| Panel | Tabs |
+| --- | --- |
+| **CENTER** | FIGHT · ARCADE · CLUB (FIGHT's flows still drill in and BACK out on the slab; CLUB is the region pick) |
+| **LEFT — THE TOWN** | TOWN (the live-status chips) · LADDER (the leaderboard, off the back wall: BATTLE / XP / ARCADE sub-boards, ten rows, stick-scrolled, tap a name for the profile) · NEWS (the Gasket Gazette, rendered on its own page canvas and blitted onto the wing, stick-scrolled) |
+| **RIGHT — YOU** | YOU (the paint bay, your blank, coins, record) · SETTINGS (volume tracks scrubbed by the trigger, mute / voice / hide-paint breakers, REPORT, CREDITS) |
+
+Above the right wing hangs **THE PROFILE pop-out** — what the floating
+coin readout became, on the RAVE RAID profile-card pattern: a bare chip
+(your accent mark, name, rank, `$` balance rolling up after a bout) that
+drops your card out over the wing — the painting behind the name, rank
+and XP bar, honours and achievements with tooltips, your note — with
+RENAME and WRITE NOTE. Rename lives there and nowhere else. Any other
+menu action folds the card.
 
 The wrap is the *foyer* menu (solo/spawn context). On the club floor the
 same three panels compress into the summonable console (the RAVE RAID
@@ -555,10 +575,14 @@ Each phase is shippable; nothing waits on everything.
    three-panel wrap. Old menu retires screen by screen.
    *(v1 shipped: the kit lives at `src/ui/kit/`, and `src/menu/wrap.ts`
    stands three kit panels on the arc as drop-in `MenuPanel`s — BATTLE
-   with all its faces, ARCADE, and the house panel. Still legacy: the
-   modals — campaign line-up, arcade lobby, locker, shop, settings,
-   gazette — the rear leaderboard, the name keyboard, and the pointer
-   visuals; `pointer.ts`/`safety.ts` port when those screens move.)*
+   with all its faces, ARCADE, and the house panel. MENUS 2 shipped the
+   tab grammar, moved the leaderboard, the paper and settings onto wing
+   tabs as kit faces (`src/menu/ladder.ts`, `settingsFace.ts`) and made
+   the coin readout THE PROFILE pop-out (`profilePop.ts`); the rear
+   board, the paper/gear discs, the settings modal and the coin HUD are
+   deleted. Still legacy: the modals — campaign line-up, arcade lobby,
+   locker, shop — the name keyboard, and the pointer visuals;
+   `pointer.ts`/`safety.ts` port when those screens move.)*
 3. **The mannequin** — new procedural blank over the existing rig +
    hitboxes; FF1 skins retired behind it; attachments shop v1.
    *(v2 shipped: THE BLANK is the ONLY body — the FF1 animal chassis

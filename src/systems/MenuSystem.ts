@@ -35,16 +35,11 @@ import {
   accentBarLight,
   clearProfileKeyboardHint,
   colorBarHue,
-  musicVolFromU,
-  sfxVolFromU,
   clickBalls,
   colorBarLight,
   campaignModal,
-  clearReportSent,
-  setCreditsOpen,
   createActionPanel,
   createMenu,
-  markReportSent,
   flashProfileKeyboardHint,
   profileHintActive,
   resetNewsScroll,
@@ -57,7 +52,9 @@ import {
   type PanelId,
 } from '../menu/menu.js';
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
-import { installWrap, type Wrap } from '../menu/wrap.js';
+import { installWrap, wrapNav, type Wrap } from '../menu/wrap.js';
+import { clearReportSent, markReportSent, musicVolFromU, setCreditsOpen, sfxVolFromU } from '../menu/settingsFace.js';
+import { profilePop } from '../menu/profilePop.js';
 import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
 import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
@@ -118,6 +115,7 @@ import {
   setPlayerName,
   setPlayerNote,
   setProfileView,
+  type LeaderboardTab,
   syncLookMirror,
 } from '../net/leaderboard.js';
 import { gazette, markGazetteRead, refreshGazette, type GazetteArticle } from '../net/gazette.js';
@@ -140,7 +138,13 @@ const NEWS_SCROLL_STEP = 76;
  *  flip passthrough, tweak settings. Everything else — every fight, the
  *  loadout, the shop — clanks like sealed armour until the tutorial has been
  *  run once (app.tutorialDone; the tutorial button itself is always live). */
-const PRE_TUTORIAL_PANELS = new Set<string>(['gazette', 'news', 'gear', 'settings']);
+function preTutorialAllowed(action: MenuAction | null): boolean {
+  if (!action) return false;
+  if (action === 'start-tutorial' || action === 'rename' || action === 'edit-note') return true;
+  // Tabs, the paper, settings and the profile card all answer before the
+  // tutorial; the ladder, the fights, the bay and the shop clank.
+  return /^(wrap:tab-|open-gazette|gazette-close|open-settings|settings-|credits-back|sfx-|music-|toggle-mute|toggle-voice|toggle-hide-paint|profile-|badge-|lb-)/.test(action);
+}
 
 interface Pointer {
   line: Line;
@@ -188,6 +192,8 @@ export class MenuSystem extends createSystem({}) {
   private boardScrollDir = 0;
   private newsScrollCooldown = 0;
   private newsScrollDir = 0;
+  /** The board a ladder profile was opened from — BACK returns there. */
+  private ladderFrom: LeaderboardTab = 'ranked';
   private draggingHue = false;
   private accentHue = Number.NaN;
   private accentLight = Number.NaN;
@@ -343,22 +349,22 @@ export class MenuSystem extends createSystem({}) {
       return;
     }
 
-    // Customisation and the gazette are both modal: the lobby arc swaps out for
-    // the open panel. The leaderboard ('board') hangs behind you — always up.
-    // The shop is a sub-modal of customisation: while it's up the customise
-    // plate (and its mirror/loadout) step aside for the shop face.
+    // Customisation, the campaign line-up, the arcade lobby and the paint
+    // bay are modal: the lobby arc swaps out for the open panel. (The
+    // paper and settings are TABS on the wings now — MENUS 2.) The shop is
+    // a sub-modal of customisation: while it's up the customise plate (and
+    // its mirror/loadout) step aside for the shop face.
     const shopOpen = customization.open && customization.shopOpen;
     const modalCustom = customization.open && !shopOpen;
-    const modalNews = app.gazetteOpen;
     const modalCampaign = app.campaignOpen;
     const modalLobby = app.lobbyMode !== null;
-    const modalSettings = app.settingsOpen;
+    const arcUp = !customization.open && !modalCampaign && !modalLobby && !app.paintBayOpen;
     let visChanged = this.rayTargets.length === 0; // first frame: build the list
     for (const p of this.menu.panels) {
       let show: boolean;
       switch (p.id) {
-        case 'board':
-          show = p.mesh.visible; // always up, hanging behind you
+        case 'profilecard':
+          show = arcUp && profilePop.open; // dropped out of the chip
           break;
         case 'custom': // the LOCKER
         case 'balls':
@@ -367,25 +373,19 @@ export class MenuSystem extends createSystem({}) {
         case 'shop':
           show = shopOpen;
           break;
-        case 'news':
-          show = modalNews;
-          break;
         case 'campaign':
           show = modalCampaign;
           break;
         case 'lobby':
           show = modalLobby;
           break;
-        case 'settings':
-          show = modalSettings;
-          break;
         case 'paintbay':
           show = app.paintBayOpen;
           break;
         default:
-          // The arc (train/duel/info), the paper button AND the coin readout:
-          // the lobby's face, gone while any modal is open.
-          show = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings && !app.paintBayOpen;
+          // The arc (train/duel/info) and the profile chip: the lobby's
+          // face, gone while any modal is open.
+          show = arcUp;
           break;
       }
       if (p.mesh.visible !== show) {
@@ -404,7 +404,6 @@ export class MenuSystem extends createSystem({}) {
     // The podium shows with the lobby arc and steps aside for every modal
     // (the locker brings its own mirror); it turns like a display stand.
     if (this.podium) {
-      const arcUp = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings && !app.paintBayOpen;
       this.podium.visible = arcUp;
       this.podium.userData.beat = (this.podium.userData.beat ?? 0) + 1;
       if (arcUp) this.podium.rotation.y += delta * 0.3;
@@ -433,12 +432,14 @@ export class MenuSystem extends createSystem({}) {
         if (app.paintBayOpen && hit.object.userData?.paintPart && hit.uv) this.bayBodyHit(hand, hit);
         continue;
       }
-      if (panel.id === 'board') {
+      // The TOWN wing scrolls with the thumbstick: ladder rows on LADDER,
+      // the article on NEWS.
+      if (panel.id === 'duel' && wrapNav.town === 'ladder') {
         boardPointed = true;
         const axis = this.input.xr.gamepads[hand]?.getAxesValues(InputComponent.Thumbstick)?.y ?? 0;
         if (Math.abs(axis) > Math.abs(boardScrollAxis)) boardScrollAxis = axis;
       }
-      if (panel.id === 'news') {
+      if (panel.id === 'duel' && wrapNav.town === 'news') {
         newsPointed = true;
         const axis = this.input.xr.gamepads[hand]?.getAxesValues(InputComponent.Thumbstick)?.y ?? 0;
         if (Math.abs(axis) > Math.abs(newsScrollAxis)) newsScrollAxis = axis;
@@ -490,7 +491,7 @@ export class MenuSystem extends createSystem({}) {
         setMusicVolume(musicVolFromU(hit.uv.x)); // scrub the music volume live
         dragged = true;
       } else if (hit.uv && down) {
-        if (!app.tutorialDone && action !== 'start-tutorial' && !PRE_TUTORIAL_PANELS.has(panel.id)) {
+        if (!app.tutorialDone && !preTutorialAllowed(action)) {
           sfx.armorClank(); // sealed until the tutorial has been run once
         } else if (panel.click) {
           if (panel.click(hit.uv.x, hit.uv.y)) clicked = true;
@@ -524,8 +525,7 @@ export class MenuSystem extends createSystem({}) {
       if (hover) sfx.uiHover(); // soft laser zap as the pointer lands
     }
     // A scroll repaints its own page, nothing else.
-    if (boardScrolled) this.redrawPanel('board');
-    if (newsScrolled) this.redrawPanel('news');
+    if (boardScrolled || newsScrolled) this.redrawPanel('duel');
     // A skin change can touch several faces (locker, shop, board avatar) —
     // it's a rare, single event, so the full repaint is fine. A slider scrub
     // bumps the version EVERY frame — the drag branch below repaints just the
@@ -586,9 +586,7 @@ export class MenuSystem extends createSystem({}) {
 
     // Coins banked during a bout roll up the moment you're back at the menu —
     // redraw just the readout each frame while the digits are still climbing.
-    if (tickCoinRollup(delta)) {
-      this.menu.panels.find((p) => p.id === 'coins')?.redraw(null);
-    }
+    if (tickCoinRollup(delta)) this.redrawPanel('profile');
 
     // (The old pre-tutorial "TUTORIAL plate breathes" per-frame repaint is
     // gone: on the wrap the sealed lobby's call to action is the kit's
@@ -641,6 +639,10 @@ export class MenuSystem extends createSystem({}) {
   private run(action: MenuAction): void {
     sfx.ensureAudio();
     sfx.uiClick();
+    // THE PROFILE card folds on any action that isn't its own.
+    if (!action.startsWith('profile-') && !action.startsWith('badge-') && action !== 'rename' && action !== 'edit-note') {
+      profilePop.open = false;
+    }
     // The first leaderboard-relevant act (a training run, a 1v1 queue, or a
     // bot bout — bot wins score now too) claims a callsign: the keyboard pops
     // once, prefilled with the auto name, and the pending action resumes after
@@ -767,9 +769,9 @@ export class MenuSystem extends createSystem({}) {
         saveOnlyBots();
         break;
       case 'toggle-voice':
-        // Lives in the settings modal now — flip it and repaint that breaker.
+        // Lives on the SETTINGS tab — flip it and repaint the wing.
         setVoiceEnabled(!voiceEnabled());
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'ranked-match':
         if (app.onlyBots) break; // disabled — no online play in only-bots mode
@@ -925,11 +927,15 @@ export class MenuSystem extends createSystem({}) {
       case 'lb-ffa':
         setLeaderboardTab('ffa');
         break;
-      case 'lb-profile':
-        setProfileView(null); // your own profile
-        break;
       case 'profile-back':
-        setLeaderboardTab('ranked');
+        // Back to the board the name was tapped on.
+        setLeaderboardTab(this.ladderFrom);
+        break;
+      case 'profile-toggle':
+        profilePop.open = !profilePop.open;
+        break;
+      case 'profile-close':
+        profilePop.open = false;
         break;
       case 'edit-note':
         this.kbPending = null;
@@ -944,33 +950,32 @@ export class MenuSystem extends createSystem({}) {
         this.keyboard.open(myStats().name);
         return;
       case 'open-gazette':
-        // Open the paper, and the moment you do the edition counts as read —
-        // the red dot clears.
-        app.gazetteOpen = true;
+        // The NEWS tab: open the paper, and the moment you do the edition
+        // counts as read — the red pip on the tab clears.
+        wrapNav.town = 'news';
         resetNewsScroll();
         markGazetteRead();
         void refreshGazette(true);
         break;
       case 'gazette-close':
-        app.gazetteOpen = false;
+        wrapNav.town = 'town';
         break;
       case 'open-settings':
-        app.settingsOpen = true;
+        wrapNav.you = 'settings';
         break;
       case 'settings-credits':
         setCreditsOpen(true);
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'credits-back':
         setCreditsOpen(false);
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'settings-close':
-        app.settingsOpen = false;
+        // Back to the YOU tab.
+        wrapNav.you = 'you';
         clearReportSent(); // next visit gets a fresh report button
         setCreditsOpen(false); // reopening lands on settings, not credits
-        // Repaint the gear disc so its muted-pip reflects any change made inside.
-        this.menu.panels.find((p) => p.id === 'gear')?.redraw(null);
         break;
       case 'settings-report':
         // The safety report: typed on the callsign keyboard, filed to the
@@ -980,16 +985,16 @@ export class MenuSystem extends createSystem({}) {
         this.keyboard.open('', 'REPORT A PLAYER OR PROBLEM', 64);
         break;
       case 'toggle-mute':
-        // Flip the music mute (persisted) and repaint the settings breaker.
+        // Flip the music mute (persisted) and repaint the wing's breaker.
         toggleMusicMuted();
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'toggle-hide-paint':
         // HIDE PAINT, globally: every other body renders bare base tone.
         // Remote bake keys watch paintPrefs.version, so live rigs repaint on
         // the spot; your own paint stays yours.
         togglePaintHiddenAll();
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'open-pub':
         // Don't navigate yet — open the EU/USA region picker first.
@@ -1148,7 +1153,10 @@ export class MenuSystem extends createSystem({}) {
         } else if (action.startsWith('lb-row-')) {
           // Open the clicked player's profile.
           const row = leaderboardRows()[boardScroll() + Number(action.slice(7))];
-          if (row) setProfileView(row);
+          if (row) {
+            this.ladderFrom = leaderboard.tab;
+            setProfileView(row);
+          }
         } else if (action.startsWith('pub-go-')) {
           // Pick a pub region, remember it, then hop to the pub page.
           const id = action.slice(7);
@@ -1340,7 +1348,8 @@ export class MenuSystem extends createSystem({}) {
         scroll: (px: number) => scrollNews(px),
         close: () => this.run('gazette-close'),
         snap: (): string => {
-          const p = this.menu.panels.find((x) => x.id === 'news');
+          // The paper is a tab on the TOWN wing now — snap the wing.
+          const p = this.menu.panels.find((x) => x.id === 'duel');
           if (!p) return '';
           p.redraw(null);
           const tex = (p.mesh.material as MeshBasicMaterial).map as CanvasTexture | null;
@@ -2021,10 +2030,10 @@ export class MenuSystem extends createSystem({}) {
       this.keyboard.close();
       this.kbPending = null;
     }
-    // Customisation (panel + mirror) and the gazette are lobby-only affairs.
+    // Customisation (panel + mirror) and the profile card are lobby-only affairs.
     if (!inLobby) {
       customization.open = false;
-      app.gazetteOpen = false;
+      profilePop.open = false;
       if (this.mirror) this.mirror.group.visible = false;
     }
 

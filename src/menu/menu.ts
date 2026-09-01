@@ -20,12 +20,9 @@ import {
 } from 'three';
 import { app, DEFAULT_ACCENT_HUE, saveBallArc, saveBallAttach, saveCurveStrength, saveShowBody, type AppEnvironment } from './appState.js';
 import { avatarOwned, customization, platformOwned, gearOwned } from './customization.js';
-import { rankBadge, rankBadgeZoom } from './rankBadges.js';
 import { coinImage } from './coinIcon.js';
 import { canAfford, coins } from './wallet.js';
-import { tierForXp } from './progression.js';
 import { AVATAR_SKINS, PLATFORM_SKINS, type AvatarSkin, type PlatformSkin } from '../avatar/skins.js';
-import { paintBanner, paintHiddenAll } from '../avatar/paint.js';
 import { drawAvatarIcon, drawGearIcon, drawPlatformIcon } from './skinIcons.js';
 import { GEAR as GEAR_CATALOGUE, type GearDef } from '../avatar/gear.js';
 import { BOSSES } from '../campaign/bosses.js';
@@ -38,30 +35,12 @@ import {
   goopliathUnlocked,
   stageUnlocked,
 } from '../campaign/campaignState.js';
-import { ATTACH, DIFFICULTY, DIFFICULTY_ORDER, GAME_TITLE, SEASON, hueToColor, seasonIndex, type ArcadeMode, type Difficulty } from '../config.js';
-import {
-  LEADERBOARD_VISIBLE_ROWS,
-  SEASON_AWARDS,
-  boardScroll,
-  isRunTab,
-  leaderboard,
-  leaderboardRows,
-  myProfileRow,
-  runRows,
-  type LbRow,
-  type LeaderboardTab,
-  type RunRow,
-  type SeasonAward,
-} from '../net/leaderboard.js';
+import { ATTACH, DIFFICULTY, DIFFICULTY_ORDER, GAME_TITLE, hueToColor, type ArcadeMode, type Difficulty } from '../config.js';
 import { gazette, type GazetteArticle } from '../net/gazette.js';
 import { mesh } from '../net/mesh.js';
-import { isMusicMuted } from '../audio/menuMusic.js';
-import { voiceEnabled } from '../audio/voicePref.js';
-import { sfxVolume } from '../audio/sfx.js';
-import { musicVolume } from '../audio/musicVolume.js';
 import { PUB_MAX_PLAYERS } from '../pub/protocol.js';
 import { PUB_REGIONS } from '../pub/config.js';
-import { UI, buttonPlate, hazardStrip, plate, segmentBar, stencilFont } from '../ui/industrial.js';
+import { UI, buttonPlate, hazardStrip, plate, stencilFont } from '../ui/industrial.js';
 
 export type PanelId =
   | 'train'
@@ -69,22 +48,14 @@ export type PanelId =
   | 'info'
   /** THE PAINT BAY (a kit panel modal — src/menu/paintbay.ts). */
   | 'paintbay'
-  | 'board'
+  /** THE PROFILE pop-out above the YOU wing: the chip, and the card it drops. */
+  | 'profile'
+  | 'profilecard'
   | 'custom'
   | 'loadout'
   | 'balls'
   /** The platform shop (a sub-modal of customisation). */
   | 'shop'
-  /** The coin-wallet readout that sits beside the paper button. */
-  | 'coins'
-  /** The little circular paper button hanging above the right panel. */
-  | 'gazette'
-  /** The settings gear disc, left of the paper button. */
-  | 'gear'
-  /** The settings modal (audio sliders + music mute + voice toggle). */
-  | 'settings'
-  /** The Gasket Gazette front page itself (opens modal over the lobby). */
-  | 'news'
   /** The ARCADE campaign line-up — the titan gauntlet (modal over the lobby). */
   | 'campaign'
   /** The shared arcade LOBBY (room browser / squad room) for 2v2 / ffa / raid
@@ -166,8 +137,10 @@ export type MenuAction =
   | 'lb-gauntlet'
   | 'lb-raid'
   | 'lb-goopliath'
-  | 'lb-profile'
   | `lb-row-${number}`
+  /** THE PROFILE pop-out (MENUS 2): the chip toggles the card; CLOSE folds it. */
+  | 'profile-toggle'
+  | 'profile-close'
   | 'edit-note'
   | 'profile-back'
   | 'rename'
@@ -240,8 +213,6 @@ const DUEL_H = PH + 48;
 // The leaderboard plate is taller than the lobby panels so the whole top 10
 // fits at once — its own canvas (same width, more height) and a physical size
 // scaled to match, so the text keeps the lobby's pixel density (no stretch).
-const BW = 512;
-const BH = 548;
 const PROFILE_KEYBOARD_HINT_MS = 4500;
 
 let profileKeyboardHintUntil = 0;
@@ -903,590 +874,6 @@ function hitPubPicker(v: number): MenuAction | null {
 }
 
 
-// Leaderboard row band: the full top 10 laid out at once, then the footer.
-const BOARD_ROW_Y0 = 164;
-const BOARD_ROW_STEP = 30;
-
-/** Top row: PROFILE / BATTLE / XP / ARCADE. PROFILE leads (it's the panel's
- *  landing face); BATTLE fronts the three live-fight boards (1v1 / 2v2 /
- *  ffa); ARCADE fronts AIM plus the four PvE run-time boards. Each lights
- *  for any of its own sub-tabs. */
-const BOARD_TABS: Array<[string, MenuAction, (t: LeaderboardTab) => boolean]> = [
-  ['PROFILE', 'lb-profile', (t) => t === 'profile'],
-  ['BATTLE', 'lb-battle', (t) => t === 'ranked' || t === 'duo' || t === 'ffa'],
-  ['XP', 'lb-xp', (t) => t === 'xp'],
-  ['ARCADE', 'lb-arcade', (t) => ARCADE_SUB_TABS.includes(t as LeaderboardTab)],
-];
-const BOARD_TAB_W = (BW - 96 - 48) / 4;
-
-/** BATTLE sub-tabs: the three live-fight boards. */
-const BATTLE_SUBS: Array<[LeaderboardTab, string, MenuAction]> = [
-  ['ranked', '1V1', 'lb-ranked'],
-  ['duo', '2V2', 'lb-duo'],
-  ['ffa', 'FFA', 'lb-ffa'],
-];
-/** ARCADE sub-tabs: AIM plus the two PvE run-time boards (hardcore and the
- *  higher difficulties ride the same boards wearing their symbols). */
-const ARCADE_SUBS: Array<[LeaderboardTab, string, MenuAction]> = [
-  ['training', 'AIM', 'lb-training'],
-  ['gauntlet', 'GAUNTLET', 'lb-gauntlet'],
-  ['raid', 'RAID', 'lb-raid'],
-  ['goopliath', 'GOOP RAID', 'lb-goopliath'],
-];
-const ARCADE_SUB_TABS = ARCADE_SUBS.map(([id]) => id);
-const SUB_Y = 140;
-const SUB_H = 38;
-
-/** The sub-tab set for the active top tab (BATTLE or ARCADE), or null. */
-function activeSubs(): Array<[LeaderboardTab, string, MenuAction]> | null {
-  const t = leaderboard.tab;
-  if (t === 'ranked' || t === 'duo' || t === 'ffa') return BATTLE_SUBS;
-  if (ARCADE_SUB_TABS.includes(t)) return ARCADE_SUBS;
-  return null;
-}
-
-/** Behind — the Firebase leaderboard: BATTLE / XP / ARCADE boards + PROFILE. */
-function drawBoard(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null): void {
-  panelBg(ctx, false, UI.amber, 'LEADERBOARD', BW, BH);
-  let x = 48;
-  for (const [label, action, isActive] of BOARD_TABS) {
-    const active = isActive(leaderboard.tab);
-    const hot = hoverAction === action;
-    plate(ctx, x, 88, BOARD_TAB_W, 44, {
-      cut: 10,
-      fill: active ? 'rgba(255,176,0,0.18)' : hot ? 'rgba(255,176,0,0.14)' : 'rgba(150,150,170,0.10)',
-      stroke: active || hot ? UI.amber : UI.steelDim,
-      rivets: false,
-    });
-    ctx.font = '700 19px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = active || hot ? UI.amber : UI.textDim;
-    ctx.fillText(label, x + BOARD_TAB_W / 2, 88 + 44 / 2);
-    x += BOARD_TAB_W + 16;
-  }
-
-  // Sub-tab row (BATTLE's three or ARCADE's five) under the active top tab.
-  const subs = activeSubs();
-  if (subs) {
-    const gap = 12;
-    const subW = (BW - 96 - (subs.length - 1) * gap) / subs.length;
-    let sx = 48;
-    for (const [id, label, action] of subs) {
-      const active = leaderboard.tab === id;
-      const hot = hoverAction === action;
-      plate(ctx, sx, SUB_Y, subW, SUB_H, {
-        cut: 8,
-        fill: active ? 'rgba(79,183,255,0.18)' : hot ? 'rgba(255,176,0,0.12)' : 'rgba(150,150,170,0.08)',
-        stroke: active ? UI.cool : hot ? UI.amber : UI.steelDim,
-        rivets: false,
-      });
-      // Shrink the label to fit its plate (RAID HC / HARDCORE are wide).
-      let px = 17;
-      ctx.font = `700 ${px}px system-ui, sans-serif`;
-      while (px > 10 && ctx.measureText(label).width > subW - 12) {
-        px -= 1;
-        ctx.font = `700 ${px}px system-ui, sans-serif`;
-      }
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = active ? UI.cool : hot ? UI.amber : UI.textDim;
-      ctx.fillText(label, sx + subW / 2, SUB_Y + SUB_H / 2);
-      sx += subW + gap;
-    }
-  }
-
-  if (leaderboard.tab === 'profile') drawProfile(ctx, hoverAction);
-  else if (isRunTab(leaderboard.tab)) drawRunRows(ctx);
-  else drawBoardRows(ctx, hoverAction);
-}
-
-/** Row column origin — pushed down when a sub-tab row is showing. */
-function boardRowY0(): number {
-  return activeSubs() ? BOARD_ROW_Y0 + SUB_H + 8 : BOARD_ROW_Y0;
-}
-
-/** A little procedural flame — the BLAZING mark, wherever feats are shown. */
-export function drawFlame(ctx: CanvasRenderingContext2D, cx: number, baseY: number, h: number): void {
-  const w = h * 0.62;
-  const flame = (hh: number, ww: number, color: string): void => {
-    ctx.beginPath();
-    ctx.moveTo(cx, baseY);
-    ctx.bezierCurveTo(cx - ww * 0.55, baseY - hh * 0.12, cx - ww * 0.42, baseY - hh * 0.55, cx - ww * 0.1, baseY - hh * 0.62);
-    ctx.bezierCurveTo(cx - ww * 0.28, baseY - hh * 0.8, cx + ww * 0.02, baseY - hh * 0.9, cx + ww * 0.08, baseY - hh);
-    ctx.bezierCurveTo(cx + ww * 0.42, baseY - hh * 0.68, cx + ww * 0.55, baseY - hh * 0.3, cx, baseY);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
-  };
-  flame(h, w, UI.ember); // the outer tongue
-  flame(h * 0.55, w * 0.6, UI.amber); // the hot core
-}
-
-/** The feat markers a run row wears: flame (blazing) / HARD chip, + HC. */
-function drawRunFeats(ctx: CanvasRenderingContext2D, r: RunRow, xRight: number, y: number): number {
-  let x = xRight;
-  ctx.textAlign = 'right';
-  ctx.font = '800 14px system-ui, sans-serif';
-  if (r.hardcore) {
-    ctx.fillStyle = UI.danger;
-    ctx.fillText('HC', x, y);
-    x -= ctx.measureText('HC').width + 10;
-  }
-  if (r.difficulty === 'blazing') {
-    drawFlame(ctx, x - 7, y + 9, 20);
-    x -= 22;
-  } else if (r.difficulty === 'hard') {
-    ctx.fillStyle = UI.amber;
-    ctx.fillText('HARD', x, y);
-    x -= ctx.measureText('HARD').width + 10;
-  }
-  return x;
-}
-
-/** A run board — one row per completed run: rank, the whole squad, the clock
- *  (lowest time on top). Names are dimmed small; the time is the headline;
- *  hardcore / hard / blazing feats wear their marks beside the clock. */
-function drawRunRows(ctx: CanvasRenderingContext2D): void {
-  const rows = runRows();
-  const offset = boardScroll();
-  const rowY0 = boardRowY0();
-  rows.slice(offset, offset + LEADERBOARD_VISIBLE_ROWS).forEach((r, i) => {
-    const y = rowY0 + i * BOARD_ROW_STEP;
-    if (r.me) {
-      ctx.fillStyle = 'rgba(255,176,0,0.10)';
-      ctx.fillRect(38, y - 16, BW - 76, BOARD_ROW_STEP - 3);
-    }
-    ctx.textAlign = 'left';
-    ctx.font = '600 22px system-ui, sans-serif';
-    ctx.fillStyle = r.me ? UI.emberBright : UI.textDim;
-    ctx.fillText(`${offset + i + 1}.`, 48, y);
-    // The clock — the headline, right-aligned — then the feat marks, then
-    // however much room is left goes to the squad names.
-    ctx.textAlign = 'right';
-    ctx.font = '700 22px system-ui, sans-serif';
-    ctx.fillStyle = r.me ? UI.emberBright : UI.amber;
-    ctx.fillText(fmtRunTime(r.seconds), BW - 56, y);
-    const featLeft = drawRunFeats(ctx, r, BW - 56 - 95, y);
-    // The squad — every runner on the row, shrunk to share the middle.
-    ctx.textAlign = 'left';
-    const names = r.names.join('  ·  ') || '—';
-    let px = 20;
-    ctx.font = `600 ${px}px system-ui, sans-serif`;
-    const nameMax = featLeft - 90 - 12;
-    while (px > 11 && ctx.measureText(names).width > nameMax) {
-      px -= 1;
-      ctx.font = `600 ${px}px system-ui, sans-serif`;
-    }
-    ctx.fillStyle = r.me ? UI.text : 'rgba(232,236,242,0.82)';
-    ctx.fillText(names, 90, y);
-  });
-  ctx.textAlign = 'center';
-  if (!rows.length) {
-    ctx.fillStyle = UI.textDim;
-    ctx.font = '600 22px system-ui, sans-serif';
-    ctx.fillText(leaderboard.status || 'no runs yet — set the pace', BW / 2, rowY0 + 4 * BOARD_ROW_STEP);
-  } else {
-    ctx.fillStyle = UI.steelDim;
-    ctx.font = '600 18px system-ui, sans-serif';
-    ctx.fillText('ranked by the whole run’s fight time', BW / 2, 514);
-  }
-}
-
-function drawBoardRows(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null): void {
-  const rows = leaderboardRows();
-  const offset = boardScroll();
-  const rowY0 = boardRowY0();
-  rows.slice(offset, offset + LEADERBOARD_VISIBLE_ROWS).forEach((r, i) => {
-    const y = rowY0 + i * BOARD_ROW_STEP;
-    const hot = hoverAction === `lb-row-${i}`;
-    if (hot) {
-      ctx.fillStyle = 'rgba(255,176,0,0.12)';
-      ctx.fillRect(38, y - 16, BW - 76, BOARD_ROW_STEP - 3);
-    }
-    ctx.font = '600 22px system-ui, sans-serif';
-    ctx.fillStyle = r.me ? UI.emberBright : hot ? UI.text : UI.textDim;
-    ctx.textAlign = 'left';
-    // Rank number, then a small rank emblem (nudged down so its bottom lines
-    // up with the row text — text is middle-baselined at y), then the name.
-    ctx.fillText(`${offset + i + 1}.`, 48, y);
-    const rowTier = tierForXp(r.xp).index;
-    const rowBadge = rankBadge(rowTier);
-    if (rowBadge) {
-      const s = 30 * rankBadgeZoom(rowTier);
-      ctx.drawImage(rowBadge, 99 - s / 2, y - 3 - s / 2, s, s);
-    }
-    ctx.fillText(r.name, 126, y);
-    ctx.textAlign = 'right';
-    ctx.fillText(String(r.value), BW - 56, y);
-  });
-  ctx.textAlign = 'center';
-  if (!rows.length) {
-    ctx.fillStyle = UI.textDim;
-    ctx.font = '600 22px system-ui, sans-serif';
-    ctx.fillText(leaderboard.status || 'no entries yet', BW / 2, rowY0 + 4 * BOARD_ROW_STEP);
-  } else if (leaderboard.tab === 'ranked') {
-    // The season clock — the ladder plays for trophies, so show the bell.
-    ctx.fillStyle = UI.amberSoft;
-    ctx.font = '700 18px system-ui, sans-serif';
-    ctx.fillText(`${seasonLabel()} · tap a name for their profile`, BW / 2, 514);
-  } else {
-    ctx.fillStyle = UI.steelDim;
-    ctx.font = '600 18px system-ui, sans-serif';
-    ctx.fillText('tap a name to open their profile', BW / 2, 514);
-  }
-}
-
-/** "SEASON 2 · ENDS IN 41D 7H" — the ranked footer's countdown. */
-function seasonLabel(): string {
-  const idx = seasonIndex();
-  const endMs = SEASON.epochUtc + idx * SEASON.lengthDays * 86_400_000;
-  const left = Math.max(0, endMs - Date.now());
-  const days = Math.floor(left / 86_400_000);
-  const hours = Math.floor((left % 86_400_000) / 3_600_000);
-  const clock = days > 0 ? `${days}D ${hours}H` : hours > 0 ? `${hours}H` : 'UNDER AN HOUR';
-  return `SEASON ${idx} · ENDS IN ${clock}`;
-}
-
-/** Season-trophy chip styling, best first (matches SEASON_AWARDS order). */
-const AWARD_STYLE: Record<SeasonAward, { label: string; color: string }> = {
-  first: { label: '1ST', color: '#d9a832' }, // championship gold
-  second: { label: '2ND', color: '#c8d2dc' }, // silver
-  third: { label: '3RD', color: '#c97a1e' }, // bronze
-  top10: { label: 'TOP 10', color: UI.amber },
-  top25: { label: 'TOP 25', color: UI.steel },
-};
-
-/** What each honour actually is — the hover tooltip on the profile chips. */
-const AWARD_TIP: Record<SeasonAward, string> = {
-  first: 'WON A RANKED SEASON',
-  second: 'FINISHED A RANKED SEASON 2ND',
-  third: 'FINISHED A RANKED SEASON 3RD',
-  top10: 'TOP 10 RANKED SEASON FINISH',
-  top25: 'TOP 25 RANKED SEASON FINISH',
-};
-
-/**
- * One profile achievement's screen rect + tooltip — the SAME list drives the
- * drawing, the pointer hit-test and the hover tooltip, so they can't drift.
- */
-type ProfileBadgeSpot = {
-  id: MenuAction;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  tip: string;
-} & (
-  | { kind: 'award'; award: SeasonAward; count: number }
-  | { kind: 'clear'; glyph: 'star' | 'shield' | 'drop'; tier: number; hardcore: boolean }
-);
-
-/** Where the achievement section's rows live on the profile card. */
-const PROF_ROW_X = 150; // chips start here; the section label sits left of it
-const PROF_HONOURS_Y = 300;
-const PROF_CHIP_H = 26;
-
-/** Deterministic chip width for an honour label — shared by draw AND hit-test
- *  (no ctx here), so the two can't disagree. */
-function awardChipW(label: string): number {
-  return 26 + Math.ceil(label.length * 8.6);
-}
-
-function profileBadgeSpots(row: LbRow): ProfileBadgeSpot[] {
-  const spots: ProfileBadgeSpot[] = [];
-  // Season honours flow LEFT→RIGHT under the label, best first, wrapping if a
-  // trophy cabinet ever fills the row.
-  let ax = PROF_ROW_X;
-  let ay = PROF_HONOURS_Y;
-  for (const key of SEASON_AWARDS) {
-    const count = row.awards?.[key] ?? 0;
-    if (!count) continue;
-    const label = count > 1 ? `${AWARD_STYLE[key].label} ×${count}` : AWARD_STYLE[key].label;
-    const w = awardChipW(label);
-    if (ax + w > BW - 44) {
-      ax = PROF_ROW_X;
-      ay += PROF_CHIP_H + 6;
-    }
-    const times = count > 1 ? ` · ×${count}` : '';
-    spots.push({ kind: 'award', id: `badge-${key}`, x: ax, y: ay, w, h: PROF_CHIP_H, award: key, count, tip: AWARD_TIP[key] + times });
-    ax += w + 8;
-  }
-  // The clears row sits beneath the last honours row.
-  const clears: Array<['star' | 'shield' | 'drop', string, number, number]> = [
-    ['star', 'GAUNTLET CLEARED', row.gauntletBest ?? 0, row.gauntletBestHc ?? 0],
-    ['shield', 'TITAN RAID CLEARED', row.raidBest ?? 0, row.raidBestHc ?? 0],
-    ['drop', 'GOOPLIATH FELLED', row.goopBest ?? 0, 0],
-  ];
-  let bx = PROF_ROW_X;
-  const by = ay + PROF_CHIP_H + 10;
-  for (const [glyph, what, tier, hcTier] of clears) {
-    if (!tier) continue;
-    const hardcore = hcTier >= tier;
-    const tierName = tier >= 3 ? 'BLAZING' : tier === 2 ? 'HARD' : 'NORMAL';
-    spots.push({
-      kind: 'clear',
-      id: `badge-${glyph}`,
-      x: bx,
-      y: by,
-      w: 44,
-      h: 36,
-      glyph,
-      tier,
-      hardcore,
-      tip: `${what} · ${tierName}${hardcore ? ' · HARDCORE' : ''}`,
-    });
-    bx += 54;
-  }
-  return spots;
-}
-
-/** The clear-badge glyphs: star (gauntlet), shield (raid), drop (Goopliath). */
-function drawClearGlyph(ctx: CanvasRenderingContext2D, kind: 'star' | 'shield' | 'drop', cx: number, cy: number, r: number, color: string): void {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  if (kind === 'star') {
-    for (let i = 0; i < 10; i++) {
-      const ang = -Math.PI / 2 + (i * Math.PI) / 5;
-      const rad = i % 2 === 0 ? r : r * 0.44;
-      const x = cx + Math.cos(ang) * rad;
-      const y = cy + Math.sin(ang) * rad;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-  } else if (kind === 'shield') {
-    ctx.moveTo(cx, cy - r);
-    ctx.lineTo(cx + r * 0.85, cy - r * 0.6);
-    ctx.lineTo(cx + r * 0.85, cy + r * 0.15);
-    ctx.quadraticCurveTo(cx + r * 0.7, cy + r * 0.75, cx, cy + r);
-    ctx.quadraticCurveTo(cx - r * 0.7, cy + r * 0.75, cx - r * 0.85, cy + r * 0.15);
-    ctx.lineTo(cx - r * 0.85, cy - r * 0.6);
-  } else {
-    // The gel drop: a teardrop — round belly, pinched crown.
-    ctx.moveTo(cx, cy - r);
-    ctx.quadraticCurveTo(cx + r * 0.9, cy + r * 0.05, cx + r * 0.62, cy + r * 0.5);
-    ctx.arc(cx, cy + r * 0.28, r * 0.7, -0.35, Math.PI + 0.35);
-    ctx.quadraticCurveTo(cx - r * 0.9, cy + r * 0.05, cx, cy - r);
-  }
-  ctx.closePath();
-  ctx.fill();
-}
-
-/** A small feat chip: coloured plate + label (+ ×N for repeat honours). */
-function drawFeatChip(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, label: string, color: string, count = 1, flame = false): void {
-  plate(ctx, x, y, w, 26, { cut: 6, fill: 'rgba(14,15,20,0.7)', stroke: color, rivets: false });
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '800 14px system-ui, sans-serif';
-  ctx.fillStyle = color;
-  const text = count > 1 ? `${label} ×${count}` : label;
-  ctx.fillText(text, x + w / 2 + (flame ? 7 : 0), y + 14);
-  if (flame) drawFlame(ctx, x + w / 2 - ctx.measureText(text).width / 2 - 4, y + 22, 17);
-}
-
-/** The PROFILE face, read top to bottom like a service record: WHO (name,
- *  rank emblem + tier, LP/XP), HOW FAR (the XP bar), WHAT THEY'VE DONE
- *  (labelled HONOURS and CLEARS rows), then their note and the buttons. */
-function drawProfile(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null): void {
-  const row = leaderboard.viewRow ?? myProfileRow();
-  const own = row.me;
-  const tier = tierForXp(row.xp);
-
-  // --- THE PAINTING, behind the name (docs/paint.md P4). The banner is the
-  // front of the part they painted most, rendered by the same bake their
-  // body wears — an unpainted fighter keeps today's clean card. A dark
-  // scrim keeps the name legible over hot paint.
-  const banner = paintBanner(row.look, row.tone, 400, 108);
-  if (banner) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(56, 148, BW - 112, 108, 12);
-    ctx.clip();
-    ctx.globalAlpha = 0.6;
-    ctx.drawImage(banner, 56, 148, BW - 112, 108);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = 'rgba(10,11,15,0.52)';
-    ctx.fillRect(56, 148, BW - 112, 108);
-    ctx.restore();
-    ctx.beginPath();
-    ctx.roundRect(56, 148, BW - 112, 108, 12);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(172,182,198,0.35)';
-    ctx.stroke();
-  }
-
-  // --- WHO ---
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = stencilFont(36);
-  ctx.fillStyle = UI.emberBright;
-  ctx.fillText(row.name, BW / 2, 176);
-  // The rank emblem rides beside the tier name — an accent, not a centrepiece.
-  ctx.font = stencilFont(22);
-  ctx.fillStyle = UI.amber;
-  ctx.fillText(tier.name, BW / 2, 212);
-  const badge = rankBadge(tier.index);
-  if (badge) {
-    const s = 32 * rankBadgeZoom(tier.index);
-    const bx = BW / 2 - ctx.measureText(tier.name).width / 2 - 24;
-    ctx.drawImage(badge, bx - s / 2, 212 - s / 2, s, s);
-  }
-  ctx.font = '700 20px system-ui, sans-serif';
-  ctx.fillStyle = UI.amberSoft;
-  ctx.fillText(`${row.score} LP    ·    ${row.xp} XP`, BW / 2, 242);
-
-  // --- HOW FAR --- progress toward the next rank emblem.
-  segmentBar(ctx, 80, 260, BW - 160, 14, tier.progress, UI.ember);
-  ctx.font = '700 13px system-ui, sans-serif';
-  ctx.fillStyle = UI.amberSoft;
-  ctx.fillText(
-    tier.next === null ? 'MAX RANK' : `${tier.next - row.xp} XP TO ${tierForXp(tier.next).name}`,
-    BW / 2,
-    288,
-  );
-
-  // --- WHAT THEY'VE DONE --- two labelled rows: season HONOURS chips, then
-  // ACHIEVEMENTS glyphs (star gauntlet · shield raid · drop Goopliath;
-  // hardcore burns the glyph red, blazing wears the flame). Pointing at any
-  // of them pops a tooltip saying what it's for (drawn last, over everything).
-  const spots = profileBadgeSpots(row);
-  const sectionLabel = (text: string, cy: number): void => {
-    ctx.textAlign = 'left';
-    // 12px: ACHIEVEMENTS is the longest label and must clear the chips at x150.
-    ctx.font = '800 12px system-ui, sans-serif';
-    ctx.fillStyle = UI.textDim;
-    ctx.fillText(text, 48, cy);
-  };
-  const awardSpots = spots.filter((s) => s.kind === 'award');
-  const clearSpots = spots.filter((s) => s.kind === 'clear');
-  const honoursBottom = awardSpots.reduce((m, s) => Math.max(m, s.y), PROF_HONOURS_Y);
-  const clearsY = clearSpots[0]?.y ?? honoursBottom + PROF_CHIP_H + 10;
-  sectionLabel('HONOURS', PROF_HONOURS_Y + PROF_CHIP_H / 2);
-  sectionLabel('ACHIEVEMENTS', clearsY + 18);
-  const noneYet = (cy: number): void => {
-    ctx.textAlign = 'left';
-    ctx.font = '700 13px system-ui, sans-serif';
-    ctx.fillStyle = UI.steelDim;
-    ctx.fillText('none yet', PROF_ROW_X, cy);
-  };
-  if (!awardSpots.length) noneYet(PROF_HONOURS_Y + PROF_CHIP_H / 2);
-  if (!clearSpots.length) noneYet(clearsY + 18);
-  for (const s of spots) {
-    if (s.kind === 'award') {
-      drawFeatChip(ctx, s.x, s.y, s.w, AWARD_STYLE[s.award].label, AWARD_STYLE[s.award].color, s.count);
-    } else {
-      const color = s.hardcore ? UI.danger : s.tier >= 3 ? UI.ember : s.tier === 2 ? UI.amber : UI.steel;
-      plate(ctx, s.x, s.y, s.w, s.h, { cut: 8, fill: 'rgba(14,15,20,0.7)', stroke: color, rivets: false });
-      drawClearGlyph(ctx, s.glyph, s.x + 22, s.y + 19, 12, color);
-      if (s.tier >= 3) drawFlame(ctx, s.x + 40, s.y + 6, 14);
-    }
-  }
-
-  // Note plate — clipped so a long note can never spill past the box.
-  ctx.textAlign = 'center';
-  plate(ctx, 56, 408, BW - 112, 72, { cut: 10, fill: 'rgba(18,19,24,0.5)', stroke: UI.steelDim, rivets: false });
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(64, 412, BW - 128, 64);
-  ctx.clip();
-  ctx.font = '600 21px system-ui, sans-serif';
-  ctx.fillStyle = row.note ? UI.text : UI.steelDim;
-  drawNote(ctx, row.note || (own ? 'no note yet' : 'no note'), BW / 2, 434, BW - 152, 26);
-  ctx.restore();
-
-  if (own) {
-    buttonPlate(ctx, 56, 488, 180, 40, 'RENAME', UI.amber, hoverAction === 'rename');
-    buttonPlate(ctx, BW - 236, 488, 180, 40, 'WRITE NOTE', UI.cool, hoverAction === 'edit-note');
-    if (performance.now() < profileKeyboardHintUntil) {
-      plate(ctx, 70, 529, BW - 140, 18, {
-        cut: 5,
-        fill: 'rgba(22,30,38,0.88)',
-        stroke: UI.cool,
-        rivets: false,
-      });
-      ctx.font = '700 12px system-ui, sans-serif';
-      ctx.fillStyle = UI.coolBright;
-      ctx.fillText('turn around to the keyboard to write your note', BW / 2, 539);
-    }
-  } else {
-    buttonPlate(ctx, BW / 2 - 90, 494, 180, 42, 'BACK', UI.steel, hoverAction === 'profile-back');
-  }
-
-  // The hovered achievement's tooltip — beside its chip, on top of everything.
-  const hovered = hoverAction?.startsWith('badge-') ? spots.find((s) => s.id === hoverAction) : undefined;
-  if (hovered) {
-    ctx.font = '700 15px system-ui, sans-serif';
-    const tw = ctx.measureText(hovered.tip).width + 26;
-    const tx = hovered.x < BW / 2 ? hovered.x + hovered.w + 10 : hovered.x - 10 - tw;
-    const ty = hovered.y + hovered.h / 2 - 14;
-    plate(ctx, tx, ty, tw, 28, { cut: 6, fill: 'rgba(10,11,15,0.94)', stroke: UI.amber, rivets: false });
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = UI.amberSoft;
-    ctx.fillText(hovered.tip, tx + tw / 2, ty + 15);
-    ctx.textBaseline = 'alphabetic';
-  }
-}
-
-/** A profile note in at most two centred lines, ellipsised if it overflows. */
-function drawNote(ctx: CanvasRenderingContext2D, text: string, cx: number, y: number, maxW: number, lineH: number): void {
-  const words = text.split(' ');
-  const lines = [''];
-  for (const w of words) {
-    const i = lines.length - 1;
-    const test = lines[i] ? `${lines[i]} ${w}` : w;
-    if (ctx.measureText(test).width > maxW && lines[i]) {
-      if (lines.length === 2) {
-        let s = `${lines[1]}…`;
-        while (s.length > 1 && ctx.measureText(s).width > maxW) s = `${s.slice(0, -2)}…`;
-        lines[1] = s;
-        break;
-      }
-      lines.push(w);
-    } else {
-      lines[i] = test;
-    }
-  }
-  lines.slice(0, 2).forEach((l, i) => ctx.fillText(l, cx, y + i * lineH));
-}
-
-function hitBoard(u: number, v: number): MenuAction | null {
-  const x = u * BW;
-  const y = (1 - v) * BH;
-  if (y >= 82 && y <= 138) {
-    const i = Math.max(0, Math.min(3, Math.floor((x - 48) / (BOARD_TAB_W + 16))));
-    return BOARD_TABS[i][1];
-  }
-  // Sub-tabs (BATTLE's three or ARCADE's five).
-  const subs = activeSubs();
-  if (subs && y >= SUB_Y - 4 && y <= SUB_Y + SUB_H + 4) {
-    const gap = 12;
-    const subW = (BW - 96 - (subs.length - 1) * gap) / subs.length;
-    const i = Math.max(0, Math.min(subs.length - 1, Math.floor((x - 48) / (subW + gap))));
-    return subs[i][2];
-  }
-  if (leaderboard.tab === 'profile') {
-    // The achievement chips are hover targets — pointing at one names it.
-    const row = leaderboard.viewRow ?? myProfileRow();
-    for (const s of profileBadgeSpots(row)) {
-      if (x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h) return s.id;
-    }
-    if (y >= 482 && y <= 536) {
-      const own = !leaderboard.viewRow || leaderboard.viewRow.me;
-      return own ? (x < BW / 2 ? 'rename' : 'edit-note') : 'profile-back';
-    }
-    return null;
-  }
-  // Run boards aren't players — no profile to open on a row tap.
-  if (isRunTab(leaderboard.tab)) return null;
-  const rowY0 = boardRowY0();
-  if (y >= rowY0 - 15 && y <= rowY0 + LEADERBOARD_VISIBLE_ROWS * BOARD_ROW_STEP) {
-    const n = Math.floor((y - (rowY0 - 15)) / BOARD_ROW_STEP);
-    if (n >= 0 && n < LEADERBOARD_VISIBLE_ROWS) return `lb-row-${n}` as MenuAction;
-  }
-  return null;
-}
-
 // --- the A-button action panel -----------------------------------------------
 
 export interface ActionButton {
@@ -1989,322 +1376,18 @@ export function clickBalls(u: number, v: number): boolean {
 }
 
 // --- THE GASKET GAZETTE -----------------------------------------------------
-// A plain circular button hangs above the right panel; it wears a red dot when
-// Sheriff Cole Ironside has filed a new edition you haven't read. Tapping it
-// opens the paper itself — an aged-newsprint front page (serif type on cream,
-// a deliberate break from the smoked-steel lobby) over the lobby arc.
+// The paper itself — an aged-newsprint front page (serif type on cream, a
+// deliberate break from the smoked-steel lobby). MENUS 2: it renders on its
+// own portrait canvas here and the TOWN wing's NEWS tab blits it (wrap.ts);
+// the paper button and the modal are gone.
 
-const GZ = 128; // the round button's square canvas
-const NW = 720; // newspaper page canvas — portrait, like a real front page
-const NH = 900;
-
-/** The round paper button: a steel disc with a folded-newspaper glyph, plus a
- *  red notification dot while the latest edition is unread. NOT glowing. */
-function drawGazetteButton(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null): void {
-  ctx.clearRect(0, 0, GZ, GZ);
-  const hot = hoverAction === 'open-gazette';
-  const cx = GZ / 2;
-  const cy = GZ / 2;
-  const r = 52;
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = hot ? 'rgba(16,18,24,0.92)' : 'rgba(9,10,14,0.82)';
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = hot ? UI.amber : UI.steel;
-  ctx.stroke();
-
-  // Folded-newspaper glyph: a page with a masthead bar + body lines.
-  const iw = 50;
-  const ih = 44;
-  const ix = cx - iw / 2;
-  const iy = cy - ih / 2;
-  const ink = hot ? UI.amber : UI.text;
-  ctx.fillStyle = ink;
-  ctx.fillRect(ix, iy, iw, ih);
-  ctx.fillStyle = 'rgba(9,10,14,0.92)';
-  ctx.fillRect(ix + 6, iy + 6, iw - 12, 9); // masthead block
-  for (let i = 0; i < 4; i++) ctx.fillRect(ix + 6, iy + 21 + i * 6, iw - 12, 3); // text lines
-
-  // Unread dot — the whole point of the button.
-  if (gazette.unread) {
-    ctx.beginPath();
-    ctx.arc(cx + r * 0.66, cy - r * 0.66, 12, 0, Math.PI * 2);
-    ctx.fillStyle = UI.danger;
-    ctx.fill();
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-    ctx.stroke();
-  }
-}
-
-/** Inside the disc → open the gazette. */
-function hitGazetteButton(u: number, v: number): MenuAction | null {
-  const dx = u - 0.5;
-  const dy = v - 0.5;
-  return dx * dx + dy * dy <= 0.41 * 0.41 ? 'open-gazette' : null;
-}
-
-/** The settings button: a steel disc with a gear cog. Opens the SETTINGS modal
- *  (audio sliders + music mute + voice). Matches the paper button (NOT glowing).
- *  A small red dot sits on the cog while the music is muted, so the mute state
- *  still reads at a glance from the closed HUD. */
-function drawSettingsButton(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null): void {
-  ctx.clearRect(0, 0, GZ, GZ);
-  const hot = hoverAction === 'open-settings';
-  const muted = isMusicMuted();
-  const cx = GZ / 2;
-  const cy = GZ / 2;
-  const r = 52;
-
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = hot ? 'rgba(16,18,24,0.92)' : 'rgba(9,10,14,0.82)';
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = hot ? UI.amber : UI.steel;
-  ctx.stroke();
-
-  const ink = hot ? UI.amber : UI.text;
-  ctx.fillStyle = ink;
-  ctx.strokeStyle = ink;
-
-  // A cog: alternate outer (tooth tip) and root radius around the circle, with
-  // each tooth held flat across a short span so it reads squared, not spiky.
-  const teeth = 8;
-  const rOuter = 27;
-  const rRoot = 20;
-  const seg = (Math.PI * 2) / teeth;
-  const tip = seg * 0.28; // half-width of a flat tooth tip
-  ctx.beginPath();
-  for (let i = 0; i < teeth; i++) {
-    const a = i * seg;
-    const ring: [number, number][] = [
-      [a - tip, rOuter],
-      [a + tip, rOuter],
-      [a + seg / 2 - tip, rRoot],
-      [a + seg / 2 + tip, rRoot],
-    ];
-    for (let k = 0; k < ring.length; k++) {
-      const [ang, rad] = ring[k];
-      const x = cx + Math.cos(ang) * rad;
-      const y = cy + Math.sin(ang) * rad;
-      if (i === 0 && k === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-  }
-  ctx.closePath();
-  ctx.fill();
-  // Bore the centre out (punch a hole in the hub).
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.beginPath();
-  ctx.arc(cx, cy, 8.5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalCompositeOperation = 'source-over';
-
-  if (muted) {
-    // Muted-music tell: a small red pip on the cog's shoulder.
-    ctx.fillStyle = UI.danger;
-    ctx.beginPath();
-    ctx.arc(cx + 20, cy - 20, 7, 0, Math.PI * 2);
-    ctx.fill();
-  }
-}
-
-/** Inside the disc → open the settings modal. */
-function hitSettingsButton(u: number, v: number): MenuAction | null {
-  const dx = u - 0.5;
-  const dy = v - 0.5;
-  return dx * dx + dy * dy <= 0.41 * 0.41 ? 'open-settings' : null;
-}
-
-// ───────────────────────────── SETTINGS MODAL ───────────────────────────────
-// Audio + voice, opened from the gear disc: SOUND FX and MUSIC volume sliders,
-// a music-mute breaker and the voice-chat breaker (moved here from the ARCADE
-// panel). The sliders scrub like the LOCKER colour bars (MenuSystem reads the
-// hit UV each frame while the trigger is held — see the 'sfx-vol'/'music-vol'
-// branches there).
-
-const SET_W = 560;
-const SET_H = 620;
-const SFX_BAR = { x: 48, y: 150, w: SET_W - 96, h: 40 };
-const MUSIC_BAR = { x: 48, y: 252, w: SET_W - 96, h: 40 };
-const SET_MUTE_Y = 322;
-const SET_VOICE_Y = 378;
-/** HIDE PAINT: every other player renders bare base tone (docs/paint.md §6). */
-const SET_PAINT_Y = 434;
-const SET_REPORT_BTN = { x: 40, y: 490, w: 232, h: 46 };
-const SET_CREDITS_BTN = { x: SET_W - 40 - 232, y: 490, w: 232, h: 46 };
-/** True while the settings panel is showing the CREDITS face. */
-let creditsOpen = false;
-export function setCreditsOpen(open: boolean): void {
-  creditsOpen = open;
-}
-const SET_CLOSE_BTN = { x: SET_W / 2 - 90, y: SET_H - 66, w: 180, h: 50 };
-
-/** Flips after a report goes out so the button says it landed; settings-close
- *  resets it (module state — the panel repaints on hover changes anyway). */
-let reportSent = false;
-export function markReportSent(): void {
-  reportSent = true;
-}
-export function clearReportSent(): void {
-  reportSent = false;
-}
-
-function clamp01(n: number): number {
-  return Math.min(1, Math.max(0, n));
-}
-
-/** UV.x on the settings canvas → 0..1 SFX volume along its track. */
-export function sfxVolFromU(u: number): number {
-  return clamp01((u * SET_W - SFX_BAR.x) / SFX_BAR.w);
-}
-/** UV.x on the settings canvas → 0..1 music volume along its track. */
-export function musicVolFromU(u: number): number {
-  return clamp01((u * SET_W - MUSIC_BAR.x) / MUSIC_BAR.w);
-}
-
-function drawVolRow(ctx: CanvasRenderingContext2D, label: string, value: number, bar: { x: number; y: number; w: number; h: number }, accent: string, hot: boolean): void {
-  // Label left, live percentage right, above the track.
-  ctx.textAlign = 'left';
-  ctx.font = '700 22px system-ui, sans-serif';
-  ctx.fillStyle = hot ? accent : UI.textDim;
-  ctx.fillText(label, bar.x, bar.y - 16);
-  ctx.textAlign = 'right';
-  ctx.fillStyle = UI.text;
-  ctx.font = '800 20px system-ui, sans-serif';
-  ctx.fillText(`${Math.round(value * 100)}%`, bar.x + bar.w, bar.y - 16);
-  ctx.textAlign = 'center';
-
-  // Track, filled portion, then the knob.
-  plate(ctx, bar.x, bar.y, bar.w, bar.h, {
-    cut: 10,
-    fill: 'rgba(150,150,170,0.10)',
-    stroke: hot ? accent : UI.steelDim,
-    rivets: false,
-  });
-  const fw = clamp01(value) * (bar.w - 12);
-  if (fw > 2) {
-    ctx.fillStyle = accent;
-    ctx.globalAlpha = 0.85;
-    ctx.fillRect(bar.x + 6, bar.y + 6, fw, bar.h - 12);
-    ctx.globalAlpha = 1;
-  }
-  const kx = bar.x + 6 + fw;
-  ctx.beginPath();
-  ctx.arc(kx, bar.y + bar.h / 2, 13, 0, Math.PI * 2);
-  ctx.fillStyle = hot ? '#ffffff' : UI.text;
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = accent;
-  ctx.stroke();
-}
-
-/** A settings toggle switch — the ARCADE breaker, at the settings canvas width. */
-function settingsBreaker(ctx: CanvasRenderingContext2D, label: string, on: boolean, hot: boolean, py: number, onFill: string, onStroke: string): void {
-  ctx.font = '700 22px system-ui, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = hot ? UI.amber : UI.textDim;
-  ctx.fillText(label, 48, py + 24);
-  const pw = 96, ph = 34, px = SET_W - 48 - pw;
-  plate(ctx, px, py, pw, ph, {
-    cut: 10,
-    fill: on ? onFill : hot ? 'rgba(255,176,0,0.16)' : 'rgba(150,150,170,0.12)',
-    stroke: hot ? UI.amber : on ? onStroke : UI.steelDim,
-    rivets: false,
-  });
-  ctx.fillStyle = on ? onStroke : UI.steelDim;
-  const kw = pw / 2 - 10;
-  ctx.fillRect(on ? px + pw - kw - 6 : px + 6, py + 6, kw, ph - 12);
-  ctx.textAlign = 'center';
-}
-
-const CREDITS: [string, string][] = [
-  ['CREATED BY', 'yellkell'],
-  ['VOICE ACTING', 'v0ltaVA'],
-  ['OST', 'IBWildcat1998 & poopoodoodoo698'],
-  ['CONSULTING', 'RedWolf9 & JKing123'],
-  ['SPECIAL THANKS TO', 'JakeThePro, JFighter, CrystalZach, Xyfume,'],
-  ['', 'fazeway851, GODLY, Yomamaokay,'],
-  ['', 'The Blaston community'],
-  ['', '& The developers of Blaston'],
-];
-
-function drawCredits(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null): void {
-  panelBg(ctx, false, UI.amber, 'CREDITS', SET_W, SET_H);
-  ctx.textAlign = 'center';
-  let y = 96;
-  for (const [role, names] of CREDITS) {
-    if (role) {
-      ctx.font = '700 16px system-ui, sans-serif';
-      ctx.fillStyle = UI.textDim;
-      ctx.fillText(role, SET_W / 2, y);
-      y += 22;
-    }
-    ctx.font = '600 21px system-ui, sans-serif';
-    ctx.fillStyle = UI.text;
-    ctx.fillText(names, SET_W / 2, y);
-    y += role ? 36 : 24;
-  }
-  buttonPlate(ctx, SET_CLOSE_BTN.x, SET_CLOSE_BTN.y, SET_CLOSE_BTN.w, SET_CLOSE_BTN.h, 'BACK', UI.steel, hoverAction === 'credits-back');
-}
-
-function drawSettings(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null): void {
-  if (creditsOpen) {
-    drawCredits(ctx, hoverAction);
-    return;
-  }
-  panelBg(ctx, false, UI.amber, 'SETTINGS', SET_W, SET_H);
-  ctx.textAlign = 'center';
-  ctx.font = '600 20px system-ui, sans-serif';
-  ctx.fillStyle = UI.textDim;
-  ctx.fillText('audio & voice', SET_W / 2, 96);
-
-  drawVolRow(ctx, 'SOUND FX', sfxVolume(), SFX_BAR, UI.cool, hoverAction === 'sfx-vol');
-  drawVolRow(ctx, 'MUSIC', musicVolume(), MUSIC_BAR, UI.emberBright, hoverAction === 'music-vol');
-
-  settingsBreaker(ctx, 'mute music', isMusicMuted(), hoverAction === 'toggle-mute', SET_MUTE_Y, 'rgba(232,53,42,0.28)', UI.danger);
-  settingsBreaker(ctx, 'voice chat', voiceEnabled(), hoverAction === 'toggle-voice', SET_VOICE_Y, 'rgba(57,217,138,0.28)', '#39d98a');
-  // The total defence against offensive paintings: everyone renders bare.
-  settingsBreaker(ctx, 'hide all paint', paintHiddenAll(), hoverAction === 'toggle-hide-paint', SET_PAINT_Y, 'rgba(232,53,42,0.28)', UI.danger);
-
-  // REPORT — a player, a bug, anything harmful. Typed on the keyboard and
-  // filed to the backend; no address, no mail client, no fuss.
-  buttonPlate(
-    ctx, SET_REPORT_BTN.x, SET_REPORT_BTN.y, SET_REPORT_BTN.w, SET_REPORT_BTN.h,
-    reportSent ? 'REPORT SENT ✓' : 'REPORT A PROBLEM',
-    reportSent ? '#39d98a' : UI.danger,
-    !reportSent && hoverAction === 'settings-report',
-    reportSent,
-  );
-  buttonPlate(ctx, SET_CREDITS_BTN.x, SET_CREDITS_BTN.y, SET_CREDITS_BTN.w, SET_CREDITS_BTN.h, 'CREDITS', UI.cool, hoverAction === 'settings-credits');
-
-  buttonPlate(ctx, SET_CLOSE_BTN.x, SET_CLOSE_BTN.y, SET_CLOSE_BTN.w, SET_CLOSE_BTN.h, 'CLOSE', UI.steel, hoverAction === 'settings-close');
-}
-
-function hitSettings(u: number, v: number): MenuAction | null {
-  const x = u * SET_W;
-  const y = (1 - v) * SET_H;
-  const inBar = (b: { x: number; y: number; w: number; h: number }): boolean =>
-    x >= b.x - 8 && x <= b.x + b.w + 8 && y >= b.y - 10 && y <= b.y + b.h + 10;
-  if (creditsOpen) return inBar(SET_CLOSE_BTN) ? 'credits-back' : null;
-  if (inBar(SFX_BAR)) return 'sfx-vol';
-  if (inBar(MUSIC_BAR)) return 'music-vol';
-  if (y >= SET_MUTE_Y - 4 && y <= SET_MUTE_Y + 40) return 'toggle-mute';
-  if (y >= SET_VOICE_Y - 4 && y <= SET_VOICE_Y + 40) return 'toggle-voice';
-  if (y >= SET_PAINT_Y - 4 && y <= SET_PAINT_Y + 40) return 'toggle-hide-paint';
-  if (inBar(SET_REPORT_BTN)) return 'settings-report';
-  if (inBar(SET_CREDITS_BTN)) return 'settings-credits';
-  if (inBar(SET_CLOSE_BTN)) return 'settings-close';
-  return null;
-}
-
+/** The page canvas — portrait, like a real front page. */
+export const NW = 720;
+export const NH = 900;
 const NEWS_INK = '#241c12'; // sepia newsprint ink
 const NEWS_SERIF = 'Georgia, "Times New Roman", serif';
-/** CLOSE button band on the page (canvas coords). */
-const NEWS_CLOSE = { x: NW / 2 - 120, y: NH - 92, w: 240, h: 56 };
+/** The article viewport's bottom edge (the page's lower margin). */
+const NEWS_VIEW_BOTTOM = NH - 48;
 
 function newsRule(ctx: CanvasRenderingContext2D, y: number, h = 3): void {
   ctx.fillStyle = NEWS_INK;
@@ -2498,7 +1581,7 @@ function layoutArticle(ctx: CanvasRenderingContext2D, art: GazetteArticle, top: 
 }
 
 /** The Gasket Gazette front page. */
-function drawNews(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null): void {
+function drawNews(ctx: CanvasRenderingContext2D): void {
   // Aged paper, lightly vignetted at the edges.
   ctx.clearRect(0, 0, NW, NH);
   ctx.fillStyle = '#e9e2cf';
@@ -2551,7 +1634,7 @@ function drawNews(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null)
   } else {
     // The WHOLE article — headline, subhead, body, byline — scrolls together
     // as one column under the fixed masthead (thumbstick, like the leaderboard).
-    const viewBottom = NEWS_CLOSE.y - 16;
+    const viewBottom = NEWS_VIEW_BOTTOM;
     const clipTop = 238; // just under the dateline rule, above the headline tops
 
     // Measure the full article height (no draw) to clamp the scroll.
@@ -2590,20 +1673,23 @@ function drawNews(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null)
     if (newsScroll < newsMaxScroll - 0.5) chevron(viewBottom - 6, true);
   }
 
-  // CLOSE — the one control on the page. Restore the 'middle' baseline FIRST
-  // (the masthead left it 'alphabetic'); buttonPlate centres its label assuming
-  // middle, so without this the CLOSE text rides high in the button.
   ctx.textBaseline = 'middle';
-  buttonPlate(ctx, NEWS_CLOSE.x, NEWS_CLOSE.y, NEWS_CLOSE.w, NEWS_CLOSE.h, 'CLOSE', UI.amber, hoverAction === 'gazette-close');
 }
 
-function hitNews(u: number, v: number): MenuAction | null {
-  const x = u * NW;
-  const y = (1 - v) * NH;
-  if (x >= NEWS_CLOSE.x && x <= NEWS_CLOSE.x + NEWS_CLOSE.w && y >= NEWS_CLOSE.y && y <= NEWS_CLOSE.y + NEWS_CLOSE.h) {
-    return 'gazette-close';
+/** The page's own canvas — rendered fresh on each call (the wing's redraw
+ *  is the freshness clock) and handed back to be blitted. */
+let newsCanvas: HTMLCanvasElement | null = null;
+export function renderNewsPage(): HTMLCanvasElement {
+  if (!newsCanvas) {
+    newsCanvas = document.createElement('canvas');
+    newsCanvas.width = NW;
+    newsCanvas.height = NH;
   }
-  return null;
+  const ctx = newsCanvas.getContext('2d')!;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  drawNews(ctx);
+  return newsCanvas;
 }
 
 // --- THE COIN WALLET + PLATFORM STORE ---------------------------------------
@@ -2627,9 +1713,6 @@ function drawCoinSymbol(ctx: CanvasRenderingContext2D, x: number, y: number, w: 
     ctx.restore();
   }
 }
-
-const COIN_HUD_W = 256;
-const COIN_HUD_H = 128;
 
 // The number shown on the lobby readout ROLLS UP to the real balance rather
 // than snapping — so coins banked during a bout count up satisfyingly the
@@ -2657,29 +1740,8 @@ export function tickCoinRollup(dt: number): boolean {
 }
 
 /** The current readout value (rounded) — also lets the shop/header agree. */
-function coinDisplayValue(): number {
+export function coinDisplayValue(): number {
   return Math.round(coinShown);
-}
-
-/** The lobby coin readout: symbol on the left, balance on the right, on a
- *  smoked-steel chip — sized and styled to sit beside the gazette button. */
-function drawCoinHud(ctx: CanvasRenderingContext2D): void {
-  ctx.clearRect(0, 0, COIN_HUD_W, COIN_HUD_H);
-  const rolling = coinShown !== coins.balance;
-  plate(ctx, 6, 30, COIN_HUD_W - 12, COIN_HUD_H - 60, {
-    cut: 14,
-    fill: 'rgba(9,10,14,0.82)',
-    stroke: rolling ? UI.amber : UI.steel, // glints amber while counting up
-    rivets: false,
-  });
-  drawCoinSymbol(ctx, 22, 40, 48, 48);
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.font = '800 46px system-ui, sans-serif';
-  ctx.fillStyle = rolling ? UI.amber : UI.text;
-  ctx.fillText(String(coinDisplayValue()), 84, 65);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
 }
 
 // The shop sells both cosmetics: AVATARS (the paid unlocks, plus a COMING SOON
@@ -3938,9 +3000,6 @@ export function createMenu(scene: Scene): Menu {
   const train = makePanel('train', 0.86, 0.86 * (TRAIN_H / PW), drawTrain, hitTrain, { ch: TRAIN_H });
   const duel = makePanel('duel', 0.78, 0.62 * (DUEL_H / PH), drawDuel, hitDuel, { ch: DUEL_H });
   const info = makePanel('info', 0.78, 0.62, drawInfo, hitInfo);
-  // Taller than the lobby panels (1.36 × 1.456 ≈ BW:BH) so the full top 10
-  // reads at a glance; its own BW×BH canvas keeps the text at lobby density.
-  const board = makePanel('board', 1.36, 1.456, drawBoard, hitBoard, { cw: BW, ch: BH });
   // The LOCKER (your inventory + colour sliders) reuses the 'custom' id/slot.
   const custom = makePanel('custom', 0.9, 0.9 * (PAN_H / PAN_W), drawLocker, hitLocker, { cw: PAN_W, ch: PAN_H });
   const balls = makePanel('balls', 0.84, 0.72, drawBalls, () => null, {
@@ -3948,19 +3007,6 @@ export function createMenu(scene: Scene): Menu {
     ch: BALL_H,
     click: clickBalls,
   });
-  // The little round paper button (above the right panel) + the front page it
-  // opens. The page is portrait (NW:NH), sized to keep newsprint readable.
-  const gazetteBtn = makePanel('gazette', 0.16, 0.16, drawGazetteButton, hitGazetteButton, {
-    cw: GZ,
-    ch: GZ,
-  });
-  // The settings gear, a twin disc just LEFT of the paper button — opens the
-  // audio/voice modal.
-  const gearBtn = makePanel('gear', 0.16, 0.16, drawSettingsButton, hitSettingsButton, {
-    cw: GZ,
-    ch: GZ,
-  });
-  const news = makePanel('news', 0.86, 0.86 * (NH / NW), drawNews, hitNews, { cw: NW, ch: NH });
   // The ARCADE campaign line-up (the titan gauntlet) — modal over the lobby.
   const campaign = makePanel('campaign', 1.5, 1.5 * (CAMP_H / CAMP_W), drawCampaign, hitCampaign, {
     cw: CAMP_W,
@@ -3972,14 +3018,7 @@ export function createMenu(scene: Scene): Menu {
     cw: RAID_W,
     ch: RAID_H,
   });
-  // The coin readout beside the paper button, and the platform shop it links to.
-  const coinHud = makePanel('coins', 0.24, 0.24 * (COIN_HUD_H / COIN_HUD_W), (ctx) => drawCoinHud(ctx), () => null, {
-    cw: COIN_HUD_W,
-    ch: COIN_HUD_H,
-  });
   const shop = makePanel('shop', 0.9, 0.9 * (PAN_H / PAN_W), drawShop, hitShop, { cw: PAN_W, ch: PAN_H });
-  // The SETTINGS modal (audio sliders + music mute + voice) — centre modal slot.
-  const settings = makePanel('settings', 0.92, 0.92 * (SET_H / SET_W), drawSettings, hitSettings, { cw: SET_W, ch: SET_H });
 
   // Shallow arc in front of the player, tilted inward toward the centre.
   const y = 1.45;
@@ -3992,9 +3031,6 @@ export function createMenu(scene: Scene): Menu {
   duel.mesh.rotation.y = 0.48;
   info.mesh.position.set(0.84, y - 0.02, -1.02);
   info.mesh.rotation.y = -0.48;
-  // The leaderboard hangs behind you — turn around between fights.
-  board.mesh.position.set(0, 1.6, 1.5);
-  board.mesh.rotation.y = Math.PI;
   // Customisation: hidden until opened; sits right of centre so the avatar
   // mirror has room to stand beside it (MenuSystem owns the mirror).
   // Shorter plate now (CLOSE moved off it): nudge up so its TOP edge — where
@@ -4010,35 +3046,18 @@ export function createMenu(scene: Scene): Menu {
   balls.mesh.position.set(1.32, 1.18, -0.66);
   balls.mesh.rotation.y = -0.6;
   balls.mesh.visible = false;
-  // The paper button sits just above the right (info) panel, sharing its tilt.
-  gazetteBtn.mesh.position.set(0.92, 2.0, -1.05);
-  gazetteBtn.mesh.rotation.y = -0.48;
-  // The settings gear mirrors the coin readout to the LEFT of the paper button,
-  // along the same inward-tilted arc (left → a touch further away).
-  gearBtn.mesh.position.set(0.66, 2.0, -1.16);
-  gearBtn.mesh.rotation.y = -0.48;
-  // The coin readout sits just to the RIGHT of the paper button, same height +
-  // tilt — symbol and balance together, as asked.
-  coinHud.mesh.position.set(1.18, 2.0, -0.94);
-  coinHud.mesh.rotation.y = -0.48;
   // The platform shop opens where the customise plate sits (it replaces it).
   shop.mesh.position.set(0.5, 1.5, -1.1);
   shop.mesh.rotation.y = -0.3;
   shop.mesh.visible = false;
-  // The front page opens dead centre, facing you — modal over the lobby arc.
-  news.mesh.position.set(0, 1.5, -1.16);
-  news.mesh.visible = false;
   // The titan line-up opens dead centre too — same modal slot as the paper.
   campaign.mesh.position.set(0, 1.5, -1.2);
   campaign.mesh.visible = false;
   // The arcade lobby shares the centre modal slot.
   lobby.mesh.position.set(0, 1.5, -1.18);
   lobby.mesh.visible = false;
-  // The settings modal shares the centre modal slot too.
-  settings.mesh.position.set(0, 1.5, -1.16);
-  settings.mesh.visible = false;
 
-  const panels = [train, duel, info, board, custom, balls, gazetteBtn, gearBtn, coinHud, shop, news, campaign, lobby, settings];
+  const panels = [train, duel, info, custom, balls, shop, campaign, lobby];
   for (const p of panels) {
     p.redraw(null);
     group.add(p.mesh);

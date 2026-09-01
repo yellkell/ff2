@@ -21,13 +21,19 @@ carried over verbatim: everything in it still applies to this code.
 - `public/stats.html` — the web leaderboard: FIRE FIGHT boards first,
   RAVE RAID as a separate-but-equal tab. Standalone, read-only, no SDK.
 - **THE WRAP** — the wrap-around three-panel lobby (DESIGN.md §2, phase 2),
-  live and SIMPLIFIED to the few-doors law: the center slab's root is just
-  FIGHT / ARCADE / THE CLUB, everything else a sub-option behind its door
-  (battle flows, arcade modes, the club's region pick — all on the slab,
-  one BACK away; ONLY BOTS and SHOOT BACK demoted into their doors). THE
-  TOWN (left) is a buttonless live-status board; YOU (right) is the body,
-  the shop and the wallet. Headless probe: `npm run dev` then
-  `npm run check:wrap` (add `--shots` for panel PNGs).
+  now TABBED (MENUS 2, the Overwatch / Fortnite grammar): every panel wears
+  a strip of horizontal tabs across its top. The center slab is FIGHT ·
+  ARCADE · CLUB (the battle flows drill in and BACK out inside FIGHT; the
+  club's region pick is the CLUB tab; ONLY BOTS and SHOOT BACK stay demoted
+  inside their tabs). THE TOWN (left) is TOWN · LADDER · NEWS — the
+  leaderboard came in off the back wall and the Gasket Gazette is a tab,
+  not a modal. YOU (right) is YOU · SETTINGS — the gear disc became a tab.
+  Above the right wing, THE PROFILE pop-out replaced the floating coin
+  readout: a chip with your name, rank and bolt-dollars that drops your
+  card out over the wing — the painting, honours, achievements, your
+  note, and RENAME (the only place a callsign changes now). Headless
+  probe: `npm run dev` then `npm run check:wrap` (add `--shots` for
+  face PNGs).
 - **THE BLANK** — the mannequin (DESIGN.md §5): `src/avatar/mannequin.ts`,
   the ONLY body. TWO pieces and no more — ONE continuous lofted surface
   from the neck through shoulders, waist and hips to a monotonic taper,
@@ -105,12 +111,12 @@ carried over verbatim: everything in it still applies to this code.
   THE PAINT BAY (YOU wing), and the room sees the result: your look packs
   to ~8 bytes a unit and rides the duel `iam`, the squad mesh and the club
   hello, baked once on join wherever your body renders. HIDE PAINT
-  (settings, or per-punter on the club console) and REPORT PAINT are the
+  (the SETTINGS tab, or per-punter on the club console) and REPORT PAINT are the
   moderation backstops. P5: every piece of GEAR is a paint surface, and
   the rack sells DOTS and SQUARES beside stripes and splotches — sized and
   spun with the stick as you place them, capped so nothing swallows the
   body. THE RECORD: the look mirrors to your player doc,
-  the leaderboard PROFILE card renders the painting behind your name,
+  the LADDER's profile view and your PROFILE card render the painting behind your name,
   stats.html rows wear your colours as chips, and the Gasket Gazette's
   wire report names a champion's paint. Headless probes:
   `npm run check:paint` (wire + record + two-client room), plus the bay

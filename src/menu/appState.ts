@@ -162,11 +162,6 @@ export const app: {
   /** THE PAINT BAY is open over the lobby (modal, like customisation —
    *  the locker mirror stands beside it so placement is live). */
   paintBayOpen: boolean;
-  /** The Gasket Gazette is open over the lobby (modal, like customisation). */
-  gazetteOpen: boolean;
-  /** The SETTINGS panel (audio sliders + music mute + voice toggle) is open
-   *  over the lobby (modal, like the gazette). */
-  settingsOpen: boolean;
   /** The ARCADE campaign line-up (the titan sub-menu) is open over the lobby
    *  (modal, like customisation). Campaign bouts return here, win or lose. */
   campaignOpen: boolean;
@@ -278,8 +273,6 @@ export const app: {
   pubRegionCounts: {},
   infoView: 'root',
   paintBayOpen: false,
-  gazetteOpen: false,
-  settingsOpen: false,
   campaignOpen: false,
   campaignStage: 0,
   campaignMode: 'single',
