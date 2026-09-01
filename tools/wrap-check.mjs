@@ -85,6 +85,39 @@ check('THE TOWN board has no buttons at all', town.length === 0, town.join(','))
 const you = await wrap(`buttons('info')`);
 check('YOU leads with the paint bay + body, no club door', you.includes('open-paintbay') && you.includes('open-custom') && you.includes('rename') && !you.includes('open-pub'), you.join(','));
 
+// THE GAZETTE (net/gazette.ts + menu.ts): inject an edition with the voice's
+// sections — a WANTED poster, the NOTICE, the WEATHER — open the paper and
+// snap the page; it must lay out and render without a page error.
+{
+  const before = errors.length;
+  await page.evaluate(() => {
+    window.__ff2.gazette.inject({
+      headline: 'VOLTAIRE UP NINE RUNGS; SOMEBODY CHECK THE LADDER',
+      subhead: 'A pair fight, a brawl, and a coat of OXBLOOD this office did not authorise.',
+      body: 'VOLTAIRE rose nine rungs on the roll overnight, which is not a climb so much as a jailbreak. Eleven engagements, most of them duels.\n\nOut at the boneyard a squad put down JUGGERNAUT in eight minutes on the county watch. They came back through the trailhead at dusk making the noise they make.\n\nThe sign still points the wrong way. My knee has been clicking since the weather turned; the doctor says it is the weather.',
+      mood: 'AGGRIEVED',
+      wanted: { name: 'VOLTAIRE', crime: 'Excessive winning. Also the paint.', reward: '200 bolt-dollars' },
+      notice: 'The boneyard is closed to picnickers until GOLIATH stops getting back up.',
+      weather: 'Dusk. It has been dusk for some time. Expect dusk.',
+    });
+    window.__ff2.gazette.open();
+  });
+  await page.waitForTimeout(400);
+  const snap = await page.evaluate(() => window.__ff2.gazette.snap());
+  // …and the fold: scroll to the poster, the notice and the weather.
+  const snap2 = await page.evaluate(() => { window.__ff2.gazette.scroll(900); return window.__ff2.gazette.snap(); });
+  await page.evaluate(() => window.__ff2.gazette.close());
+  check('GAZETTE: an edition with the voice\'s sections lays out and renders', snap.startsWith('data:image/png') && snap.length > 20000 && errors.length === before, `${snap.length} bytes`);
+  if (shots && snap) {
+    const file = join(here, 'wrap-gazette.png');
+    writeFileSync(file, Buffer.from(snap.split(',')[1], 'base64'));
+    console.log(`  wrote ${file}`);
+    const file2 = join(here, 'wrap-gazette-2.png');
+    writeFileSync(file2, Buffer.from(snap2.split(',')[1], 'base64'));
+    console.log(`  wrote ${file2}`);
+  }
+}
+
 // GEAR (avatar/gear.ts): a dev equip dresses the podium's blank in the piece
 // — head + body slots at once — and the wire form re-validates junk away.
 {

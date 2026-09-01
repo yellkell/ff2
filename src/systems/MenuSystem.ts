@@ -25,8 +25,7 @@ import {
   Raycaster,
   SphereGeometry,
   Vector3,
-  type Intersection,
-} from 'three';
+  type Intersection, CanvasTexture } from 'three';
 import { app, DEFAULT_ACCENT_HUE, DEFAULT_ACCENT_LIGHT, saveAccentHue, saveAccentLight, saveDifficulty, saveEnvironment, saveOnlyBots, saveShootBack, type AppState, type ArcadeMode } from '../menu/appState.js';
 import { bootIntroActive } from '../experience/introGate.js';
 import { DIFFICULTY_ORDER, type Difficulty } from '../config.js';
@@ -121,7 +120,7 @@ import {
   setProfileView,
   syncLookMirror,
 } from '../net/leaderboard.js';
-import { gazette, markGazetteRead, refreshGazette } from '../net/gazette.js';
+import { gazette, markGazetteRead, refreshGazette, type GazetteArticle } from '../net/gazette.js';
 import { hueToColor, pubUrl, teamColor } from '../config.js';
 import * as sfx from '../audio/sfx.js';
 import { requestClubEntry } from '../experience/clubNavigation.js';
@@ -1320,6 +1319,36 @@ export class MenuSystem extends createSystem({}) {
         pieces: () => podium.children[0]?.children.length ?? 0,
         /** The gear the podium's blank is wearing right now. */
         gear: () => wornGear(podium),
+      };
+      // THE GAZETTE, drivable headlessly: inject an edition (the page never
+      // needs Firestore to be probed), open/close it, and snap the page.
+      (hook as unknown as { gazette?: unknown }).gazette = {
+        inject: (art: Partial<GazetteArticle>) => {
+          gazette.article = {
+            edition: 999,
+            dateline: 'PROBE DAY',
+            headline: '',
+            subhead: '',
+            body: '',
+            byline: 'Sheriff Cole Ironside',
+            mood: '',
+            wanted: null,
+            notice: '',
+            weather: '',
+            ...art,
+          };
+          gazette.status = '';
+        },
+        open: () => this.run('open-gazette'),
+        scroll: (px: number) => scrollNews(px),
+        close: () => this.run('gazette-close'),
+        snap: (): string => {
+          const p = this.menu.panels.find((x) => x.id === 'news');
+          if (!p) return '';
+          p.redraw(null);
+          const tex = (p.mesh.material as MeshBasicMaterial).map as CanvasTexture | null;
+          return (tex?.image as HTMLCanvasElement | undefined)?.toDataURL('image/png') ?? '';
+        },
       };
       // GEAR, drivable headlessly: a dev equip grants the piece (no coins)
       // so probes can dress the podium and watch it change.

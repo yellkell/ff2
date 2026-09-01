@@ -2433,6 +2433,67 @@ function layoutArticle(ctx: CanvasRenderingContext2D, art: GazetteArticle, top: 
   ctx.font = `italic bold 22px ${NEWS_SERIF}`;
   if (draw) ctx.fillText(`— ${art.byline}, Gasket Township`, NW - 50, y + 8);
   y += 40;
+
+  // THE VOICE's sections (docs/gazette-voice.md §5), under the byline:
+  // the WANTED poster, the Sheriff's NOTICE, and the weather. Each is
+  // measured the same way it's drawn, so the scroll clamp stays honest.
+  if (art.wanted) {
+    const w = art.wanted;
+    const bx = 70;
+    const bw = NW - 140;
+    const top = y + 6;
+    ctx.textAlign = 'center';
+    ctx.font = `900 40px ${NEWS_SERIF}`;
+    let yy = top + 52;
+    if (draw) ctx.fillText('WANTED', NW / 2, yy);
+    yy += 12;
+    if (draw) {
+      // The poster's own rule, inside its frame — not the page's.
+      ctx.strokeStyle = NEWS_INK;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(bx + 26, yy);
+      ctx.lineTo(bx + bw - 26, yy);
+      ctx.stroke();
+    }
+    yy += 30;
+    ctx.font = `bold 30px ${NEWS_SERIF}`;
+    if (draw) ctx.fillText(w.name.toUpperCase(), NW / 2, yy);
+    yy += 22;
+    ctx.font = `italic 20px ${NEWS_SERIF}`;
+    yy = flowParagraph(ctx, w.crime, NW / 2, yy, bw - 60, 26, draw) + 2;
+    if (w.reward) {
+      ctx.font = `bold 18px ${NEWS_SERIF}`;
+      if (draw) ctx.fillText(`REWARD · ${w.reward.toUpperCase()}`, NW / 2, yy + 14);
+      yy += 30;
+    }
+    const bh = yy - top + 14;
+    if (draw) {
+      // A poster tacked to the page: a heavy frame with a thin inner rule.
+      ctx.strokeStyle = NEWS_INK;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(bx, top, bw, bh);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx + 6, top + 6, bw - 12, bh - 12);
+    }
+    y = top + bh + 18;
+  }
+  if (art.notice) {
+    ctx.textAlign = 'left';
+    ctx.font = `bold 17px ${NEWS_SERIF}`;
+    if (draw) ctx.fillText('NOTICE FROM THE SHERIFF\'S OFFICE', 50, y + 10);
+    y += 22;
+    ctx.font = `italic 21px ${NEWS_SERIF}`;
+    y = flowParagraph(ctx, art.notice, 50, y + 14, NW - 100, 28, draw) + 10;
+  }
+  if (art.weather) {
+    if (draw) newsRule(ctx, y + 2, 1);
+    ctx.textAlign = 'left';
+    ctx.font = `bold 16px ${NEWS_SERIF}`;
+    if (draw) ctx.fillText('WEATHER', 50, y + 30);
+    ctx.font = `italic 19px ${NEWS_SERIF}`;
+    y = flowParagraph(ctx, art.weather, 140, y + 30, NW - 190, 26, draw) + 8;
+  }
   return y;
 }
 

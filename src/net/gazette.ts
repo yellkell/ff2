@@ -28,6 +28,12 @@ export interface GazetteArticle {
   byline: string;
   /** A one-word mood Cole's in today (e.g. OUTRAGE, GLEE) — stamped on the page. */
   mood: string;
+  /** THE VOICE's sections (docs/gazette-voice.md §5): a WANTED poster for
+   *  the top climber, the Sheriff's one-line NOTICE, and the WEATHER (it is
+   *  always dusk). Older editions carry none — the page just ends at the byline. */
+  wanted: { name: string; crime: string; reward: string } | null;
+  notice: string;
+  weather: string;
 }
 
 /** Live gazette state the lobby reads each redraw. */
@@ -74,6 +80,19 @@ function firestore(): Promise<Handle | null> {
   return handlePromise;
 }
 
+/** A string field off the doc, capped — the page lays these out at fixed sizes. */
+function str(v: unknown, max: number): string {
+  return typeof v === 'string' ? v.trim().slice(0, max) : '';
+}
+
+function readWanted(v: unknown): GazetteArticle['wanted'] {
+  if (!v || typeof v !== 'object') return null;
+  const w = v as Record<string, unknown>;
+  const name = str(w.name, 24);
+  if (!name) return null;
+  return { name, crime: str(w.crime, 80), reward: str(w.reward, 40) };
+}
+
 let lastFetch = -Infinity;
 
 /** Pull the latest edition (throttled — `force` bypasses the cooldown). */
@@ -97,6 +116,9 @@ export async function refreshGazette(force = false): Promise<void> {
       body: (d.body as string) ?? '',
       byline: (d.byline as string) ?? 'Sheriff Cole Ironside',
       mood: (d.mood as string) ?? '',
+      wanted: readWanted(d.wanted),
+      notice: str(d.notice, 160),
+      weather: str(d.weather, 90),
     };
     gazette.unread = gazette.article.edition > seenEdition();
     gazette.status = '';
