@@ -161,6 +161,16 @@ Free placement can draw things we don't want in a room:
 1. **P1 — the canvas**: loft UVs + per-part paint canvases + the bake;
    `Look` model + localStorage; a dev-seeded look renders on your own
    body, the mirror and the podium. *(No UI yet — prove the pipeline.)*
+   **SHIPPED**: `src/avatar/paint.ts` (Look + validation + bake +
+   `__ff2.paint` dev verbs), the `PAINT` config block (24-colour
+   append-only palette, 64-unit cap, per-part canvas sizes), seam-safe
+   cylindrical UVs on the mannequin lofts (paint surfaces exempted from
+   the static-merge collapse), and the bake wired into applyOwnSkins for
+   your body, the mirror and the podium. Two real bugs found and fixed
+   on the way: the loft's triangles wound INWARD (the game had been
+   rendering the body's interior — the paint proved it), and paint
+   surfaces had to be kept out of collapseStatic or they fused into one
+   untagged batch.
 2. **P2 — the bay**: tray panel, take/place/adjust/pick-up/return verbs,
    layer swap; shop sells stripes+splotches in the first two colour
    tiers; the graduation stripe.

@@ -59,6 +59,7 @@ import {
 } from '../menu/menu.js';
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, type Wrap } from '../menu/wrap.js';
+import { applyLook, installPaintDevHook, myLook, paintState } from '../avatar/paint.js';
 import {
   avatarOwned,
   clearShopPreview,
@@ -146,6 +147,7 @@ interface Pointer {
 export class MenuSystem extends createSystem({}) {
   private menu!: Menu;
   private wrap!: Wrap;
+  private paintVersionSeen = 0;
   /** Last lobby-ness handed to the music (null = never) — see applyState(). */
   private musicInLobby: boolean | null = null;
   private ray = new Raycaster();
@@ -247,6 +249,17 @@ export class MenuSystem extends createSystem({}) {
     // place (same ids, same slots) — see menu/wrap.ts. The second argument
     // lets the headless dev hook (__ff2.wrap.act) fire real actions.
     this.wrap = installWrap(this.menu, (a) => this.run(a));
+    installPaintDevHook(); // __ff2.paint — THE PAINT's dev/probe verbs
+    // Probe-only: dump a rig's baked part canvas for inspection.
+    (window.__ff2 as unknown as Record<string, unknown>).paintSnap = (rootName: string, part: string): string => {
+      const obj = this.scene.getObjectByName(rootName);
+      let url = '';
+      obj?.traverse((o) => {
+        const store = o.userData?.paintStore as { canvas: HTMLCanvasElement } | undefined;
+        if (o.userData?.paintPart === part && store && !url) url = store.canvas.toDataURL('image/png');
+      });
+      return url;
+    };
     this.buildPodium();
     this.panel = createActionPanel(this.scene);
     this.keyboard = createNameKeyboard(this.scene);
@@ -1237,6 +1250,19 @@ export class MenuSystem extends createSystem({}) {
   private applyOwnSkins(): void {
     const skinChanged = customization.version !== this.skinVersion;
     const accentChanged = app.accentHue !== this.accentHue || app.accentLight !== this.accentLight;
+    const paintChanged = paintState.version !== this.paintVersionSeen;
+    if (!skinChanged && !accentChanged && !paintChanged) return;
+    // THE PAINT: bake your look onto every rig that is YOURS — your own
+    // torso, the locker mirror, the podium. (Rivals' looks ride the wire
+    // in paint P3; bots stay factory-blank on purpose.)
+    if (paintChanged || skinChanged) {
+      this.paintVersionSeen = paintState.version;
+      const look = myLook();
+      for (const name of ['player-torso', 'player-glove-left', 'player-glove-right', 'mirror-avatar', 'podium-avatar']) {
+        const obj = this.scene.getObjectByName(name);
+        if (obj) applyLook(obj, look);
+      }
+    }
     if (!skinChanged && !accentChanged) return;
 
     const names = ['player-torso', 'player-glove-left', 'player-glove-right', 'mirror-avatar', 'podium-avatar'];

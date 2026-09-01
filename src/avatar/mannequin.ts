@@ -86,36 +86,54 @@ const SEG = 36;
  * no visible seams, mirror-symmetric on both axes by construction.
  */
 function loft(rings: Ring[], mat: MeshStandardMaterial): Mesh {
+  // SEG+1 columns per ring: the seam vertex is duplicated so u runs a
+  // clean 0..1 around the body — THE PAINT bakes into these UVs, and a
+  // shared seam vertex would smear the last column across the whole map.
+  const cols = SEG + 1;
   const pos: number[] = [];
+  const uv: number[] = [];
   const idx: number[] = [];
-  for (const r of rings) {
-    for (let s = 0; s < SEG; s++) {
-      const t = (s / SEG) * Math.PI * 2;
-      pos.push(Math.cos(t) * r.w, r.y, Math.sin(t) * r.d + (r.z ?? 0));
-    }
+  // v by cumulative profile arc, so paint stays even where rings crowd.
+  const arc: number[] = [0];
+  for (let k = 1; k < rings.length; k++) {
+    const a = rings[k - 1];
+    const b = rings[k];
+    arc.push(arc[k - 1] + Math.hypot(b.y - a.y, ((b.w + b.d) - (a.w + a.d)) / 2));
   }
+  const total = arc[arc.length - 1] || 1;
+  rings.forEach((r, k) => {
+    for (let s = 0; s < cols; s++) {
+      const t = ((s % SEG) / SEG) * Math.PI * 2;
+      pos.push(Math.cos(t) * r.w, r.y, Math.sin(t) * r.d + (r.z ?? 0));
+      uv.push(s / SEG, 1 - arc[k] / total);
+    }
+  });
   for (let k = 0; k < rings.length - 1; k++) {
-    const a0 = k * SEG;
-    const b0 = (k + 1) * SEG;
+    const a0 = k * cols;
+    const b0 = (k + 1) * cols;
     for (let s = 0; s < SEG; s++) {
-      const s1 = (s + 1) % SEG;
-      idx.push(a0 + s, b0 + s, b0 + s1, a0 + s, b0 + s1, a0 + s1);
+      // Wound so faces point OUTWARD (rings run top→down): a culled-inward
+      // body renders its own interior — the paint looked like it was on
+      // the wrong side of the world until this flipped.
+      idx.push(a0 + s, b0 + s + 1, b0 + s, a0 + s, a0 + s + 1, b0 + s + 1);
     }
   }
   // Flat caps close the tube (the end rings are small, so the cap is a
   // sliver — the averaged normals round it off rather than crease it).
   const top = pos.length / 3;
   pos.push(0, rings[0].y, rings[0].z ?? 0);
+  uv.push(0.5, 1);
   const bottom = top + 1;
   pos.push(0, rings[rings.length - 1].y, rings[rings.length - 1].z ?? 0);
+  uv.push(0.5, 0);
   for (let s = 0; s < SEG; s++) {
-    const s1 = (s + 1) % SEG;
-    idx.push(top, s1, s);
-    const l0 = (rings.length - 1) * SEG;
-    idx.push(bottom, l0 + s, l0 + s1);
+    idx.push(top, s, s + 1);
+    const l0 = (rings.length - 1) * cols;
+    idx.push(bottom, l0 + s + 1, l0 + s);
   }
   const geo = new BufferGeometry();
   geo.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  geo.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2));
   geo.setIndex(idx);
   geo.computeVertexNormals();
   return new Mesh(geo, mat);
@@ -130,6 +148,8 @@ export function buildMannequinHead(tone: BlankTone): Group {
   const skull = new Mesh(new SphereGeometry(r, 28, 22), mat);
   skull.scale.set(0.84, 1.08, 0.93);
   skull.position.y = r * 0.05;
+  skull.userData.paintPart = 'head'; // THE PAINT bakes into this mesh's map
+  skull.userData.paintTone = tone;
   g.add(skull);
 
   // The neck: a short column entering the egg from below — in the HEAD
@@ -156,23 +176,24 @@ export function buildMannequinChest(tone: BlankTone): Group {
   const g = tagged(tone);
   // (y, halfW, halfD) — widest ring stays inside the 0.2 chest hitbox
   // sphere; the shoulder line carries the width, the waist the pinch.
-  g.add(
-    loft(
-      [
-        { y: 0.185, w: 0.052, d: 0.046, z: -0.075 }, // neck root, leaning to the head
-        { y: 0.155, w: 0.07, d: 0.057, z: -0.05 },
-        { y: 0.125, w: 0.16, d: 0.078, z: -0.02 }, // trapezius spreading
-        { y: 0.095, w: 0.252, d: 0.09 }, // THE SHOULDER LINE — widest
-        { y: 0.05, w: 0.232, d: 0.098 },
-        { y: -0.015, w: 0.166, d: 0.1 }, // chest
-        { y: -0.085, w: 0.124, d: 0.09 },
-        { y: -0.148, w: 0.094, d: 0.077 }, // THE WAIST — thin
-        { y: -0.175, w: 0.093, d: 0.076 },
-        { y: -0.195, w: 0.097, d: 0.079 }, // hem, handing off to the hips
-      ],
-      toneMat(tone),
-    ),
+  const trunk = loft(
+    [
+      { y: 0.185, w: 0.052, d: 0.046, z: -0.075 }, // neck root, leaning to the head
+      { y: 0.155, w: 0.07, d: 0.057, z: -0.05 },
+      { y: 0.125, w: 0.16, d: 0.078, z: -0.02 }, // trapezius spreading
+      { y: 0.095, w: 0.252, d: 0.09 }, // THE SHOULDER LINE — widest
+      { y: 0.05, w: 0.232, d: 0.098 },
+      { y: -0.015, w: 0.166, d: 0.1 }, // chest
+      { y: -0.085, w: 0.124, d: 0.09 },
+      { y: -0.148, w: 0.094, d: 0.077 }, // THE WAIST — thin
+      { y: -0.175, w: 0.093, d: 0.076 },
+      { y: -0.195, w: 0.097, d: 0.079 }, // hem, handing off to the hips
+    ],
+    toneMat(tone),
   );
+  trunk.userData.paintPart = 'chest';
+  trunk.userData.paintTone = tone;
+  g.add(trunk);
   return g;
 }
 
@@ -180,19 +201,20 @@ export function buildMannequinChest(tone: BlankTone): Group {
  *  taper to a rounded tip. Nothing below the hip line gets wider again. */
 export function buildMannequinPelvis(tone: BlankTone): Group {
   const g = tagged(tone);
-  g.add(
-    loft(
-      [
-        { y: 0.115, w: 0.09, d: 0.074 }, // tucks up inside the chest hem
-        { y: 0.06, w: 0.112, d: 0.09 },
-        { y: 0.0, w: 0.132, d: 0.104 }, // the hip line — widest, subtle
-        { y: -0.07, w: 0.115, d: 0.092 }, // and from here: only narrower
-        { y: -0.135, w: 0.078, d: 0.065 },
-        { y: -0.19, w: 0.04, d: 0.035 },
-        { y: -0.225, w: 0.014, d: 0.013 }, // the rounded tip
-      ],
-      toneMat(tone),
-    ),
+  const hips = loft(
+    [
+      { y: 0.115, w: 0.09, d: 0.074 }, // tucks up inside the chest hem
+      { y: 0.06, w: 0.112, d: 0.09 },
+      { y: 0.0, w: 0.132, d: 0.104 }, // the hip line — widest, subtle
+      { y: -0.07, w: 0.115, d: 0.092 }, // and from here: only narrower
+      { y: -0.135, w: 0.078, d: 0.065 },
+      { y: -0.19, w: 0.04, d: 0.035 },
+      { y: -0.225, w: 0.014, d: 0.013 }, // the rounded tip
+    ],
+    toneMat(tone),
   );
+  hips.userData.paintPart = 'pelvis';
+  hips.userData.paintTone = tone;
+  g.add(hips);
   return g;
 }

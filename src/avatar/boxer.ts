@@ -305,7 +305,10 @@ export function buildBoxer(team: number, skinId?: string): BoxerRig {
   // work unchanged.
   const buildCollapsed = (builder: (accent: number) => Group): Group => {
     const g = builder(accent);
-    collapseStatic(g);
+    // Paint surfaces stay individual meshes: THE PAINT bakes a per-part
+    // canvas into each one's material map, so the collapse must not fuse
+    // them into one batch (they share a material look by design).
+    collapseStatic(g, (o) => !!o.userData?.paintPart);
     if (sole) g.visible = true;
     return g;
   };

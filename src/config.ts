@@ -119,6 +119,29 @@ export function seasonScoreField(idx: number): string {
   return `score_s${idx}`;
 }
 
+/**
+ * THE PAINT (docs/paint.md) — the blank takes colour from placed stripes
+ * and splotches alone. The palette INDEX is the wire value, so the roster
+ * is append-only: never reorder, never remove, only add to the end.
+ * Tiers by index: 0–7 the base rack, 8–19 the neon rack, 20–23 top shelf.
+ */
+export const PAINT = {
+  /** Placed units per look — the cap IS the wire/moderation bound. */
+  maxUnits: 64,
+  /** Paint canvas size per body part (px, square). */
+  canvas: { head: 256, chest: 512, pelvis: 256 } as Record<string, number>,
+  /** The sold colours. */
+  colours: [
+    // the base rack
+    0xf4f2ee, 0x17171a, 0x8c1d18, 0xb35b1e, 0xc2a24b, 0x4f5d33, 0x24354f, 0x4a3524,
+    // the neon rack
+    0xffb02e, 0xff5a1f, 0xff2ad5, 0x4fb7ff, 0xb06bff, 0x8fff3d, 0x2be2c2, 0xff4f8e,
+    0x9fdcff, 0xffe94a, 0x6fffb0, 0xe8352a,
+    // the top shelf
+    0xd8b24a, 0xe9e2f2, 0x050507, 0xc9d2dd,
+  ],
+};
+
 export const CURRENCY = {
   /** Coins banked per completed game (any mode, win or loss). */
   perGame: 10,
