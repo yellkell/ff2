@@ -94,8 +94,11 @@ over. No big-bang rewrite of a working lobby.
 social space). **In:** RAVE RAID's club law, extended.
 
 The four-places law carries over (where you are is what you're doing):
-foyer (menu), **the club** (social), the match (wherever your game seats
-you), and spectator ground at the club's arena pit.
+foyer (menu), **the club** (social), and the match (wherever your game
+seats you — with audience ground around it). **The club itself contains
+no arena — ever.** RAVE RAID's floor is the model exactly: games are
+CALLED from the floor and PLAYED somewhere else; the venue stays a
+venue.
 
 ### 3.1 Calling a game — THE BELL
 
@@ -118,14 +121,19 @@ the match **without leaving the venue** (see 3.2). The floor never closes:
 stay-behinds keep talking, newcomers keep arriving, finished players fold
 back home automatically.
 
-### 3.2 Watching — the pit, and the crowd that can't be heard
+### 3.2 Watching — travel together, and the crowd that can't be heard
 
-Matches called from the club run in **the pit**: a sunken arena floor at
-the heart of the new venue, with the fighters' platforms down in it and
-spectator ground — rails, terraces, standing room — wrapped around and
-above it. Fighters stream poses + fireballs to the room (FF1's fight hall
-already streams a live duel at 20 Hz to 12 punters; the pit inherits that
-wire, upgraded to mesh matches).
+No pit, no fight hall — **nothing fights inside the club** (the Iron
+Balls pub's indoor duel was FF1; FF2 ends it). Instead, RAVE RAID's law
+extended to watchers: when the bell hits zero, the caller's squad AND
+everyone who touched in as AUDIENCE are dealt to the match's own place
+together — fighters onto the platforms, watchers onto **audience
+ground** built into each arena (rails and standing terraces outside the
+cage line, in the dark beyond the fighters' light). "We can all stay
+together and watch" is literal: the group travels as one, the club
+floor stays open behind them, and everyone folds back to the floor when
+the bout ends. Fighters stream poses + fireballs to the audience over
+the wire FF1's fight hall already proved at 20 Hz.
 
 Crowd rules (this is a design pillar, so it's spelled out):
 
@@ -145,9 +153,10 @@ Crowd rules (this is a design pillar, so it's spelled out):
   has hands up, plus a clap/stomp layer. It's the one channel the audience
   has into the fighters' ears — pure noise, no words — so a comeback
   landing while the whole terrace goes up FEELS like it.
-- Environments are designed around the watchers: sightlines from every
-  terrace, the pit lit like a show (fighters brightest thing in the room),
-  spectator ground close enough to feel it but outside the cage line.
+- Environments are designed around the watchers: every competitive
+  arena grows audience ground with clean sightlines, the fight lit like
+  a show (fighters brightest thing in the place — Desert 2.0 already
+  obeys), watchers close enough to feel it but outside the cage line.
 
 ### 3.3 The venue
 
@@ -157,10 +166,12 @@ architecture (`club/build.ts` + `merge.ts` + place-scoped fog/voice/music)
 brokering — but **re-skinned into FF2's world**: the industrial fight-club
 language (gunmetal, hazard amber, riveted steel) fused with the supper-club
 craft level (every edge carries thickness; saturated colour reserved for
-light). Rooms: the floor + bar, the pit (3.2), the locker room (paint +
-shop in person — your mannequin on a plinth), the arcade corner (cabinets
-carry over), and a dark door we keep for whatever the next experiment is —
-THE STEP taught us the value of an unexplained door.
+light). Rooms: the floor + bar, the locker room (paint + shop in person
+— your mannequin on a plinth), the arcade corner (cabinets carry over),
+and a dark door we keep for whatever the next experiment is — THE STEP
+taught us the value of an unexplained door. No pit, no ring, no
+consoles: the only way a fight starts here is the bell, and the only
+place it happens is elsewhere.
 
 Both games' clubs keep their servers' good bones: RAVE RAID's relay owns
 the bell clock and deals seats; FF1's pub server contributes the voice
@@ -440,8 +451,16 @@ Each phase is shippable; nothing waits on everything.
    cosmetics sync. (The moment "lasting through games" works, ship it.)
 5. **The venue + THE BELL** — new club on RAVE RAID's club architecture,
    merged room server, bell-launch for 1v1/2v2/FFA first.
-6. **The pit + the crowd** — spectator streaming into the venue, voice
-   bubble, hands-up roar wire, sourced crowd beds.
+   *(Opened: RAVE RAID's club VENUE is ported whole into `src/club/` —
+   build.ts, config, materials, merge, the arcade + step ref registries,
+   a palette shim carrying the disco magenta/cyan and per-guest hue
+   helper — compiling clean against FF2's kit fonts and glow, with the
+   foyer left behind (FF2 has its own lobby). `club-preview.html` walks
+   it for screenshots. Next: presence + teleport systems, then the
+   bell.)*
+6. **Audience ground + the crowd** — watchers travel with the squad,
+   audience terraces in the arenas, voice bubble, hands-up roar wire,
+   sourced crowd beds.
 7. **RAVE mode** — port the set, decks, records; mannequin on the ring;
    coins per song; bell learns RAVE SET.
 8. **Campaign 2** — move-grammar port (telegraphs/setlist/floor manager),

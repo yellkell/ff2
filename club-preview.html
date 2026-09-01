@@ -1,0 +1,46 @@
+<!doctype html>
+<!-- DEV-ONLY harness: renders THE CLUB (the venue ported from RAVE RAID,
+     FF2's social base) for screenshots. Not shipped, not in build inputs.
+     ?x= ?y= ?z= camera position · ?yaw= ?pitch= heading (radians). -->
+<html>
+  <body style="margin:0; background:#000">
+    <script type="module">
+      import { ACESFilmicToneMapping, PerspectiveCamera, PMREMGenerator, Scene, WebGLRenderer } from 'three';
+      import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+      import { buildClub } from '/src/club/build.ts';
+
+      const params = new URLSearchParams(location.search);
+      const x = Number(params.get('x') ?? 0);
+      const y = Number(params.get('y') ?? 1.6);
+      const z = Number(params.get('z') ?? 6.5);
+      const yaw = Number(params.get('yaw') ?? 0);
+      const pitch = Number(params.get('pitch') ?? 0);
+
+      const scene = new Scene();
+      const renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(1);
+      renderer.toneMapping = ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.0;
+      document.body.appendChild(renderer.domElement);
+      scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+
+      const refs = buildClub(scene);
+      refs.root.visible = true;
+
+      const camera = new PerspectiveCamera(74, window.innerWidth / window.innerHeight, 0.05, 200);
+      camera.position.set(x, y, z);
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = yaw;
+      camera.rotation.x = pitch;
+
+      let t = 0;
+      renderer.setAnimationLoop(() => {
+        t += 1 / 60;
+        // A little life so screenshots catch the room breathing.
+        refs.chandelier.rings.forEach((ring, i) => { ring.pivot.rotation.y = t * ring.speed * (i % 2 ? -1 : 1); });
+        renderer.render(scene, camera);
+      });
+    </script>
+  </body>
+</html>
