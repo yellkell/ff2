@@ -8,6 +8,9 @@
 export const PALETTE = {
   magenta: 0xff2ad5,
   cyan: 0x4fb7ff,
+  /** The mirror ball's silvered facet steel. */
+  mirror: 0xcfd8e6,
+  whiteHot: 0xfff3cf,
 };
 
 /** Hue (0..1) → RGB int at a given HSL-ish lightness — RR's helper, used

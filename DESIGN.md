@@ -100,20 +100,29 @@ no arena — ever.** RAVE RAID's floor is the model exactly: games are
 CALLED from the floor and PLAYED somewhere else; the venue stays a
 venue.
 
-### 3.1 Calling a game — THE BELL
+### 3.1 Calling a game — DISCO BALLS, always
 
-RAVE RAID's BALL generalises. Anyone on the floor presses CALL on the
-console and **something comes down** — for FF2 it's a ring bell winched out
-of the dark on its cable (same under-damped spring drop, same 60 s
-relay-owned countdown plate showing the game, the caller, and one orbiting
-pip per person touched in). The caller picks **what** rides the bell:
+RAVE RAID's BALL doesn't generalise into something else — **it IS the
+launcher, for everything**. Anyone on the floor opens the A-button
+console; it has TWO TABS:
 
-- 1V1 · 2V2 · FFA (fireball duels/brawls)
-- TITAN RAID (the co-op campaign gauntlet)
-- RAVE SET (a full RAVE RAID chart — song + difficulty ride the bell)
-- anything we add later — the bell is mode-agnostic by design: it carries
-  `{ mode, params, caller, seats[] }` and the relay deals seats + seed +
-  a shared start clock, exactly like the BALL deals a set.
+- **FIGHT** — start FIRE FIGHT matches and raids: 1V1 · 2V2 · FFA ·
+  TITAN RAID.
+- **RAVE** — the record shelf: RAVE RAID's charted songs and the
+  difficulty chips.
+
+Either way the CTA is the same verb: **CALL THE BALL.** A mirror ball is
+winched down out of the ceiling on its cable (the under-damped spring
+drop, the 60 s relay-owned countdown plate — the game or the song, the
+caller, one orbiting pip per person touched in). The ball is
+mode-agnostic: it carries `{ mode, params, caller, seats[] }` and the
+relay deals seats + seed + a shared start clock, whether that's a duel,
+a titan gauntlet or a rave set.
+*(Shipped so far: THE BALL's visual ported whole (`src/club/ball.ts` +
+the mirror-ball glint in materials/glow), the record shelf as data
+(`src/club/records.ts`, 24 RR masters' measured metadata), and the
+tabbed console face + local state (`src/club/console.ts`) — the relay
+drop/deal wiring lands with presence.)*
 
 Joining is physical (walk up, touch, trigger), leaving is touching again,
 the caller can START early or cancel, and at zero the squad is dealt into

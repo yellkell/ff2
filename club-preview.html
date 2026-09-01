@@ -5,7 +5,7 @@
 <html>
   <body style="margin:0; background:#000">
     <script type="module">
-      import { ACESFilmicToneMapping, PerspectiveCamera, PMREMGenerator, Scene, WebGLRenderer } from 'three';
+      import { ACESFilmicToneMapping, Color, FogExp2, PerspectiveCamera, PMREMGenerator, Scene, WebGLRenderer } from 'three';
       import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
       import { buildClub } from '/src/club/build.ts';
 
@@ -20,13 +20,55 @@
       const renderer = new WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(1);
+      // FIRE FIGHT 2's actual pipeline: ACES + the soft PMREM room env the
+      // arena installs globally — the club is relit FOR this.
       renderer.toneMapping = ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.0;
       document.body.appendChild(renderer.domElement);
       scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+      scene.environmentIntensity = 0.22; // ambience, not a studio wash
+      // The club lights ITSELF (buildLights + emissives) — a studio env map
+      // just flattens the plaster grey. Fog and background as ClubSystem
+      // sets them in RAVE RAID.
+      scene.background = new Color(0x0b0810);
+      scene.fog = new FogExp2(0x0b0810, 0.028);
 
       const refs = buildClub(scene);
       refs.root.visible = true;
+
+      // ?ball=1 — THE BALL down over the dance floor, plate painted.
+      let ball = null;
+      if (params.get('ball') === '1') {
+        const { buildBallVisual, ballAnchor } = await import('/src/club/ball.ts');
+        ball = buildBallVisual();
+        const bx = 0, bz = -3.2;
+        const anchor = ballAnchor(bx, bz);
+        ball.group.position.set(bx, 2.1, bz);
+        ball.setCable(anchor.y - 2.1);
+        ball.paint({ seconds: 42, trackId: params.get('song') ?? '', callerName: 'IRON-1736', joinNames: ['IRON-1736', 'RAVER-2041'], mine: false, joined: false, inReach: false });
+        ball.setPips([0.08, 0.62]);
+        scene.add(ball.group);
+      }
+
+      // ?console=1&ctab=rave — the A-button console standing in space.
+      let consolePanel = null;
+      if (params.get('console') === '1') {
+        const { Panel } = await import('/src/ui/kit/panel.ts');
+        const { consoleFace, consoleState, consoleClick } = await import('/src/club/console.ts');
+        if (params.get('ctab') === 'rave') consoleClick('club:tab-rave');
+        if (params.get('song')) consoleClick(`club:song-${params.get('song')}`);
+        consolePanel = new Panel(0.62, 0.98, 768, 1216);
+        const f = consoleFace();
+        consolePanel.paint(f.title, f.body, f.buttons, null);
+        // Stand it 0.85 m along the camera's heading, facing back at it.
+        const dx = -Math.sin(yaw), dz = -Math.cos(yaw);
+        consolePanel.mesh.position.set(x + dx * 0.85, y - 0.12, z + dz * 0.85);
+        consolePanel.mesh.rotation.order = 'YXZ';
+        consolePanel.mesh.rotation.y = yaw;
+        consolePanel.mesh.rotation.x = -0.18;
+        scene.add(consolePanel.mesh);
+        void consoleState;
+      }
 
       const camera = new PerspectiveCamera(74, window.innerWidth / window.innerHeight, 0.05, 200);
       camera.position.set(x, y, z);
@@ -39,6 +81,12 @@
         t += 1 / 60;
         // A little life so screenshots catch the room breathing.
         refs.chandelier.rings.forEach((ring, i) => { ring.pivot.rotation.y = t * ring.speed * (i % 2 ? -1 : 1); });
+        if (ball) {
+          ball.ball.rotation.y = t * 0.5;
+          ball.twinkle(1 / 60);
+          ball.plate.rotation.y = yaw;
+        }
+        if (consolePanel) consolePanel.tick(1 / 60, 0.5 + 0.5 * Math.sin(t * 2));
         renderer.render(scene, camera);
       });
     </script>

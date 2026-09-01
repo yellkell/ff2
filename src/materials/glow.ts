@@ -48,3 +48,47 @@ export function glowSprite(color: ColorRepresentation, size: number, opacity = 1
   sprite.scale.setScalar(size);
   return sprite;
 }
+
+let _glintTex: Texture | undefined;
+
+/** A four-point mirror-ball glint (ported with THE CLUB from RAVE RAID):
+ *  two flattened streaks over a hot core — the sparkle a facet throws. */
+export function glintTexture(): Texture {
+  if (_glintTex) return _glintTex;
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  const mid = size / 2;
+  g.globalCompositeOperation = 'lighter';
+  // Faint halo.
+  const halo = g.createRadialGradient(mid, mid, 0, mid, mid, mid);
+  halo.addColorStop(0, 'rgba(255,255,255,0.30)');
+  halo.addColorStop(0.35, 'rgba(255,255,255,0.10)');
+  halo.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = halo;
+  g.fillRect(0, 0, size, size);
+  // The two streaks: a radial gradient squashed flat, once per axis.
+  for (const flip of [false, true]) {
+    g.save();
+    g.translate(mid, mid);
+    if (flip) g.rotate(Math.PI / 2);
+    g.scale(1, 0.07);
+    const streak = g.createRadialGradient(0, 0, 0, 0, 0, mid);
+    streak.addColorStop(0, 'rgba(255,255,255,0.95)');
+    streak.addColorStop(0.4, 'rgba(255,255,255,0.35)');
+    streak.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = streak;
+    g.fillRect(-mid, -mid, size, size * 8);
+    g.restore();
+  }
+  // Hot core.
+  const core = g.createRadialGradient(mid, mid, 0, mid, mid, size * 0.09);
+  core.addColorStop(0, 'rgba(255,255,255,1)');
+  core.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = core;
+  g.fillRect(0, 0, size, size);
+  _glintTex = new CanvasTexture(c);
+  return _glintTex;
+}
+
