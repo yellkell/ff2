@@ -237,6 +237,12 @@ carries over; the catalogue changes from skins to attachments.
 
 ### 5.3 The paint — the important part
 
+> **Now specced in full in [`docs/paint.md`](docs/paint.md)** — buying
+> individual stripes and splotches, the paint bay's verbs, the packed
+> `Look` model, per-part canvas baking, how every other player sees your
+> painting (sync, validation, fail-soft), moderation, and the four-phase
+> build order. The sketch below is the original outline it grew from.
+
 Colour is bought as **stripes**: paint items you place *minutely* on your
 own body and attachments from the locker — position, angle, length, width,
 hue — layer over layer, removable, editable, **persistent across games and
@@ -442,6 +448,17 @@ Each phase is shippable; nothing waits on everything.
    new titan line-up, the on-beat titan, raid cut.
 9. **Desert 2.0** — the dusk rebuild, then the venue exterior, then the
    rest of the environments.
+   *(First pass shipped: golden hour dying into night — deep violet-navy
+   overhead with 420 early stars thickening away from a blood-orange
+   horizon band, a swollen dying sun in an ember halo, the whole palette
+   a step darker and richer with bone and dust left pale to catch the
+   light, and the papercraft flat-shading retired: the default desert
+   material is smooth matte clay, dunes at higher vertex density so the
+   dusk light rolls instead of snapping facet to facet. Every landmark
+   kept: the sign, the skull, the fence, the tumbleweeds, the mesas, the
+   vultures, the dust devils. Next passes: real material variation on
+   the mesas, the lit sign lamp, heat-haze at the horizon, and the same
+   treatment for the salt flats and factory.)*
 10. **Links & Discord** — `?join=` everywhere, QR on the lobby, bot write
     path.
 

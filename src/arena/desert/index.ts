@@ -13,6 +13,8 @@
 import {
   AmbientLight,
   BackSide,
+  BufferAttribute,
+  BufferGeometry,
   CircleGeometry,
   Color,
   DirectionalLight,
@@ -20,12 +22,14 @@ import {
   HemisphereLight,
   Mesh,
   Object3D,
+  Points,
+  PointsMaterial,
   ShaderMaterial,
   SphereGeometry,
   Vector3,
 } from 'three';
 import { CONFIG } from './config.js';
-import { makePaperDouble } from './paper.js';
+import { makePaperDouble, makeRng } from './paper.js';
 import { buildTerrain } from './terrain.js';
 import { buildBoulders, buildMesas } from './rocks.js';
 import { buildCacti } from './cactus.js';
@@ -86,18 +90,58 @@ function makeSkyDome(): Mesh {
   return dome;
 }
 
+/** Early stars over the dying light: none in the orange band, thickening
+ *  toward the zenith, each with its own brightness — one Points draw. */
+function makeStars(): Points {
+  const { count, minElevation, radius } = CONFIG.stars;
+  const rng = makeRng(CONFIG.terrain.seed * 7 + 1);
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    // Bias the density upward: elevation from a squared roll.
+    const elev = minElevation + (1 - minElevation) * Math.sqrt(rng());
+    const phi = Math.asin(elev);
+    const theta = rng() * Math.PI * 2;
+    pos[i * 3] = Math.cos(phi) * Math.cos(theta) * radius;
+    pos[i * 3 + 1] = Math.sin(phi) * radius;
+    pos[i * 3 + 2] = Math.cos(phi) * Math.sin(theta) * radius;
+    // Cool white with the odd warm one, fading toward the horizon band.
+    const b = (0.35 + 0.65 * rng()) * Math.min(1, (elev - minElevation) * 6 + 0.25);
+    const warm = rng() < 0.12;
+    col[i * 3] = b * (warm ? 1 : 0.82);
+    col[i * 3 + 1] = b * (warm ? 0.85 : 0.86);
+    col[i * 3 + 2] = b * (warm ? 0.7 : 1);
+  }
+  const geo = new BufferGeometry();
+  geo.setAttribute('position', new BufferAttribute(pos, 3));
+  geo.setAttribute('color', new BufferAttribute(col, 3));
+  const mat = new PointsMaterial({
+    size: 2.4,
+    sizeAttenuation: false,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+  });
+  const stars = new Points(geo, mat);
+  stars.frustumCulled = false;
+  return stars;
+}
+
 export function buildDesert(): Desert {
   const root = new Group();
   root.name = 'desert-environment';
   root.visible = false;
 
   root.add(makeSkyDome());
+  root.add(makeStars());
 
   // A low warm sun — ambiguous sunrise/sunset, with long readable shadows.
   const e = CONFIG.mood.sunElevation * (Math.PI / 2);
   const sunDir = new Vector3(0.35 * Math.cos(e), Math.sin(e), -0.94 * Math.cos(e)).normalize();
 
-  const sun = new DirectionalLight(new Color('#ffb879'), 1.75);
+  // The dying sun: deeper, lower, still the longest shadows in the game.
+  const sun = new DirectionalLight(new Color('#ff8d4e'), 1.5);
   sun.position.copy(sunDir).multiplyScalar(55);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
@@ -111,15 +155,16 @@ export function buildDesert(): Desert {
   root.add(sun);
   root.add(sun.target); // target sits at the origin → sun points at the platforms
 
-  root.add(new AmbientLight(new Color('#705c7a'), 0.32));
-  root.add(new HemisphereLight(new Color(CONFIG.ibl.sky), new Color(CONFIG.ibl.ground), 0.5));
+  root.add(new AmbientLight(new Color('#332c4a'), 0.3)); // night creeping in
+  root.add(new HemisphereLight(new Color(CONFIG.ibl.sky), new Color(CONFIG.ibl.ground), 0.55));
 
-  // Stylised paper sun low on the horizon (with a fainter halo behind it).
-  const halo = new Mesh(new CircleGeometry(44, 36), makePaperDouble('#ffc090', 0.42));
+  // The dying sun on the horizon, swollen the way a sunset sun reads,
+  // with a wide ember halo bleeding into the haze behind it.
+  const halo = new Mesh(new CircleGeometry(52, 36), makePaperDouble('#e86a34', 0.5));
   halo.position.copy(sunDir).multiplyScalar(602);
   halo.lookAt(0, halo.position.y, 0);
   root.add(halo);
-  const disc = new Mesh(new CircleGeometry(26, 32), makePaperDouble(CONFIG.palette.sun, 1.1));
+  const disc = new Mesh(new CircleGeometry(30, 32), makePaperDouble(CONFIG.palette.sun, 1.25));
   disc.position.copy(sunDir).multiplyScalar(600);
   disc.lookAt(0, disc.position.y, 0);
   root.add(disc);

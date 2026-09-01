@@ -1,20 +1,23 @@
 /**
- * Papercraft material toolkit + tiny deterministic helpers (ported from
- * yellkell/vrenv). The look is "folded construction paper": flat-shaded
- * low-poly geometry wearing completely matte materials — cheap, holds frame
- * rate on Quest.
+ * Desert material toolkit + tiny deterministic helpers (ported from
+ * yellkell/vrenv, reworked for DESERT 2.0). The papercraft flat-shading
+ * era is over: the default material is now SMOOTH-shaded matte clay —
+ * the same cheap geometry reads as wind-worn rock and sand instead of
+ * folded paper, and the dusk light rolls over it instead of snapping
+ * facet to facet. Pass `flat = true` only where a hard crease is the
+ * point (nothing does yet).
  */
 
 import { Color, MeshStandardMaterial } from 'three';
 
-/** A sheet of matte paper. `flat` gives the folded-facet look (default on). */
-export function makePaper(hex: string, roughness = 0.97, flat = true): MeshStandardMaterial {
+/** Matte desert clay. `flat` restores the old folded-facet look (off). */
+export function makePaper(hex: string, roughness = 0.92, flat = false): MeshStandardMaterial {
   return new MeshStandardMaterial({
     color: new Color(hex),
     roughness,
     metalness: 0.0,
     flatShading: flat,
-    envMapIntensity: 0.35, // a touch of sky bounce, but stays papery
+    envMapIntensity: 0.45, // dusk-sky bounce keeps the shadow side alive
   });
 }
 

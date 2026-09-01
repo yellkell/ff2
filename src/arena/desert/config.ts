@@ -8,54 +8,65 @@
  */
 
 export const CONFIG = {
-  /** Overall art direction. */
+  /** Overall art direction — DESERT 2.0: golden hour dying into night
+   *  (DESIGN.md §6.1). Darker, richer, the arena the brightest thing for
+   *  miles; same sign, same skull, same tumbleweeds. */
   mood: {
     /** Sun height: 0 = on the horizon (long shadows), 1 = overhead. */
-    sunElevation: 0.13,
+    sunElevation: 0.045,
     exposure: 0.86,
-    haze: 0.5,
+    haze: 0.55,
     viewDistance: 1500,
   },
 
-  /** Dawn-or-dusk sky gradient (the inward-facing dome). */
+  /** The dusk sky (the inward-facing dome): a blood-orange band dying on
+   *  one horizon, deep violet overhead, early stars above it. */
   sky: {
-    top: '#3d5f91', // muted blue-violet overhead, not midday cyan
-    horizon: '#eda36f', // peach dust band at the low sun line
-    bottom: '#8d6a69', // rosy earth glow below the horizon
+    top: '#131b34', // deep violet-navy — night arriving overhead
+    horizon: '#d95f2b', // the blood-orange band where the sun is dying
+    bottom: '#3c2029', // dark earth glow below the horizon
     intensity: 1.0,
   },
 
-  /** Image-based lighting tint — warm enough for dawn, cool enough for dusk. */
+  /** Image-based lighting tint — the last warm light, over cooling ground. */
   ibl: {
-    sky: '#f3b895',
-    ground: '#76545c',
-    intensity: 0.82,
+    sky: '#d98a5c',
+    ground: '#241b26',
+    intensity: 0.62,
   },
 
-  /** The construction-paper palette. */
+  /** The dusk palette: everything a step darker and richer, the pale
+   *  things (bone, dust) left bright so they CATCH the dying light. */
   palette: {
-    sandLight: '#d9aa72',
-    sandDark: '#a8684f',
-    sun: '#ffb36f',
-    rockStrata: ['#a85638', '#c06b41', '#cf8350', '#b85a3a', '#9d4a30'],
-    boulder: ['#bd7048', '#a9603c', '#caa06a'],
-    cactus: '#6f9a5b',
-    cactusDark: '#5b8049',
-    flower: '#ec6a86',
-    tumbleweed: ['#b59257', '#9a7842', '#caa978'],
-    wood: '#875432',
-    bone: '#ece2cb',
-    agave: '#8aa86a',
-    cloud: '#f4e8d4',
-    dust: ['#d8bd92', '#c2a072', '#cdb487'],
-    bird: '#100e14', // near-black; rendered unlit so it reads as a silhouette
+    sandLight: '#a3754e',
+    sandDark: '#5e3a2c',
+    sun: '#ff7c38',
+    rockStrata: ['#6e3524', '#84422a', '#95542f', '#7a3823', '#5f2c1d'],
+    boulder: ['#7c452b', '#6b3a24', '#8a6a44'],
+    cactus: '#48663c',
+    cactusDark: '#374f2f',
+    flower: '#b04c62',
+    tumbleweed: ['#7c6339', '#69512c', '#8f774f'],
+    wood: '#5c3820',
+    bone: '#e8ddc4',
+    agave: '#5c7346',
+    cloud: '#6b4038', // underlit from the horizon, dark against the violet
+    dust: ['#8a6f4e', '#77603f', '#816d4c'],
+    bird: '#0b0a10', // near-black; rendered unlit so it reads as a silhouette
+  },
+
+  /** Early stars, thickening away from the horizon band. */
+  stars: {
+    count: 420,
+    minElevation: 0.14, // none in the orange band
+    radius: 780, // just inside the 800 sky dome
   },
 
   /** The folded-paper ground. */
   terrain: {
     seed: 23,
     size: 240, // width of the desert (meters)
-    segments: 56, // facet density
+    segments: 96, // vertex density (smooth dunes want more to roll over)
     duneHeight: 3.2,
     flatRadius: 14, // level clearing around the platforms
     platformReveal: 0.14, // lower the clearing so the platform slabs read as raised
