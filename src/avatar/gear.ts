@@ -27,7 +27,6 @@
 import { BoxGeometry, BufferGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, type Object3D, SphereGeometry, TorusGeometry } from 'three';
 import { BODY_IK } from '../config.js';
 import type { BlankTone } from './mannequin.js';
-import { collapseStatic } from '../arena/merge.js';
 
 export type GearSlot = 'head' | 'body' | 'hands';
 export const GEAR_SLOTS: readonly GearSlot[] = ['head', 'body', 'hands'];
@@ -421,7 +420,19 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     const g = build(primer(tone), side);
     g.name = 'gear';
     g.userData.gear = id;
-    collapseStatic(g);
+    // A PAINT SURFACE (avatar/paint.ts): every mesh of the piece wears its
+    // slot's canvas, so the bay can place stripes, dots and squares on it
+    // and a pauldron's twin gets the same paint. Each mesh takes its own
+    // material (the bake sets a map per mesh) and the piece is NOT
+    // collapsed — the merge would drop the UVs the paint samples by.
+    const part = slot === 'head' ? 'gearHead' : slot === 'body' ? 'gearBody' : 'gearHands';
+    g.traverse((m) => {
+      const mesh = m as Mesh;
+      if (!mesh.isMesh) return;
+      mesh.material = (mesh.material as MeshStandardMaterial).clone();
+      mesh.userData.paintPart = part;
+      mesh.userData.paintTone = tone;
+    });
     o.add(g);
   });
 }

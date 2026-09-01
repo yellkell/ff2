@@ -284,10 +284,11 @@ export class OpponentSystem extends createSystem({
     if (key === r.appliedSkins) return;
     r.appliedSkins = key;
     for (const piece of r.rig.all) applyAvatarSkin(piece, av);
+    // Their GEAR first (off the same channels; bots wear none — nobody's
+    // home), THEN the look: gear is a paint surface, so the bake must see it.
+    for (const piece of r.rig.all) applyGear(piece, cleanGear(gr), av.id === 'onyx' ? 'onyx' : 'white');
     const look = hidden ? { paint: [] } : unpackLook(wire);
     for (const piece of r.rig.all) applyLook(piece, look);
-    // Their GEAR, off the same channels (bots wear none — nobody's home).
-    for (const piece of r.rig.all) applyGear(piece, cleanGear(gr), av.id === 'onyx' ? 'onyx' : 'white');
     if (duel) {
       const pad = this.scene.getObjectByName(platformName(slot));
       if (pad) applyPlatformSkin(pad, pf);

@@ -237,11 +237,12 @@ export class PubPlayerSystem extends createSystem({}) {
    *  them bare instead; the wire string is re-validated on every bake. */
   private bakePaint(punter: RemotePunter): void {
     const hidden = paintHiddenAll() || socialPaintHidden(punter.name);
-    const look = hidden ? { paint: [] } : unpackLook(punter.lk);
-    for (const piece of punter.rig.all) applyLook(piece, look);
-    // Their GEAR bolts on alongside, primed in their own tone.
+    // Their GEAR bolts on first (primed in their own tone), then the
+    // painting bakes over body AND gear — gear is a paint surface.
     const tone = punter.av === 'onyx' ? 'onyx' : 'white';
     for (const piece of punter.rig.all) applyGear(piece, cleanGear(punter.gr), tone);
+    const look = hidden ? { paint: [] } : unpackLook(punter.lk);
+    for (const piece of punter.rig.all) applyLook(piece, look);
   }
 
   update(delta: number): void {
@@ -277,10 +278,13 @@ export class PubPlayerSystem extends createSystem({}) {
       if (pub.online) pubSendEvent({ e: 'LOOK', lk: myPackedLook(), gr: myPackedGear() });
       const myTorso = pub.refs?.root.getObjectByName('pub-fighter-torso');
       if (myTorso) {
-        applyLook(myTorso, myLook());
         applyGear(myTorso, myGear(), myTone());
+        applyLook(myTorso, myLook());
       }
-      for (const glove of this.localGloves) applyGear(glove, myGear(), myTone());
+      for (const glove of this.localGloves) {
+        applyGear(glove, myGear(), myTone());
+        applyLook(glove, myLook());
+      }
     }
     // A hide-paint flip (settings breaker or the console's PAINT switch)
     // rebakes every punter immediately.
@@ -478,6 +482,7 @@ export class PubPlayerSystem extends createSystem({}) {
       retintLocal(glove, pub.myAccent);
       applyAvatarSkin(glove, myAvatarSkin()); // your shape + custom colour walk in too
       applyGear(glove, myGear(), myTone()); // …and your knuckles
+      applyLook(glove, myLook()); // …painted
       grips[hand].add(glove);
       this.localGloves.push(glove);
     }

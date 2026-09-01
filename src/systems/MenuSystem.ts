@@ -28,7 +28,7 @@ import {
   type Intersection, CanvasTexture } from 'three';
 import { app, DEFAULT_ACCENT_HUE, DEFAULT_ACCENT_LIGHT, saveAccentHue, saveAccentLight, saveDifficulty, saveEnvironment, saveOnlyBots, saveShootBack, type AppState, type ArcadeMode } from '../menu/appState.js';
 import { bootIntroActive } from '../experience/introGate.js';
-import { DIFFICULTY_ORDER, type Difficulty } from '../config.js';
+import { DIFFICULTY_ORDER, type Difficulty, PAINT } from '../config.js';
 import { difficultyUnlocked } from '../campaign/campaignState.js';
 import {
   accentBarHue,
@@ -1007,10 +1007,7 @@ export class MenuSystem extends createSystem({}) {
       case 'open-paintbay':
         app.paintBayOpen = true;
         this.ensureMirror();
-        this.bayMeshes = [];
-        this.mirror?.group.traverse((o) => {
-          if (o.userData?.paintPart) this.bayMeshes.push(o);
-        });
+        this.collectBayMeshes();
         this.bayKey = '';
         break;
       case 'paintbay-close':
@@ -1441,7 +1438,10 @@ export class MenuSystem extends createSystem({}) {
         if (obj) applyAvatarSkin(obj, name === 'mirror-avatar' ? mirrorAv : av);
         // (the podium wears what you actually own, like your own body)
         if (obj) applyGear(obj, name === 'mirror-avatar' ? mirrorGear : gear, (name === 'mirror-avatar' ? mirrorAv : av).id === 'onyx' ? 'onyx' : 'white');
+        // Fresh gear is a fresh paint surface: bake the look onto it now.
+        if (obj) applyLook(obj, myLook());
       }
+      if (app.paintBayOpen) this.collectBayMeshes();
       const pad = this.scene.getObjectByName('player-platform');
       if (pad) applyPlatformSkin(pad, platformSkin(customization.platform));
       // A platform try-on models on the OPPONENT's pad across the gap — the
@@ -1832,6 +1832,16 @@ export class MenuSystem extends createSystem({}) {
   }
 
   /** Point the laser down the hand's ray, snap its end + dot to any hit. */
+  /** Every paint surface on the mirror — the head, the body and whatever
+   *  gear it wears — becomes a target for the bay's ray. Re-collected when
+   *  the gear changes, since a fresh piece is a fresh canvas. */
+  private collectBayMeshes(): void {
+    this.bayMeshes = [];
+    this.mirror?.group.traverse((o) => {
+      if (o.userData?.paintPart) this.bayMeshes.push(o);
+    });
+  }
+
   /** The ray is ON the blank in the paint bay: ghost/adjust/place/lift. */
   private bayBodyHit(hand: 'left' | 'right', hit: Intersection): void {
     const part = hit.object.userData.paintPart as PaintPart;
@@ -1841,15 +1851,17 @@ export class MenuSystem extends createSystem({}) {
     const gp = this.input.xr.gamepads[hand];
     const down = gp?.getButtonDown(InputComponent.Trigger) ?? false;
     if (bay.held) {
-      // THE MINUTELY: stick x twists, stick y sizes (grip → width).
+      // THE MINUTELY: stick x twists, stick y sizes — capped at
+      // PAINT.maxSize so a unit can never swallow the body (grip → width,
+      // for the stripe; dots and squares have one size).
       const axes = gp?.getAxesValues(InputComponent.Thumbstick);
       const grip = gp?.getButtonPressed(InputComponent.Squeeze) ?? false;
       if (axes) {
         const dt = 1 / 60;
         if (Math.abs(axes.x) > 0.25) bay.held.angle = (bay.held.angle + axes.x * dt * 0.25 + 1) % 1;
         if (Math.abs(axes.y) > 0.25) {
-          const k = grip ? 'wid' : 'len';
-          bay.held[k] = Math.max(0.02, Math.min(1, bay.held[k] - axes.y * dt * 0.5));
+          const k = grip && bay.held.kind === 'stripe' ? 'wid' : 'len';
+          bay.held[k] = Math.max(0.02, Math.min(PAINT.maxSize, bay.held[k] - axes.y * dt * 0.5));
         }
       }
       if (down) {

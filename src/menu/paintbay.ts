@@ -59,8 +59,10 @@ export interface BayFace {
 export function bayFace(): BayFace {
   const kind = bayFaceState.kind;
   const buttons: PanelButton[] = [
-    { id: 'pb:kind-stripe', label: 'STRIPES', x: M, y: 170, w: 300, h: 84, small: true, selected: kind === 'stripe' },
-    { id: 'pb:kind-splotch', label: 'SPLOTCHES', x: M + 324, y: 170, w: 300, h: 84, small: true, selected: kind === 'splotch' },
+    { id: 'pb:kind-stripe', label: 'STRIPES', x: M, y: 170, w: 150, h: 84, small: true, selected: kind === 'stripe' },
+    { id: 'pb:kind-splotch', label: 'SPLOTCHES', x: M + 158, y: 170, w: 150, h: 84, small: true, selected: kind === 'splotch' },
+    { id: 'pb:kind-dot', label: 'DOTS', x: M + 316, y: 170, w: 150, h: 84, small: true, selected: kind === 'dot' },
+    { id: 'pb:kind-square', label: 'SQUARES', x: M + 474, y: 170, w: 150, h: 84, small: true, selected: kind === 'square' },
     {
       id: 'pb:wallet',
       label: `$ ${coins.balance}`,
@@ -158,6 +160,8 @@ export function bayClick(id: string): boolean {
   };
   if (id === 'pb:kind-stripe') return (bayFaceState.kind = 'stripe'), done();
   if (id === 'pb:kind-splotch') return (bayFaceState.kind = 'splotch'), done();
+  if (id === 'pb:kind-dot') return (bayFaceState.kind = 'dot'), done();
+  if (id === 'pb:kind-square') return (bayFaceState.kind = 'square'), done();
   if (id === 'pb:return') return handReturn(), done();
   if (id === 'pb:wallet') return true;
   if (id.startsWith('pb:take-')) {

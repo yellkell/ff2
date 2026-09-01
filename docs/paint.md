@@ -22,6 +22,8 @@ fights, raids and rave sets all feed it):
 | --- | --- | --- |
 | **STRIPE** | A straight band of one colour | position · angle · length · width |
 | **SPLOTCH** | An organic splat of one colour (each unit rolls one of ~8 splat silhouettes when placed; re-placing re-rolls) | position · angle · scale |
+| **DOT** | A disc — the paint's atom (P5) | position · size |
+| **SQUARE** | A square, cut not sprayed (P5) | position · angle · size |
 
 - **Colour is the product.** Units are sold per colour: a rack of hues,
   cheap earth-and-primary tones first, hotter neons a tier up, and a
@@ -77,7 +79,7 @@ interface PlacedPaint {
   kind: 'stripe' | 'splotch';
   colour: number;   // index into the sold palette (not a free RGB)
   variant: number;  // splotch silhouette roll; stripes: end-cap style
-  part: 'head' | 'body' | 'gloveL' | 'gloveR';  // chest+pelvis merged
+  part: 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands';  // P5: the gear slots are surfaces
   u: number; v: number;   // anchor in that part's unwrap, quantized /255
   angle: number;          // /255 over 2π
   len: number; wid: number; // /255 over that part's allowed range
@@ -226,3 +228,16 @@ Free placement can draw things we don't want in a room:
    EMBER-and-CYAN machine", and stats.html rows wear paint chips decoded
    from the same doc field. Probed in `npm run check:paint`'s record
    stage (colour words + banner render both tones + no-banner-when-bare).
+5. **P5 — gear, dots and squares.** **SHIPPED**: every worn piece of GEAR
+   (avatar/gear.ts) is a paint surface — its slot (`gearHead` /
+   `gearBody` / `gearHands`) owns a canvas every mesh of the piece
+   wears, so painting one pauldron paints its twin, and gear is dressed
+   BEFORE the look bakes wherever a body renders (own rigs, the mirror and
+   podium, rivals, squadmates, punters, the pit). Two new kinds: DOT (a
+   disc, one size) and SQUARE (spun by the stick, cut not sprayed), sold
+   on the bay's rack beside stripes and splotches. The wire is format 3
+   (kind in two bits, part above) and still reads formats 1 and 2. Sizing
+   in the bay is capped at `PAINT.maxSize` — a sash across the chest,
+   never a whole-body fill — and the stick's x twists / y sizes every
+   kind (grip → width for the stripe only). Probed: roundtrip of dot,
+   square and a gear-surface unit; the format-2 legacy read.

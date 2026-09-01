@@ -136,10 +136,15 @@ export const PAINT = {
    * drop it to 512 if a full club's textures ever cost more than the
    * paint is worth.
    */
-  canvas: { head: 256, body: 768 } as Record<string, number>,
+  canvas: { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128 } as Record<string, number>,
   /** Unit prices in coins; racks multiply (see tierOf). A basic stripe is
-   *  two games' pay — a first paint job lands around a session of play. */
-  price: { stripe: 20, splotch: 30 },
+   *  two games' pay — a first paint job lands around a session of play.
+   *  DOTS and SQUARES are the cheap geometry — a dot is the paint's atom. */
+  price: { stripe: 20, splotch: 30, dot: 15, square: 20 },
+  /** The biggest a unit can be sized in the bay (fraction of its part's
+   *  canvas). Big enough for a sash across the chest, never a whole-body
+   *  fill — the blank's silhouette stays the picture. */
+  maxSize: 0.55,
   tierMult: [1, 2, 10], // base rack · neon rack · top shelf
   /** Rack boundaries by colour index: 0–7 base, 8–19 neon, 20+ top. */
   tierOf: (colour: number): number => (colour < 8 ? 0 : colour < 20 ? 1 : 2),

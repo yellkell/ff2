@@ -106,7 +106,10 @@ carried over verbatim: everything in it still applies to this code.
   to ~8 bytes a unit and rides the duel `iam`, the squad mesh and the club
   hello, baked once on join wherever your body renders. HIDE PAINT
   (settings, or per-punter on the club console) and REPORT PAINT are the
-  moderation backstops. THE RECORD: the look mirrors to your player doc,
+  moderation backstops. P5: every piece of GEAR is a paint surface, and
+  the rack sells DOTS and SQUARES beside stripes and splotches — sized and
+  spun with the stick as you place them, capped so nothing swallows the
+  body. THE RECORD: the look mirrors to your player doc,
   the leaderboard PROFILE card renders the painting behind your name,
   stats.html rows wear your colours as chips, and the Gasket Gazette's
   wire report names a champion's paint. Headless probes:

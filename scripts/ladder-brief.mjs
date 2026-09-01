@@ -55,9 +55,10 @@ function paintColours(wire, max = 3) {
   } catch {
     return [];
   }
-  // Wire format 1 (chest + pelvis parts) or 2 (one body) — the colour byte
-  // sits in the same place in both (docs/paint.md §3).
-  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || (bytes[0] !== 1 && bytes[0] !== 2)) return [];
+  // Wire format 1 (chest + pelvis parts), 2 (one body) or 3 (gear surfaces,
+  // dots and squares) — the colour byte sits in the same place in all three
+  // (docs/paint.md §3).
+  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || bytes[0] < 1 || bytes[0] > 3) return [];
   const tally = new Map();
   for (let o = 1; o + 8 <= bytes.length; o += 8) {
     const c = bytes[o + 1];

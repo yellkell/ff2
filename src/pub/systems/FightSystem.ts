@@ -449,8 +449,8 @@ export class FightSystem extends createSystem({}) {
     applyAvatarSkin(this.bodyRig.torso, mySkin);
     // Your painting fights with you — the crowd sees the body THEY see you in.
     // (PubPlayerSystem rebakes this by name if you repaint mid-visit.)
-    applyLook(this.bodyRig.torso, myLook());
     applyGear(this.bodyRig.torso, myGear(), myTone()); // …in your gear
+    applyLook(this.bodyRig.torso, myLook()); // …painted, gear included
     pub.refs!.root.add(this.bodyRig.torso);
     for (const platform of pub.refs!.fightPlatforms) {
       platform.traverse((node) => {
