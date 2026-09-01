@@ -4,7 +4,7 @@
  * with flat shading so they read as folded paper.
  */
 
-import { CapsuleGeometry, type Group as GroupT, Group, IcosahedronGeometry, type Material, Mesh, SphereGeometry } from 'three';
+import { CapsuleGeometry, type Group as GroupT, Group, type Material, Mesh, SphereGeometry } from 'three';
 import { CONFIG } from './config.js';
 import { makePaper, makeRng } from './paper.js';
 import { desertHeight } from './terrain.js';
@@ -15,7 +15,7 @@ const P = CONFIG.palette;
 
 /** A little squashed bloom for a growth tip. */
 function makeBloom(r: number): Mesh {
-  const bloom = new Mesh(new IcosahedronGeometry(r, 0), makePaper(P.flower, 0.9));
+  const bloom = new Mesh(new SphereGeometry(r, 12, 9), makePaper(P.flower, 0.9));
   bloom.scale.y = 0.7;
   return bloom;
 }
@@ -31,17 +31,17 @@ function makeArm(mat: Material, atHeight: number, len: number): Group {
   const r = 0.15;
   const reach = 0.42; // how far the stub leans out before turning up
 
-  const stub = new Mesh(new CapsuleGeometry(r, 0.55, 3, 7), mat);
+  const stub = new Mesh(new CapsuleGeometry(r, 0.55, 6, 14), mat);
   stub.rotation.z = Math.PI * 0.42; // lean outward, not flat
   stub.position.set(reach * 0.5, 0.16, 0);
 
-  const elbow = new Mesh(new SphereGeometry(r, 7, 5), mat);
+  const elbow = new Mesh(new SphereGeometry(r, 12, 9), mat);
   elbow.position.set(reach, 0.34, 0);
 
-  const up = new Mesh(new CapsuleGeometry(r, len, 3, 7), mat);
+  const up = new Mesh(new CapsuleGeometry(r, len, 6, 14), mat);
   up.position.set(reach, len * 0.5 + 0.34, 0);
 
-  const tip = new Mesh(new SphereGeometry(r * 0.92, 7, 5), mat);
+  const tip = new Mesh(new SphereGeometry(r * 0.92, 12, 9), mat);
   tip.position.set(reach, len + 0.34, 0);
 
   arm.add(stub, elbow, up, tip);
@@ -55,12 +55,12 @@ function makeSaguaro(rng: () => number): Group {
   const mat = makePaper(rng() < 0.5 ? P.cactus : P.cactusDark, 0.98);
   const trunkH = 2.2 + rng() * 1.8;
   const r = 0.3 + rng() * 0.06;
-  const trunk = new Mesh(new CapsuleGeometry(r, trunkH, 3, 9), mat);
+  const trunk = new Mesh(new CapsuleGeometry(r, trunkH, 6, 18), mat);
   trunk.position.y = trunkH * 0.5 + r;
   g.add(trunk);
 
   // Domed crown so the trunk reads as grown, not sawn off.
-  const crown = new Mesh(new SphereGeometry(r * 0.96, 9, 6), mat);
+  const crown = new Mesh(new SphereGeometry(r * 0.96, 14, 10), mat);
   crown.position.y = trunkH + r;
   g.add(crown);
 
@@ -87,10 +87,10 @@ function makeBarrel(rng: () => number): Group {
   const g = new Group();
   const mat = makePaper(P.cactus, 0.98);
   const h = 0.5 + rng() * 0.5;
-  const body = new Mesh(new CapsuleGeometry(0.45, h, 3, 8), mat);
+  const body = new Mesh(new CapsuleGeometry(0.45, h, 6, 16), mat);
   body.position.y = 0.45 + h * 0.3;
   g.add(body);
-  const flower = new Mesh(new IcosahedronGeometry(0.12, 0), makePaper(P.flower, 0.9));
+  const flower = new Mesh(new SphereGeometry(0.12, 10, 8), makePaper(P.flower, 0.9));
   flower.position.y = body.position.y + 0.45 + h * 0.5;
   g.add(flower);
   g.traverse((o) => (o.castShadow = true));
@@ -106,7 +106,7 @@ function makePricklyPear(rng: () => number): Group {
   let py = 0.35;
   for (let i = 0; i < pads; i++) {
     const rad = 0.35 + rng() * 0.12;
-    const pad = new Mesh(new IcosahedronGeometry(rad, 1), mat);
+    const pad = new Mesh(new SphereGeometry(rad, 14, 10), mat);
     pad.scale.set(1, 1.25, 0.32);
     pad.rotation.y = rng() * Math.PI;
     pad.rotation.z = (rng() - 0.5) * 0.6;

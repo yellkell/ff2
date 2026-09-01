@@ -11,21 +11,22 @@
  *              buzzing lamp, the broken fence, a campfire burning low, a
  *              windmill turning against the last light, telegraph poles
  *              marching off toward town. Somewhere you'd wait.
- *   THE FLATS  a match — open ground, nothing to hide behind. The skull, a
- *              dead tree throwing the longest shadow in the game, and the
- *              ribs of something enormous, half under the sand.
+ *   THE FLATS  a match — open ground, nothing to hide behind. The skull
+ *              and a dead tree throwing the longest shadow in the game.
  *   BONEYARD   the campaign and every raid — where titans are broken. A
  *              ring of standing wreck-plates around the pit, oil drums
- *              burning, RUSTHOOK's own hook buried to the shank, scrap
- *              heaped where it fell.
+ *              burning, RUSTHOOK's own hook buried to the shank.
  *
- * Only ONE site is visible at a time and each collapses to a few static
- * draws; the living bits (fire, the windmill) stay out of the merge. The
- * far layer — sky, sun, terrain, mesas — is shared and simply YAWED per
- * site (SITE_YAW), so the sun band and the skyline sit somewhere new too:
- * the lobby's dying sun hangs to your left, a match's rival stands backlit
- * against it, and a raid's titan is lit full in the face while the squad
- * has the light at its back.
+ * Every piece is a SURFACE, not a facet: rounded river stones and worn
+ * plates in the material kit's rock, rust, bark, bone and wood skins
+ * (textures.ts), with enough segments that nothing reads as paper. No
+ * litter — the brief was beautiful, not busy. Only ONE site is visible at
+ * a time and each collapses to a few static draws; the living bits (fire,
+ * the windmill) stay out of the merge. The far layer — sky, sun, terrain,
+ * mesas — is shared and simply YAWED per site (SITE_YAW), so the sun band
+ * and the skyline sit somewhere new too: the lobby's dying sun hangs to
+ * your left, a match's rival stands backlit against it, and a raid's
+ * titan is lit full in the face while the squad has the light at its back.
  */
 
 import {
@@ -34,9 +35,8 @@ import {
   BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
-  DodecahedronGeometry,
+  ExtrudeGeometry,
   Group,
-  IcosahedronGeometry,
   Mesh,
   MeshStandardMaterial,
   Object3D,
@@ -44,12 +44,16 @@ import {
   PointLight,
   Points,
   PointsMaterial,
+  Shape,
+  SphereGeometry,
+  Sprite,
   TorusGeometry,
 } from 'three';
 import { CONFIG } from './config.js';
-import { makePaper, makePaperDouble, makeRng } from './paper.js';
+import { makePaperDouble, makeRng } from './paper.js';
 import { desertHeight } from './terrain.js';
 import { fence, signpost, skull } from './props.js';
+import { barkMat, rockMat, rustMat, softSprite, woodMat } from './textures.js';
 import { collapseStatic } from '../merge.js';
 
 export type DesertSite = 'trailhead' | 'flats' | 'boneyard';
@@ -80,15 +84,12 @@ function groundAt(x: number, z: number, yaw: number): number {
   return desertHeight(x * c - z * s, x * s + z * c);
 }
 
-function rustMat(hex: number, rough = 0.62): MeshStandardMaterial {
-  return new MeshStandardMaterial({ color: hex, roughness: rough, metalness: 0.55, envMapIntensity: 0.5 });
-}
-
-/* ── fire: crossed emissive planes + rising embers + a flickering light ── */
+/* ── fire: crossed emissive tongues, a glow, embers, a guttering light ── */
 
 interface Flame {
   group: Group;
   planes: Mesh[];
+  glow: Sprite;
   light: PointLight | null;
   embers: Points;
   emberVel: Float32Array;
@@ -96,9 +97,10 @@ interface Flame {
   seed: number;
 }
 
-/** A small fire: three crossed tongues that breathe and lean, a spray of
- *  embers climbing out of it, and (optionally — lights are the one thing
- *  we ration) a warm point light that gutters with the flame. */
+/** A small fire: three crossed tongues that breathe and lean under a soft
+ *  glow sprite, a spray of embers climbing out of it, and (optionally —
+ *  lights are the one thing we ration) a warm point light that gutters
+ *  with the flame. */
 function makeFlame(scale: number, lit: boolean, seed: number): Flame {
   const group = new Group();
   const planes: Mesh[] = [];
@@ -111,6 +113,10 @@ function makeFlame(scale: number, lit: boolean, seed: number): Flame {
     group.add(m);
     planes.push(m);
   }
+  const glow = new Sprite(softSprite('#ff8a2a', 0.55));
+  glow.scale.set(1.6 * scale, 1.6 * scale, 1);
+  glow.position.y = 0.45 * scale;
+  group.add(glow);
   const n = 26;
   const pos = new Float32Array(n * 3);
   const vel = new Float32Array(n);
@@ -134,7 +140,7 @@ function makeFlame(scale: number, lit: boolean, seed: number): Flame {
     light.position.y = 0.6 * scale;
     group.add(light);
   }
-  return { group, planes, light, embers, emberVel: vel, base: scale, seed };
+  return { group, planes, glow, light, embers, emberVel: vel, base: scale, seed };
 }
 
 function tickFlame(f: Flame, delta: number, time: number): void {
@@ -144,7 +150,9 @@ function tickFlame(f: Flame, delta: number, time: number): void {
     p.scale.set(f.base * (1 - i * 0.18) * (1.05 - (k - 1) * 0.6), f.base * (1 - i * 0.18) * k, 1);
     p.rotation.z = Math.sin(t * 0.6 + i * 1.3) * 0.12;
   });
-  if (f.light) f.light.intensity = 6 * f.base * (0.85 + Math.sin(t * 1.3) * 0.08 + Math.sin(t * 3.1) * 0.07);
+  const gutter = 0.85 + Math.sin(t * 1.3) * 0.08 + Math.sin(t * 3.1) * 0.07;
+  if (f.light) f.light.intensity = 6 * f.base * gutter;
+  f.glow.material.opacity = 0.55 * gutter;
   const pos = f.embers.geometry.attributes.position as BufferAttribute;
   const arr = pos.array as Float32Array;
   const top = 1.7 * f.base;
@@ -160,31 +168,57 @@ function tickFlame(f: Flame, delta: number, time: number): void {
   pos.needsUpdate = true;
 }
 
+/* ── shared pieces ─────────────────────────────────────────────────────── */
+
+/** A rounded river stone: a fine sphere squashed and spun, in rock. */
+function stone(rng: () => number, mat: MeshStandardMaterial, r: number): Mesh {
+  const s = new Mesh(new SphereGeometry(r, 16, 12), mat);
+  s.scale.set(1 + (rng() - 0.5) * 0.4, 0.62 + rng() * 0.2, 0.85 + (rng() - 0.5) * 0.3);
+  s.rotation.set(rng() * 0.6, rng() * Math.PI * 2, rng() * 0.4);
+  return s;
+}
+
+/** A worn iron plate with a bevelled, softened edge (never a razor box). */
+function plateGeometry(w: number, h: number, t: number): ExtrudeGeometry {
+  const r = Math.min(0.12, w * 0.2, h * 0.2);
+  const s = new Shape();
+  s.moveTo(-w / 2 + r, -h / 2);
+  s.lineTo(w / 2 - r, -h / 2);
+  s.quadraticCurveTo(w / 2, -h / 2, w / 2, -h / 2 + r);
+  s.lineTo(w / 2, h / 2 - r);
+  s.quadraticCurveTo(w / 2, h / 2, w / 2 - r, h / 2);
+  s.lineTo(-w / 2 + r, h / 2);
+  s.quadraticCurveTo(-w / 2, h / 2, -w / 2, h / 2 - r);
+  s.lineTo(-w / 2, -h / 2 + r);
+  s.quadraticCurveTo(-w / 2, -h / 2, -w / 2 + r, -h / 2);
+  const geo = new ExtrudeGeometry(s, { depth: t, bevelEnabled: true, bevelThickness: 0.035, bevelSize: 0.035, bevelSegments: 3 });
+  geo.translate(0, 0, -t / 2);
+  return geo;
+}
+
 /* ── TRAILHEAD ─────────────────────────────────────────────────────────── */
 
 /** A stone-ringed campfire: the lobby's hearth. */
 function campfire(rng: () => number): { group: Group; flame: Flame } {
   const g = new Group();
-  const stone = makePaper('#5a4a3f', 0.95);
+  const rock = rockMat('#7a6a5c', { repeat: [2, 1], bumpScale: 0.03 });
   for (let i = 0; i < 9; i++) {
     const a = (i / 9) * Math.PI * 2 + rng() * 0.3;
     const r = 0.55 + rng() * 0.08;
-    const s = new Mesh(new DodecahedronGeometry(0.11 + rng() * 0.05, 0), stone);
-    s.position.set(Math.cos(a) * r, 0.07, Math.sin(a) * r);
-    s.rotation.set(rng() * 3, rng() * 3, 0);
-    s.scale.y = 0.75;
+    const s = stone(rng, rock, 0.11 + rng() * 0.05);
+    s.position.set(Math.cos(a) * r, 0.06, Math.sin(a) * r);
     g.add(s);
   }
-  const wood = makePaper('#2a1a10', 0.9);
+  const wood = barkMat('#4a3020', { repeat: [2, 1] });
   for (let i = 0; i < 4; i++) {
-    const log = new Mesh(new CylinderGeometry(0.05, 0.06, 0.7, 6), wood);
+    const log = new Mesh(new CylinderGeometry(0.05, 0.06, 0.7, 12), wood);
     log.rotation.z = Math.PI / 2 - 0.5;
     log.rotation.y = (i / 4) * Math.PI * 2;
     log.position.set(0, 0.14, 0);
     g.add(log);
   }
   // Char + ember glow in the centre: an emissive disc under the flame.
-  const bed = new Mesh(new CylinderGeometry(0.3, 0.34, 0.04, 10), makePaperDouble('#ff5a1a', 1.1));
+  const bed = new Mesh(new CylinderGeometry(0.3, 0.34, 0.04, 24), makePaperDouble('#ff5a1a', 1.1));
   bed.position.y = 0.06;
   g.add(bed);
   const flame = makeFlame(0.8, true, 3.1);
@@ -196,12 +230,12 @@ function campfire(rng: () => number): { group: Group; flame: Flame } {
 /** An Aermotor-style windmill on a lattice tower, the fan free to spin. */
 function windmill(): { group: Group; fan: Group } {
   const g = new Group();
-  const steel = rustMat(0x5a4a3c, 0.7);
+  const steel = rustMat(0x6a5a4c, { roughness: 0.7 });
   const H = 9;
   // Four splayed legs + three rings of cross bracing.
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    const leg = new Mesh(new CylinderGeometry(0.05, 0.07, H, 5), steel);
+    const leg = new Mesh(new CylinderGeometry(0.05, 0.07, H, 8), steel);
     leg.position.set(Math.cos(a) * 0.65, H / 2, Math.sin(a) * 0.65);
     leg.lookAt(Math.cos(a) * 0.2, H, Math.sin(a) * 0.2);
     leg.rotateX(Math.PI / 2);
@@ -223,11 +257,11 @@ function windmill(): { group: Group; fan: Group } {
   g.add(deck);
   const fan = new Group();
   fan.position.set(0, H + 0.7, 0.55);
-  const hub = new Mesh(new CylinderGeometry(0.14, 0.14, 0.2, 10), steel);
+  const hub = new Mesh(new CylinderGeometry(0.14, 0.14, 0.2, 16), steel);
   hub.rotation.x = Math.PI / 2;
   fan.add(hub);
-  const bladeMat = makePaper('#8a7a68', 0.85);
-  const rim = new Mesh(new TorusGeometry(1.35, 0.025, 5, 28), steel);
+  const bladeMat = rustMat('#a89888', { roughness: 0.6 });
+  const rim = new Mesh(new TorusGeometry(1.35, 0.025, 8, 48), steel);
   fan.add(rim);
   for (let i = 0; i < 14; i++) {
     const b = new Mesh(new BoxGeometry(0.28, 1.15, 0.015), bladeMat);
@@ -253,10 +287,10 @@ function windmill(): { group: Group; fan: Group } {
 /** Telegraph poles marching off along a line — the road to town. */
 function telegraphLine(n: number): Group {
   const g = new Group();
-  const wood = makePaper(P.wood, 0.98);
+  const wood = woodMat(P.wood, { repeat: [1, 6] });
   for (let i = 0; i < n; i++) {
     const pole = new Group();
-    const post = new Mesh(new CylinderGeometry(0.09, 0.12, 6.2, 6), wood);
+    const post = new Mesh(new CylinderGeometry(0.09, 0.12, 6.2, 12), wood);
     post.position.y = 3.1;
     const arm = new Mesh(new BoxGeometry(1.4, 0.1, 0.1), wood);
     arm.position.y = 5.7;
@@ -275,14 +309,14 @@ function telegraphLine(n: number): Group {
  *  trailhead besides the fire. Its light is the sign's, so it's real. */
 function signLamp(): { group: Group; light: PointLight; bulb: Mesh } {
   const g = new Group();
-  const steel = rustMat(0x3c3430, 0.75);
-  const arm = new Mesh(new CylinderGeometry(0.025, 0.025, 0.9, 6), steel);
+  const steel = rustMat(0x4c4440, { roughness: 0.75 });
+  const arm = new Mesh(new CylinderGeometry(0.025, 0.025, 0.9, 10), steel);
   arm.rotation.z = Math.PI / 2 - 0.35;
   arm.position.set(0.3, 2.45, -0.02);
-  const hood = new Mesh(new ConeGeometry(0.22, 0.16, 12, 1, true), steel);
+  const hood = new Mesh(new ConeGeometry(0.22, 0.16, 20, 1, true), steel);
   hood.position.set(0.75, 2.6, 0);
   hood.rotation.x = Math.PI; // mouth down
-  const bulb = new Mesh(new IcosahedronGeometry(0.05, 1), makePaperDouble('#ffd9a0', 3.2));
+  const bulb = new Mesh(new SphereGeometry(0.05, 12, 9), makePaperDouble('#ffd9a0', 3.2));
   bulb.position.set(0.75, 2.52, 0);
   const light = new PointLight(0xffc27a, 4.5, 5.5, 2);
   light.position.set(0.75, 2.45, 0);
@@ -312,17 +346,6 @@ function buildTrailhead(yaw: number): SiteSet {
   // arc and the podium, close enough to warm the TOWN board's side.
   const fire = campfire(rng);
   place(fire.group, -4.6, -3.4, 0, root);
-  // A second, dead fire ring further out — someone was here before you.
-  const old = new Group();
-  const stone = makePaper('#4d4038', 0.95);
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const s = new Mesh(new DodecahedronGeometry(0.1, 0), stone);
-    s.position.set(Math.cos(a) * 0.5, 0.06, Math.sin(a) * 0.5);
-    s.scale.y = 0.7;
-    old.add(s);
-  }
-  place(old, 6.5, 7.5, 0);
   // The windmill against the sun band (left-front once the far layer
   // turns), and the poles heading off the other way, toward town.
   const mill = windmill();
@@ -350,9 +373,9 @@ function buildTrailhead(yaw: number): SiteSet {
 /** A dead tree: a leaning trunk forking into bare branches. */
 function deadTree(rng: () => number): Group {
   const g = new Group();
-  const bark = makePaper('#3a2a1e', 0.98);
+  const bark = barkMat('#5a4030', { repeat: [1, 3] });
   const branch = (parent: Object3D, len: number, r: number, depth: number): void => {
-    const m = new Mesh(new CylinderGeometry(r * 0.55, r, len, 6), bark);
+    const m = new Mesh(new CylinderGeometry(r * 0.55, r, len, 12), bark);
     m.position.y = len / 2;
     const holder = new Group();
     holder.add(m);
@@ -373,28 +396,6 @@ function deadTree(rng: () => number): Group {
   return g;
 }
 
-/** The ribs of something enormous, half under the sand. */
-function titanRibs(rng: () => number): Group {
-  const g = new Group();
-  const bone = makePaper(P.bone, 0.6);
-  bone.envMapIntensity = 0.9; // bleached bone catches the light
-  const n = 6;
-  for (let i = 0; i < n; i++) {
-    const r = 2.6 - i * 0.22;
-    const rib = new Mesh(new TorusGeometry(r, 0.11 - i * 0.008, 6, 22, Math.PI * 0.62), bone);
-    rib.position.set(0, -0.35, i * 0.75);
-    rib.rotation.set(0, Math.PI / 2, Math.PI * 0.2 + (rng() - 0.5) * 0.1);
-    g.add(rib);
-  }
-  // The spine they hang from.
-  const spine = new Mesh(new CylinderGeometry(0.16, 0.2, n * 0.75 + 0.8, 8), bone);
-  spine.rotation.x = Math.PI / 2;
-  spine.position.set(0, 1.9, (n * 0.75) / 2 - 0.4);
-  g.add(spine);
-  g.traverse((o) => (o.castShadow = true));
-  return g;
-}
-
 function buildFlats(yaw: number): SiteSet {
   const root = new Group();
   root.name = 'site-flats';
@@ -408,17 +409,11 @@ function buildFlats(yaw: number): SiteSet {
   };
   place(skull(), -6.8, -1.6, 0.8);
   place(deadTree(rng), 7.6, 2.4, 0.3);
-  place(titanRibs(rng), -10.5, -9.5, 0.9);
-  // A few bleached long bones scattered toward the ribs.
-  const bone = makePaper(P.bone, 0.7);
-  for (let i = 0; i < 4; i++) {
-    const b = new Mesh(new CylinderGeometry(0.06, 0.08, 1.1 + rng() * 0.6, 6), bone);
-    const x = -6 - rng() * 4;
-    const z = -4 - rng() * 5;
-    b.position.set(x, groundAt(x, z, yaw) + 0.05, z);
-    b.rotation.set(Math.PI / 2, 0, rng() * Math.PI);
-    statics.add(b);
-  }
+  // A second, smaller tree far out on the other side: the flats' only
+  // verticals, and the longest shadows in the game.
+  const far = deadTree(rng);
+  far.scale.setScalar(0.7);
+  place(far, -14, -11, 1.9);
   collapseStatic(statics);
   root.add(statics);
   return { root, update: () => {} };
@@ -426,34 +421,36 @@ function buildFlats(yaw: number): SiteSet {
 
 /* ── BONEYARD ──────────────────────────────────────────────────────────── */
 
-/** A standing wreck-plate: a rusted titan panel driven into the sand. */
+/** A standing wreck-plate: a bevelled titan panel driven into the sand,
+ *  one rib of structure still on its face. */
 function wreckPlate(rng: () => number, mat: MeshStandardMaterial): Group {
   const g = new Group();
   const h = 3.4 + rng() * 2.6;
   const w = 1.4 + rng() * 1.2;
-  const plate = new Mesh(new BoxGeometry(w, h, 0.18), mat);
+  const plate = new Mesh(plateGeometry(w, h, 0.18), mat);
   plate.position.y = h / 2 - 0.4;
   plate.rotation.set((rng() - 0.5) * 0.3, 0, (rng() - 0.5) * 0.25);
   g.add(plate);
-  // A rib of structure showing on one face.
-  const rib = new Mesh(new BoxGeometry(0.12, h * 0.8, 0.1), mat);
+  const rib = new Mesh(plateGeometry(0.14, h * 0.8, 0.1), mat);
   rib.position.set((rng() - 0.5) * w * 0.6, h / 2 - 0.4, 0.14);
   rib.rotation.copy(plate.rotation);
   g.add(rib);
+  g.traverse((o) => (o.castShadow = true));
   return g;
 }
 
 /** An oil drum with a fire in it. */
 function burningDrum(lit: boolean, seed: number): { group: Group; flame: Flame } {
   const g = new Group();
-  const drum = new Mesh(new CylinderGeometry(0.3, 0.3, 0.9, 12, 1, true), rustMat(0x4a2e22, 0.8));
+  const drum = new Mesh(new CylinderGeometry(0.3, 0.3, 0.9, 28, 1, true), rustMat(0x5a3a2c, { roughness: 0.8, repeat: [3, 1] }));
   drum.position.y = 0.45;
   g.add(drum);
+  const band = rustMat(0x3a2820, { roughness: 0.85 });
   for (const y of [0.15, 0.75]) {
-    const band = new Mesh(new TorusGeometry(0.31, 0.02, 5, 16), rustMat(0x2e1d16, 0.85));
-    band.rotation.x = Math.PI / 2;
-    band.position.y = y;
-    g.add(band);
+    const ring = new Mesh(new TorusGeometry(0.31, 0.02, 8, 28), band);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = y;
+    g.add(ring);
   }
   const flame = makeFlame(0.6, lit, seed);
   flame.group.position.y = 0.75;
@@ -464,38 +461,19 @@ function burningDrum(lit: boolean, seed: number): { group: Group; flame: Flame }
 /** RUSTHOOK's hook, buried to the shank — the boneyard's monument. */
 function buriedHook(): Group {
   const g = new Group();
-  const mat = rustMat(0x4a3b2b, 0.66);
-  const bend = new Mesh(new TorusGeometry(1.7, 0.28, 8, 24, Math.PI * 1.15), mat);
+  const mat = rustMat(0x5a4736, { roughness: 0.66, repeat: [4, 1] });
+  const bend = new Mesh(new TorusGeometry(1.7, 0.28, 14, 56, Math.PI * 1.15), mat);
   bend.rotation.set(0, 0, -0.3);
   bend.position.y = 0.6;
   g.add(bend);
-  const shank = new Mesh(new CylinderGeometry(0.26, 0.3, 3.2, 10), mat);
+  const shank = new Mesh(new CylinderGeometry(0.26, 0.3, 3.2, 18), mat);
   shank.position.set(1.7, -0.6, 0);
   shank.rotation.z = -0.3;
   g.add(shank);
-  const tip = new Mesh(new ConeGeometry(0.28, 0.9, 10), mat);
+  const tip = new Mesh(new ConeGeometry(0.28, 0.9, 18), mat);
   tip.position.set(-1.05, 1.95, 0);
   tip.rotation.z = -1.2;
   g.add(tip);
-  g.traverse((o) => (o.castShadow = true));
-  return g;
-}
-
-/** A heap of scrap: plates and struts thrown together. */
-function scrapHeap(rng: () => number, mat: MeshStandardMaterial, n: number): Group {
-  const g = new Group();
-  for (let i = 0; i < n; i++) {
-    const long = rng() < 0.4;
-    const m = new Mesh(
-      long ? new BoxGeometry(0.12, 0.12, 1.2 + rng() * 1.2) : new BoxGeometry(0.6 + rng() * 0.8, 0.08, 0.5 + rng() * 0.7),
-      mat,
-    );
-    const a = rng() * Math.PI * 2;
-    const r = rng() * 1.3;
-    m.position.set(Math.cos(a) * r, 0.05 + rng() * 0.6, Math.sin(a) * r);
-    m.rotation.set((rng() - 0.5) * 0.9, rng() * Math.PI, (rng() - 0.5) * 0.9);
-    g.add(m);
-  }
   g.traverse((o) => (o.castShadow = true));
   return g;
 }
@@ -515,7 +493,11 @@ function buildBoneyard(yaw: number): SiteSet {
   // the pit pad at (0, −6) two-and-a-half metres across — nothing inside
   // ten metres of the origin or six of the pit, and the front (+z) stays
   // open so the lobby-to-fight cut never puts a wall at your back.
-  const plates = [rustMat(0x4a3b2b), rustMat(0x33373f), rustMat(0x342e40, 0.7)];
+  const plates = [
+    rustMat(0x5a4736, { roughness: 0.62 }),
+    rustMat(0x474b55, { roughness: 0.6 }),
+    rustMat(0x4a4256, { roughness: 0.7 }),
+  ];
   const ring = 12.5;
   for (let i = 0; i < 9; i++) {
     const a = Math.PI + (i / 8 - 0.5) * Math.PI * 1.25; // the back arc, −z
@@ -525,9 +507,6 @@ function buildBoneyard(yaw: number): SiteSet {
     place(wreckPlate(rng, plates[i % plates.length]), x, z, -a + (rng() - 0.5) * 0.5);
   }
   place(buriedHook(), -13.5, -13, 0.6);
-  place(scrapHeap(rng, plates[0], 14), 11.5, -7, 0);
-  place(scrapHeap(rng, plates[1], 10), -11, 4.5, 1.2);
-  place(scrapHeap(rng, plates[2], 8), 9.5, 7.5, 0.4);
   // Drums: two LIT (the light budget), two just burning.
   const drums = [
     burningDrum(true, 1.7),

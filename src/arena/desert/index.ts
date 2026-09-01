@@ -65,15 +65,20 @@ export interface Desert {
   update(delta: number, time: number): void;
 }
 
-/** A big inward-facing gradient sky sphere — top → horizon → sandy ground. */
-function makeSkyDome(): Mesh {
+/** A big inward-facing gradient sky sphere. The blood-orange band lives
+ *  on ONE horizon — under the dying sun — and thins and cools to a dusty
+ *  mauve as you turn away from it, so the sky has a direction and the
+ *  night is already arriving behind you. */
+function makeSkyDome(sunDir: Vector3): Mesh {
   const mat = new ShaderMaterial({
     side: BackSide,
     depthWrite: false,
     uniforms: {
       top: { value: new Color(CONFIG.sky.top) },
       horizon: { value: new Color(CONFIG.sky.horizon) },
+      dusk: { value: new Color(CONFIG.sky.dusk) },
       bottom: { value: new Color(CONFIG.sky.bottom) },
+      sun: { value: sunDir.clone() },
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
@@ -83,13 +88,19 @@ function makeSkyDome(): Mesh {
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform vec3 top, horizon, bottom;
+      uniform vec3 top, horizon, dusk, bottom, sun;
       varying vec3 vDir;
       void main() {
         float h = vDir.y;
+        // How squarely this heading faces the dying sun: 1 under it, 0 behind you.
+        float toward = 0.5 + 0.5 * dot(normalize(vec3(vDir.x, 0.0, vDir.z)), normalize(vec3(sun.x, 0.0, sun.z)));
+        float t = pow(toward, 2.4);
+        vec3 band = mix(dusk, horizon, t);
+        // The band is tall and hot under the sun, low and cool away from it.
+        float reach = 0.16 + 0.32 * t;
         vec3 c = h > 0.0
-          ? mix(horizon, top, smoothstep(0.0, 0.45, h))
-          : mix(horizon, bottom, smoothstep(0.0, -0.35, h));
+          ? mix(band, top, smoothstep(0.0, reach, h))
+          : mix(band, bottom, smoothstep(0.0, -0.35, h));
         gl_FragColor = vec4(c, 1.0);
       }
     `,
@@ -243,12 +254,12 @@ export function buildDesert(): Desert {
   far.name = 'desert-far';
   root.add(far);
 
-  far.add(makeSkyDome());
-  far.add(makeStars());
-
   // A low warm sun — ambiguous sunrise/sunset, with long readable shadows.
   const e = CONFIG.mood.sunElevation * (Math.PI / 2);
   const sunDir = new Vector3(0.35 * Math.cos(e), Math.sin(e), -0.94 * Math.cos(e)).normalize();
+
+  far.add(makeSkyDome(sunDir));
+  far.add(makeStars());
 
   // The dying sun: deeper, lower, still the longest shadows in the game.
   const sun = new DirectionalLight(new Color('#ff8d4e'), 1.5);

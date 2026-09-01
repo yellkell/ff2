@@ -5,9 +5,10 @@
  * belong to the trailhead, the skull to the flats.
  */
 
-import { BoxGeometry, CanvasTexture, ConeGeometry, CylinderGeometry, Group, IcosahedronGeometry, Mesh, MeshStandardMaterial } from 'three';
+import { BoxGeometry, CanvasTexture, ConeGeometry, CylinderGeometry, Group, Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
 import { CONFIG } from './config.js';
 import { makePaper } from './paper.js';
+import { boneMat, woodMat } from './textures.js';
 
 const P = CONFIG.palette;
 
@@ -126,7 +127,7 @@ function gasketSignTexture(): CanvasTexture {
 
 export function signpost(): Group {
   const g = new Group();
-  const wood = makePaper(P.wood, 0.98);
+  const wood = woodMat(P.wood, { repeat: [1, 3] });
   // The post stands BEHIND the board (negative z) so it never crosses the
   // painted face — it used to sit in front and hide the first letters.
   const post = new Mesh(new BoxGeometry(0.14, 2.2, 0.14), wood);
@@ -145,23 +146,24 @@ export function signpost(): Group {
 
 export function skull(): Group {
   const g = new Group();
-  // Bleached bone is the one glossy thing on the flats: it GLINTS.
-  const bone = makePaper(P.bone, 0.55);
-  bone.envMapIntensity = 0.9;
-  const cranium = new Mesh(new IcosahedronGeometry(0.28, 0), bone);
+  // Bleached bone is the one glossy thing on the flats: it GLINTS — smooth
+  // domes in a pored bone skin, no facet to be seen.
+  const bone = boneMat(P.bone);
+  const cranium = new Mesh(new SphereGeometry(0.28, 22, 16), bone);
   cranium.scale.set(1, 0.8, 1.1);
   cranium.position.y = 0.24;
-  const snout = new Mesh(new BoxGeometry(0.22, 0.18, 0.3), bone);
-  snout.position.set(0, 0.16, 0.28);
+  const snout = new Mesh(new SphereGeometry(0.17, 18, 12), bone);
+  snout.scale.set(0.72, 0.55, 1.15);
+  snout.position.set(0, 0.16, 0.3);
   g.add(cranium, snout);
   for (const side of [-1, 1]) {
-    const horn = new Mesh(new ConeGeometry(0.06, 0.5, 6), bone);
+    const horn = new Mesh(new ConeGeometry(0.06, 0.5, 14), bone);
     horn.position.set(side * 0.28, 0.34, -0.05);
     horn.rotation.z = side * 1.2;
     g.add(horn);
   }
   for (const side of [-1, 1]) {
-    const socket = new Mesh(new IcosahedronGeometry(0.07, 0), makePaper('#3a2c1d', 1));
+    const socket = new Mesh(new SphereGeometry(0.07, 12, 9), makePaper('#3a2c1d', 1));
     socket.position.set(side * 0.12, 0.26, 0.22);
     g.add(socket);
   }
@@ -171,10 +173,10 @@ export function skull(): Group {
 
 export function fence(): Group {
   const g = new Group();
-  const wood = makePaper(P.wood, 0.98);
+  const wood = woodMat(P.wood, { repeat: [1, 3] });
   const n = 5;
   for (let i = 0; i < n; i++) {
-    const post = new Mesh(new CylinderGeometry(0.07, 0.08, 1.3, 6), wood);
+    const post = new Mesh(new CylinderGeometry(0.07, 0.08, 1.3, 12), wood);
     post.position.set(i * 1.3, 0.55 - (i === 2 ? 0.3 : 0), 0);
     post.rotation.z = i === 2 ? 0.4 : (Math.random() - 0.5) * 0.08;
     g.add(post);

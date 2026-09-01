@@ -396,12 +396,13 @@ of GASKET: the signpost under its own buzzing hooded lamp, the broken
 fence, a campfire burning low on the TOWN board's side, a windmill turning
 against the last light, telegraph poles marching off toward town. **THE
 FLATS** are every match and Aim Training — open ground: the skull (now
-glinting), a dead tree throwing the longest shadow in the game, the ribs
-of something enormous half under the sand. **THE BONEYARD** is every
-campaign fight and every raid — where titans are broken: a ring of
-standing wreck-plates around the pit, oil drums burning (two lit — the
-light budget), RUSTHOOK's own hook buried to the shank, scrap heaped
-where it fell — all of it clear of the five-seat arc. Only one site is
+glinting) and two dead trees throwing the longest shadows in the game.
+**THE BONEYARD** is every campaign fight and every raid — where titans
+are broken: a ring of standing bevelled wreck-plates around the pit, oil
+drums burning (two lit — the light budget), RUSTHOOK's own hook buried
+to the shank — all of it clear of the five-seat arc. No litter anywhere:
+the brief was beautiful, not busy, and the first cut's scrap heaps,
+loose bones and rib cages were pulled the moment they read as debris. Only one site is
 visible at a time and each collapses to a few static draws; the far layer
 (sky, sun, ground, mesas, weather) is shared and simply YAWED per site, so
 the skyline sits somewhere new too: the lobby's sun hangs to your left, a
@@ -412,7 +413,19 @@ octaves of radial noise, ledges where a stratum held, the bands baked into
 vertex colour and merged to one draw — the static merge learned to keep
 `color`), a heat-haze band swims along the horizon (one additive draw,
 no render target), dust motes hang in the arena's light cone, and bone
-catches the light. Preview: `env-preview.html?env=desert&site=…`;
+catches the light. **Papercraft is OUT, as the brief demanded** — and not
+by adding polygons alone: `arena/desert/textures.ts` is the material
+kit, six procedural canvas skins (rippled sand, strata rock, oxidised
+iron, dead bark, cured plank, pored bone), each a tint-neutral colour map
+plus a bump map cut from the same seeded noise, so every surface carries
+grain the low light rakes across for one texture fetch and no extra
+draws. The ground wears the sand skin under its dune colour; boulders are
+noise-displaced spheres in rock, smooth-shaded; clouds are layered soft
+sprites instead of faceted blobs; the skull is domes, not an icosahedron;
+cacti and agave carry the segments to read as flesh; and the sky dome
+finally has a DIRECTION — the blood-orange band is tall and hot under the
+dying sun and thins to a dusty mauve behind you, so the night is already
+arriving on one side. Preview: `env-preview.html?env=desert&site=…`;
 headless: `npm run check:desert` (add `--shots`).
 
 ### 6.2 The bar

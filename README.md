@@ -54,12 +54,18 @@ carried over verbatim: everything in it still applies to this code.
   `--shots`; it also asserts seven distinct silhouettes).
 - **THE SITES** — one desert, three places (DESIGN.md §6.1): the lobby
   waits at THE TRAILHEAD (the GASKET sign under its lamp, a campfire, a
-  windmill on the sun band), matches box on THE FLATS (the skull, a dead
-  tree, titan ribs in the sand), and every campaign fight and raid stands
-  in THE BONEYARD (a ring of wreck-plates and burning drums round the pit,
-  RUSTHOOK's hook buried to the shank). The far layer turns with the site
-  so the skyline moves too. With it, Desert 2.0's second pass: wind-carved
-  vertex-coloured mesas, a horizon heat-haze, dust in the arena light.
+  windmill on the sun band), matches box on THE FLATS (the skull, two dead
+  trees), and every campaign fight and raid stands in THE BONEYARD (a ring
+  of wreck-plates and burning drums round the pit, RUSTHOOK's hook buried
+  to the shank). The far layer turns with the site so the skyline moves
+  too. With it, Desert 2.0's second pass — and the END of papercraft:
+  `src/arena/desert/textures.ts` is a kit of six procedural skins (sand,
+  rock, rust, bark, wood, bone; colour + bump from one seeded noise) worn
+  by rippled dunes, smooth wind-carved mesas and boulders, bevelled iron,
+  a real skull; clouds are soft sprites, the sky band lives on ONE horizon
+  and cools to mauve behind you, a heat-haze swims at the ground line and
+  dust hangs in the arena light. No litter: nothing on the sand that
+  reads as debris.
   Preview: `/env-preview.html?env=desert&site=trailhead|flats|boneyard`;
   probe: `npm run check:desert` (add `--shots`).
 - **THE STAGE DECK** — the diamond-plate pedestals retired: fighting

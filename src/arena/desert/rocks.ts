@@ -9,6 +9,7 @@
  */
 
 import {
+  type BufferGeometry,
   Color,
   CylinderGeometry,
   Float32BufferAttribute,
@@ -20,7 +21,8 @@ import {
   Object3D,
 } from 'three';
 import { CONFIG } from './config.js';
-import { makePaper, makeRng, valueNoise2D } from './paper.js';
+import { makeRng, valueNoise2D } from './paper.js';
+import { rockMat } from './textures.js';
 import { desertHeight } from './terrain.js';
 import { collapseStatic } from '../merge.js';
 
@@ -35,18 +37,44 @@ function trs(x: number, y: number, z: number, sx: number, sy: number, sz: number
   return dummy.matrix;
 }
 
-/** Faceted boulders strewn across the dunes. */
+/** A rounded, wind-worn boulder: a fine sphere pushed in and out by two
+ *  octaves of noise, smooth normals — no facet anywhere. One geometry
+ *  serves every instance; scale and spin hide the repeat. */
+function boulderGeometry(rng: () => number): BufferGeometry {
+  const geo = new IcosahedronGeometry(1, 3);
+  const noise = valueNoise2D(rng, 8);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const u = Math.atan2(z, x) / (Math.PI * 2) + 0.5;
+    const v = y * 0.5 + 0.5;
+    const d = 1 + (noise(u * 4, v * 4) - 0.5) * 0.42 + (noise(u * 12, v * 12) - 0.5) * 0.1;
+    pos.setXYZ(i, x * d, y * d * 0.85, z * d);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Boulders strewn across the dunes, smooth and skinned in strata rock. */
 export function buildBoulders(parent: GroupT): void {
   const rng = makeRng(CONFIG.terrain.seed * 7 + 1);
   const n = CONFIG.rocks.boulders;
   const half = CONFIG.terrain.size / 2 - 6;
   const cols = P.boulder.map((c) => new Color(c));
-  const mesh = new InstancedMesh(new IcosahedronGeometry(1, 0), makePaper('#ffffff', 0.98), n);
+  const mesh = new InstancedMesh(boulderGeometry(rng), rockMat('#ffffff', { repeat: [1, 1], bumpScale: 0.04 }), n);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   for (let i = 0; i < n; i++) {
-    const x = (rng() * 2 - 1) * half;
-    const z = (rng() * 2 - 1) * half;
+    // Never inside the clearing: a boulder at your elbow reads as litter.
+    let x = 0;
+    let z = 0;
+    do {
+      x = (rng() * 2 - 1) * half;
+      z = (rng() * 2 - 1) * half;
+    } while (Math.hypot(x, z) < 18);
     const s = 0.4 + rng() * rng() * 2.2;
     const y = desertHeight(x, z) + s * 0.45;
     mesh.setMatrixAt(i, trs(x, y, z, s, s * (0.7 + rng() * 0.4), s, rng() * Math.PI));
@@ -59,8 +87,9 @@ export function buildBoulders(parent: GroupT): void {
 
 /** One mesa material for the whole ring — the colour lives in the
  *  vertices, so every mesa merges into a single draw. */
-const MESA_MAT = ((): ReturnType<typeof makePaper> => {
-  const m = makePaper('#ffffff', 0.96);
+const MESA_MAT = ((): ReturnType<typeof rockMat> => {
+  // Strata in the vertex colour, grain + bump from the rock skin on top.
+  const m = rockMat('#ffffff', { repeat: [5, 2], bumpScale: 0.45, roughness: 0.96 });
   m.vertexColors = true;
   return m;
 })();
@@ -118,7 +147,7 @@ function makeMesa(rng: () => number, height: number): Mesh {
     b.copy(strata[(first + band + 1) % strata.length]);
     a.lerp(b, smoothstep(0.85, 1, local));
     const shade = 1 + scour * 0.35 + (local < 0.1 ? -0.12 : 0);
-    a.multiplyScalar(shade);
+    a.multiplyScalar(shade * 1.22); // the skin's map darkens by ~0.8; keep the palette
     if (rim <= 0.5 || y01 > 0.985) a.lerp(new Color(P.sandLight), 0.35);
     cols.push(a.r, a.g, a.b);
   }

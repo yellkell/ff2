@@ -9,7 +9,8 @@
 
 import { Color, Float32BufferAttribute, type Group, Mesh, PlaneGeometry } from 'three';
 import { CONFIG } from './config.js';
-import { makePaper, makeRng, valueNoise2D } from './paper.js';
+import { makeRng, valueNoise2D } from './paper.js';
+import { sandSkin, skinned } from './textures.js';
 
 const T = CONFIG.terrain;
 const rng = makeRng(T.seed);
@@ -48,7 +49,10 @@ export function buildTerrain(parent: Group): void {
   geo.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geo.computeVertexNormals();
 
-  const mat = makePaper(CONFIG.palette.sandLight, 1.0);
+  // Wind-rippled sand under the dune colour: the skin's map is tint-neutral
+  // (vertex colour carries the dusk tone), its bump gives the ground grain
+  // and long ripples the low sun rakes across.
+  const mat = skinned(sandSkin(), '#dcc6ad', { repeat: [72, 72], roughness: 1, bumpScale: 0.08 });
   mat.vertexColors = true;
 
   const ground = new Mesh(geo, mat);

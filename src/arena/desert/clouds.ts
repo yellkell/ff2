@@ -1,38 +1,40 @@
 /**
- * Flattened paper clouds (adapted from yellkell/DOWN2): a few overlapping
- * faceted blobs per cloud, squashed flat and drifting slowly above the mesas.
- * They cast no shadow.
- *
- * Their travel band runs well wider than the placed spread, and each cloud
- * fades out as it nears the far edge and back in after it wraps round, so a
- * cloud dissolves into the haze and re-forms rather than snapping across the
- * sky — the wrap is never seen.
+ * Dusk clouds: each is a handful of soft, slightly ragged SPRITES layered
+ * into one drifting mass — underlit from the horizon, dark against the
+ * violet. (They used to be faceted paper blobs; the sprite reads as vapour
+ * at any distance and costs the same handful of draws.) They cast no
+ * shadow. Their travel band runs wider than the placed spread and each
+ * cloud fades out near the far edge and back in after it wraps, so a
+ * cloud dissolves into the haze and re-forms rather than snapping across
+ * the sky — the wrap is never seen.
  */
 
-import { type Group as GroupT, Group, IcosahedronGeometry, Mesh, type MeshStandardMaterial } from 'three';
+import { type Group as GroupT, Group, Sprite, type SpriteMaterial } from 'three';
 import { CONFIG } from './config.js';
-import { makePaper, makeRng } from './paper.js';
+import { makeRng } from './paper.js';
+import { softSprite } from './textures.js';
 
 export interface CloudDrift {
   obj: Group;
-  mat: MeshStandardMaterial;
+  mat: SpriteMaterial;
   speed: number;
   bound: number; // wrap point (x), out past the placed spread
   fade: number; // width of the fade band at each edge
 }
 
 const smooth = (t: number): number => t * t * (3 - 2 * t);
+const FULL = 0.82; // resting opacity — never quite solid
 
-/** A clump of squashed paper puffs, all sharing one (fade-able) material. */
-function makeCloud(rng: () => number, mat: MeshStandardMaterial): Group {
+/** A mass of overlapping soft puffs sharing one (fade-able) material. */
+function makeCloud(rng: () => number, mat: SpriteMaterial): Group {
   const g = new Group();
-  const puffs = 3 + ((rng() * 3) | 0);
+  const puffs = 4 + ((rng() * 3) | 0);
   for (let i = 0; i < puffs; i++) {
-    const r = 2.4 + rng() * 3.2;
-    const puff = new Mesh(new IcosahedronGeometry(r, 1), mat);
-    puff.position.set((rng() - 0.5) * 9, (rng() - 0.5) * 2.4, (rng() - 0.5) * 5);
-    puff.scale.y = 0.55;
-    g.add(puff);
+    const w = 6 + rng() * 7;
+    const s = new Sprite(mat);
+    s.scale.set(w, w * (0.42 + rng() * 0.2), 1);
+    s.position.set((rng() - 0.5) * 11, (rng() - 0.5) * 2.2, (rng() - 0.5) * 5);
+    g.add(s);
   }
   return g;
 }
@@ -45,8 +47,7 @@ export function buildClouds(parent: GroupT): CloudDrift[] {
   const fade = 48; // fade band sits beyond the placed clouds
   const clouds: CloudDrift[] = [];
   for (let i = 0; i < count; i++) {
-    const mat = makePaper(CONFIG.palette.cloud, 1.0);
-    mat.transparent = true;
+    const mat = softSprite(CONFIG.palette.cloud, FULL);
     const cloud = makeCloud(rng, mat);
     const y = heightMin + rng() * (heightMax - heightMin);
     cloud.position.set((rng() * 2 - 1) * spread, y, (rng() * 2 - 1) * spread);
@@ -61,6 +62,6 @@ export function animateClouds(clouds: CloudDrift[], delta: number): void {
   for (const c of clouds) {
     c.obj.position.x += c.speed * delta;
     if (c.obj.position.x > c.bound) c.obj.position.x = -c.bound;
-    c.mat.opacity = smooth(Math.min(1, Math.max(0, (c.bound - Math.abs(c.obj.position.x)) / c.fade)));
+    c.mat.opacity = FULL * smooth(Math.min(1, Math.max(0, (c.bound - Math.abs(c.obj.position.x)) / c.fade)));
   }
 }
