@@ -36,6 +36,14 @@ carried over verbatim: everything in it still applies to this code.
   hitboxes, immune to every recolour; the rest of your colour is paint.
   THE PODIUM shows your dressed blank beside the YOU wing.
   Preview: `/skin-preview.html?skins=blank,onyx`.
+- **THE PAINT** ([`docs/paint.md`](docs/paint.md), P1–P3 shipped) — buy
+  stripes and splotches by colour, place them minutely on your own body in
+  THE PAINT BAY (YOU wing), and the room sees the result: your look packs
+  to ~8 bytes a unit and rides the duel `iam`, the squad mesh and the club
+  hello, baked once on join wherever your body renders. HIDE PAINT
+  (settings, or per-punter on the club console) and REPORT PAINT are the
+  moderation backstops. Headless probes: `npm run check:paint` (wire +
+  two-client room), plus the bay verbs under `window.__ff2.paint`.
 
 ## Run it
 

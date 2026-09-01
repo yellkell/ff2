@@ -58,6 +58,7 @@ import {
   teamColor,
 } from '../../config.js';
 import { buildBoxer, solveTorso, type BoxerRig } from '../../avatar/boxer.js';
+import { applyLook, myLook } from '../../avatar/paint.js';
 import { applyAvatarSkin, applyPlatformSkin, platformSkin, type PlatformSkin } from '../../avatar/skins.js';
 import { customization, myAvatarSkin } from '../../menu/customization.js';
 import {
@@ -445,6 +446,9 @@ export class FightSystem extends createSystem({}) {
     this.bodyRig.torso.name = 'pub-fighter-torso';
     this.bodyRig.torso.visible = false;
     applyAvatarSkin(this.bodyRig.torso, mySkin);
+    // Your painting fights with you — the crowd sees the body THEY see you in.
+    // (PubPlayerSystem rebakes this by name if you repaint mid-visit.)
+    applyLook(this.bodyRig.torso, myLook());
     pub.refs!.root.add(this.bodyRig.torso);
     for (const platform of pub.refs!.fightPlatforms) {
       platform.traverse((node) => {

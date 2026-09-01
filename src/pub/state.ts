@@ -17,6 +17,8 @@ export interface RemotePunter {
   /** Their main-game skin picks (empty = default look). */
   av: string;
   pf: string;
+  /** Their packed paint look, as it arrived (re-validated at bake time). */
+  lk: string;
   rig: BoxerRig;
   nameTag: Panel;
   /** Latest network pose; rigs ease toward these each frame. */

@@ -51,7 +51,7 @@ class Mesh {
    *  colour), learned from the same `iam` message. OpponentSystem dresses
    *  every mesh fighter (raid squadmates, FFA/2v2 rivals) from this, so
    *  people wear what they actually chose instead of bot randoms. */
-  cosmetics: ({ av?: string; pf?: string; avc?: number; avl?: number } | undefined)[] = [];
+  cosmetics: ({ av?: string; pf?: string; avc?: number; avl?: number; lk?: string } | undefined)[] = [];
   /** Seat → that peer's remote voice stream, set by the impl on `ontrack`. */
   voice = new Map<number, MediaStream>();
   /** True once every seat is filled by a human. */

@@ -31,6 +31,7 @@ import { app, saveStats } from '../menu/appState.js';
 import { mesh } from '../net/mesh.js';
 import { myElo, myName } from '../net/leaderboard.js';
 import { customization } from '../menu/customization.js';
+import { myPackedLook } from '../avatar/paint.js';
 import { packPose } from '../net/client.js';
 import { attachMeshVoice, detachAllMeshVoice, detachMeshVoice, setMeshSpeaker, updateListener } from '../net/voice.js';
 import { reportArcade } from '../net/leaderboard.js';
@@ -307,6 +308,7 @@ export class MeshSystem extends createSystem({
       pf: customization.platform,
       avc: customization.colorHue,
       avl: customization.colorLight,
+      lk: myPackedLook(),
     });
   }
 
@@ -391,7 +393,7 @@ export class MeshSystem extends createSystem({
     // not by whether they map to one of my opponent slots).
     if (msg.k === 'iam') {
       mesh.names[seat] = msg.name;
-      mesh.cosmetics[seat] = { av: msg.av, pf: msg.pf, avc: msg.avc, avl: msg.avl };
+      mesh.cosmetics[seat] = { av: msg.av, pf: msg.pf, avc: msg.avc, avl: msg.avl, lk: msg.lk };
       return;
     }
 

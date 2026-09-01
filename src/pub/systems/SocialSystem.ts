@@ -5,30 +5,42 @@
  * height, lectern lean, yawed to face you) listing everyone in the room with
  * MUTE and BLOCK buttons per punter. Point a controller and pull the trigger.
  *
- *   MUTE  — their voice stops reaching you (they stay visible).
- *   BLOCK — mute + their avatar and name tag vanish for you.
+ *   MUTE   — their voice stops reaching you (they stay visible).
+ *   BLOCK  — mute + their avatar and name tag vanish for you.
+ *   PAINT  — their painting renders bare base tone for you (docs/paint.md §6).
+ *   REPORT — file their packed look to the reports box, evidence included.
  *
- * Both are local-only and persist across visits by callsign (src/pub/social).
- * PubPlayerSystem applies the lists every frame; this panel just edits them.
+ * All but REPORT are local-only and persist across visits by callsign
+ * (src/pub/social). PubPlayerSystem applies the lists every frame; this
+ * panel just edits them.
  */
 
 import { createSystem, InputComponent } from '@iwsdk/core';
 import { Quaternion, Raycaster, Vector3 } from 'three';
 import { uiClick } from '../../audio/sfx.js';
+import { sendPaintReport } from '../../net/leaderboard.js';
 import { isVoiceMuted } from '../voice/capture.js';
 import { Panel } from '../panel.js';
 import { pub } from '../state.js';
-import { socialBlocked, socialMuted, toggleSocialBlock, toggleSocialMute } from '../social.js';
+import {
+  socialBlocked,
+  socialMuted,
+  socialPaintHidden,
+  toggleSocialBlock,
+  toggleSocialMute,
+  toggleSocialPaintHide,
+} from '../social.js';
 
 const HANDS = ['left', 'right'] as const;
 
-const PANEL_W = 0.55;
+const PANEL_W = 0.72; // widened for the paint switches (4 buttons per row)
 const PANEL_H = 0.62;
 const PX = 760; // canvas px per metre — crisp text at arm's length
 const ROW_H = 52;
 const ROWS_TOP = 96;
-const BTN_W = 92;
+const BTN_W = 78;
 const BTN_H = 38;
+const BTN_GAP = 8;
 
 const _head = new Vector3();
 const _fwd = new Vector3();
@@ -38,7 +50,7 @@ const _q = new Quaternion();
 
 interface RowHit {
   name: string;
-  kind: 'mute' | 'block';
+  kind: 'mute' | 'block' | 'paint' | 'report';
   x: number;
   y: number;
 }
@@ -49,6 +61,8 @@ export class SocialSystem extends createSystem({}) {
   private hits: RowHit[] = [];
   private hover: string | null = null; // `${kind}:${name}`
   private paintKey = '';
+  /** Callsigns whose paint you've already reported this visit. */
+  private reported = new Set<string>();
 
   init(): void {
     this.panel = new Panel(PANEL_W, PANEL_H, PX);
@@ -85,7 +99,15 @@ export class SocialSystem extends createSystem({}) {
       hover = `${over.kind}:${over.name}`;
       if (this.input.xr.gamepads[hand]?.getButtonDown(InputComponent.Trigger)) {
         if (over.kind === 'mute') toggleSocialMute(over.name);
-        else toggleSocialBlock(over.name);
+        else if (over.kind === 'block') toggleSocialBlock(over.name);
+        else if (over.kind === 'paint') toggleSocialPaintHide(over.name);
+        else if (!this.reported.has(over.name)) {
+          // REPORT PAINT: their packed look IS the evidence — file it as-is.
+          // Once per punter per visit; the button flips to SENT.
+          this.reported.add(over.name);
+          const punter = [...pub.punters.values()].find((p) => p.name === over.name);
+          void sendPaintReport(over.name, punter?.lk ?? '');
+        }
         uiClick();
       }
     }
@@ -119,8 +141,12 @@ export class SocialSystem extends createSystem({}) {
     const punters = [...pub.punters.values()].sort((a, b) => a.name.localeCompare(b.name));
     const micMuted = isVoiceMuted();
     const key =
-      punters.map((p) => `${p.name}|${socialMuted(p.name) ? 1 : 0}${socialBlocked(p.name) ? 1 : 0}`).join(';') +
-      `#${this.hover ?? ''}#${micMuted ? 'm' : 'o'}`;
+      punters
+        .map(
+          (p) =>
+            `${p.name}|${socialMuted(p.name) ? 1 : 0}${socialBlocked(p.name) ? 1 : 0}${socialPaintHidden(p.name) ? 1 : 0}${this.reported.has(p.name) ? 1 : 0}`,
+        )
+        .join(';') + `#${this.hover ?? ''}#${micMuted ? 'm' : 'o'}`;
     if (key === this.paintKey) return;
     this.paintKey = key;
 
@@ -135,7 +161,7 @@ export class SocialSystem extends createSystem({}) {
       ctx.fillText('PUNTERS', 24, 44);
       ctx.font = "600 17px 'Arial Narrow', system-ui, sans-serif";
       ctx.fillStyle = 'rgba(172,182,198,0.75)';
-      ctx.fillText('mute silences · block also hides · yours to undo', 24, 74);
+      ctx.fillText('mute · block hides them · paint bares their body · report files their look', 24, 74);
 
       // YOUR mic, top-right: the little glyph mirrors the left-Y mute so you
       // can always tell whether the room can hear you.
@@ -199,7 +225,7 @@ export class SocialSystem extends createSystem({}) {
           ctx.stroke();
         }
 
-        const button = (label: string, on: boolean, kind: 'mute' | 'block', bx: number): void => {
+        const button = (label: string, on: boolean, kind: RowHit['kind'], bx: number): void => {
           const by = y + (ROW_H - BTN_H) / 2;
           const hot = this.hover === `${kind}:${p.name}`;
           ctx.fillStyle = on ? 'rgba(232,53,42,0.28)' : hot ? 'rgba(32,36,44,0.95)' : 'rgba(22,25,31,0.9)';
@@ -215,8 +241,12 @@ export class SocialSystem extends createSystem({}) {
           ctx.fillText(label, bx + BTN_W / 2, by + BTN_H / 2 + 1);
           this.hits.push({ name: p.name, kind, x: bx, y: by });
         };
-        button(muted ? 'MUTED' : 'MUTE', muted, 'mute', W - 24 - BTN_W * 2 - 10);
-        button(hidden ? 'BLOCKED' : 'BLOCK', hidden, 'block', W - 24 - BTN_W);
+        const noPaint = socialPaintHidden(p.name);
+        const sent = this.reported.has(p.name);
+        button(muted ? 'MUTED' : 'MUTE', muted, 'mute', W - 24 - BTN_W * 4 - BTN_GAP * 3);
+        button(hidden ? 'BLOCKED' : 'BLOCK', hidden, 'block', W - 24 - BTN_W * 3 - BTN_GAP * 2);
+        button(noPaint ? 'BARED' : 'PAINT', noPaint, 'paint', W - 24 - BTN_W * 2 - BTN_GAP);
+        button(sent ? 'SENT' : 'REPORT', sent, 'report', W - 24 - BTN_W);
       });
     });
   }

@@ -13,11 +13,23 @@ import { buildHand, HAND_ADDUCTION, setHandCurl } from '../../avatar/hands.js';
 import { applyAvatarSkin, resolveAvatarSkin } from '../../avatar/skins.js';
 import { myAvatarSkin } from '../../menu/customization.js';
 import { solveTorso } from '../../avatar/boxer.js';
+import {
+  applyLook,
+  clearLook,
+  demoLook,
+  myLook,
+  myPackedLook,
+  paintHiddenAll,
+  paintPrefs,
+  paintState,
+  setLook,
+  unpackLook,
+} from '../../avatar/paint.js';
 import { NET, PALETTE, teamColor } from '../../config.js';
 import { spawnGestureCue } from '../../fx/effects.js';
 import { pulseHand } from '../../input/haptics.js';
 import { audioContext, clap, micToggle, saloonEntry } from '../../audio/sfx.js';
-import { onSnap, onSpawn, onVoice, pubSendRaw, pubSendVoice } from '../net.js';
+import { onSnap, onSpawn, onVoice, pubSendEvent, pubSendRaw, pubSendVoice } from '../net.js';
 import { startVoiceCapture, stopVoiceCapture, toggleVoiceMuted } from '../voice/capture.js';
 import {
   isSpeaking,
@@ -27,7 +39,7 @@ import {
   setVoiceSpeakerPosition,
   updateVoiceListener,
 } from '../voice/playback.js';
-import { socialBlocked, socialMuted } from '../social.js';
+import { socialBlocked, socialMuted, socialPaintHidden, socialState } from '../social.js';
 import { Panel } from '../panel.js';
 import type { PoseTuple, PubPlayerNet } from '../protocol.js';
 import { bus, pub, type RemotePunter } from '../state.js';
@@ -108,6 +120,10 @@ export class PubPlayerSystem extends createSystem({}) {
   /** Seconds to wait before re-asking for the mic after a failed attempt. */
   private voiceRetryCooldown = 0;
   private clubActive = true;
+  /** My look version last sent over the room wire (repaint-at-the-bay sync). */
+  private sentLookVersion = paintState.version;
+  /** Hide-paint prefs last baked into the room's rigs. */
+  private paintPrefsKey = '';
 
   /** The local club gloves live under the persistent XR grips, not the pub
    *  root, so they need their own visibility/audio gate. */
@@ -182,7 +198,44 @@ export class PubPlayerSystem extends createSystem({}) {
       bus.on('connected', () => {
         for (const glove of this.localGloves) retintLocal(glove, pub.myAccent);
       }),
+      // A punter repainted at the bay mid-visit: adopt + rebake on the spot.
+      bus.on('gameEvent', ({ from, ev }) => {
+        if (ev.e !== 'LOOK') return;
+        const punter = pub.punters.get(from);
+        if (!punter) return;
+        punter.lk = typeof ev.lk === 'string' ? ev.lk.slice(0, 1024) : '';
+        this.bakePaint(punter);
+      }),
     );
+
+    // Headless probe: the room's paint, observable + drivable
+    // (tools/paint-wire-check.mjs). `repaint`/`bare` walk the same setLook
+    // path the bay does, so the LOOK sync above fires for real.
+    const w = window as unknown as { __ff2?: Record<string, unknown> };
+    (w.__ff2 ??= {}).club = {
+      online: (): boolean => pub.online,
+      punters: (): { name: string; lk: string; baked: boolean }[] =>
+        [...pub.punters.values()].map((p) => {
+          let baked = false;
+          for (const piece of p.rig.all) {
+            piece.traverse((o) => {
+              if (o.userData?.paintStore) baked = true;
+            });
+          }
+          return { name: p.name, lk: p.lk, baked };
+        }),
+      repaint: (): void => setLook(demoLook()),
+      bare: (): void => clearLook(),
+    };
+  }
+
+  /** Bake a punter's painting onto their rig — once per look change, never
+   *  per frame (docs/paint.md §5). HIDE PAINT (global or their name) bakes
+   *  them bare instead; the wire string is re-validated on every bake. */
+  private bakePaint(punter: RemotePunter): void {
+    const hidden = paintHiddenAll() || socialPaintHidden(punter.name);
+    const look = hidden ? { paint: [] } : unpackLook(punter.lk);
+    for (const piece of punter.rig.all) applyLook(piece, look);
   }
 
   update(delta: number): void {
@@ -207,6 +260,24 @@ export class PubPlayerSystem extends createSystem({}) {
       const sq = gp.getButtonValue(InputComponent.Squeeze);
       setHandCurl(glove, Math.max(trig, sq * 0.6), Math.max(sq, trig * 0.45), 0.35 + Math.max(trig, sq) * 0.55);
     });
+
+    // --- paint sync ---------------------------------------------------------
+    // Repainted at the bay mid-visit: tell the room once per look change (the
+    // server folds it into its record for late joiners) and refresh your own
+    // pit body. Cheap — version compares, nothing per-frame.
+    if (paintState.version !== this.sentLookVersion) {
+      this.sentLookVersion = paintState.version;
+      if (pub.online) pubSendEvent({ e: 'LOOK', lk: myPackedLook() });
+      const myTorso = pub.refs?.root.getObjectByName('pub-fighter-torso');
+      if (myTorso) applyLook(myTorso, myLook());
+    }
+    // A hide-paint flip (settings breaker or the console's PAINT switch)
+    // rebakes every punter immediately.
+    const prefsKey = `${paintPrefs.version}|${socialState.version}`;
+    if (prefsKey !== this.paintPrefsKey) {
+      this.paintPrefsKey = prefsKey;
+      for (const punter of pub.punters.values()) this.bakePaint(punter);
+    }
 
     // --- outbound pose ------------------------------------------------------
     if (pub.online) {
@@ -332,6 +403,7 @@ export class PubPlayerSystem extends createSystem({}) {
       accent: p.accent,
       av: p.av ?? '',
       pf: p.pf ?? '',
+      lk: typeof p.lk === 'string' ? p.lk.slice(0, 1024) : '',
       rig,
       nameTag,
       head: p.head,
@@ -343,6 +415,10 @@ export class PubPlayerSystem extends createSystem({}) {
       snapAge: 0,
     };
     pub.punters.set(p.id, punter);
+    // Their painting walks in with them: one bake on join. A full room
+    // joining costs a dozen canvas fills — milliseconds, amortized by the
+    // join flow, never per-frame (docs/paint.md §5).
+    this.bakePaint(punter);
     bus.emit('joined', punter);
     saloonEntry(); // swinging doors — someone just walked in
   }

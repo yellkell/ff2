@@ -23,6 +23,7 @@ import { launchXR, SessionMode, World } from '@iwsdk/core';
 import { initFirePools } from '../fx/fire.js';
 import * as sfx from '../audio/sfx.js';
 import { customization } from '../menu/customization.js';
+import { myPackedLook } from '../avatar/paint.js';
 import { PUB, pubServerUrl } from './config.js';
 import { buildPub } from './environment.js';
 import { pubConnect } from './net.js';
@@ -144,8 +145,8 @@ World.create(container, {
   // it's empty, instead of leaving the player baffled.
   bus.on('full', () => showFullNotice(world));
 
-  // Your arena cosmetics walk in with you.
-  pubConnect(pubServerUrl(), pub.myName, customization.avatar, customization.platform, customization.colorHue, customization.colorLight);
+  // Your arena cosmetics walk in with you — paint included.
+  pubConnect(pubServerUrl(), pub.myName, customization.avatar, customization.platform, customization.colorHue, customization.colorLight, myPackedLook());
 
   // Browser-only moderation: hold Z+A+P to open the admin ban panel.
   installAdminPanel();

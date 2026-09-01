@@ -5,9 +5,12 @@
  *
  *   MUTE  — you stop hearing their voice; they stay visible.
  *   BLOCK — mute plus their avatar and name tag vanish for you.
+ *   PAINT — their body renders bare base tone for you (docs/paint.md §6):
+ *           the honest backstop against offensive paintings, zero server work.
  *
- * Both are strictly LOCAL (nothing goes over the wire); SocialSystem owns the
- * A-button panel that toggles them, PubPlayerSystem applies them per frame.
+ * All strictly LOCAL (nothing goes over the wire); SocialSystem owns the
+ * A-button panel that toggles them, PubPlayerSystem applies mute/block per
+ * frame and the paint bakes (pub + arena) key off socialState.version.
  */
 
 function load(key: string): Set<string> {
@@ -30,6 +33,11 @@ function save(key: string, set: Set<string>): void {
 
 const muted = load('ff-pub-muted');
 const blocked = load('ff-pub-blocked');
+const noPaint = load('ff2-pub-nopaint');
+
+/** Bumped on any toggle — remote-rig paint bake keys fold this in so a
+ *  PAINT flip repaints that body immediately. */
+export const socialState = { version: 1 };
 
 const keyOf = (name: string): string => name.trim().toLowerCase();
 
@@ -55,4 +63,19 @@ export function toggleSocialBlock(name: string): void {
   if (blocked.has(k)) blocked.delete(k);
   else blocked.add(k);
   save('ff-pub-blocked', blocked);
+  socialState.version += 1;
+}
+
+/** True when you've hidden THIS player's paint (they render bare for you). */
+export function socialPaintHidden(name: string): boolean {
+  return noPaint.has(keyOf(name));
+}
+
+export function toggleSocialPaintHide(name: string): void {
+  const k = keyOf(name);
+  if (!k) return;
+  if (noPaint.has(k)) noPaint.delete(k);
+  else noPaint.add(k);
+  save('ff2-pub-nopaint', noPaint);
+  socialState.version += 1;
 }

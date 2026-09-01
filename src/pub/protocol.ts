@@ -55,6 +55,8 @@ export interface PubPlayerNet {
   avc?: number;
   /** Custom armour lightness (0..1, 0.5 = neutral). */
   avl?: number;
+  /** Packed paint look (avatar/paint.ts wire form) — validated on receive. */
+  lk?: string;
 }
 
 export interface BoardRow {
@@ -181,10 +183,13 @@ export type PubEvent =
   /** The coin I own has come to rest here — anyone may pick it up. */
   | { e: 'COIN_REST'; id: string; pos: Vec3T }
   /** I picked coin `id` up off the floor — everyone else drop it from view. */
-  | { e: 'COIN_TAKE'; id: string };
+  | { e: 'COIN_TAKE'; id: string }
+  /** I repainted at the bay mid-visit — my packed look changed. The server
+   *  also folds it into its player record so late joiners get it. */
+  | { e: 'LOOK'; lk: string };
 
 export type PubClientMsg =
-  | { t: 'hello'; name: string; av?: string; pf?: string; avc?: number; avl?: number; cid?: string }
+  | { t: 'hello'; name: string; av?: string; pf?: string; avc?: number; avl?: number; lk?: string; cid?: string }
   | { t: 'pose'; head: PoseTuple; left: PoseTuple; right: PoseTuple }
   /** I want to hold prop `id` (fresh grab or a mid-air catch). */
   | { t: 'grab'; id: number }

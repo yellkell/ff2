@@ -59,7 +59,7 @@ import {
 } from '../menu/menu.js';
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, type Wrap } from '../menu/wrap.js';
-import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, type PaintPart } from '../avatar/paint.js';
+import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
 import { KitMenuPanel } from '../menu/wrap.js';
 import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey } from '../menu/paintbay.js';
 import {
@@ -980,6 +980,13 @@ export class MenuSystem extends createSystem({}) {
       case 'toggle-mute':
         // Flip the music mute (persisted) and repaint the settings breaker.
         toggleMusicMuted();
+        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        break;
+      case 'toggle-hide-paint':
+        // HIDE PAINT, globally: every other body renders bare base tone.
+        // Remote bake keys watch paintPrefs.version, so live rigs repaint on
+        // the spot; your own paint stays yours.
+        togglePaintHiddenAll();
         this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
         break;
       case 'open-pub':

@@ -132,8 +132,9 @@ export const leaderboard = {
   viewRow: null as LbRow | null,
 };
 
-/** The current rival's claim about themselves (peer `iam` message). */
-export const rival = { name: 'RIVAL', elo: 1000, avatarSkin: '', platformSkin: '', avColor: -1, avLight: 0.5 };
+/** The current rival's claim about themselves (peer `iam` message). `look`
+ *  is their packed paint (validated only when unpacked for the bake). */
+export const rival = { name: 'RIVAL', elo: 1000, avatarSkin: '', platformSkin: '', avColor: -1, avLight: 0.5, look: '' };
 
 const ELO_K = 32;
 
@@ -818,5 +819,31 @@ export async function sendReport(text: string): Promise<void> {
     });
   } catch {
     /* offline or rules closed — the report is best-effort */
+  }
+}
+
+/**
+ * REPORT PAINT (docs/paint.md §6): file a report about a player's painting,
+ * carrying their packed look verbatim — the evidence is included by
+ * construction (~520 bytes at the cap), so a moderator can render exactly
+ * what the reporter saw. Same create-only 'reports' collection, same
+ * fire-and-forget rules as sendReport.
+ */
+export async function sendPaintReport(about: string, look: string): Promise<void> {
+  const name = about.trim().slice(0, 24);
+  if (!name) return;
+  const h = await firestore();
+  if (!h) return;
+  try {
+    await h.fs.addDoc(h.fs.collection(h.db, 'reports'), {
+      subject: 'paint',
+      about: name,
+      look: look.slice(0, 1024),
+      from: profile.name,
+      uid: profile.id,
+      at: h.fs.serverTimestamp(),
+    });
+  } catch {
+    /* offline or rules closed — best-effort */
   }
 }

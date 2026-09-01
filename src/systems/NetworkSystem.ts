@@ -28,6 +28,7 @@ import { app, saveStats } from '../menu/appState.js';
 import { mirrorPos, mirrorQuat, mirrorVel, net, packPose } from '../net/client.js';
 import { myElo, myName, reportResult, rival } from '../net/leaderboard.js';
 import { customization } from '../menu/customization.js';
+import { myPackedLook } from '../avatar/paint.js';
 import { setSpeakerPosition, updateListener } from '../net/voice.js';
 import type { PeerMessage, PoseTuple } from '../net/protocol.js';
 import { spawnDamagePopup, spawnFireImpact, spawnGestureCue, spawnPopup } from '../fx/effects.js';
@@ -91,6 +92,7 @@ export class NetworkSystem extends createSystem({
         pf: customization.platform,
         avc: customization.colorHue,
         avl: customization.colorLight,
+        lk: myPackedLook(),
       });
     }
 
@@ -257,6 +259,7 @@ export class NetworkSystem extends createSystem({
         rival.platformSkin = msg.pf ?? '';
         rival.avColor = typeof msg.avc === 'number' ? msg.avc : -1;
         rival.avLight = typeof msg.avl === 'number' ? msg.avl : 0.5;
+        rival.look = typeof msg.lk === 'string' ? msg.lk : '';
         break;
       case 'state':
         if (app.side === 1) this.applyHostState(msg);

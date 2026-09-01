@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "server": "node server/index.mjs",
     "server:pub": "node server/pub.mjs",
-    "check:wrap": "node tools/wrap-check.mjs"
+    "check:wrap": "node tools/wrap-check.mjs",
+    "check:paint": "node tools/paint-wire-check.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "0.4.2",

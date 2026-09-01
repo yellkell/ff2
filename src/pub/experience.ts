@@ -1,6 +1,7 @@
 import type { World } from '@iwsdk/core';
 import { Color } from 'three';
 import { customization } from '../menu/customization.js';
+import { myPackedLook } from '../avatar/paint.js';
 import { FXSystem } from '../systems/FXSystem.js';
 import { installAdminPanel } from './admin.js';
 import { PUB, pubServerUrl } from './config.js';
@@ -145,6 +146,7 @@ export function mountPubExperience(world: World): PubExperience {
         customization.platform,
         customization.colorHue,
         customization.colorLight,
+        myPackedLook(),
       );
     },
 

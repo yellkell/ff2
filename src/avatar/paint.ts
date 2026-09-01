@@ -113,6 +113,133 @@ export function clearLook(): void {
   setLook({ paint: [] });
 }
 
+/* ── the wire form (docs/paint.md §3, §5) ─────────────────────────────── */
+//
+// One unit is exactly 8 bytes, every field quantized by construction:
+//
+//   b0  kind (bit 0) | part index (bits 1..3)
+//   b1  colour index          b2  variant
+//   b3  u ·255   b4  v ·255   b5  angle ·255   b6  len ·255   b7  wid ·255
+//
+// A whole look is [format byte = 1][units…], base64'd so it rides every
+// JSON channel (the 1v1 `iam`, the mesh `iam`, the pub hello) as one short
+// string — a maxed 64-unit look is 513 bytes / ~684 base64 chars, smaller
+// than a single pose-packet burst. The receive side re-validates every
+// unit through cleanUnit, so malformed or hostile data fails soft to the
+// bare base tone — never to an error.
+
+const WIRE_FORMAT = 1;
+/** Part order ON THE WIRE — append-only (3/4 are reserved for the gloves). */
+const WIRE_PARTS: PaintPart[] = ['head', 'chest', 'pelvis'];
+/** Longest base64 string unpackLook will even look at (a maxed look is ~700). */
+const WIRE_MAX_CHARS = 1024;
+
+const q255 = (n: number): number => Math.max(0, Math.min(255, Math.round(n * 255)));
+
+/** Pack a look into its base64 wire string ('' = nothing to carry). */
+export function packLook(look: Look): string {
+  const units = look.paint.slice(0, PAINT.maxUnits);
+  if (units.length === 0) return '';
+  const bytes = new Uint8Array(1 + units.length * 8);
+  bytes[0] = WIRE_FORMAT;
+  units.forEach((p, i) => {
+    const o = 1 + i * 8;
+    bytes[o] = (p.kind === 'splotch' ? 1 : 0) | (Math.max(0, WIRE_PARTS.indexOf(p.part)) << 1);
+    bytes[o + 1] = Math.min(255, p.colour);
+    bytes[o + 2] = p.variant % 256;
+    bytes[o + 3] = q255(p.u);
+    bytes[o + 4] = q255(p.v);
+    bytes[o + 5] = q255(p.angle);
+    bytes[o + 6] = q255(p.len);
+    bytes[o + 7] = q255(p.wid);
+  });
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+/**
+ * Unpack a wire string back into a Look. ANYTHING wrong — not a string, too
+ * long, bad base64, wrong format byte, truncated units, out-of-range fields —
+ * quietly yields the bare base tone (docs/paint.md §5: late or bad data never
+ * beats no data). Every surviving unit still passes cleanUnit.
+ */
+export function unpackLook(wire: unknown): Look {
+  const bare: Look = { paint: [] };
+  if (typeof wire !== 'string' || wire.length === 0 || wire.length > WIRE_MAX_CHARS) return bare;
+  let bin: string;
+  try {
+    bin = atob(wire);
+  } catch {
+    return bare;
+  }
+  if (bin.length < 1 + 8 || (bin.length - 1) % 8 !== 0) return bare;
+  if (bin.charCodeAt(0) !== WIRE_FORMAT) return bare;
+  const count = Math.min((bin.length - 1) / 8, PAINT.maxUnits);
+  const paint: PlacedPaint[] = [];
+  for (let i = 0; i < count; i++) {
+    const o = 1 + i * 8;
+    const b0 = bin.charCodeAt(o);
+    const unit = cleanUnit({
+      kind: (b0 & 1) === 1 ? 'splotch' : 'stripe',
+      part: WIRE_PARTS[b0 >> 1], // out of range → undefined → dropped
+      colour: bin.charCodeAt(o + 1),
+      variant: bin.charCodeAt(o + 2),
+      u: bin.charCodeAt(o + 3) / 255,
+      v: bin.charCodeAt(o + 4) / 255,
+      angle: bin.charCodeAt(o + 5) / 255,
+      len: bin.charCodeAt(o + 6) / 255,
+      wid: bin.charCodeAt(o + 7) / 255,
+    });
+    if (unit) paint.push(unit);
+  }
+  return { paint };
+}
+
+let packedCache = { version: -1, wire: '' };
+
+/** MY look, packed for the wire — cached per look version (the mesh `iam`
+ *  rebroadcasts every 2 s; repacking each time would be pure waste). */
+export function myPackedLook(): string {
+  if (packedCache.version !== paintState.version) {
+    packedCache = { version: paintState.version, wire: packLook(myLook()) };
+  }
+  return packedCache.wire;
+}
+
+/* ── HIDE PAINT (docs/paint.md §6) ────────────────────────────────────── */
+
+const HIDE_KEY = 'ff2-hide-paint';
+
+/** Bumped whenever a hide-paint preference flips — remote-rig bake keys fold
+ *  this in so every painted body repaints on the spot. */
+export const paintPrefs = { version: 1 };
+
+let hideAll: boolean | null = null;
+
+/** The global settings breaker: render EVERY other player's body bare.
+ *  Strictly local, total defence; your own paint stays yours. */
+export function paintHiddenAll(): boolean {
+  if (hideAll === null) {
+    try {
+      hideAll = localStorage.getItem(HIDE_KEY) === '1';
+    } catch {
+      hideAll = false;
+    }
+  }
+  return hideAll;
+}
+
+export function togglePaintHiddenAll(): void {
+  hideAll = !paintHiddenAll();
+  try {
+    localStorage.setItem(HIDE_KEY, hideAll ? '1' : '0');
+  } catch {
+    /* session-only */
+  }
+  paintPrefs.version += 1;
+}
+
 /* ── the locker: owned, unplaced paint ────────────────────────────────── */
 
 const INV_KEY = 'ff2-paint-inv';
@@ -422,5 +549,10 @@ export function installPaintDevHook(): void {
     lift: (part: PaintPart, u: number, v: number): boolean => handLift(part, u, v),
     ret: (): void => handReturn(),
     held: (): PlacedPaint | null => bay.held,
+    // P3 wire verbs, for the headless channel probes.
+    pack: (): string => myPackedLook(),
+    unpack: (wire: unknown): Look => unpackLook(wire),
+    hideAll: (): boolean => paintHiddenAll(),
+    toggleHide: (): void => togglePaintHiddenAll(),
   };
 }

@@ -378,7 +378,7 @@ function boardRows() {
 
 function playerNet(id) {
   const p = players.get(id);
-  return { id, name: p.name, accent: p.accent, av: p.av, pf: p.pf, avc: p.avc, avl: p.avl, head: p.head, left: p.left, right: p.right };
+  return { id, name: p.name, accent: p.accent, av: p.av, pf: p.pf, avc: p.avc, avl: p.avl, lk: p.lk, head: p.head, left: p.left, right: p.right };
 }
 
 function releaseSnake(id) {
@@ -440,6 +440,14 @@ function handleEvent(senderId, ev) {
         broadcast({ t: 'snake-hi', hi: data.snakeHi });
       }
       releaseSnake(senderId);
+      broadcast({ t: 'ev', from: senderId, ev }, senderId);
+      break;
+    }
+    case 'LOOK': {
+      // A mid-visit repaint: fold the fresh packed look into the player's
+      // record (so late joiners get it in welcome/join) and relay it.
+      const p = players.get(senderId);
+      if (p) p.lk = String(ev.lk || '').slice(0, 1024);
       broadcast({ t: 'ev', from: senderId, ev }, senderId);
       break;
     }
@@ -714,6 +722,7 @@ wss.on('connection', (ws, req) => {
         pf: String(msg.pf || '').slice(0, 16),
         avc: Number.isFinite(msg.avc) ? msg.avc : -1, // custom armour hue (0..1) or -1
         avl: Number.isFinite(msg.avl) ? msg.avl : 0.5, // custom armour lightness (0..1)
+        lk: String(msg.lk || '').slice(0, 1024), // packed paint look (clients re-validate)
         head: ZERO_POSE,
         left: ZERO_POSE,
         right: ZERO_POSE,

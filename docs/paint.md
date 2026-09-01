@@ -189,5 +189,25 @@ Free placement can draw things we don't want in a room:
 3. **P3 — the room sees you**: pack/validate/sync over `iam` +
    `mesh.cosmetics` + pub hello; bake-on-join; hide-paint toggles;
    report-paint.
+   **SHIPPED**: the 8-byte wire form (`packLook`/`unpackLook` in
+   avatar/paint.ts — base64 over every JSON channel, byte-stable under
+   quantization, every received unit re-clamped through cleanUnit and
+   anything malformed failing soft to the bare base tone). The look now
+   rides all three cosmetics channels: the duel's `iam`, the mesh `iam`
+   (2v2 / FFA / raid squads, stored per seat in `mesh.cosmetics`), and
+   the club hello (kept on the server's player record so late joiners get
+   it in welcome/join; a mid-visit repaint fans out as a relayed `LOOK`
+   event). Bake-on-join everywhere a body renders: OpponentSystem bakes
+   rivals/squadmates alongside their skins (bots stay factory-blank),
+   PubPlayerSystem bakes each punter at spawn and on `LOOK`, and your own
+   pit body carries your look into the club fight hall. Moderation both
+   ways: a HIDE ALL PAINT breaker in settings, per-punter PAINT (bare
+   their body) and REPORT (their packed look filed to the `reports`
+   collection as evidence, `subject: 'paint'`) switches on the club
+   safety console — all local, all instant via version-keyed rebakes.
+   Headless: `npm run check:paint` (tools/paint-wire-check.mjs) proves the
+   wire's roundtrip + fail-soft AND runs a real two-client room against
+   the local pub relay: painted hello → roster → baked-on-join → LOOK
+   repaint mid-visit.
 4. **P4 — the record**: Firestore mirror, profile card rendering, the
    gazette learning to describe a champion's colours.

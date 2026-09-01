@@ -26,6 +26,8 @@ import {
   type AvatarSkin,
 } from '../avatar/skins.js';
 import { platformName } from '../arena/arena.js';
+import { applyLook, paintHiddenAll, paintPrefs, unpackLook } from '../avatar/paint.js';
+import { socialPaintHidden, socialState } from '../pub/social.js';
 import { Combatant } from '../components/Combatant.js';
 import { BallState, Fireball } from '../components/Fireball.js';
 import { Health } from '../components/Health.js';
@@ -233,7 +235,9 @@ export class OpponentSystem extends createSystem({
    * Dress every remote HUMAN the way THEY chose — the 1v1 rival from the
    * duel's `iam` (leaderboard) store, every mesh fighter (2v2 / FFA rivals,
    * raid squadmates) from the cosmetics their mesh `iam` broadcast — and give
-   * bots a random bout skin. Visual only.
+   * bots a random bout skin. Their PAINT bakes here too (the packed look off
+   * the same `iam`, re-validated by unpackLook), so anywhere their body
+   * renders, their painting renders — unless you hid it. Visual only.
    */
   private applySkins(r: OppRig, slot: number): void {
     // The classic duel rival syncs through the 1v1 net client's store; it is
@@ -267,10 +271,19 @@ export class OpponentSystem extends createSystem({
     // bots keep the team tint applyArenaLayout painted (so FFA pads stay
     // colour-coded), so the skin key folds the platform in only for the rival.
     const pf = duel && rival.platformSkin ? platformSkin(rival.platformSkin) : OPPONENT_DEFAULT_PLATFORM;
-    const key = `${av.id}|${peer?.avc ?? ''}|${peer?.avl ?? ''}|${duel ? pf.id : 'tint'}`;
+    // Their paint, off the same `iam` channels. Bots carry none — an
+    // unpainted body means nobody's home. HIDE PAINT (global breaker or the
+    // club console's per-name switch) bakes them bare instead; paintPrefs/
+    // socialState fold into the key so a flip repaints on the spot.
+    const wire = duel ? rival.look : (peer?.lk ?? '');
+    const name = duel ? rival.name : seat >= 0 ? (mesh.names[seat] ?? '') : '';
+    const hidden = paintHiddenAll() || (!!name && socialPaintHidden(name));
+    const key = `${av.id}|${peer?.avc ?? ''}|${peer?.avl ?? ''}|${duel ? pf.id : 'tint'}|${hidden ? '' : wire}|${paintPrefs.version}|${socialState.version}`;
     if (key === r.appliedSkins) return;
     r.appliedSkins = key;
     for (const piece of r.rig.all) applyAvatarSkin(piece, av);
+    const look = hidden ? { paint: [] } : unpackLook(wire);
+    for (const piece of r.rig.all) applyLook(piece, look);
     if (duel) {
       const pad = this.scene.getObjectByName(platformName(slot));
       if (pad) applyPlatformSkin(pad, pf);

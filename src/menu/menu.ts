@@ -25,6 +25,7 @@ import { coinImage } from './coinIcon.js';
 import { canAfford, coins } from './wallet.js';
 import { tierForXp } from './progression.js';
 import { AVATAR_SKINS, PLATFORM_SKINS, type AvatarSkin, type PlatformSkin } from '../avatar/skins.js';
+import { paintHiddenAll } from '../avatar/paint.js';
 import { drawAvatarIcon, drawPlatformIcon } from './skinIcons.js';
 import { BOSSES } from '../campaign/bosses.js';
 import { drawBossIcon } from '../campaign/icons.js';
@@ -124,6 +125,8 @@ export type MenuAction =
   | 'toggle-shootback'
   | 'toggle-onlybots'
   | 'toggle-voice'
+  /** HIDE PAINT — render every other player's body bare (docs/paint.md §6). */
+  | 'toggle-hide-paint'
   | 'ranked-match'
   /** RANKED server browser: host your own room, go back to the mode list, or
    *  cancel a host/join and return to the browser. Joining a listed room is
@@ -2096,13 +2099,15 @@ function hitSettingsButton(u: number, v: number): MenuAction | null {
 // branches there).
 
 const SET_W = 560;
-const SET_H = 560;
+const SET_H = 620;
 const SFX_BAR = { x: 48, y: 150, w: SET_W - 96, h: 40 };
 const MUSIC_BAR = { x: 48, y: 252, w: SET_W - 96, h: 40 };
 const SET_MUTE_Y = 322;
 const SET_VOICE_Y = 378;
-const SET_REPORT_BTN = { x: 40, y: 428, w: 232, h: 46 };
-const SET_CREDITS_BTN = { x: SET_W - 40 - 232, y: 428, w: 232, h: 46 };
+/** HIDE PAINT: every other player renders bare base tone (docs/paint.md §6). */
+const SET_PAINT_Y = 434;
+const SET_REPORT_BTN = { x: 40, y: 490, w: 232, h: 46 };
+const SET_CREDITS_BTN = { x: SET_W - 40 - 232, y: 490, w: 232, h: 46 };
 /** True while the settings panel is showing the CREDITS face. */
 let creditsOpen = false;
 export function setCreditsOpen(open: boolean): void {
@@ -2234,6 +2239,8 @@ function drawSettings(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | n
 
   settingsBreaker(ctx, 'mute music', isMusicMuted(), hoverAction === 'toggle-mute', SET_MUTE_Y, 'rgba(232,53,42,0.28)', UI.danger);
   settingsBreaker(ctx, 'voice chat', voiceEnabled(), hoverAction === 'toggle-voice', SET_VOICE_Y, 'rgba(57,217,138,0.28)', '#39d98a');
+  // The total defence against offensive paintings: everyone renders bare.
+  settingsBreaker(ctx, 'hide all paint', paintHiddenAll(), hoverAction === 'toggle-hide-paint', SET_PAINT_Y, 'rgba(232,53,42,0.28)', UI.danger);
 
   // REPORT — a player, a bug, anything harmful. Typed on the keyboard and
   // filed to the backend; no address, no mail client, no fuss.
@@ -2259,6 +2266,7 @@ function hitSettings(u: number, v: number): MenuAction | null {
   if (inBar(MUSIC_BAR)) return 'music-vol';
   if (y >= SET_MUTE_Y - 4 && y <= SET_MUTE_Y + 40) return 'toggle-mute';
   if (y >= SET_VOICE_Y - 4 && y <= SET_VOICE_Y + 40) return 'toggle-voice';
+  if (y >= SET_PAINT_Y - 4 && y <= SET_PAINT_Y + 40) return 'toggle-hide-paint';
   if (inBar(SET_REPORT_BTN)) return 'settings-report';
   if (inBar(SET_CREDITS_BTN)) return 'settings-credits';
   if (inBar(SET_CLOSE_BTN)) return 'settings-close';
