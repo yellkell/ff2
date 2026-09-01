@@ -77,7 +77,7 @@ interface PlacedPaint {
   kind: 'stripe' | 'splotch';
   colour: number;   // index into the sold palette (not a free RGB)
   variant: number;  // splotch silhouette roll; stripes: end-cap style
-  part: 'head' | 'chest' | 'pelvis' | 'gloveL' | 'gloveR';
+  part: 'head' | 'body' | 'gloveL' | 'gloveR';  // chest+pelvis merged
   u: number; v: number;   // anchor in that part's unwrap, quantized /255
   angle: number;          // /255 over 2π
   len: number; wid: number; // /255 over that part's allowed range

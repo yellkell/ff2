@@ -119,13 +119,14 @@ export class BartenderSystem extends createSystem({}) {
     // torso pieces are parked at fixed heights on the wheeled base).
     this.rig = buildBoxer(1, BARTENDER_BEAR_SKIN.id); // house BEAR only — no other skins
     retintRig(this.rig.all, PALETTE.amber);
-    // Reveal the BEAR skin across the WHOLE rig — head AND torso. The torso's
-    // chest/pelvis pieces are per-skin tagged and start hidden, so skinning the
-    // head alone leaves him a floating head over the base with no body.
+    // Reveal the BEAR skin across the WHOLE rig — head AND torso. The body
+    // is per-skin tagged and starts hidden, so skinning the head alone
+    // leaves him a floating head over the base with no body.
     for (const part of this.rig.all) applyAvatarSkin(part, BARTENDER_BEAR_SKIN);
     this.rig.head.position.set(0, 1.52, 0);
-    this.rig.chest.position.set(0, 1.22, 0);
-    this.rig.pelvis.position.set(0, 0.92, 0);
+    // The body plants at the HIPS (its rings are hip-local) — set low enough
+    // that its neck stops clear of the floating head, same as a player's.
+    this.rig.body.position.set(0, 0.88, 0);
     this.root.add(this.rig.head, this.rig.torso);
     for (const glove of this.rig.gloves) this.root.add(glove);
     this.restGloves();

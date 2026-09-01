@@ -23,7 +23,7 @@ import {
   RepeatWrapping,
   Vector3,
 } from 'three';
-import { buildMannequinChest, buildMannequinHead, buildMannequinPelvis } from './mannequin.js';
+import { buildMannequinBody, buildMannequinHead } from './mannequin.js';
 import { BODY_IK, PALETTE, teamColor } from '../config.js';
 import { collapseStatic } from '../arena/merge.js';
 import { buildHand } from './hands.js';
@@ -63,12 +63,14 @@ const STEEL_ROUGH = brushedSteelMap();
 export interface BoxerRig {
   /** Helmet + visor; position/orient from the head pose. */
   head: Group;
-  /** Container for the solved torso pieces (sits at the world origin). */
+  /** Container for the solved torso (sits at the world origin). */
   torso: Group;
-  /** Shoulder yoke + pauldrons + trunk; placed/oriented at the chest point. */
-  chest: Group;
-  /** Pelvis block; placed at the hips. */
-  pelvis: Group;
+  /**
+   * THE BODY — one piece, neck to tip, planted at the HIPS and leaned along
+   * the spine. (It was two groups, chest and pelvis, moved independently:
+   * the waist joint between them visibly opened as you leaned.)
+   */
+  body: Group;
   /** One gauntlet per hand; position/orient from the hand poses. */
   gloves: [Group, Group];
   /** Everything, for showing/hiding as one. */
@@ -272,13 +274,9 @@ const HEAD_BUILDERS: Record<string, (accent: number) => Group> = {
   blank: () => buildMannequinHead('white'),
   onyx: () => buildMannequinHead('onyx'),
 };
-const CHEST_BUILDERS: Record<string, (accent: number) => Group> = {
-  blank: () => buildMannequinChest('white'),
-  onyx: () => buildMannequinChest('onyx'),
-};
-const PELVIS_BUILDERS: Record<string, (accent: number) => Group> = {
-  blank: () => buildMannequinPelvis('white'),
-  onyx: () => buildMannequinPelvis('onyx'),
+const BODY_BUILDERS: Record<string, (accent: number) => Group> = {
+  blank: () => buildMannequinBody('white'),
+  onyx: () => buildMannequinBody('onyx'),
 };
 const ALL_SKIN_IDS = ['blank', 'onyx'];
 
@@ -320,26 +318,22 @@ export function buildBoxer(team: number, skinId?: string): BoxerRig {
   head.name = 'opponent-head';
   for (const id of ids) head.add(buildCollapsed(HEAD_BUILDERS[id]));
 
-  // --- Torso: a DISTINCT armoured cuirass + hip set per built skin. Same
-  //     silhouette envelope and BODY_IK hitbox spheres, equally hittable. ---
-  const chest = new Group();
-  chest.name = 'opponent-chest';
-  for (const id of ids) chest.add(buildCollapsed(CHEST_BUILDERS[id]));
-
-  const pelvis = new Group();
-  pelvis.name = 'opponent-pelvis';
-  for (const id of ids) pelvis.add(buildCollapsed(PELVIS_BUILDERS[id]));
+  // --- Body: ONE surface per built tone, neck to tip. Same silhouette
+  //     envelope and BODY_IK hitbox spheres, equally hittable. ---
+  const body = new Group();
+  body.name = 'opponent-body';
+  for (const id of ids) body.add(buildCollapsed(BODY_BUILDERS[id]));
 
   const torso = new Group();
   torso.name = 'opponent-torso';
-  torso.add(chest, pelvis);
+  torso.add(body);
 
   // Articulated VR hands (left thumb +x, right thumb -x), not gauntlets.
   const gloves: [Group, Group] = [buildHand(1), buildHand(-1)];
   gloves[0].name = 'opponent-glove-left';
   gloves[1].name = 'opponent-glove-right';
 
-  return { head, torso, chest, pelvis, gloves, all: [head, torso, gloves[0], gloves[1]] };
+  return { head, torso, body, gloves, all: [head, torso, gloves[0], gloves[1]] };
 }
 
 const UP = new Vector3(0, 1, 0);
@@ -410,11 +404,13 @@ export function solveTorso(
   _tilt.setFromUnitVectors(UP, _spine);
   _yaw.setFromAxisAngle(UP, Math.atan2(-_fwd.x, -_fwd.z));
 
-  // The torso group sits at the world origin, so world coords ARE local here.
-  rig.chest.position.copy(_chest);
-  rig.chest.quaternion.copy(_tilt).multiply(_yaw);
-  rig.pelvis.position.copy(_hips);
-  rig.pelvis.quaternion.copy(_yaw);
+  // The torso group sits at the world origin, so world coords ARE local
+  // here. ONE rigid body: planted at the hips and leaned along the spine,
+  // so the shoulders follow the lean without a waist joint to open up.
+  // (The chest/pelvis POINTS below are still solved exactly as before —
+  // they place the hitbox spheres, which never change.)
+  rig.body.position.copy(_hips);
+  rig.body.quaternion.copy(_tilt).multiply(_yaw);
 
   outChest.copy(_chest);
   outPelvis.copy(_hips);
@@ -422,7 +418,7 @@ export function solveTorso(
 
 /**
  * A static, posed bust of YOUR boxer for the lobby customization preview —
- * head over chest over pelvis with both gauntlets up in a guard. Built at the
+ * the head floating over the one-piece body, both gauntlets up in a guard. Built at the
  * given accent so the slider visibly drives the whole avatar's neon, not just
  * the gloves. Returns one group; scale/position/spin it as you like, and call
  * `setAvatarAccent` on it to recolour live.
@@ -430,15 +426,14 @@ export function solveTorso(
 export function buildBoxerPreview(accent: number): Group {
   const rig = buildBoxer(0, 'blank');
 
-  rig.pelvis.position.set(0, 0, 0);
-  rig.chest.position.set(0, 0.4, 0);
-  rig.head.position.set(0, 0.78, 0);
+  rig.body.position.set(0, 0, 0);
+  rig.head.position.set(0, 0.62, 0); // clear of the body's neck (top ring 0.488)
   rig.gloves[0].position.set(-0.26, 0.46, -0.14);
   rig.gloves[1].position.set(0.26, 0.46, -0.14);
 
   const preview = new Group();
   preview.name = 'avatar-preview';
-  preview.add(...rig.all); // head, torso (chest+pelvis), both gloves
+  preview.add(...rig.all); // head, torso (the one body), both gloves
   setAvatarAccent(preview, accent);
   return preview;
 }

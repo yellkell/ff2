@@ -1120,8 +1120,7 @@ export class FightSystem extends createSystem({}) {
     _head.y += FIGHT.pitDepth;
     const z = side === 0 ? FIGHT.platformZ : -FIGHT.platformZ;
     solveTorso(rig, _head, _headQ, FIGHT.centerX, z, this.myChest, this.myPelvis);
-    rig.chest.position.y -= FIGHT.pitDepth;
-    rig.pelvis.position.y -= FIGHT.pitDepth;
+    rig.body.position.y -= FIGHT.pitDepth;
     this.myChest.y -= FIGHT.pitDepth;
     this.myPelvis.y -= FIGHT.pitDepth;
   }
@@ -1619,8 +1618,12 @@ export class FightSystem extends createSystem({}) {
     const oppId = side >= 0 ? pub.fight.sides[side === 0 ? 1 : 0] : null;
     const rig = oppId ? pub.punters.get(oppId)?.rig : undefined;
     if (rig && ev.part !== undefined) {
-      const anchor = ev.part === 0 ? rig.head : ev.part === 2 ? rig.pelvis : rig.chest;
-      return _hitAnchor.copy(anchor.position);
+      // One body group now, planted at the hips: head hits anchor on the
+      // head, pelvis hits at the body's own origin, and a chest hit rides a
+      // third of a metre up it (close enough for a damage popup).
+      _hitAnchor.copy(ev.part === 0 ? rig.head.position : rig.body.position);
+      if (ev.part === 1) _hitAnchor.y += 0.36;
+      return _hitAnchor;
     }
     if (ev.at) return _hitAnchor.set(ev.at[0], ev.at[1], ev.at[2]);
     return fallback;

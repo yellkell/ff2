@@ -28,14 +28,18 @@ carried over verbatim: everything in it still applies to this code.
   TOWN (left) is a buttonless live-status board; YOU (right) is the body,
   the shop and the wallet. Headless probe: `npm run dev` then
   `npm run check:wrap` (add `--shots` for panel PNGs).
-- **THE BLANK** — the mannequin (DESIGN.md §5, phase 3 v3):
-  `src/avatar/mannequin.ts`, the ONLY body — one smooth lofted surface
-  per piece (no crossing parts, no seams, monotonic taper below the
-  hips), starting ALL WHITE or ALL BLACK ('blank'/'onyx', picked on the
-  locker's COLOUR tab, synced over the skin wire). Honest to the
-  hitboxes, immune to every recolour; the rest of your colour is paint.
-  THE PODIUM shows your dressed blank beside the YOU wing.
-  Preview: `/skin-preview.html?skins=blank,onyx`.
+- **THE BLANK** — the mannequin (DESIGN.md §5): `src/avatar/mannequin.ts`,
+  the ONLY body. TWO pieces and no more — ONE continuous lofted surface
+  from the neck through shoulders, waist and hips to a monotonic taper,
+  and a bare egg of a HEAD that floats free above it. (Chest and pelvis
+  used to be separate lofts the IK moved apart, so the waist visibly
+  opened as you leaned; the neck used to ride on the head and swung
+  through the shoulders on every look-behind. Both joints are gone
+  because there are no longer joints there.) Starts ALL WHITE or ALL
+  BLACK ('blank'/'onyx', picked on the locker's COLOUR tab, synced over
+  the skin wire). Honest to the hitboxes, immune to every recolour; the
+  rest of your colour is paint. Preview:
+  `/skin-preview.html?skins=blank,onyx`.
 - **THE MOVE GRAMMAR** (DESIGN.md §4, first pass) — the five titans
   learned RAVE RAID's dance: gates, crossfire rails + THE TRAP, THE X,
   the donut's one-two, marching waves that always turn, and GOLIATH's

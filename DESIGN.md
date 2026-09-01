@@ -269,6 +269,18 @@ you've built yourself. (FF1's `boxer.ts` head/torso/gloves IK solve is the
 skeleton; the mannequin is a new procedural skin over the same rig, so
 netcode, hitboxes and the pose bus don't move.)
 
+**Two pieces, one moving part.** The body is a SINGLE loft — neck,
+shoulders, chest, waist, hips, taper — planted at the hips and leaned
+along the spine; the HEAD is a bare egg that floats free above it and is
+the only piece that moves on its own. Chest and pelvis were once separate
+lofts the IK placed independently, which meant the waist opened and shut
+as you leaned, and the neck rode on the head, dragging itself through the
+shoulders whenever you looked behind you. Neither seam can reappear,
+because neither joint exists: there is nothing to come apart, and only
+the head has to be animated. The hitboxes are untouched — `solveTorso`
+still solves the chest and pelvis POINTS for the BODY_IK spheres, and the
+one surface runs inside them.
+
 ### 5.2 The shop — shapes, never colour
 
 Coins (earned per game — fights, raids, **and songs**: finishing a RAVE

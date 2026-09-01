@@ -94,7 +94,24 @@ console.log('=== the wire: pack / unpack ===');
   check('junk / empty / numeric wire → bare base tone', wire.junk === 0 && wire.empty === 0 && wire.numeric === 0);
   check('oversized wire string is refused', wire.long === 0);
   check('tampered colour byte drops that unit only', wire.tampered === 11, String(wire.tampered));
-  check('fields survive quantization (chest stripe at u≈0.72)', wire.first.kind === 'stripe' && wire.first.part === 'chest' && Math.abs(wire.first.u - 0.72) < 0.01, JSON.stringify(wire.first));
+  check('fields survive quantization (body stripe at u≈0.72)', wire.first.kind === 'stripe' && wire.first.part === 'body' && Math.abs(wire.first.u - 0.72) < 0.01, JSON.stringify(wire.first));
+
+  // THE MERGE: chest and pelvis became one body surface, so a look packed
+  // before it (wire format 1) must still land on the right half of the
+  // fighter rather than vanishing.
+  const legacy = await page.evaluate(() => {
+    const P = window.__ff2.paint;
+    // Hand-build a format-1 look: one chest unit and one pelvis unit, both
+    // at v = 0.5 — the chest's belongs above the waist, the pelvis's below.
+    const unit = (partIdx, v) => [ (partIdx << 1), 9, 0, 191, Math.round(v * 255), 0, 150, 40 ];
+    const bytes = [1, ...unit(1, 0.5), ...unit(2, 0.5)];
+    const wire = btoa(String.fromCharCode(...bytes));
+    return P.unpack(wire).paint;
+  });
+  const [oldChest, oldPelvis] = legacy;
+  check('a pre-merge look still unpacks (2 units)', legacy.length === 2, JSON.stringify(legacy));
+  check('its chest unit lands on the body ABOVE the waist', !!oldChest && oldChest.part === 'body' && oldChest.v > 0.5, JSON.stringify(oldChest));
+  check('its pelvis unit lands on the body BELOW the waist', !!oldPelvis && oldPelvis.part === 'body' && oldPelvis.v < 0.4, JSON.stringify(oldPelvis));
 
   // THE RECORD (P4): the look as words + as the profile-card banner.
   console.log('\n=== the record: colour words + the banner ===');

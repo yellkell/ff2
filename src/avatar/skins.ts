@@ -1,8 +1,7 @@
 /**
  * Pickable skins for the avatar and the platform — pure visuals, applied by
  * recolouring role-tagged materials (boxer.ts / arena.ts tag every material
- * with `userData.role`). Hitboxes are never touched: the PANTHER silhouette
- * slims the chest/pelvis GROUP scales only, the BODY_IK spheres stay as-is.
+ * with `userData.role`). Hitboxes are never touched.
  *
  * Three launch skins per slot (blue / red / one more) plus a locked
  * COMING SOON chip. The rival's picks arrive in the `iam` message and are
@@ -22,7 +21,8 @@ export interface AvatarSkin {
   trim: number;
   /** Visor / reactor / trim glow. */
   accent: number;
-  /** Sleeker silhouette (visual group scale only — hitboxes untouched). */
+  /** Sleeker silhouette — FF1's PANTHER trait, unused since THE BLANK
+   *  became the only body. Kept so old saved/wire skin ids still parse. */
   slim?: boolean;
   /** Shop price in coins. Omitted = free / owned from the start. */
   price?: number;
@@ -256,11 +256,9 @@ export function applyAvatarSkin(root: Object3D, skin: AvatarSkin): void {
         break;
     }
   });
-  // Silhouette: PANTHER runs a slimmer chest/pelvis. Group scale only.
-  const chest = root.getObjectByName('opponent-chest');
-  const pelvis = root.getObjectByName('opponent-pelvis');
-  if (chest) chest.scale.set(skin.slim ? 0.82 : 1, 1, skin.slim ? 0.88 : 1);
-  if (pelvis) pelvis.scale.set(skin.slim ? 0.86 : 1, 1, skin.slim ? 0.9 : 1);
+  // (FF1's PANTHER used to slim the chest/pelvis group scales here. Both
+  // groups are one body now and no surviving skin sets `slim`, so the
+  // silhouette is the mannequin's own — see avatar/mannequin.ts.)
 }
 
 /** Recolour a platform group's neon piping + slab tint to a skin. */

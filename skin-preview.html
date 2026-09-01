@@ -49,8 +49,8 @@
         g.rotation.y = yaw;
         const rig = buildBoxer(0, id);
         rig.head.position.set(0, 1.52, 0);
-        rig.chest.position.set(0, 1.22, 0);
-        rig.pelvis.position.set(0, 0.92, 0);
+        // ONE body, planted at the hips (its rings are hip-local).
+        rig.body.position.set(0, 0.88, 0);
         g.add(rig.head, rig.torso);
         rig.gloves[0].position.set(-0.32, 1.0, -0.14);
         rig.gloves[1].position.set(0.32, 1.0, -0.14);

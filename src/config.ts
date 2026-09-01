@@ -128,8 +128,15 @@ export function seasonScoreField(idx: number): string {
 export const PAINT = {
   /** Placed units per look — the cap IS the wire/moderation bound. */
   maxUnits: 64,
-  /** Paint canvas size per body part (px, square). */
-  canvas: { head: 256, chest: 512, pelvis: 256 } as Record<string, number>,
+  /**
+   * Paint canvas size per body part (px, square). The BODY is one surface
+   * now (chest + pelvis merged), covering roughly twice the old chest's
+   * arc — so it takes a bigger sheet to hold the same ink density. 768
+   * lands near the old chest's ~1200 px/m rather than the pelvis's ~640;
+   * drop it to 512 if a full club's textures ever cost more than the
+   * paint is worth.
+   */
+  canvas: { head: 256, body: 768 } as Record<string, number>,
   /** Unit prices in coins; racks multiply (see tierOf). A basic stripe is
    *  two games' pay — a first paint job lands around a session of play. */
   price: { stripe: 20, splotch: 30 },

@@ -9,8 +9,8 @@
  *
  *   - the Look model + localStorage persistence (yours only, for now —
  *     the wire ride is P3),
- *   - the BAKE: each mannequin paint surface (skull, trunk, hips — the
- *     meshes tagged `userData.paintPart`, exempted from the static
+ *   - the BAKE: each mannequin paint surface (the skull and the one body
+ *     loft — meshes tagged `userData.paintPart`, exempted from the static
  *     collapse) gets a per-part canvas painted base-tone-first, then
  *     every unit oldest-first, uploaded ONCE as the material's map. A
  *     repaint happens only when the look changes; at runtime a painted
@@ -29,9 +29,14 @@
 
 import { CanvasTexture, Mesh, MeshStandardMaterial, SRGBColorSpace, type Object3D } from 'three';
 import { PAINT } from '../config.js';
+import { BODY_V_SPLIT } from './mannequin.js';
 
 export type PaintKind = 'stripe' | 'splotch';
-export type PaintPart = 'head' | 'chest' | 'pelvis';
+/** The two paint surfaces. THE BLANK's chest and pelvis became ONE body
+ *  loft (avatar/mannequin.ts), so a look now lives on the head and the
+ *  body — legacy 'chest'/'pelvis' units fold into the body's v range on
+ *  read, so paint made before the merge survives it. */
+export type PaintPart = 'head' | 'body';
 
 export interface PlacedPaint {
   kind: PaintKind;
@@ -65,12 +70,26 @@ let current: Look | null = null;
 
 const clamp01 = (n: unknown): number => (typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0);
 
+/**
+ * Fold a pre-merge v onto the merged body. The old CHEST occupied what is
+ * now everything above the waist (v ≥ BODY_V_SPLIT) and the old PELVIS
+ * everything below it, so each band is a straight rescale. Sizes are left
+ * alone: the body is roughly twice the old chest's reach, so migrated
+ * paint reads a little flatter — the position is what people recognise.
+ */
+function bandV(v: number, band: 'upper' | 'lower'): number {
+  return band === 'upper' ? BODY_V_SPLIT + v * (1 - BODY_V_SPLIT) : v * BODY_V_SPLIT;
+}
+
 /** Validate one stored/received unit; null drops it (fail-soft). */
 function cleanUnit(raw: unknown): PlacedPaint | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const r = raw as Record<string, unknown>;
   const kind = r.kind === 'splotch' ? 'splotch' : r.kind === 'stripe' ? 'stripe' : null;
-  const part = r.part === 'head' || r.part === 'chest' || r.part === 'pelvis' ? r.part : null;
+  // 'chest'/'pelvis' are the pre-merge parts: fold them onto the body,
+  // upper band and lower band, so a saved look keeps its picture.
+  const legacy = r.part === 'chest' ? 'upper' : r.part === 'pelvis' ? 'lower' : null;
+  const part = r.part === 'head' ? 'head' : r.part === 'body' || legacy ? 'body' : null;
   const colour = typeof r.colour === 'number' ? Math.floor(r.colour) : -1;
   if (!kind || !part || colour < 0 || colour >= PAINT.colours.length) return null;
   return {
@@ -79,7 +98,7 @@ function cleanUnit(raw: unknown): PlacedPaint | null {
     colour,
     variant: typeof r.variant === 'number' ? Math.floor(Math.abs(r.variant)) % 256 : 0,
     u: clamp01(r.u),
-    v: clamp01(r.v),
+    v: legacy ? bandV(clamp01(r.v), legacy) : clamp01(r.v),
     angle: clamp01(r.angle),
     len: clamp01(r.len),
     wid: clamp01(r.wid),
@@ -117,20 +136,30 @@ export function clearLook(): void {
 //
 // One unit is exactly 8 bytes, every field quantized by construction:
 //
-//   b0  kind (bit 0) | part index (bits 1..3)
+//   b0  kind (bit 0) | part index (bits 1..3 — see WIRE_PARTS)
 //   b1  colour index          b2  variant
 //   b3  u ·255   b4  v ·255   b5  angle ·255   b6  len ·255   b7  wid ·255
 //
-// A whole look is [format byte = 1][units…], base64'd so it rides every
+// A whole look is [format byte][units…], base64'd so it rides every
 // JSON channel (the 1v1 `iam`, the mesh `iam`, the pub hello) as one short
 // string — a maxed 64-unit look is 513 bytes / ~684 base64 chars, smaller
 // than a single pose-packet burst. The receive side re-validates every
 // unit through cleanUnit, so malformed or hostile data fails soft to the
 // bare base tone — never to an error.
 
-const WIRE_FORMAT = 1;
-/** Part order ON THE WIRE — append-only (3/4 are reserved for the gloves). */
-const WIRE_PARTS: PaintPart[] = ['head', 'chest', 'pelvis'];
+/**
+ * FORMAT 2 — the merged body. Format 1 packed three parts (head, chest,
+ * pelvis) because the mannequin was three lofts; the torso is one surface
+ * now, so the wire carries two. Old strings still read: v1 units come back
+ * as 'chest'/'pelvis' and cleanUnit folds them onto the body's upper and
+ * lower bands, so a look packed before the merge still paints the fighter
+ * it was made for.
+ */
+const WIRE_FORMAT = 2;
+/** Part order ON THE WIRE — append-only (2+ reserved for the gloves). */
+const WIRE_PARTS: PaintPart[] = ['head', 'body'];
+/** Format 1's part order, kept only to read looks packed before the merge. */
+const WIRE_PARTS_V1 = ['head', 'chest', 'pelvis'];
 /** Longest base64 string unpackLook will even look at (a maxed look is ~700). */
 const WIRE_MAX_CHARS = 1024;
 
@@ -174,7 +203,9 @@ export function unpackLook(wire: unknown): Look {
     return bare;
   }
   if (bin.length < 1 + 8 || (bin.length - 1) % 8 !== 0) return bare;
-  if (bin.charCodeAt(0) !== WIRE_FORMAT) return bare;
+  const format = bin.charCodeAt(0);
+  if (format !== WIRE_FORMAT && format !== 1) return bare;
+  const parts: readonly string[] = format === 1 ? WIRE_PARTS_V1 : WIRE_PARTS;
   const count = Math.min((bin.length - 1) / 8, PAINT.maxUnits);
   const paint: PlacedPaint[] = [];
   for (let i = 0; i < count; i++) {
@@ -182,7 +213,7 @@ export function unpackLook(wire: unknown): Look {
     const b0 = bin.charCodeAt(o);
     const unit = cleanUnit({
       kind: (b0 & 1) === 1 ? 'splotch' : 'stripe',
-      part: WIRE_PARTS[b0 >> 1], // out of range → undefined → dropped
+      part: parts[b0 >> 1], // out of range → undefined → dropped
       colour: bin.charCodeAt(o + 1),
       variant: bin.charCodeAt(o + 2),
       u: bin.charCodeAt(o + 3) / 255,
@@ -319,7 +350,7 @@ export function handTake(kind: PaintKind, colour: number): boolean {
     kind,
     colour,
     variant: Math.floor(Math.random() * 8),
-    part: 'chest',
+    part: 'body',
     u: 0.75,
     v: 0.5,
     angle: 0,
@@ -537,9 +568,9 @@ export function paintBanner(wire: string, tone: string, w = 400, h = 120): HTMLC
   const look = unpackLook(wire);
   let out: HTMLCanvasElement | null = null;
   if (look.paint.length) {
-    const counts: Record<PaintPart, number> = { head: 0, chest: 0, pelvis: 0 };
+    const counts: Record<PaintPart, number> = { head: 0, body: 0 };
     for (const p of look.paint) counts[p.part] += 1;
-    const part: PaintPart = counts.chest > 0 ? 'chest' : counts.head >= counts.pelvis ? 'head' : 'pelvis';
+    const part: PaintPart = counts.body > 0 ? 'body' : 'head';
     const size = PAINT.canvas[part] ?? 256;
     const flat = bakeFlat(look, part, tone === 'onyx' ? 'onyx' : 'white', size);
     out = document.createElement('canvas');
@@ -575,22 +606,22 @@ export function demoLook(): Look {
   });
   return {
     paint: [
-      // Twin racing stripes down the chest front (front = u 0.75).
-      s('chest', 0.72, 0.45, 0.25, 0.62, 0.16, 9), // ember
-      s('chest', 0.78, 0.45, 0.25, 0.62, 0.16, 9),
-      s('chest', 0.75, 0.45, 0.25, 0.66, 0.05, 1), // the black pin between
+      // Twin racing stripes down the body's front (front = u 0.75).
+      s('body', 0.72, 0.708, 0.25, 0.62, 0.085, 9), // ember
+      s('body', 0.78, 0.708, 0.25, 0.62, 0.085, 9),
+      s('body', 0.75, 0.708, 0.25, 0.66, 0.027, 1), // the black pin between
       // A gold sash crossing them.
-      s('chest', 0.75, 0.62, 0.12, 0.34, 0.1, 20),
+      s('body', 0.75, 0.798, 0.12, 0.34, 0.053, 20),
       // Shoulder chevrons, cyan.
-      s('chest', 0.58, 0.82, 0.1, 0.16, 0.14, 11),
-      s('chest', 0.92, 0.82, 0.9, 0.16, 0.14, 11),
+      s('body', 0.58, 0.904, 0.1, 0.16, 0.074, 11),
+      s('body', 0.92, 0.904, 0.9, 0.16, 0.074, 11),
       // The visor band across the face, cyan over a magenta underline.
       s('head', 0.75, 0.56, 0.0, 0.4, 0.12, 11),
       s('head', 0.75, 0.49, 0.0, 0.34, 0.05, 10),
       // Hip splotches — the chameleon's flanks.
-      b('pelvis', 0.02, 0.55, 0.42, 10, 3), // magenta, right flank
-      b('pelvis', 0.48, 0.55, 0.42, 13, 7), // lime, left flank
-      b('pelvis', 0.75, 0.3, 0.3, 9, 11), // ember, front low
+      b('body', 0.02, 0.258, 0.42, 10, 3), // magenta, right flank
+      b('body', 0.48, 0.258, 0.42, 13, 7), // lime, left flank
+      b('body', 0.75, 0.141, 0.3, 9, 11), // ember, front low
       // A crown dot on the skull.
       b('head', 0.75, 0.88, 0.2, 20, 5),
     ],
