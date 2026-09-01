@@ -43,6 +43,28 @@ for (const field of ['headline', 'body']) {
     process.exit(1);
   }
 }
+// THE VOICE's sections (docs/gazette-voice.md §5): a WANTED poster, the
+// Sheriff's NOTICE and the WEATHER line. Optional, but checked when present
+// so the page never has to guess — sizes match what the lobby lays out.
+const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const wanted =
+  article.wanted && typeof article.wanted === 'object'
+    ? { name: str(article.wanted.name, 24), crime: str(article.wanted.crime, 80), reward: str(article.wanted.reward, 40) }
+    : null;
+if (wanted && !wanted.name) {
+  console.error('wanted poster needs a name');
+  process.exit(1);
+}
+const notice = str(article.notice, 160);
+const weather = str(article.weather, 90);
+if (article.mood && /\s/.test(String(article.mood).trim())) {
+  console.error('mood must be ONE word');
+  process.exit(1);
+}
+if (/\b(ELO|XP|players?|gamers?|the game|servers?)\b/i.test(article.body)) {
+  console.error('the body breaks the fourth wall (ELO/XP/player/game/server) — see docs/gazette-voice.md §3');
+  process.exit(1);
+}
 
 const db = getFirestore(initializeApp(firebaseConfig));
 
@@ -65,6 +87,9 @@ await setDoc(doc(db, 'newspaper', 'latest'), {
   body: article.body,
   byline: article.byline ?? 'Sheriff Cole Ironside',
   mood: article.mood ?? '',
+  wanted,
+  notice,
+  weather,
   publishedAt: serverTimestamp(),
 });
 
@@ -81,9 +106,16 @@ await setDoc(doc(db, 'newspaper', 'latest'), {
     body: article.body,
     byline: article.byline ?? 'Sheriff Cole Ironside',
     mood: article.mood ?? '',
+    wanted,
+    notice,
+    weather,
   };
   writeFileSync(`gazette-archive/no-${n}.json`, JSON.stringify(record, null, 2) + '\n');
-  const md = `# The Gasket Gazette — No. ${edition}\n\n**${dateline}** · _${record.mood}_\n\n## ${record.headline}\n\n*${record.subhead}*\n\n${record.body}\n\n— ${record.byline}\n`;
+  const extras =
+    (wanted ? `\n\n> **WANTED — ${wanted.name}.** ${wanted.crime} Reward: ${wanted.reward}.` : '') +
+    (notice ? `\n\n> **NOTICE.** ${notice}` : '') +
+    (weather ? `\n\n_Weather: ${weather}_` : '');
+  const md = `# The Gasket Gazette — No. ${edition}\n\n**${dateline}** · _${record.mood}_\n\n## ${record.headline}\n\n*${record.subhead}*\n\n${record.body}\n\n— ${record.byline}${extras}\n`;
   writeFileSync(`gazette-archive/no-${n}.md`, md);
 }
 

@@ -19,14 +19,15 @@ import {
   type Scene,
 } from 'three';
 import { app, DEFAULT_ACCENT_HUE, saveBallArc, saveBallAttach, saveCurveStrength, saveShowBody, type AppEnvironment } from './appState.js';
-import { avatarOwned, customization, platformOwned } from './customization.js';
+import { avatarOwned, customization, platformOwned, gearOwned } from './customization.js';
 import { rankBadge, rankBadgeZoom } from './rankBadges.js';
 import { coinImage } from './coinIcon.js';
 import { canAfford, coins } from './wallet.js';
 import { tierForXp } from './progression.js';
 import { AVATAR_SKINS, PLATFORM_SKINS, type AvatarSkin, type PlatformSkin } from '../avatar/skins.js';
 import { paintBanner, paintHiddenAll } from '../avatar/paint.js';
-import { drawAvatarIcon, drawPlatformIcon } from './skinIcons.js';
+import { drawAvatarIcon, drawGearIcon, drawPlatformIcon } from './skinIcons.js';
+import { GEAR as GEAR_CATALOGUE, type GearDef } from '../avatar/gear.js';
 import { BOSSES } from '../campaign/bosses.js';
 import { drawBossIcon } from '../campaign/icons.js';
 import {
@@ -201,13 +202,17 @@ export type MenuAction =
   /** Switch the shop / locker tab. */
   | 'tab-avatars'
   | 'tab-platforms'
+  | 'tab-gear'
   | 'tab-colour'
   /** Tap an avatar tile (equip) or a platform tile (buy if unowned, else equip). */
   | `shop-av-${number}`
   | `shop-pf-${number}`
+  /** Tap a GEAR tile (wear / take off if owned; try on in the STORE). */
+  | `shop-gr-${number}`
   /** The BUY button on a previewed (tried-on) STORE tile. */
   | `shop-buy-av-${number}`
   | `shop-buy-pf-${number}`
+  | `shop-buy-gr-${number}`
   /** Open / close the Gasket Gazette. */
   | 'open-gazette'
   | 'gazette-close'
@@ -3333,7 +3338,7 @@ export function accentBarLight(u: number): number {
 
 /** Which tab is showing. 'colour' and 'arena' are locker-only, so the shop
  *  falls back to avatars for either. */
-function activeTab(locker: boolean): 'avatars' | 'platforms' | 'colour' | 'arena' {
+function activeTab(locker: boolean): 'avatars' | 'platforms' | 'gear' | 'colour' | 'arena' {
   const t = customization.tab;
   // FF2: THE BLANK is the only body — the AVATARS shelf is gone from both
   // faces. Anything that still says 'avatars' (old saves) reads PLATFORMS.
@@ -3344,8 +3349,8 @@ function activeTab(locker: boolean): 'avatars' | 'platforms' | 'colour' | 'arena
 interface DisplayItem {
   rect: PanRect;
   action: MenuAction;
-  kind: 'avatar' | 'platform';
-  skin: AvatarSkin | PlatformSkin;
+  kind: 'avatar' | 'platform' | 'gear';
+  skin: AvatarSkin | PlatformSkin | GearDef;
   index: number;
 }
 
@@ -3359,7 +3364,9 @@ function panelItems(locker: boolean): { items: DisplayItem[]; soon: PanRect | nu
   const count =
     tab === 'avatars'
       ? AVATAR_SKINS.filter((s) => !s.locked && avatarOwned(s.id) === locker).length + (locker ? 0 : 1)
-      : PLATFORM_SKINS.filter((s) => platformOwned(s.id) === locker).length;
+      : tab === 'gear'
+        ? GEAR_CATALOGUE.filter((g) => gearOwned(g.id) === locker).length
+        : PLATFORM_SKINS.filter((s) => platformOwned(s.id) === locker).length;
   const rows = Math.max(1, Math.ceil(count / GRID_COLS));
   // Up to 3 rows fit at full height (the classic layout, untouched); more
   // than that shares the same vertical span between the rows.
@@ -3382,6 +3389,15 @@ function panelItems(locker: boolean): { items: DisplayItem[]; soon: PanRect | nu
     });
     return { items, soon: locker ? null : next() };
   }
+  if (tab === 'gear') {
+    // GEAR: the STORE lists what you don't own (slot-grouped by catalogue
+    // order), the LOCKER what you do — tap to wear / take off.
+    GEAR_CATALOGUE.forEach((g, k) => {
+      if (gearOwned(g.id) !== locker) return;
+      items.push({ rect: next(), action: `shop-gr-${k}` as MenuAction, kind: 'gear', skin: g, index: k });
+    });
+    return { items, soon: null };
+  }
   PLATFORM_SKINS.forEach((s, j) => {
     if (platformOwned(s.id) !== locker) return;
     items.push({ rect: next(), action: `shop-pf-${j}` as MenuAction, kind: 'platform', skin: s, index: j });
@@ -3403,10 +3419,15 @@ function tilePreviewed(it: DisplayItem): boolean {
 function drawTile(ctx: CanvasRenderingContext2D, it: DisplayItem, hoverAction: MenuAction | null, locker: boolean): void {
   const r = it.rect;
   const avatar = it.kind === 'avatar';
-  const accent = avatar ? (it.skin as AvatarSkin).accent : (it.skin as PlatformSkin).neon;
+  const gear = it.kind === 'gear';
+  const accent = avatar ? (it.skin as AvatarSkin).accent : gear ? 0xc9a86a : (it.skin as PlatformSkin).neon;
   const css = hexCss(accent);
-  const equipped = avatar ? customization.avatar === it.skin.id : customization.platform === it.skin.id;
-  const owned = avatar ? avatarOwned(it.skin.id) : platformOwned(it.skin.id);
+  const equipped = avatar
+    ? customization.avatar === it.skin.id
+    : gear
+      ? customization.gear.includes(it.skin.id)
+      : customization.platform === it.skin.id;
+  const owned = avatar ? avatarOwned(it.skin.id) : gear ? gearOwned(it.skin.id) : platformOwned(it.skin.id);
   const previewed = !locker && tilePreviewed(it);
   const hot = hoverAction === it.action;
   plate(ctx, r.x, r.y, r.w, r.h, {
@@ -3423,6 +3444,7 @@ function drawTile(ctx: CanvasRenderingContext2D, it: DisplayItem, hoverAction: M
   const iconR = r.h * (compact ? 0.23 : 0.27);
   const iconCy = r.y + r.h * (compact ? 0.3 : 0.34);
   if (avatar) drawAvatarIcon(ctx, it.skin.id, icx, iconCy, iconR, css);
+  else if (gear) drawGearIcon(ctx, it.skin as GearDef, icx, iconCy, iconR, css);
   else drawPlatformIcon(ctx, it.skin as PlatformSkin, icx, iconCy, iconR);
 
   ctx.textAlign = 'center';
@@ -3441,10 +3463,10 @@ function drawTile(ctx: CanvasRenderingContext2D, it: DisplayItem, hoverAction: M
   ctx.font = `800 ${compact ? 10 : 12}px system-ui, sans-serif`;
   if (equipped) {
     ctx.fillStyle = UI.amber;
-    ctx.fillText('EQUIPPED', icx, fy);
+    ctx.fillText(gear ? 'WORN' : 'EQUIPPED', icx, fy);
   } else if (owned) {
     ctx.fillStyle = 'rgba(232,236,242,0.5)';
-    ctx.fillText('EQUIP', icx, fy);
+    ctx.fillText(gear ? 'WEAR' : 'EQUIP', icx, fy);
   } else if ((it.skin as PlatformSkin).earnedBy) {
     // Earned, never sold — the tile says how to win it, shrunk to fit
     // ('FELL RAID GOOPLIATH' runs the full tile).
@@ -3461,7 +3483,7 @@ function drawTile(ctx: CanvasRenderingContext2D, it: DisplayItem, hoverAction: M
     // into the actual BUY button.
     const price = (it.skin as { price?: number }).price ?? 0;
     const b = buyRect(r);
-    const buyAction = `shop-buy-${avatar ? 'av' : 'pf'}-${it.index}`;
+    const buyAction = `shop-buy-${avatar ? 'av' : gear ? 'gr' : 'pf'}-${it.index}`;
     buttonPlate(ctx, b.x, b.y, b.w, b.h, `BUY  ${price}`, canAfford(price) ? UI.amber : UI.steel, hoverAction === buyAction, !canAfford(price));
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -3734,7 +3756,7 @@ function gridHit(x: number, y: number, locker: boolean): MenuAction | null {
     // A previewed STORE tile's BUY strip claims its own action (earned-only
     // tiles never grow one — nothing to buy).
     if (!locker && tilePreviewed(it) && !(it.skin as PlatformSkin).earnedBy && inPanRect(x, y, buyRect(it.rect))) {
-      return `shop-buy-${it.kind === 'avatar' ? 'av' : 'pf'}-${it.index}` as MenuAction;
+      return `shop-buy-${it.kind === 'avatar' ? 'av' : it.kind === 'gear' ? 'gr' : 'pf'}-${it.index}` as MenuAction;
     }
     if (inPanRect(x, y, it.rect)) return it.action;
   }
@@ -3782,8 +3804,10 @@ function drawShop(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null)
   ctx.fillStyle = UI.amber;
   ctx.fillText(String(coins.balance), PAN_W - 110, 39);
 
+  const tab = activeTab(false);
   drawTabs(ctx, [
-    { label: 'PLATFORMS', action: 'tab-platforms', active: true },
+    { label: 'PLATFORMS', action: 'tab-platforms', active: tab === 'platforms' },
+    { label: 'GEAR', action: 'tab-gear', active: tab === 'gear' },
   ], hoverAction);
   drawGrid(ctx, false, hoverAction);
 
@@ -3798,8 +3822,8 @@ function hitShop(u: number, v: number): MenuAction | null {
   const head = hitHeaderTabs(x, y);
   if (head) return head;
   if (inPanRect(x, y, FOOT_CLOSE)) return 'custom-close';
-  const t = tabHit(x, y, 1);
-  if (t !== null) return 'tab-platforms';
+  const t = tabHit(x, y, 2);
+  if (t !== null) return t === 0 ? 'tab-platforms' : 'tab-gear';
   return gridHit(x, y, false);
 }
 
@@ -3810,6 +3834,7 @@ function drawLocker(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | nul
   const tab = activeTab(true);
   drawTabs(ctx, [
     { label: 'PLATFORMS', action: 'tab-platforms', active: tab === 'platforms' },
+    { label: 'GEAR', action: 'tab-gear', active: tab === 'gear' },
     { label: 'COLOUR', action: 'tab-colour', active: tab === 'colour' },
     { label: 'ARENA', action: 'tab-arena', active: tab === 'arena' },
   ], hoverAction);
@@ -3828,8 +3853,8 @@ function hitLocker(u: number, v: number): MenuAction | null {
   const head = hitHeaderTabs(x, y);
   if (head) return head;
   if (inPanRect(x, y, FOOT_CLOSE)) return 'custom-close';
-  const t = tabHit(x, y, 3);
-  if (t !== null) return t === 0 ? 'tab-platforms' : t === 1 ? 'tab-colour' : 'tab-arena';
+  const t = tabHit(x, y, 4);
+  if (t !== null) return t === 0 ? 'tab-platforms' : t === 1 ? 'tab-gear' : t === 2 ? 'tab-colour' : 'tab-arena';
   const tab = activeTab(true);
   if (tab === 'colour') {
     // FF2: the armour dye is gone; the body offers exactly one choice —

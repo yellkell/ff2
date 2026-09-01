@@ -308,6 +308,24 @@ primer grey as the body. FF1's wallet/shop/locker plumbing
 (`wallet.ts`, `customization.ts`, owned-lists, try-before-buy preview)
 carries over; the catalogue changes from skins to attachments.
 
+**SHIPPED — GEAR** (`src/avatar/gear.ts`): fifteen shapes in three SLOTS
+— head (CREST, ANTENNAE, HORNS, HALO, MOHAWK, VISOR BAND), body
+(PAULDRONS, CHESTPLATE, COLLAR, RIDGE, BELT, EPAULETTES) and hands
+(CUFFS, KNUCKLES, GAUNTLETS) — one worn per slot, every piece primed in
+the body's own tone (white on a blank, black on an onyx) and immune to
+every recolour, exactly like the body. Purely visual: gear parents to the
+rig's head / body / glove groups and the BODY_IK hitboxes never move.
+The STORE and LOCKER grew a GEAR tab (try-on dresses the mirror, a buy
+goes straight on, a locker tap wears or removes), and the worn set rides
+every cosmetics channel packed as a short comma list — the duel `iam`,
+the mesh `iam` (`mesh.cosmetics`), the club hello + the LOOK event, the
+raid pit body, and the player doc (`gear`) — re-validated on arrival by
+`cleanGear` (unknown ids dropped, one per slot, hard length cap: the
+paint's fail-soft law). Probes: `check:wrap` dresses the podium through
+`__ff2.gear` and asserts the wire form; `check:paint`'s two-client room
+sees a punter's gear arrive on the hello. Not yet: gear as a PAINT
+surface (stripes stay on the body and head for now).
+
 ### 5.3 The paint — the important part
 
 > **Now specced in full in [`docs/paint.md`](docs/paint.md)** — buying

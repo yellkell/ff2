@@ -18,7 +18,7 @@
 import { FIREBASE_ENABLED, firebaseConfig } from './firebaseConfig.js';
 import { xpForArcade, xpForBot, xpForCampaign, xpForMatch, xpForTraining, xpForTutorial } from '../menu/progression.js';
 import { myPackedLook } from '../avatar/paint.js';
-import { customization } from '../menu/customization.js';
+import { customization, myPackedGear } from '../menu/customization.js';
 import { addCoins } from '../menu/wallet.js';
 import { CURRENCY, LADDER, seasonIndex, seasonScoreField, type ArcadeMode, type Difficulty } from '../config.js';
 
@@ -55,6 +55,8 @@ export interface LbRow {
   look: string;
   /** Their base tone ('blank' | 'onyx'), for the banner's ground. */
   tone: string;
+  /** Their worn gear, packed (avatar/gear.ts) — the profile card names it. */
+  gear: string;
 }
 
 /** The season-end honours, best first. */
@@ -141,7 +143,7 @@ export const leaderboard = {
 
 /** The current rival's claim about themselves (peer `iam` message). `look`
  *  is their packed paint (validated only when unpacked for the bake). */
-export const rival = { name: 'RIVAL', elo: 1000, avatarSkin: '', platformSkin: '', avColor: -1, avLight: 0.5, look: '' };
+export const rival = { name: 'RIVAL', elo: 1000, avatarSkin: '', platformSkin: '', avColor: -1, avLight: 0.5, look: '', gear: '' };
 
 const ELO_K = 32;
 
@@ -183,6 +185,7 @@ export function myProfileRow(): LbRow {
     note: profile.note,
     look: myPackedLook(),
     tone: customization.avatar,
+    gear: myPackedGear(),
   };
 }
 
@@ -488,10 +491,11 @@ export function initLeaderboard(): void {
           goopBest: 0,
           look: myPackedLook(),
           tone: customization.avatar,
+          gear: myPackedGear(),
           lastPlayedAt: Date.now(),
           updatedAt: h.fs.serverTimestamp(),
         });
-        mirroredLook = `${customization.avatar}|${myPackedLook()}`;
+        mirroredLook = `${customization.avatar}|${myPackedLook()}|${myPackedGear()}`;
       }
     } catch {
       leaderboard.status = 'leaderboard unreachable';
@@ -515,10 +519,10 @@ let mirroredLook: string | null = null;
  */
 export function syncLookMirror(): void {
   if (!FIREBASE_ENABLED || mirroredLook === null || !profile.id) return;
-  const key = `${customization.avatar}|${myPackedLook()}`;
+  const key = `${customization.avatar}|${myPackedLook()}|${myPackedGear()}`;
   if (key === mirroredLook) return;
   mirroredLook = key;
-  writeMine({ look: myPackedLook(), tone: customization.avatar });
+  writeMine({ look: myPackedLook(), tone: customization.avatar, gear: myPackedGear() });
 }
 
 let lastFetch = -Infinity;
@@ -551,6 +555,7 @@ export async function refreshLeaderboard(force = false): Promise<void> {
           note: (d.data().note as string) ?? '',
           look: (d.data().look as string) ?? '',
           tone: (d.data().tone as string) ?? 'blank',
+          gear: (d.data().gear as string) ?? '',
         }))
         // Every board shows anyone who's banked anything. (RANKED is ladder
         // points now — per-season, and raw ELO stays hidden for matchmaking.)

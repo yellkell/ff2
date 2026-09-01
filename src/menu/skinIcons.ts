@@ -7,6 +7,7 @@
  */
 
 import type { PlatformSkin } from '../avatar/skins.js';
+import type { GearDef } from '../avatar/gear.js';
 
 function hex(n: number): string {
   return `#${(n & 0xffffff).toString(16).padStart(6, '0')}`;
@@ -153,6 +154,153 @@ export function drawPlatformIcon(ctx: CanvasRenderingContext2D, skin: PlatformSk
     ctx.fillStyle = hex(skin.neon);
     ctx.fill();
     ctx.restore();
+  }
+  ctx.restore();
+}
+
+/**
+ * A GEAR tile's glyph: the slot's silhouette (a head, a torso, a fist) in
+ * dim steel with the piece itself drawn over it in the tile's brass — the
+ * shape you're buying, where it goes.
+ */
+export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: number, cy: number, r: number, color: string): void {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const dim = 'rgba(150,150,170,0.55)';
+  const line = Math.max(2, r * 0.14);
+  if (def.slot === 'head') {
+    ctx.fillStyle = dim;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + r * 0.1, r * 0.5, r * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = line;
+    ctx.beginPath();
+    switch (def.id) {
+      case 'crest':
+        ctx.moveTo(cx - r * 0.4, cy - r * 0.35);
+        ctx.quadraticCurveTo(cx, cy - r * 1.15, cx + r * 0.45, cy - r * 0.3);
+        ctx.stroke();
+        break;
+      case 'antennae':
+        for (const s of [-1, 1]) {
+          ctx.moveTo(cx + s * r * 0.3, cy - r * 0.4);
+          ctx.lineTo(cx + s * r * 0.62, cy - r * 1.05);
+        }
+        ctx.stroke();
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.arc(cx + s * r * 0.62, cy - r * 1.05, line * 0.9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        break;
+      case 'horns':
+        for (const s of [-1, 1]) {
+          ctx.moveTo(cx + s * r * 0.35, cy - r * 0.35);
+          ctx.quadraticCurveTo(cx + s * r * 0.95, cy - r * 0.5, cx + s * r * 0.75, cy - r * 1.05);
+        }
+        ctx.stroke();
+        break;
+      case 'halo':
+        ctx.ellipse(cx, cy - r * 0.85, r * 0.55, r * 0.16, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      case 'mohawk':
+        for (let i = -2; i <= 2; i++) {
+          const x = cx + i * r * 0.18;
+          ctx.moveTo(x - r * 0.08, cy - r * 0.45);
+          ctx.lineTo(x, cy - r * 0.95 + Math.abs(i) * r * 0.12);
+          ctx.lineTo(x + r * 0.08, cy - r * 0.45);
+        }
+        ctx.fill();
+        break;
+      default: // visorband
+        ctx.moveTo(cx - r * 0.55, cy - r * 0.05);
+        ctx.lineTo(cx + r * 0.55, cy - r * 0.05);
+        ctx.stroke();
+    }
+  } else if (def.slot === 'body') {
+    ctx.fillStyle = dim;
+    ctx.beginPath();
+    ctx.moveTo(cx - r * 0.62, cy - r * 0.55);
+    ctx.lineTo(cx + r * 0.62, cy - r * 0.55);
+    ctx.lineTo(cx + r * 0.32, cy + r * 0.75);
+    ctx.lineTo(cx - r * 0.32, cy + r * 0.75);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = line;
+    ctx.beginPath();
+    switch (def.id) {
+      case 'pauldrons':
+        for (const s of [-1, 1]) ctx.ellipse(cx + s * r * 0.58, cy - r * 0.5, r * 0.26, r * 0.18, 0, Math.PI, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'chestplate':
+        ctx.moveTo(cx - r * 0.3, cy - r * 0.35);
+        ctx.lineTo(cx + r * 0.3, cy - r * 0.35);
+        ctx.lineTo(cx + r * 0.22, cy + r * 0.15);
+        ctx.lineTo(cx, cy + r * 0.3);
+        ctx.lineTo(cx - r * 0.22, cy + r * 0.15);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case 'collar':
+        ctx.ellipse(cx, cy - r * 0.6, r * 0.42, r * 0.14, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        break;
+      case 'ridge':
+        for (let i = 0; i < 5; i++) {
+          ctx.moveTo(cx, cy - r * 0.45 + i * r * 0.26);
+          ctx.lineTo(cx + r * 0.16, cy - r * 0.36 + i * r * 0.26);
+        }
+        ctx.stroke();
+        break;
+      case 'belt':
+        ctx.moveTo(cx - r * 0.42, cy + r * 0.32);
+        ctx.lineTo(cx + r * 0.42, cy + r * 0.32);
+        ctx.stroke();
+        ctx.fillRect(cx - r * 0.09, cy + r * 0.22, r * 0.18, r * 0.2);
+        break;
+      default: // epaulettes
+        for (const s of [-1, 1]) ctx.fillRect(cx + s * r * 0.62 - r * 0.2, cy - r * 0.66, r * 0.4, r * 0.14);
+    }
+  } else {
+    // A fist from above: the palm block and four fingers.
+    ctx.fillStyle = dim;
+    ctx.beginPath();
+    ctx.roundRect(cx - r * 0.42, cy - r * 0.2, r * 0.84, r * 0.7, r * 0.12);
+    ctx.fill();
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.roundRect(cx - r * 0.4 + i * r * 0.21, cy - r * 0.55, r * 0.17, r * 0.4, r * 0.06);
+      ctx.fill();
+    }
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = line;
+    ctx.beginPath();
+    switch (def.id) {
+      case 'cuffs':
+        ctx.moveTo(cx - r * 0.5, cy + r * 0.55);
+        ctx.lineTo(cx + r * 0.5, cy + r * 0.55);
+        ctx.stroke();
+        break;
+      case 'knuckles':
+        for (let i = 0; i < 4; i++) {
+          const x = cx - r * 0.31 + i * r * 0.21;
+          ctx.moveTo(x - r * 0.07, cy - r * 0.5);
+          ctx.lineTo(x, cy - r * 0.85);
+          ctx.lineTo(x + r * 0.07, cy - r * 0.5);
+        }
+        ctx.fill();
+        break;
+      default: // gauntlets
+        ctx.fillRect(cx - r * 0.34, cy - r * 0.08, r * 0.68, r * 0.42);
+    }
   }
   ctx.restore();
 }

@@ -60,6 +60,7 @@ import {
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, type Wrap } from '../menu/wrap.js';
 import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
+import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
 import { KitMenuPanel } from '../menu/wrap.js';
 import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey } from '../menu/paintbay.js';
@@ -75,8 +76,7 @@ import {
   setAvatarLight,
   setAvatarSkin,
   setPlatformSkin,
-  setShopPreview,
-} from '../menu/customization.js';
+  setShopPreview, gearOwned, gearWith, myGear, myPackedGear, ownGear, setGear, toggleGear } from '../menu/customization.js';
 import { canAfford, coins, spendCoins } from '../menu/wallet.js';
 import { playCash, preloadCash } from '../audio/cash.js';
 import { setMenuMusicActive, toggleMusicMuted } from '../audio/menuMusic.js';
@@ -1048,6 +1048,9 @@ export class MenuSystem extends createSystem({}) {
       case 'tab-arena':
         customization.tab = 'arena';
         break;
+      case 'tab-gear':
+        customization.tab = 'gear';
+        break;
       case 'av-uncolor':
         setAvatarColor(-1); // back to the skin's own palette
         break;
@@ -1082,6 +1085,24 @@ export class MenuSystem extends createSystem({}) {
           app.campaignStage = Number(action.slice('campaign-'.length)) || 0;
           app.arcade = '1v1';
           app.state = 'playing';
+          break;
+        }
+        // shop-buy-gr-N: the BUY button on a previewed GEAR tile; shop-gr-N:
+        // a LOCKER tap wears/removes a piece you own, a STORE tap tries an
+        // unowned piece on the mirror.
+        if (action.startsWith('shop-buy-gr-')) {
+          const def = GEAR[Number(action.slice('shop-buy-gr-'.length))];
+          if (def && !gearOwned(def.id)) {
+            this.buyOrWearGear(def.id, def.price);
+            if (gearOwned(def.id)) clearShopPreview();
+          }
+          break;
+        }
+        if (action.startsWith('shop-gr-')) {
+          const def = GEAR[Number(action.slice('shop-gr-'.length))];
+          if (!def) break;
+          if (customization.shopOpen && !gearOwned(def.id)) setShopPreview('gear', def.id);
+          else this.buyOrWearGear(def.id, def.price);
           break;
         }
         // shop-buy-av-N / shop-buy-pf-N: the BUY button on a previewed STORE
@@ -1194,6 +1215,19 @@ export class MenuSystem extends createSystem({}) {
    * buy it (debit the wallet, mark it owned) and equip it. Can't afford it →
    * nothing changes (the wallet refuses the spend).
    */
+  /** A gear tap: own it → wear it (or take it off); else buy it and wear it. */
+  private buyOrWearGear(id: string, price: number): void {
+    if (!gearOwned(id)) {
+      if (!canAfford(price) || !spendCoins(price)) return;
+      ownGear(id);
+      playCash();
+      const def = gearDef(id);
+      if (def) setGear(def.slot, id); // a fresh buy goes straight on
+      return;
+    }
+    toggleGear(id);
+  }
+
   private buyOrEquipPlatform(id: string, price: number): void {
     if (!platformOwned(id)) {
       if (!canAfford(price) || !spendCoins(price)) return; // can't afford — no-op
@@ -1284,6 +1318,22 @@ export class MenuSystem extends createSystem({}) {
         raw: () => ({ pod: podium.visible, grp: this.menu.group.visible, custom: customization.open, beat: podium.userData.beat ?? 0 }),
         at: () => podium.position.toArray(),
         pieces: () => podium.children[0]?.children.length ?? 0,
+        /** The gear the podium's blank is wearing right now. */
+        gear: () => wornGear(podium),
+      };
+      // GEAR, drivable headlessly: a dev equip grants the piece (no coins)
+      // so probes can dress the podium and watch it change.
+      (hook as unknown as { gear?: unknown }).gear = {
+        catalogue: () => GEAR.map((g) => g.id),
+        worn: () => myGear(),
+        equip: (id: string) => {
+          ownGear(id);
+          const d = gearDef(id);
+          if (d) setGear(d.slot, id);
+        },
+        clear: (slot: 'head' | 'body' | 'hands') => setGear(slot, ''),
+        pack: () => myPackedGear(),
+        clean: (s: string) => cleanGear(s),
       };
     }
     this.skinVersion = -1; // dress the new rig on the next applyOwnSkins
@@ -1353,10 +1403,15 @@ export class MenuSystem extends createSystem({}) {
       // shows exactly what you'd get.
       const pv = customization.preview;
       const mirrorAv = pv?.kind === 'avatar' ? resolveAvatarSkin(pv.id, customization.colorHue, customization.colorLight) : av;
+      // GEAR: your worn set on every rig that's yours; a STORE try-on
+      // dresses the MIRROR alone in the previewed piece (its slot swapped).
+      const gear = myGear();
+      const mirrorGear = pv?.kind === 'gear' ? gearWith(pv.id) : gear;
       for (const name of names) {
         const obj = this.scene.getObjectByName(name);
         if (obj) applyAvatarSkin(obj, name === 'mirror-avatar' ? mirrorAv : av);
         // (the podium wears what you actually own, like your own body)
+        if (obj) applyGear(obj, name === 'mirror-avatar' ? mirrorGear : gear, (name === 'mirror-avatar' ? mirrorAv : av).id === 'onyx' ? 'onyx' : 'white');
       }
       const pad = this.scene.getObjectByName('player-platform');
       if (pad) applyPlatformSkin(pad, platformSkin(customization.platform));

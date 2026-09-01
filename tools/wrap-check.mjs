@@ -85,6 +85,30 @@ check('THE TOWN board has no buttons at all', town.length === 0, town.join(','))
 const you = await wrap(`buttons('info')`);
 check('YOU leads with the paint bay + body, no club door', you.includes('open-paintbay') && you.includes('open-custom') && you.includes('rename') && !you.includes('open-pub'), you.join(','));
 
+// GEAR (avatar/gear.ts): a dev equip dresses the podium's blank in the piece
+// — head + body slots at once — and the wire form re-validates junk away.
+{
+  const before = await page.evaluate(() => window.__ff2.podium?.gear?.() ?? null);
+  await page.evaluate(() => {
+    window.__ff2.gear.equip('crest');
+    window.__ff2.gear.equip('pauldrons');
+  });
+  await page.waitForTimeout(400); // applyOwnSkins dresses on the next frame
+  const worn = await page.evaluate(() => window.__ff2.podium.gear());
+  const wire = await page.evaluate(() => ({
+    packed: window.__ff2.gear.pack(),
+    junk: window.__ff2.gear.clean('nonsense,crest,horns,,pauldrons'),
+    oversized: window.__ff2.gear.clean('crest,' + 'x'.repeat(200)),
+  }));
+  await page.evaluate(() => {
+    window.__ff2.gear.clear('head');
+    window.__ff2.gear.clear('body');
+  });
+  check('GEAR: the podium wears what you equip (crest + pauldrons)', Array.isArray(worn) && worn.includes('crest') && worn.includes('pauldrons') && (before?.length ?? 0) === 0, JSON.stringify({ before, worn }));
+  check('GEAR: the wire packs slot-ordered and drops junk / a second head', wire.packed === 'crest,pauldrons' && wire.junk.join(',') === 'crest,pauldrons', JSON.stringify(wire));
+  check('GEAR: an oversized wire string is refused whole (bare)', wire.oversized.length === 0, JSON.stringify(wire.oversized));
+}
+
 console.log('\n=== through the FIGHT door ===');
 await wrap(`act('wrap:fight')`);
 let face = await wrap(`buttons('train')`);

@@ -155,6 +155,9 @@ console.log('\n=== the room: hello → roster → bake-on-join ===');
   await ctxA.addInitScript(() => {
     const s = (part, u, v, angle, len, wid, colour) => ({ kind: 'stripe', part, u, v, angle, len, wid, colour, variant: 0 });
     localStorage.setItem('ff2-look', JSON.stringify({ paint: [s('chest', 0.75, 0.5, 0.25, 0.6, 0.15, 9), s('head', 0.75, 0.55, 0, 0.4, 0.12, 11)] }));
+    // …and PICASSO's gear (avatar/gear.ts): owned + worn, so it rides the hello.
+    localStorage.setItem('ff-owned-gear', JSON.stringify(['horns', 'belt']));
+    localStorage.setItem('ff-gear', 'horns,belt');
   });
 
   const pubUrl = (name) => `${base}/pub.html?name=${name}&server=${encodeURIComponent(pubWs)}`;
@@ -175,6 +178,8 @@ console.log('\n=== the room: hello → roster → bake-on-join ===');
     .then(() => true, () => false);
   const rosterB = await pageB.evaluate(() => window.__ff2.club.punters());
   check('RUBE sees PICASSO painted + baked on join', seesPainted, JSON.stringify(rosterB));
+  const picasso = rosterB.find((p) => p.name === 'PICASSO');
+  check("RUBE sees PICASSO's GEAR on the hello (horns + belt)", !!picasso && picasso.gr === 'horns,belt', picasso?.gr ?? '(no row)');
 
   // …and PICASSO sees RUBE bare but still baked (base tone fill).
   const seesBare = await pageA

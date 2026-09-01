@@ -18,11 +18,14 @@
       import { buildBoxer } from '/src/avatar/boxer.ts';
       import { applyAvatarSkin, applyPlatformSkin, avatarSkin, platformSkin } from '/src/avatar/skins.ts';
       import { makePlatform } from '/src/arena/arena.ts';
+      import { applyGear } from '/src/avatar/gear.ts';
 
       const params = new URLSearchParams(location.search);
       const skinIds = (params.get('skins') ?? '').split(',').filter(Boolean);
       const padIds = (params.get('pads') ?? '').split(',').filter(Boolean);
       const yaw = Number(params.get('yaw') ?? 0); // extra rig yaw, radians
+      // ?gear=crest,pauldrons,knuckles — worn by every rig shown (avatar/gear.ts).
+      const gear = (params.get('gear') ?? '').split(',').filter(Boolean);
 
       const scene = new Scene();
       scene.background = new Color(0x181a20);
@@ -56,6 +59,7 @@
         rig.gloves[1].position.set(0.32, 1.0, -0.14);
         g.add(rig.gloves[0], rig.gloves[1]);
         for (const part of rig.all) applyAvatarSkin(part, avatarSkin(id));
+        for (const part of rig.all) applyGear(part, gear, id === 'onyx' ? 'onyx' : 'white');
         scene.add(g);
         i++;
       }

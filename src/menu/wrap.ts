@@ -438,7 +438,7 @@ function youFace(): Face {
       {
         id: 'open-custom',
         label: 'YOUR BLANK',
-        sub: lock ? SEAL_SUB : 'base tone · gauntlet neon · pads · arena',
+        sub: lock ? SEAL_SUB : 'base tone · gear · pads · arena',
         x: X, y: 470, w: W, h: 110,
         disabled: lock,
       },

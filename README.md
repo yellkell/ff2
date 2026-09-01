@@ -73,6 +73,24 @@ carried over verbatim: everything in it still applies to this code.
   running at your foe, brass corner screws, the team-neon tube as edge
   lighting). Skins stain the boards instead of tinting steel.
   Preview: `/deck-preview.html?shape=gate|donut|x|routine`.
+- **THE GASKET GAZETTE'S VOICE** — Sheriff Cole Ironside has a bible now
+  ([`docs/gazette-voice.md`](docs/gazette-voice.md)): who he is (a tin-star
+  who despises the Clankers and is one), how he sounds, what he never does
+  (never names who fell, never breaks the fourth wall, never resolves the
+  denial), his dictionary from the game's words to Gasket's, and the shape
+  of an edition — headline, subhead, body, mood, plus a WANTED poster for
+  the top climber, the Sheriff's NOTICE and the WEATHER (it is always
+  dusk), all laid out on the lobby's front page. The daily command lives in
+  this repo (`.claude/commands/daily-gazette.md`); the wire report now
+  names each fighter's gear and deck beside their paint.
+- **GEAR** — the attachments shop (DESIGN.md §5.2): fifteen shapes that
+  bolt onto THE BLANK in its own primer — crests, antennae, horns, halos,
+  mohawks and visor bands for the head; pauldrons, a chestplate, a collar,
+  a dorsal ridge, a belt and epaulettes for the body; cuffs, knuckle spikes
+  and gauntlets for the hands. One per slot, purely visual (the hitboxes
+  never move), tried on in the STORE's GEAR tab, worn from the LOCKER, and
+  seen by everyone: the worn set rides the duel, the squad mesh, the club
+  hello and your player doc, re-validated on arrival. `src/avatar/gear.ts`.
 - **THE PAINT** ([`docs/paint.md`](docs/paint.md), P1–P4 shipped) — buy
   stripes and splotches by colour, place them minutely on your own body in
   THE PAINT BAY (YOU wing), and the room sees the result: your look packs

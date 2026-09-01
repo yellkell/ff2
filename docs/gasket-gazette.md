@@ -7,6 +7,21 @@ furious denial — reads the ladder each day and files an editorial. It lands in
 the lobby behind a small round paper button above the right-hand panel; the
 button wears a **red notification dot** until you've read the latest edition.
 
+**The voice lives in [`gazette-voice.md`](gazette-voice.md)** — who Cole is,
+how he sounds, what he never does, his dictionary (the game's words →
+Gasket's), the shape of an edition and two worked examples. The daily
+command (`.claude/commands/daily-gazette.md`, in this repo now) writes
+from it.
+
+Since THE VOICE phase an edition also carries three sections the lobby
+page lays out under the byline: a **WANTED** poster for the top climber
+(`{ name, crime, reward }`), the Sheriff's one-line **NOTICE**, and the
+**WEATHER** (it is always dusk). The wire report grew each fighter's
+**gear** (the shapes bolted on, already in Cole's words) and **pad** (the
+deck they stand on, by material) beside their paint colours — and learned
+the paint's format-2 wire, which it had been rejecting since the body
+merged (every painted fighter read as blank for a while).
+
 ## How it fits together
 
 ```
@@ -38,7 +53,8 @@ edition appears the next time a player lands in the lobby — no rebuild/redeplo
 ## Firestore data
 
 - `newspaper/latest` — the live edition the game reads:
-  `{ edition, dateline, headline, subhead, body, byline, mood, publishedAt }`.
+  `{ edition, dateline, headline, subhead, body, byline, mood, wanted?,
+  notice?, weather?, publishedAt }`.
 - `newspaper/_snapshot` — internal generator state: the ladder standings as of
   the last published edition, used to compute "what changed" for the next one.
 

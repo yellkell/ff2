@@ -11,7 +11,8 @@ import { Color, Group, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { buildBoxer } from '../../avatar/boxer.js';
 import { buildHand, HAND_ADDUCTION, setHandCurl } from '../../avatar/hands.js';
 import { applyAvatarSkin, resolveAvatarSkin } from '../../avatar/skins.js';
-import { myAvatarSkin } from '../../menu/customization.js';
+import { applyGear, cleanGear } from '../../avatar/gear.js';
+import { myAvatarSkin, customization, myGear, myPackedGear, myTone } from '../../menu/customization.js';
 import { solveTorso } from '../../avatar/boxer.js';
 import {
   applyLook,
@@ -121,6 +122,7 @@ export class PubPlayerSystem extends createSystem({}) {
   private voiceRetryCooldown = 0;
   private clubActive = true;
   /** My look version last sent over the room wire (repaint-at-the-bay sync). */
+  private sentGearVersion = -1;
   private sentLookVersion = paintState.version;
   /** Hide-paint prefs last baked into the room's rigs. */
   private paintPrefsKey = '';
@@ -204,6 +206,7 @@ export class PubPlayerSystem extends createSystem({}) {
         const punter = pub.punters.get(from);
         if (!punter) return;
         punter.lk = typeof ev.lk === 'string' ? ev.lk.slice(0, 1024) : '';
+        if (typeof ev.gr === 'string') punter.gr = ev.gr.slice(0, 48);
         this.bakePaint(punter);
       }),
     );
@@ -214,7 +217,7 @@ export class PubPlayerSystem extends createSystem({}) {
     const w = window as unknown as { __ff2?: Record<string, unknown> };
     (w.__ff2 ??= {}).club = {
       online: (): boolean => pub.online,
-      punters: (): { name: string; lk: string; baked: boolean }[] =>
+      punters: (): { name: string; lk: string; gr: string; baked: boolean }[] =>
         [...pub.punters.values()].map((p) => {
           let baked = false;
           for (const piece of p.rig.all) {
@@ -222,7 +225,7 @@ export class PubPlayerSystem extends createSystem({}) {
               if (o.userData?.paintStore) baked = true;
             });
           }
-          return { name: p.name, lk: p.lk, baked };
+          return { name: p.name, lk: p.lk, gr: p.gr, baked };
         }),
       repaint: (): void => setLook(demoLook()),
       bare: (): void => clearLook(),
@@ -236,6 +239,9 @@ export class PubPlayerSystem extends createSystem({}) {
     const hidden = paintHiddenAll() || socialPaintHidden(punter.name);
     const look = hidden ? { paint: [] } : unpackLook(punter.lk);
     for (const piece of punter.rig.all) applyLook(piece, look);
+    // Their GEAR bolts on alongside, primed in their own tone.
+    const tone = punter.av === 'onyx' ? 'onyx' : 'white';
+    for (const piece of punter.rig.all) applyGear(piece, cleanGear(punter.gr), tone);
   }
 
   update(delta: number): void {
@@ -265,11 +271,16 @@ export class PubPlayerSystem extends createSystem({}) {
     // Repainted at the bay mid-visit: tell the room once per look change (the
     // server folds it into its record for late joiners) and refresh your own
     // pit body. Cheap — version compares, nothing per-frame.
-    if (paintState.version !== this.sentLookVersion) {
+    if (paintState.version !== this.sentLookVersion || customization.version !== this.sentGearVersion) {
       this.sentLookVersion = paintState.version;
-      if (pub.online) pubSendEvent({ e: 'LOOK', lk: myPackedLook() });
+      this.sentGearVersion = customization.version;
+      if (pub.online) pubSendEvent({ e: 'LOOK', lk: myPackedLook(), gr: myPackedGear() });
       const myTorso = pub.refs?.root.getObjectByName('pub-fighter-torso');
-      if (myTorso) applyLook(myTorso, myLook());
+      if (myTorso) {
+        applyLook(myTorso, myLook());
+        applyGear(myTorso, myGear(), myTone());
+      }
+      for (const glove of this.localGloves) applyGear(glove, myGear(), myTone());
     }
     // A hide-paint flip (settings breaker or the console's PAINT switch)
     // rebakes every punter immediately.
@@ -404,6 +415,7 @@ export class PubPlayerSystem extends createSystem({}) {
       av: p.av ?? '',
       pf: p.pf ?? '',
       lk: typeof p.lk === 'string' ? p.lk.slice(0, 1024) : '',
+      gr: typeof p.gr === 'string' ? p.gr.slice(0, 48) : '',
       rig,
       nameTag,
       head: p.head,
@@ -465,6 +477,7 @@ export class PubPlayerSystem extends createSystem({}) {
       glove.quaternion.copy(HAND_ADDUCTION[hand === 'left' ? 0 : 1]);
       retintLocal(glove, pub.myAccent);
       applyAvatarSkin(glove, myAvatarSkin()); // your shape + custom colour walk in too
+      applyGear(glove, myGear(), myTone()); // …and your knuckles
       grips[hand].add(glove);
       this.localGloves.push(glove);
     }
