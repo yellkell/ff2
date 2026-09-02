@@ -185,9 +185,13 @@ dev plugin provides a WebXR emulator (WASD + mouse).
 
 ## Deploying
 
-The live site is **GitHub Pages, published by GitHub Actions**
-(`.github/workflows/deploy.yml` → https://yellkell.github.io/ff2/). A push
-builds `dist/` and uploads it; no Firebase involved.
+The live site is **https://ff2.web.app**, published by GitHub Actions
+(`.github/workflows/firebase-deploy.yml`). A push to `main` goes live; a pull
+request gets a temporary preview channel so a change can be walked around in a
+headset before it is merged.
+
+A **GitHub Pages** mirror still builds from `.github/workflows/deploy.yml`
+(https://yellkell.github.io/ff2/).
 
 Pages serves the game from a **subpath** (`/ff2/`), not a domain root, so
 every reference to a file in `public/` must be written **relatively**
@@ -198,7 +202,39 @@ shipped this bug once. `npm run build && npm run check:pages` serves the
 build under `/ff2/` in a real browser and fails on any 404; the deploy
 workflow runs a fast static version of the same guard.
 
-> Firebase is still used for **Firestore** (leaderboards, matchmaking, the
-> gazette) — only hosting moved. `firebase-deploy.yml` remains parked on
-> manual dispatch and still points at FIRE FIGHT 1's project, so it must
-> not be run from this repo.
+### The Firebase project
+
+Everything server-side — boards, matchmaking, presence, the gazette — lives in
+**one Firestore**, the project behind ff2.web.app, shared by FIRE FIGHT 2, RAVE
+RAID and the club.
+
+It did not use to. FF2 talked to `arfi-b68f9`, inherited from the ARFI era and
+also **FIRE FIGHT 1's live hosting** — which is why this workflow sat parked on
+manual dispatch, since an automatic deploy from this repo would have
+overwritten the live FF1 site. RAVE RAID kept its world board in a project of
+its own, and the pub's arcade board was a single document wedged into FF2's.
+One player had three identities and a board in one game could not see a name
+from another.
+
+> The project id reads `flappy-ff9f6`, which is where the `ff2` hosting site
+> was reserved. A `.web.app` name is globally unique, so prising it loose to
+> rename the project would mean releasing `ff2` into the pool where anyone
+> could take it. The id is invisible to players — treat it as **the FF2
+> project**.
+
+Two pieces of setup are not in this repo, because they cannot be:
+
+- **Anonymous sign-in must be ON** (Authentication → Sign-in method →
+  Anonymous). Every security rule identifies a row by its document name
+  matching `request.auth.uid`, so with it off there is no uid, and every write
+  in the game is denied — boards go quiet and matchmaking never pairs.
+- **A TTL policy on `expiresAt`**, for the `rooms` and `presence` collections
+  (Firestore → TTL). Both write the field already; the policy is what makes
+  Firestore act on it. Without it, abandoned rooms are hidden from players by
+  the client-side expiry check but are never actually deleted.
+
+Rules and indexes DO live here and ship with the repo:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```

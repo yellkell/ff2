@@ -14,7 +14,7 @@
  * opening the `gazette` collection for read (the scheduled task writes it).
  */
 
-import { FIREBASE_ENABLED, firebaseConfig } from './firebaseConfig.js';
+import { FIREBASE_ENABLED, cloud, type Cloud } from './firebase.js';
 
 export interface GazetteArticle {
   /** Monotonic edition number — drives the unread dot. */
@@ -54,30 +54,16 @@ function seenEdition(): number {
   }
 }
 
-type FirestoreMod = typeof import('firebase/firestore');
-interface Handle {
-  fs: FirestoreMod;
-  db: import('firebase/firestore').Firestore;
-}
-
-let handlePromise: Promise<Handle | null> | null = null;
-
-function firestore(): Promise<Handle | null> {
-  if (!FIREBASE_ENABLED) return Promise.resolve(null);
-  handlePromise ??= (async () => {
-    try {
-      const appMod = await import('firebase/app');
-      const fs = await import('firebase/firestore');
-      // Share the app instance the leaderboard / WebRTC transport may already
-      // have spun up rather than double-initialising.
-      const fbApp = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebaseConfig);
-      return { fs, db: fs.getFirestore(fbApp) };
-    } catch {
-      gazette.status = 'gazette offline';
-      return null;
-    }
-  })();
-  return handlePromise;
+/**
+ * The shared connection (net/firebase.ts). The paper is world-readable, so this
+ * would work without a sign-in — but sharing the one app and the one uid keeps
+ * a single connection for the whole session rather than a second one just to
+ * read the front page.
+ */
+async function firestore(): Promise<Cloud | null> {
+  const c = await cloud();
+  if (!c) gazette.status = 'gazette offline';
+  return c;
 }
 
 /** A string field off the doc, capped — the page lays these out at fixed sizes. */

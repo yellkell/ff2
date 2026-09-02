@@ -190,6 +190,21 @@ service cloud.firestore {
       allow delete: if mine(uid);
     }
 
+    /* ── probes — the device clock-skew measurement ───────────────────── */
+    // One throwaway document per player, written with a serverTimestamp() and
+    // read straight back from the server so the stamp is resolved; the
+    // difference is how wrong this headset's clock is (see net/serverClock.ts).
+    //
+    // It needs a place of its own. The probe used to be written into the
+    // matchmaking collection as a fake lobby marked `open: false` — invisible
+    // to the queue, but a room-shaped document in the rooms collection all the
+    // same, and one that now could not satisfy the room rules without lying
+    // about being a room. Its own door is cheaper than a shape it doesn't fit.
+
+    match /probes/{uid} {
+      allow read, write: if mine(uid);
+    }
+
     /* ── gazette — the paper the lobby reads ──────────────────────────── */
     // Written by the scheduled generator with admin credentials, which are
     // not bound by these rules. From a client it is read-only: the front page

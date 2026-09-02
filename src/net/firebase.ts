@@ -98,6 +98,9 @@ export const cloudState = {
 
 let live: Cloud | null = null;
 let opening: Promise<Cloud | null> | null = null;
+/** The current Firebase ID token — see where it is set for why this is kept
+ *  reachable without an await. Empty until the cloud opens. */
+let idToken = '';
 /** Set when the project has no database, or auth is off, or the key is wrong.
  *  A failure of that kind is PERMANENT for the session — retrying every minute
  *  on a headset that will never reach it is just noise. A plain network blip
@@ -158,6 +161,21 @@ export function cloud(): Promise<Cloud | null> {
       const cred = auth.currentUser ?? (await withTimeout(authMod.signInAnonymously(auth), 'sign-in')).user;
 
       live = { app, auth, db: fs.getFirestore(app), fs, uid: cred.uid };
+
+      // Cache the ID TOKEN, and keep it current. Almost everything goes through
+      // the SDK, which handles tokens itself — but the mesh's page-hide
+      // tombstone cannot: it is a `keepalive` fetch straight at the Firestore
+      // REST API, fired while the page is being torn down, precisely because
+      // the SDK's own write does not survive that moment. An unauthenticated
+      // REST write is a DENIED write now, so that one call needs a token it
+      // can reach synchronously.
+      authMod.onIdTokenChanged(auth, (user) => {
+        void user?.getIdToken().then((t) => {
+          idToken = t;
+        });
+      });
+      idToken = await cred.getIdToken().catch(() => '');
+
       cloudState.status = 'ready';
       cloudState.uid = cred.uid;
       cloudState.reason = '';
@@ -185,6 +203,16 @@ export function cloud(): Promise<Cloud | null> {
  */
 export function cloudUid(): string {
   return cloudState.uid;
+}
+
+/**
+ * The current Firebase ID token, or '' if there isn't one. Synchronous by
+ * necessity: its one caller is a page-teardown `keepalive` fetch that has no
+ * moment left in which to await anything. Use the SDK everywhere else — it
+ * refreshes and retries on its own.
+ */
+export function currentIdToken(): string {
+  return idToken;
 }
 
 /** True once the cloud is open and usable. */

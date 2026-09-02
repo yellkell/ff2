@@ -10,14 +10,12 @@
  * facade's inbox; the facade mirrors seat/occupant/full state for the systems.
  */
 
-import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   addDoc,
   collection,
   deleteField,
   doc,
   FieldPath,
-  getFirestore,
   onSnapshot,
   runTransaction,
   serverTimestamp,
@@ -26,7 +24,7 @@ import {
   type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { firebaseConfig } from './firebaseConfig.js';
+import { cloud, currentIdToken, firebaseConfig, type Cloud } from './firebase.js';
 import { serverNow } from './serverClock.js';
 import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
@@ -70,10 +68,53 @@ function fightersIn(seats: string[], fighters: number): boolean {
  *  before eviction; short enough that a real death doesn't block the seat. */
 const GONE_EVICT_MS = 90 * 1000;
 
-let firebaseApp: FirebaseApp | undefined;
+/**
+ * The shared connection (net/firebase.ts). Opened before anything touches
+ * Firestore: under the current rules an unauthenticated write is denied, not
+ * merely slow.
+ */
+let live: Cloud | null = null;
+
+async function openCloud(): Promise<Cloud> {
+  live ??= await cloud();
+  if (!live) throw new Error('no connection');
+  return live;
+}
+
 function db(): Firestore {
-  firebaseApp ??= getApps().length ? getApp() : initializeApp(firebaseConfig);
-  return getFirestore(firebaseApp);
+  if (!live) throw new Error('cloud not open'); // openCloud() first — always awaited by the caller
+  return live.db;
+}
+
+/** The one rooms collection — `arcadeRooms` and `privateRooms` folded in. */
+function roomsCol(): ReturnType<typeof collection> {
+  return collection(db(), 'rooms');
+}
+
+/**
+ * How long a mesh room's lease runs without a heartbeat. Comfortably longer
+ * than the beat below, so one missed write doesn't evict a live lobby.
+ */
+const LEASE_MS = 90 * 1000;
+
+/**
+ * The fields the rules insist on.
+ *
+ * NOTE THE TWO 'mode's. A room's `mode` is what KIND of room it is — the small
+ * fixed vocabulary the rules check and the whole app shares. The arcade format
+ * a lobby is running (1v1, 2v2, ffa, raid) is a different and finer fact, and
+ * it now rides as `format` so the two never have to mean the same word.
+ */
+function roomFields(format: ArcadeMode, visibility: 'public' | 'private') {
+  const now = Date.now();
+  return {
+    mode: format === 'raid' ? ('raid' as const) : ('arcade' as const),
+    format,
+    visibility,
+    host: live?.uid ?? '',
+    at: now,
+    expiresAt: now + LEASE_MS,
+  };
 }
 
 interface MeshWire {
@@ -123,11 +164,10 @@ export class MeshImpl {
     this.state.capacity = CAPACITY[mode];
     this.state.watching = false;
     this.state.onStatus('opening a lobby…');
-    const rooms = collection(db(), 'arcadeRooms');
+    await openCloud();
     const seats = Array.from({ length: seatCount(mode) }, (_, i) => (i === 0 ? this.clientId : ''));
     const names = Array.from({ length: seatCount(mode) }, (_, i) => (i === 0 ? name : ''));
-    this.roomRef = await addDoc(rooms, {
-      mode,
+    this.roomRef = await addDoc(roomsCol(), {
       capacity: this.state.capacity,
       seats,
       names,
@@ -137,6 +177,7 @@ export class MeshImpl {
       started: false,
       open: true,
       createdAt: serverTimestamp(),
+      ...roomFields(mode, 'public'),
     });
     if (this.closed) return;
     this.state.mySeat = 0;
@@ -153,27 +194,30 @@ export class MeshImpl {
    *
    * The document is the SAME shape as a listed lobby's, so every bit of the
    * seat/occupancy/signalling machinery below works on it unchanged — the only
-   * differences are that it lives in its own `privateRooms` collection (which
-   * is what keeps it out of the public browser, for free: the room browser only
-   * ever watches `arcadeRooms`) and that its doc id IS the code.
+   * differences are `visibility: 'private'`, which is what keeps it out of the
+   * public browser, and that its doc id IS the code.
    */
   async hostPrivate(mode: ArcadeMode, name: string): Promise<string> {
     this.state.capacity = CAPACITY[mode];
     this.state.watching = false;
     this.state.onStatus('reserving a code…');
-    const coll = collection(db(), 'privateRooms');
+    await openCloud();
     const seats = Array.from({ length: seatCount(mode) }, (_, i) => (i === 0 ? this.clientId : ''));
     const names = Array.from({ length: seatCount(mode) }, (_, i) => (i === 0 ? name : ''));
     for (let attempt = 0; attempt < 8 && !this.closed; attempt++) {
       const code = String(Math.floor(Math.random() * 100000)).padStart(5, '0');
-      const ref = doc(coll, code);
+      const ref = doc(roomsCol(), code);
       try {
         await runTransaction(db(), async (txn) => {
-          // Any existing doc means that code is in use — close() deletes a room
-          // once its last member leaves, so live codes are the only ones held.
-          if ((await txn.get(ref)).exists()) throw new Error('taken');
+          // A code is taken while its room is still LEASED. close() deletes a
+          // room once its last member leaves, so this only matters for one
+          // abandoned by a crash — and the lease is what frees those, rather
+          // than the code being burnt for ever.
+          const held = await txn.get(ref);
+          if (held.exists() && Date.now() < ((held.data()?.expiresAt as number | undefined) ?? 0)) {
+            throw new Error('taken');
+          }
           txn.set(ref, {
-            mode,
             capacity: this.state.capacity,
             seats,
             names,
@@ -183,6 +227,7 @@ export class MeshImpl {
             started: false,
             open: true,
             createdAt: serverTimestamp(),
+            ...roomFields(mode, 'private'),
           });
         });
         this.roomRef = ref;
@@ -208,7 +253,8 @@ export class MeshImpl {
    */
   async joinPrivate(code: string, name: string, watch = false): Promise<ArcadeMode | null> {
     this.state.onStatus(watch ? 'looking up the code…' : 'looking up the code…');
-    const ref = doc(collection(db(), 'privateRooms'), code);
+    await openCloud();
+    const ref = doc(roomsCol(), code);
     try {
       const claim = await runTransaction(db(), async (txn) => {
         const fresh = await txn.get(ref);
@@ -217,14 +263,15 @@ export class MeshImpl {
         if (data.open !== true || data.started === true) throw new Error('closed');
         const seats = (data.seats as string[]) ?? [];
         const names = (data.names as string[]) ?? seats.map(() => '');
-        const fighters = Number(data.capacity) || CAPACITY[data.mode as ArcadeMode] || seats.length;
+        const format = data.format as ArcadeMode;
+        const fighters = Number(data.capacity) || CAPACITY[format] || seats.length;
         const free = claimSeat(seats, fighters, watch);
         if (free < 0) throw new Error('full');
         seats[free] = this.clientId;
         names[free] = name;
         // The door closes on the FIGHTERS being in, not on the terrace.
         txn.update(ref, { seats, names, open: !fightersIn(seats, fighters) });
-        return { seat: free, mode: data.mode as ArcadeMode, capacity: fighters };
+        return { seat: free, mode: format, capacity: fighters };
       });
       if (this.closed) return null;
       this.roomRef = ref;
@@ -247,7 +294,8 @@ export class MeshImpl {
     this.state.capacity = CAPACITY[mode];
     this.state.watching = watch;
     this.state.onStatus(watch ? 'taking a place on the terrace…' : 'joining the lobby…');
-    const ref = doc(collection(db(), 'arcadeRooms'), roomId);
+    await openCloud();
+    const ref = doc(roomsCol(), roomId);
     try {
       const seat = await runTransaction(db(), async (txn) => {
         const fresh = await txn.get(ref);
@@ -293,7 +341,12 @@ export class MeshImpl {
     if (this.beatTimer !== null) return;
     const tick = (): void => {
       if (this.closed || !this.roomRef) return;
-      void updateDoc(this.roomRef, { beat: serverTimestamp() }).catch(() => {});
+      // The beat pushes the LEASE out as well as stamping liveness. `beat` is
+      // what the room browsers read to hide a zombie; `expiresAt` is what the
+      // TTL policy reads to actually remove it. A room that beat without
+      // renewing its lease would vanish underneath a lobby full of people.
+      const now = Date.now();
+      void updateDoc(this.roomRef, { beat: serverTimestamp(), at: now, expiresAt: now + LEASE_MS }).catch(() => {});
     };
     tick();
     this.beatTimer = setInterval(tick, 30_000);
@@ -401,8 +454,8 @@ export class MeshImpl {
   private readonly onPageHide = (): void => {
     if (this.closed || !this.roomRef) return;
     if (this.rawSeats[this.state.mySeat] !== this.clientId) return; // not seated
-    const db = `projects/${firebaseConfig.projectId}/databases/(default)`;
-    const name = `${db}/documents/${this.roomRef.path}`;
+    const dbPath = `projects/${firebaseConfig.projectId}/databases/(default)`;
+    const name = `${dbPath}/documents/${this.roomRef.path}`;
     const body = {
       writes: [
         {
@@ -416,11 +469,17 @@ export class MeshImpl {
         },
       ],
     };
+    // The API key alone used to be enough, back when the rules let anyone
+    // write a room. It isn't now: this has to arrive AS someone, so it carries
+    // the cached ID token. No token means no cloud this session, in which case
+    // there is no room to tombstone either.
+    const token = currentIdToken();
+    if (!token) return;
     try {
-      void fetch(`https://firestore.googleapis.com/v1/${db}/documents:commit?key=${firebaseConfig.apiKey}`, {
+      void fetch(`https://firestore.googleapis.com/v1/${dbPath}/documents:commit`, {
         method: 'POST',
         keepalive: true, // survives page teardown, unlike the SDK's write
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(body),
       }).catch(() => {});
     } catch {
@@ -432,11 +491,22 @@ export class MeshImpl {
    *  freshen the beat, so a dozing host's room comes straight back to life. */
   private readonly onPageShow = (): void => {
     if (this.closed || !this.roomRef || !this.state.joined) return;
-    void updateDoc(this.roomRef, new FieldPath('gone', this.clientId), deleteField(), 'beat', serverTimestamp()).catch(
-      () => {
-        /* room reaped while we slept — the next snapshot / join tells the tale */
-      },
-    );
+    const now = Date.now();
+    void updateDoc(
+      this.roomRef,
+      new FieldPath('gone', this.clientId),
+      deleteField(),
+      'beat',
+      serverTimestamp(),
+      // Renew the lease too — a nap longer than LEASE_MS would otherwise leave
+      // the room technically expired the instant we woke it.
+      'at',
+      now,
+      'expiresAt',
+      now + LEASE_MS,
+    ).catch(() => {
+      /* room reaped while we slept — the next snapshot / join tells the tale */
+    });
   };
 
   /** Quest fires visibilitychange more reliably than pageshow on wake. */

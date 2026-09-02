@@ -182,14 +182,18 @@ offer. On desktop, the IWSDK dev plugin provides a WebXR emulator
 Two transports, one protocol — `src/net/` picks automatically:
 
 1. **Serverless (default)** — Firebase Firestore handles matchmaking + WebRTC
-   signaling (the repurposed `arfi-b68f9` project, see
-   `src/net/firebaseConfig.ts`), then ALL game traffic flows **peer-to-peer
-   over RTCDataChannels**: poses on an unordered/no-retransmit channel,
-   events on a reliable one. Firebase never sees a pose packet — that's the
-   latency upgrade over relaying game state through a realtime database.
-   One-time setup in the [Firebase console](https://console.firebase.google.com/project/arfi-b68f9):
-   enable **Cloud Firestore** and allow read/write on the `lobbies`
-   collection (rules sketch in `firebaseConfig.ts`).
+   signaling (the project behind ff2.web.app, see `src/net/firebase.ts`), then
+   ALL game traffic flows **peer-to-peer over RTCDataChannels**: poses on an
+   unordered/no-retransmit channel, events on a reliable one. Firebase never
+   sees a pose packet — that's the latency upgrade over relaying game state
+   through a realtime database.
+
+   Every lobby in the game is one collection, `rooms`, told apart by `mode`
+   and `visibility` (`src/net/rooms.ts` explains why it used to be five).
+   Identity is **anonymous auth**: no sign-in screen, but a real uid, which is
+   what lets a rule say "this row is yours" instead of `if true`. See the
+   README's *The Firebase project* for the two console settings that are not
+   in this repo.
 2. **WebSocket relay** — `npm run server` (~100 lines, zero game logic) and
    point clients at it with `?server=wss://your-relay-host:8787`. Lowest
    latency when hosted near both players; also the LAN/dev fallback.
