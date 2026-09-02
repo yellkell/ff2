@@ -2,7 +2,7 @@
  * ladder-brief.mjs — the Gasket Gazette's "wire report".
  *
  * Reads the live ladder (Firestore `players`) and the snapshot left by the
- * LAST published edition (`newspaper/_snapshot`), works out what changed since
+ * LAST published edition (`gazette/_snapshot`), works out what changed since
  * — who fought, who climbed, who slid, who's new in town — and prints a
  * compact JSON brief to stdout.
  *
@@ -20,12 +20,12 @@ import { collection, doc, getDoc, getDocs, getFirestore, limit, orderBy, query, 
 
 // Public web config (an identifier, not a secret — same as src/net/firebaseConfig.ts).
 const firebaseConfig = {
-  apiKey: 'AIzaSyA0NYO_w6uU0Fcc6nuVPitRQaGW3B6518E',
-  authDomain: 'arfi-b68f9.firebaseapp.com',
-  projectId: 'arfi-b68f9',
-  storageBucket: 'arfi-b68f9.firebasestorage.app',
-  messagingSenderId: '188374608574',
-  appId: '1:188374608574:web:108250406138b5a5988cef',
+  apiKey: 'AIzaSyD7jbazGQc4wiPBUzQSMwO6W7nMcMtaJzQ',
+  authDomain: 'flappy-ff9f6.firebaseapp.com',
+  projectId: 'flappy-ff9f6',
+  storageBucket: 'flappy-ff9f6.firebasestorage.app',
+  messagingSenderId: '777089145974',
+  appId: '1:777089145974:web:560584da7691e495ab1357',
 };
 
 const XP_PER_GAME = 25; // PROGRESSION.matchPlay — a bout banks ~25 XP win or lose
@@ -133,7 +133,7 @@ async function readPlayers() {
 
 /** The standings captured when the last edition was filed (or null on day one). */
 async function readSnapshot() {
-  const snap = await getDoc(doc(db, 'newspaper', '_snapshot'));
+  const snap = await getDoc(doc(db, 'gazette', '_snapshot'));
   if (!snap.exists()) return null;
   const data = snap.data();
   const byUid = {};
@@ -146,42 +146,57 @@ async function readSnapshot() {
 
 /**
  * RAIDS since the last edition: squads that marched out of town and FELLED the
- * titans (`runRaid`) or the gel-beast GOOPLIATH (`runGoopliath`). Only
- * VICTORIOUS runs are ever recorded — the game posts a run when the last boss
- * falls, so a squad that got beaten leaves no wire at all. The brief therefore
- * carries triumphs only, which suits the paper's never-punch-down rule.
+ * titans (`ff2-raid-time`) or the gel-beast GOOPLIATH (`ff2-goopliath-time`).
+ * Only VICTORIOUS runs are ever recorded — the game posts a run when the last
+ * boss falls, so a squad that got beaten leaves no wire at all. The brief
+ * therefore carries triumphs only, which suits the paper's never-punch-down
+ * rule.
  *
- * Each doc: names[] (the whole squad, 2–5 callsigns), difficulty
- * (normal|hard|blazing — easy never posts), hardcore (titan raids only: no
- * healing between bosses), at (server clock when it fell).
+ * The wire reads PERSONAL-BEST rows now, not a log of every attempt, so what
+ * comes back is "whose best time moved since the last edition" rather than
+ * "every run anyone finished". For a paper that reports feats, that is the
+ * better feed anyway: a squad grinding the same raid nine times in an evening
+ * files one story, not nine.
+ *
+ * Each row: meta.names[] (the whole squad, 2–5 callsigns), meta.difficulty
+ * (normal|hard|blazing — easy never posts), meta.hardcore (titan raids only:
+ * no healing between bosses), value (the clock), at (when it landed).
  */
 async function readRaids(sinceMs) {
-  const cutoff = new Date(sinceMs);
-  const pull = async (col, kind) => {
+  const cutoff = sinceMs;
+  const pull = async (board, kind) => {
     try {
       // Range + orderBy on the SAME field — a single-field query, no composite
-      // index needed on these collections.
+      // index needed.
       const snap = await getDocs(
-        query(collection(db, col), where('at', '>', cutoff), orderBy('at', 'desc'), limit(20)),
+        query(collection(db, 'boards', board, 'rows'), where('at', '>', cutoff), orderBy('at', 'desc'), limit(20)),
       );
       return snap.docs.map((d) => {
         const x = d.data();
-        const at = x.at?.toMillis?.() ?? 0;
+        const meta = x.meta ?? {};
+        // `at` is a plain client clock here (the rules type-check it at the
+        // door, and a serverTimestamp() sentinel can't be type-checked), so
+        // it arrives as a number rather than a Firestore Timestamp.
+        const at = typeof x.at === 'number' ? x.at : (x.at?.toMillis?.() ?? 0);
         return {
           kind, // 'titans' — the five-machine gauntlet; 'goopliath' — the gel-beast
-          squad: Array.isArray(x.names) ? x.names.map(String) : [],
-          squadSize: Array.isArray(x.names) ? x.names.length : 0,
-          difficulty: x.difficulty ?? 'normal',
-          hardcore: !!x.hardcore,
+          squad: Array.isArray(meta.names) ? meta.names.map(String) : [],
+          squadSize: Array.isArray(meta.names) ? meta.names.length : 0,
+          difficulty: meta.difficulty ?? 'normal',
+          hardcore: !!meta.hardcore,
+          seconds: typeof x.value === 'number' ? x.value : null,
           when: at ? new Date(at).toISOString() : null,
           hoursAgo: at ? Math.round((Date.now() - at) / 3_600_000) : null,
         };
       });
     } catch {
-      return []; // a missing collection or closed rule starves this feed only
+      return []; // a cold board or a closed rule starves this feed only
     }
   };
-  const [titans, goop] = await Promise.all([pull('runRaid', 'titans'), pull('runGoopliath', 'goopliath')]);
+  const [titans, goop] = await Promise.all([
+    pull('ff2-raid-time', 'titans'),
+    pull('ff2-goopliath-time', 'goopliath'),
+  ]);
   return [...titans, ...goop].sort((a, b) => (b.when ?? '').localeCompare(a.when ?? ''));
 }
 

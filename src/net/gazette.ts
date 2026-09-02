@@ -4,14 +4,14 @@
  * "Clankers" tearing up his quiet streets (and who is, of course, a Clanker
  * himself — he just won't admit it). A scheduled Claude task reads the ladder
  * every day, works out who fought and who rose or fell, and writes Cole's
- * editorial in character, dropping it into Firestore at `newspaper/latest`.
+ * editorial in character, dropping it into Firestore at `gazette/latest`.
  *
  * This module is the lobby's reader: it pulls the latest edition, and tracks
  * whether THIS player has read it yet so the lobby's paper button can wear a
  * red notification dot until they do. Rides the same Firestore project as
  * matchmaking + the leaderboard; loads firebase lazily like leaderboard.ts so
  * offline lobby players never pay for the bundle. Needs a Firestore rule
- * opening the `newspaper` collection for read (the scheduled task writes it).
+ * opening the `gazette` collection for read (the scheduled task writes it).
  */
 
 import { FIREBASE_ENABLED, firebaseConfig } from './firebaseConfig.js';
@@ -102,7 +102,7 @@ export async function refreshGazette(force = false): Promise<void> {
   const h = await firestore();
   if (!h) return;
   try {
-    const snap = await h.fs.getDoc(h.fs.doc(h.db, 'newspaper', 'latest'));
+    const snap = await h.fs.getDoc(h.fs.doc(h.db, 'gazette', 'latest'));
     if (!snap.exists()) {
       gazette.status = 'the presses are quiet';
       return;
