@@ -1,19 +1,25 @@
 /**
  * The club's material wardrobe — every surface painted by hand on small
  * tileable canvases (no shipped image assets, same discipline as the rest of
- * the game). The palette does the restraint: charcoal plaster, smoked oak,
- * champagne brass, oxblood velvet, dark veined stone — saturated colour is
- * reserved for LIGHT (coves, candles, signage, the eclipse).
+ * the game). NEON INDUSTRIAL: board-formed concrete, checker plate, sealed
+ * concrete floor, quilted black vinyl, brushed stainless, rubber matting,
+ * painted riveted plate — saturated colour is reserved for LIGHT (the neon
+ * runs, the hazard coves, the candles, the eclipse).
  *
- * Roughness separation carries the "expensive" read: plaster is dead matte,
- * velvet swallows light, oak is waxed, stone is honed, brass is the one
- * thing allowed to shine.
+ * The function names are the deco wardrobe's (plaster, parquet, velvet,
+ * marble, oak…) because build.ts calls them by those names in a hundred
+ * places; what each paints is the industrial surface that took that
+ * material's job. Roughness separation still carries the "expensive"
+ * read: concrete is dead matte, vinyl swallows light, plate is satin,
+ * stainless is brushed, galvanised steel is the one thing allowed to shine.
  */
 
 import {
   CanvasTexture,
+  Color,
   LinearFilter,
   LinearMipmapLinearFilter,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   RepeatWrapping,
   SRGBColorSpace,
@@ -59,106 +65,174 @@ function cached(key: string, make: () => CanvasTexture): CanvasTexture {
 
 /* ── surfaces ───────────────────────────────────────────────────────────── */
 
-/** Charcoal lime plaster: soft trowel clouds + the faintest grit. */
+/** Board-formed concrete: the grain of the shuttering left in the wall,
+ *  pour lines, and a grid of tie holes. (Was: charcoal lime plaster.) */
 export function plasterTexture(repeat: [number, number] = [4, 2]): CanvasTexture {
   return cached(`plaster${repeat}`, () => {
     const [c, g] = canvas(256);
     const r = rng(0x9145);
     g.fillStyle = css(DECOR.plaster);
     g.fillRect(0, 0, 256, 256);
-    // Trowel clouds: big soft ellipses a shade either side of the base.
-    for (let i = 0; i < 46; i++) {
-      const light = r() > 0.5;
-      g.fillStyle = light ? 'rgba(96,90,106,0.05)' : 'rgba(12,10,18,0.07)';
+    // Boards: horizontal bands a shade apart, each with faint wood grain
+    // pressed into the concrete.
+    const BOARD = 32;
+    for (let y = 0; y < 256; y += BOARD) {
+      g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.06)';
+      g.fillRect(0, y, 256, BOARD);
+      g.strokeStyle = 'rgba(0,0,0,0.28)';
+      g.lineWidth = 1.2;
       g.beginPath();
-      g.ellipse(r() * 256, r() * 256, 30 + r() * 60, 14 + r() * 34, r() * Math.PI, 0, Math.PI * 2);
-      g.fill();
+      g.moveTo(0, y + 0.5);
+      g.lineTo(256, y + 0.5);
+      g.stroke();
+      g.strokeStyle = 'rgba(0,0,0,0.07)';
+      g.lineWidth = 1;
+      for (let k = 0; k < 3; k++) {
+        const gy = y + 4 + r() * (BOARD - 8);
+        g.beginPath();
+        g.moveTo(0, gy);
+        g.bezierCurveTo(90, gy + (r() - 0.5) * 3, 170, gy + (r() - 0.5) * 3, 256, gy);
+        g.stroke();
+      }
     }
-    // Grit.
+    // Tie holes: a cone of shadow with a lit rim, on a grid.
+    for (const x of [48, 208]) {
+      for (const y of [64, 192]) {
+        const hole = g.createRadialGradient(x - 1, y - 1, 0, x, y, 7);
+        hole.addColorStop(0, 'rgba(0,0,0,0.75)');
+        hole.addColorStop(0.7, 'rgba(0,0,0,0.5)');
+        hole.addColorStop(1, 'rgba(255,255,255,0.08)');
+        g.fillStyle = hole;
+        g.beginPath();
+        g.arc(x, y, 7, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    // Grit and the odd stain.
     for (let i = 0; i < 700; i++) {
-      g.fillStyle = r() > 0.5 ? 'rgba(200,195,210,0.03)' : 'rgba(0,0,0,0.05)';
+      g.fillStyle = r() > 0.5 ? 'rgba(220,220,225,0.03)' : 'rgba(0,0,0,0.05)';
       g.fillRect(r() * 256, r() * 256, 1, 1);
+    }
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle = 'rgba(40,36,30,0.12)';
+      g.beginPath();
+      g.ellipse(r() * 256, r() * 256, 16 + r() * 30, 30 + r() * 60, 0, 0, Math.PI * 2);
+      g.fill();
     }
     return wrap(c, repeat);
   });
 }
 
-/** Herringbone smoked-oak parquet — the dance floor's field. */
+/** CHECKER PLATE — the dance floor. Raised diamond bars in a staggered
+ *  grid on dark steel, each with a lit edge up-left and a shadow down-right,
+ *  and the wear of ten thousand feet down the middle. (Was: herringbone
+ *  parquet.) */
 export function parquetTexture(repeat: [number, number] = [3, 3]): CanvasTexture {
   return cached(`parquet${repeat}`, () => {
     const [c, g] = canvas(512);
     const r = rng(0xdacef100);
-    g.fillStyle = css(DECOR.oakDark);
+    g.fillStyle = css(DECOR.oak);
     g.fillRect(0, 0, 512, 512);
-    const L = 64; // plank length
-    const W = 21; // plank width
-    const tones = ['#4a3524', '#41301f', '#523a27', '#463222', '#3a2a1c', '#4e3626'];
-    // Two diagonal families make the herringbone; drawn oversize so the tile
-    // edge cuts cleanly and the pattern wraps.
-    for (let row = -2; row < 20; row++) {
-      for (let col = -2; col < 20; col++) {
-        const x = col * L * 0.5;
-        const y = row * W * 2;
-        for (const flip of [0, 1]) {
-          g.save();
-          g.translate(x + (flip ? L * 0.25 : -L * 0.25) + L * 0.25, y + (flip ? W : 0) + W * 0.5);
-          g.rotate(flip ? Math.PI / 4 : -Math.PI / 4);
-          const tone = tones[Math.floor(r() * tones.length)];
-          g.fillStyle = tone;
-          g.fillRect(-L / 2, -W / 2, L, W);
-          // Grain: a few long strokes down the plank.
-          g.strokeStyle = 'rgba(0,0,0,0.16)';
-          g.lineWidth = 1;
-          for (let s = 0; s < 3; s++) {
-            const gy = -W / 2 + (s + 0.6) * (W / 3.4) + (r() - 0.5) * 3;
-            g.beginPath();
-            g.moveTo(-L / 2 + 2, gy);
-            g.bezierCurveTo(-L / 6, gy + (r() - 0.5) * 3, L / 6, gy + (r() - 0.5) * 3, L / 2 - 2, gy);
-            g.stroke();
-          }
-          // Edge shadow so every plank keeps its joint.
-          g.strokeStyle = 'rgba(0,0,0,0.4)';
-          g.strokeRect(-L / 2, -W / 2, L, W);
-          // A rare waxed highlight — the floor is loved but lived-on.
-          if (r() > 0.9) {
-            g.fillStyle = 'rgba(255,230,190,0.05)';
-            g.fillRect(-L / 2, -W / 2, L, W / 3);
-          }
-          g.restore();
+    // Mill scale: faint blotches under everything.
+    for (let i = 0; i < 60; i++) {
+      g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.06)';
+      g.beginPath();
+      g.ellipse(r() * 512, r() * 512, 20 + r() * 50, 12 + r() * 30, r() * Math.PI, 0, Math.PI * 2);
+      g.fill();
+    }
+    const cell = 32;
+    g.lineCap = 'round';
+    for (let row = 0; row < 16; row++) {
+      for (let col = 0; col < 16; col++) {
+        const cx = col * cell + cell / 2 + (row % 2 ? cell / 2 : 0);
+        const cy = row * cell + cell / 2;
+        const d = cell * 0.27;
+        const diag = (row + col) % 2 ? 1 : -1;
+        // Shadow, then bar, then highlight — a raised diamond.
+        for (const [dx, dy, style, w] of [
+          [1.5, 1.5, 'rgba(0,0,0,0.55)', 5],
+          [0, 0, 'rgba(120,124,132,0.9)', 4],
+          [-1.2, -1.2, 'rgba(230,234,240,0.55)', 1.6],
+        ] as const) {
+          g.strokeStyle = style;
+          g.lineWidth = w;
+          g.beginPath();
+          g.moveTo(cx - d + dx, cy - d * diag + dy);
+          g.lineTo(cx + d + dx, cy + d * diag + dy);
+          g.stroke();
         }
       }
     }
+    // Wear: the middle is walked bright and the edges keep their scale.
+    const wear = g.createRadialGradient(256, 256, 40, 256, 256, 300);
+    wear.addColorStop(0, 'rgba(255,255,255,0.07)');
+    wear.addColorStop(1, 'rgba(0,0,0,0.12)');
+    g.fillStyle = wear;
+    g.fillRect(0, 0, 512, 512);
     return wrap(c, repeat);
   });
 }
 
-/** Honed dark terrazzo with brass-fleck aggregate — walkways + bar floor. */
+/** Sealed concrete floor with a saw-cut joint grid and the odd crack —
+ *  walkways and the bar floor. (Was: honed terrazzo.) */
 export function terrazzoTexture(repeat: [number, number] = [6, 6]): CanvasTexture {
   return cached(`terrazzo${repeat}`, () => {
     const [c, g] = canvas(256);
     const r = rng(0x7e44a);
     g.fillStyle = css(DECOR.stone);
     g.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 340; i++) {
+    for (let i = 0; i < 260; i++) {
       const t = r();
-      g.fillStyle =
-        t > 0.94
-          ? 'rgba(201,168,106,0.5)' // the brass flecks
-          : t > 0.6
-            ? 'rgba(180,185,198,0.16)'
-            : t > 0.3
-              ? 'rgba(120,126,140,0.14)'
-              : 'rgba(8,9,12,0.35)';
+      g.fillStyle = t > 0.6 ? 'rgba(180,185,198,0.07)' : t > 0.3 ? 'rgba(120,126,140,0.08)' : 'rgba(8,9,12,0.16)';
       g.beginPath();
-      g.ellipse(r() * 256, r() * 256, 1 + r() * 3.4, 1 + r() * 2.6, r() * Math.PI, 0, Math.PI * 2);
+      g.ellipse(r() * 256, r() * 256, 2 + r() * 6, 1 + r() * 4, r() * Math.PI, 0, Math.PI * 2);
       g.fill();
     }
+    // Trowel sweep, faint.
+    for (let i = 0; i < 6; i++) {
+      g.strokeStyle = 'rgba(255,255,255,0.025)';
+      g.lineWidth = 8;
+      g.beginPath();
+      g.arc(r() * 256, r() * 256, 60 + r() * 80, r() * Math.PI, r() * Math.PI + 1.2);
+      g.stroke();
+    }
+    // Saw-cut joints on the tile's edges (they wrap into a grid).
+    g.strokeStyle = 'rgba(0,0,0,0.5)';
+    g.lineWidth = 2.5;
+    g.beginPath();
+    g.moveTo(0, 0.5);
+    g.lineTo(256, 0.5);
+    g.moveTo(0.5, 0);
+    g.lineTo(0.5, 256);
+    g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,0.08)';
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(0, 3);
+    g.lineTo(256, 3);
+    g.moveTo(3, 0);
+    g.lineTo(3, 256);
+    g.stroke();
+    // One hairline crack.
+    g.strokeStyle = 'rgba(0,0,0,0.35)';
+    g.lineWidth = 0.9;
+    g.beginPath();
+    let x = 40 + r() * 60;
+    let y = 200;
+    g.moveTo(x, y);
+    for (let s = 0; s < 6; s++) {
+      x += (r() - 0.3) * 30;
+      y -= 20 + r() * 20;
+      g.lineTo(x, y);
+    }
+    g.stroke();
     return wrap(c, repeat);
   });
 }
 
-/** Oxblood velvet — deep nap with a low sheen band. `channels` draws the
- *  banquette's vertical channel tufting into the cloth. */
+/** Black QUILTED VINYL — a satin nap, and with `channels` the diamond
+ *  quilting of a fight-club banquette, each pad crowned and buttoned.
+ *  (Was: oxblood velvet.) */
 export function velvetTexture(repeat: [number, number] = [2, 1], channels = 0): CanvasTexture {
   return cached(`velvet${repeat}|${channels}`, () => {
     const [c, g] = canvas(256);
@@ -169,188 +243,268 @@ export function velvetTexture(repeat: [number, number] = [2, 1], channels = 0): 
     grad.addColorStop(1, css(DECOR.velvet));
     g.fillStyle = grad;
     g.fillRect(0, 0, 256, 256);
-    // Nap: fine vertical strokes, darker and lighter threads.
-    for (let i = 0; i < 420; i++) {
+    // Satin: fine strokes catching a little light.
+    for (let i = 0; i < 380; i++) {
       const x = r() * 256;
-      g.strokeStyle = r() > 0.5 ? 'rgba(255,150,150,0.03)' : 'rgba(0,0,0,0.06)';
+      g.strokeStyle = r() > 0.5 ? 'rgba(200,205,215,0.035)' : 'rgba(0,0,0,0.07)';
       g.beginPath();
       g.moveTo(x, r() * 256);
       g.lineTo(x + (r() - 0.5) * 4, r() * 256);
       g.stroke();
     }
     if (channels > 0) {
+      // Vertical channels become QUILTED PADS: the same width, each with a
+      // crowned highlight, a seam, and a button at every crossing.
       const w = 256 / channels;
+      const rows = 2;
+      const h = 256 / rows;
       for (let i = 0; i < channels; i++) {
-        const x = i * w;
-        // Each channel: shaded edges, a soft crown, a seam line.
-        const edge = g.createLinearGradient(x, 0, x + w, 0);
-        edge.addColorStop(0, 'rgba(0,0,0,0.5)');
-        edge.addColorStop(0.22, 'rgba(255,190,170,0.06)');
-        edge.addColorStop(0.5, 'rgba(255,210,190,0.1)');
-        edge.addColorStop(0.78, 'rgba(255,190,170,0.06)');
-        edge.addColorStop(1, 'rgba(0,0,0,0.5)');
-        g.fillStyle = edge;
-        g.fillRect(x, 0, w, 256);
-        g.strokeStyle = 'rgba(20,4,6,0.55)';
-        g.lineWidth = 2;
-        g.beginPath();
-        g.moveTo(x + 0.5, 0);
-        g.lineTo(x + 0.5, 256);
-        g.stroke();
+        for (let j = 0; j < rows; j++) {
+          const x = i * w;
+          const y = j * h;
+          const crown = g.createRadialGradient(x + w / 2, y + h / 2, 2, x + w / 2, y + h / 2, Math.max(w, h) * 0.7);
+          crown.addColorStop(0, 'rgba(255,255,255,0.11)');
+          crown.addColorStop(0.7, 'rgba(255,255,255,0.02)');
+          crown.addColorStop(1, 'rgba(0,0,0,0.45)');
+          g.fillStyle = crown;
+          g.fillRect(x, y, w, h);
+          g.strokeStyle = 'rgba(0,0,0,0.6)';
+          g.lineWidth = 2;
+          g.strokeRect(x + 0.5, y + 0.5, w, h);
+          // Stitch dashes along the seams.
+          g.setLineDash([3, 3]);
+          g.strokeStyle = 'rgba(190,195,205,0.18)';
+          g.lineWidth = 1;
+          g.strokeRect(x + 2.5, y + 2.5, w - 4, h - 4);
+          g.setLineDash([]);
+          // The button.
+          g.fillStyle = 'rgba(0,0,0,0.7)';
+          g.beginPath();
+          g.arc(x, y, 3.2, 0, Math.PI * 2);
+          g.fill();
+          g.fillStyle = 'rgba(160,168,176,0.7)';
+          g.beginPath();
+          g.arc(x - 0.6, y - 0.6, 1.6, 0, Math.PI * 2);
+          g.fill();
+        }
       }
     }
     return wrap(c, repeat);
   });
 }
 
-/** Ribbed glass — vertical reeds; backlit by an emissive material. */
+/** Reeded glass — vertical reeds, backlit by an emissive material. Cooler
+ *  than it was: the light behind it is a tube now, not a lamp. */
 export function ribbedGlassTexture(repeat: [number, number] = [6, 1]): CanvasTexture {
   return cached(`ribbed${repeat}`, () => {
     const [c, g] = canvas(128);
     const REED = 16;
     for (let x = 0; x < 128; x += REED) {
       const reed = g.createLinearGradient(x, 0, x + REED, 0);
-      reed.addColorStop(0, '#5a5648');
-      reed.addColorStop(0.28, '#d8cfae');
-      reed.addColorStop(0.5, '#fff6d8');
-      reed.addColorStop(0.72, '#d8cfae');
-      reed.addColorStop(1, '#5a5648');
+      reed.addColorStop(0, '#4c5560');
+      reed.addColorStop(0.28, '#c6d2dc');
+      reed.addColorStop(0.5, '#eef6ff');
+      reed.addColorStop(0.72, '#c6d2dc');
+      reed.addColorStop(1, '#4c5560');
       g.fillStyle = reed;
       g.fillRect(x, 0, REED, 128);
     }
-    // A soft vertical fade keeps the panel from reading as a flat stripe.
     const fade = g.createLinearGradient(0, 0, 0, 128);
-    fade.addColorStop(0, 'rgba(30,26,18,0.35)');
+    fade.addColorStop(0, 'rgba(18,22,30,0.35)');
     fade.addColorStop(0.5, 'rgba(0,0,0,0)');
-    fade.addColorStop(1, 'rgba(30,26,18,0.35)');
+    fade.addColorStop(1, 'rgba(18,22,30,0.35)');
     g.fillStyle = fade;
     g.fillRect(0, 0, 128, 128);
     return wrap(c, repeat);
   });
 }
 
-/** Dark honed marble with pale + brass veining — counter and table tops. */
+/** BRUSHED STAINLESS — long drag lines, a soft anisotropic band, a few
+ *  scuffs — counter and table tops. (Was: honed marble.) */
 export function marbleTexture(repeat: [number, number] = [2, 1]): CanvasTexture {
   return cached(`marble${repeat}`, () => {
     const [c, g] = canvas(256);
     const r = rng(0x3a4b1e);
-    g.fillStyle = '#16171c';
+    g.fillStyle = '#5c6169';
     g.fillRect(0, 0, 256, 256);
-    // Cloudy body.
-    for (let i = 0; i < 40; i++) {
-      g.fillStyle = r() > 0.5 ? 'rgba(60,64,76,0.08)' : 'rgba(6,6,10,0.12)';
+    // The brush: hundreds of hairlines across.
+    for (let i = 0; i < 900; i++) {
+      const y = r() * 256;
+      g.strokeStyle = r() > 0.5 ? `rgba(255,255,255,${0.03 + r() * 0.06})` : `rgba(0,0,0,${0.04 + r() * 0.08})`;
+      g.lineWidth = 0.6 + r() * 0.8;
+      const x0 = r() * 256;
       g.beginPath();
-      g.ellipse(r() * 256, r() * 256, 24 + r() * 60, 12 + r() * 30, r() * Math.PI, 0, Math.PI * 2);
-      g.fill();
-    }
-    // Veins: wandering bezier threads, one in ghost-white, a rare one brass.
-    for (let v = 0; v < 9; v++) {
-      const brassVein = r() > 0.8;
-      g.strokeStyle = brassVein ? 'rgba(201,168,106,0.34)' : 'rgba(214,218,230,0.22)';
-      g.lineWidth = brassVein ? 1.6 : 0.9 + r() * 1.2;
-      let x = r() * 256;
-      let y = r() * 256;
-      g.beginPath();
-      g.moveTo(x, y);
-      for (let s = 0; s < 5; s++) {
-        const nx = x + (r() - 0.5) * 130;
-        const ny = y + (r() - 0.5) * 130;
-        g.quadraticCurveTo(x + (r() - 0.5) * 60, y + (r() - 0.5) * 60, nx, ny);
-        x = nx;
-        y = ny;
-      }
+      g.moveTo(x0 - 80, y);
+      g.lineTo(x0 + 80 + r() * 120, y + (r() - 0.5) * 0.6);
       g.stroke();
-      // A hairline echo beside the big vein sells the stone.
-      if (!brassVein) {
-        g.strokeStyle = 'rgba(214,218,230,0.08)';
-        g.lineWidth = 0.5;
-        g.stroke();
-      }
+    }
+    // The anisotropic sheen band.
+    const band = g.createLinearGradient(0, 0, 0, 256);
+    band.addColorStop(0, 'rgba(0,0,0,0.12)');
+    band.addColorStop(0.42, 'rgba(255,255,255,0.10)');
+    band.addColorStop(0.5, 'rgba(255,255,255,0.16)');
+    band.addColorStop(0.58, 'rgba(255,255,255,0.10)');
+    band.addColorStop(1, 'rgba(0,0,0,0.12)');
+    g.fillStyle = band;
+    g.fillRect(0, 0, 256, 256);
+    // Scuffs: a few arcs against the grain.
+    for (let i = 0; i < 4; i++) {
+      g.strokeStyle = 'rgba(255,255,255,0.08)';
+      g.lineWidth = 0.8;
+      g.beginPath();
+      g.arc(r() * 256, r() * 256, 20 + r() * 40, r() * Math.PI * 2, r() * Math.PI * 2 + 0.8);
+      g.stroke();
     }
     return wrap(c, repeat);
   });
 }
 
-/** The lounge runner: a deco fan-and-line carpet in oxblood and brass. */
+/** RUBBER MATTING down the lounge aisle: raised studs on a grid, and a
+ *  hazard-amber edge stripe either side. (Was: the deco fan carpet.) */
 export function runnerTexture(repeat: [number, number] = [1, 3]): CanvasTexture {
   return cached(`runner${repeat}`, () => {
     const [c, g] = canvas(256);
-    g.fillStyle = '#2c1216';
+    const r = rng(0x5a11);
+    g.fillStyle = '#1b1c20';
     g.fillRect(0, 0, 256, 256);
-    g.strokeStyle = 'rgba(201,168,106,0.5)';
-    g.lineWidth = 3;
-    // Border rails.
-    for (const x of [10, 22, 234, 246]) {
-      g.beginPath();
-      g.moveTo(x, 0);
-      g.lineTo(x, 256);
-      g.stroke();
-    }
-    // Repeating sunburst fans up the middle.
-    //
-    // The fans are SPACED BY THE TILE, not by hand. Hand-placed at 42/128/214
-    // the third one reached y = 278 on a 256 tile: the carpet lost the top of
-    // every third fan to the seam, and since the motif was sliced rather than
-    // wrapped the missing part never came back on the next tile. Give each
-    // fan an equal slot and sit it in the middle of its own, and the run is
-    // both evenly spaced AND whole across the join — the same pattern, minus
-    // the haircut.
-    const FANS = 3;
-    const slot = 256 / FANS;
-    // Ray length, and the apex offset the motif is centred on. The rays
-    // spread ±60° off vertical (below), so the fan's half-height is
-    // 44·cos(30°) = 38.1 — comfortably inside the 42.7 each slot allows.
-    const REACH = 44;
-    const APEX = 26;
-    for (let k = 0; k < FANS; k++) {
-      const cy = k * slot + slot / 2 - APEX;
-      for (let i = 0; i < 7; i++) {
-        const a = -Math.PI / 2 + ((i - 3) * Math.PI) / 9;
+    // The studs.
+    for (let y = 8; y < 256; y += 16) {
+      for (let x = 8; x < 256; x += 16) {
+        if (x < 34 || x > 222) continue;
+        const stud = g.createRadialGradient(x - 1.5, y - 1.5, 0.5, x, y, 5.5);
+        stud.addColorStop(0, 'rgba(120,124,132,0.85)');
+        stud.addColorStop(0.6, 'rgba(50,52,58,0.9)');
+        stud.addColorStop(1, 'rgba(0,0,0,0.55)');
+        g.fillStyle = stud;
         g.beginPath();
-        g.moveTo(128, cy + APEX);
-        g.lineTo(128 + Math.sin(a) * REACH, cy + APEX - Math.cos(a) * REACH);
-        g.stroke();
+        g.arc(x, y, 5.5, 0, Math.PI * 2);
+        g.fill();
       }
-      g.beginPath();
-      g.arc(128, cy + APEX, 8, 0, Math.PI * 2);
-      g.stroke();
     }
-    // Wear: soft dark tread down the centre.
+    // Hazard stripe edges: amber and black, diagonal.
+    for (const [x0, x1] of [
+      [8, 26],
+      [230, 248],
+    ] as const) {
+      g.save();
+      g.beginPath();
+      g.rect(x0, 0, x1 - x0, 256);
+      g.clip();
+      g.fillStyle = css(DECOR.cove);
+      g.fillRect(x0, 0, x1 - x0, 256);
+      g.fillStyle = 'rgba(0,0,0,0.85)';
+      for (let y = -32; y < 256 + 32; y += 32) {
+        g.beginPath();
+        g.moveTo(x0 - 20, y);
+        g.lineTo(x1 + 20, y + 20);
+        g.lineTo(x1 + 20, y + 36);
+        g.lineTo(x0 - 20, y + 16);
+        g.closePath();
+        g.fill();
+      }
+      g.restore();
+    }
+    // Wear: the middle is walked dull.
     const wear = g.createLinearGradient(64, 0, 192, 0);
     wear.addColorStop(0, 'rgba(0,0,0,0)');
-    wear.addColorStop(0.5, 'rgba(0,0,0,0.25)');
+    wear.addColorStop(0.5, 'rgba(0,0,0,0.22)');
     wear.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = wear;
     g.fillRect(0, 0, 256, 256);
+    void r;
     return wrap(c, repeat);
   });
 }
 
-/** Waxed oak planking for the bar front + stage skirt (straight lay). */
+/** PAINTED STEEL PLATE for the bar front and the stage skirt: panels with
+ *  a rivet row along every seam, the paint chipped to bare metal at the
+ *  edges. (Was: waxed oak planking.) */
 export function oakTexture(repeat: [number, number] = [3, 1]): CanvasTexture {
   return cached(`oak${repeat}`, () => {
     const [c, g] = canvas(256);
     const r = rng(0x0a45);
     g.fillStyle = css(DECOR.oak);
     g.fillRect(0, 0, 256, 256);
-    for (let y = 0; y < 256; y += 32) {
-      g.fillStyle = `rgba(${20 + r() * 26}, ${12 + r() * 16}, ${6 + r() * 8}, 0.28)`;
-      g.fillRect(0, y, 256, 32);
-      g.strokeStyle = 'rgba(0,0,0,0.45)';
-      g.lineWidth = 1.5;
+    const PANEL = 64;
+    for (let y = 0; y < 256; y += PANEL) {
+      g.fillStyle = `rgba(255,255,255,${r() * 0.035})`;
+      g.fillRect(0, y, 256, PANEL);
+      // The seam: a dark cut and a lit lip.
+      g.strokeStyle = 'rgba(0,0,0,0.6)';
+      g.lineWidth = 2;
       g.beginPath();
       g.moveTo(0, y + 0.5);
       g.lineTo(256, y + 0.5);
       g.stroke();
-      for (let s = 0; s < 4; s++) {
-        g.strokeStyle = 'rgba(0,0,0,0.14)';
-        g.lineWidth = 1;
-        const gy = y + 5 + r() * 24;
+      g.strokeStyle = 'rgba(255,255,255,0.09)';
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(0, y + 2.5);
+      g.lineTo(256, y + 2.5);
+      g.stroke();
+      // Rivets along the seam.
+      for (let x = 12; x < 256; x += 24) {
+        const riv = g.createRadialGradient(x - 1, y + 9, 0.5, x, y + 10, 4);
+        riv.addColorStop(0, 'rgba(190,196,204,0.9)');
+        riv.addColorStop(0.6, 'rgba(70,74,80,0.9)');
+        riv.addColorStop(1, 'rgba(0,0,0,0.6)');
+        g.fillStyle = riv;
         g.beginPath();
-        g.moveTo(0, gy);
-        g.bezierCurveTo(80, gy + (r() - 0.5) * 5, 176, gy + (r() - 0.5) * 5, 256, gy);
-        g.stroke();
+        g.arc(x, y + 10, 4, 0, Math.PI * 2);
+        g.fill();
       }
+      // Chips and scuffs in the paint.
+      for (let k = 0; k < 5; k++) {
+        g.fillStyle = 'rgba(150,156,164,0.28)';
+        g.beginPath();
+        g.ellipse(r() * 256, y + 14 + r() * 44, 1 + r() * 4, 0.6 + r() * 2, r() * Math.PI, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    return wrap(c, repeat);
+  });
+}
+
+/** CORRUGATED STEEL SHEETING — the stage's back wall, where the velvet
+ *  drapes hung: vertical ribs each shaded across its wave, galvanised
+ *  spangle in the flats, and rust bleeding up from the bottom edge. */
+export function corrugatedTexture(repeat: [number, number] = [2, 2]): CanvasTexture {
+  return cached(`corrugated${repeat}`, () => {
+    const [c, g] = canvas(256);
+    const r = rng(0xc0ff33);
+    const RIB = 32;
+    for (let x = 0; x < 256; x += RIB) {
+      const wave = g.createLinearGradient(x, 0, x + RIB, 0);
+      wave.addColorStop(0, '#5a6169');
+      wave.addColorStop(0.18, '#8d969e');
+      wave.addColorStop(0.32, '#b3bcc4');
+      wave.addColorStop(0.5, '#8d969e');
+      wave.addColorStop(0.72, '#4a5158');
+      wave.addColorStop(0.9, '#3a4047');
+      wave.addColorStop(1, '#5a6169');
+      g.fillStyle = wave;
+      g.fillRect(x, 0, RIB, 256);
+    }
+    // Spangle: the zinc crystal flecks.
+    for (let i = 0; i < 500; i++) {
+      g.fillStyle = r() > 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+      g.fillRect(r() * 256, r() * 256, 1 + r() * 2, 1 + r() * 2);
+    }
+    // Rust, bleeding up from the bottom in streaks.
+    const rust = g.createLinearGradient(0, 256, 0, 150);
+    rust.addColorStop(0, 'rgba(120,58,22,0.55)');
+    rust.addColorStop(0.5, 'rgba(120,58,22,0.14)');
+    rust.addColorStop(1, 'rgba(120,58,22,0)');
+    g.fillStyle = rust;
+    g.fillRect(0, 150, 256, 106);
+    for (let i = 0; i < 9; i++) {
+      const x = r() * 256;
+      const h = 30 + r() * 90;
+      const streak = g.createLinearGradient(0, 256, 0, 256 - h);
+      streak.addColorStop(0, 'rgba(140,70,26,0.45)');
+      streak.addColorStop(1, 'rgba(140,70,26,0)');
+      g.fillStyle = streak;
+      g.fillRect(x, 256 - h, 3 + r() * 5, h);
     }
     return wrap(c, repeat);
   });
@@ -358,21 +512,30 @@ export function oakTexture(repeat: [number, number] = [3, 1]): CanvasTexture {
 
 /* ── material shorthands ────────────────────────────────────────────────── */
 
+/** GALVANISED STEEL — the wardrobe's `brass`: zinc-grey, a little duller
+ *  than brass ever was, and the one thing in the building allowed to shine. */
 export const brassMat = (rough = 0.28): MeshStandardMaterial =>
-  new MeshStandardMaterial({ color: DECOR.brass, metalness: 0.95, roughness: rough });
+  new MeshStandardMaterial({ color: DECOR.brass, metalness: 0.92, roughness: Math.max(0.34, rough + 0.08) });
 
+/** GUNMETAL — the wardrobe's `bronze`: the structural dark steel. */
 export const bronzeMat = (): MeshStandardMaterial =>
-  new MeshStandardMaterial({ color: DECOR.bronze, metalness: 0.85, roughness: 0.5 });
+  new MeshStandardMaterial({ color: DECOR.bronze, metalness: 0.85, roughness: 0.48 });
 
 export const blackSteelMat = (): MeshStandardMaterial =>
   new MeshStandardMaterial({ color: 0x1b1c21, metalness: 0.8, roughness: 0.55 });
 
-/** A brass piece with its own warm glow — cove strips, ring underglow. */
+/** A steel piece with a HAZARD-AMBER glow in it — cove strips, ring underglow. */
 export const brassGlowMat = (intensity: number): MeshStandardMaterial =>
   new MeshStandardMaterial({
     color: DECOR.brass,
     emissive: DECOR.cove,
     emissiveIntensity: intensity,
     metalness: 0.6,
-    roughness: 0.35,
+    roughness: 0.4,
   });
+
+/** A NEON TUBE: unlit, tone-mapping bypassed so it burns at its own colour
+ *  whatever the room's exposure — the architecture's lines, the rings'
+ *  channels, the signage. */
+export const neonMat = (color: number = DECOR.neon, intensity = 1): MeshBasicMaterial =>
+  new MeshBasicMaterial({ color: new Color(color).multiplyScalar(intensity), toneMapped: false });

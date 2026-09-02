@@ -74,8 +74,7 @@ import {
   ribbedGlassTexture,
   runnerTexture,
   terrazzoTexture,
-  velvetTexture,
-} from './materials.js';
+  velvetTexture, neonMat, corrugatedTexture } from './materials.js';
 import { collapseStatic } from './merge.js';
 import { registerArcade } from './arcade.js';
 import { registerStep } from './step.js';
@@ -255,9 +254,10 @@ function buildFloors(root: Group): void {
 
   // The dance floor: herringbone parquet disc, a hair proud so it never
   // z-fights the field, with a bronze surround ring easing the step.
+  // Checker plate: metal, satin — it catches the eclipse overhead.
   const parquet = new Mesh(
     new CircleGeometry(F.r, 56),
-    new MeshStandardMaterial({ map: parquetTexture([5, 5]), metalness: 0.16, roughness: 0.5 }),
+    new MeshStandardMaterial({ map: parquetTexture([5, 5]), metalness: 0.7, roughness: 0.42 }),
   );
   parquet.rotation.x = -Math.PI / 2;
   parquet.position.set(F.x, 0.012, F.z);
@@ -282,7 +282,7 @@ function buildFloors(root: Group): void {
 function buildFloorInlay(root: Group): MeshBasicMaterial {
   const F = CLUB.floor;
   const mat = new MeshBasicMaterial({
-    color: DECOR.brass,
+    color: DECOR.neon,
     transparent: true,
     opacity: 0.5,
     blending: AdditiveBlending,
@@ -343,15 +343,30 @@ function buildWalls(root: Group, W: number, NZ: number, SZ: number, H: number): 
   wall(SZ - NZ, -W, (NZ + SZ) / 2, Math.PI / 2); // west
   wall(SZ - NZ, W, (NZ + SZ) / 2, -Math.PI / 2); // east
 
-  // Trim lines every wall carries: skirting, dado rail, picture rail — the
-  // three horizontal registers that make plaster read as a dressed room.
+  // Trim lines every wall carries: a steel kick plate, and the two rails
+  // are NEON TUBES now — amber at dado height, cyan at picture height — on
+  // dark clips, the lines that make concrete read as a dressed room.
   const skirt = blackSteelMat();
   const railMat = brassMat(0.34);
+  const dadoNeon = neonMat(DECOR.cove, 1.15);
+  const pictureNeon = neonMat(DECOR.neon, 1.2);
   const trimRun = (len: number, x: number, z: number, ry: number): void => {
     box(root, skirt, len, 0.16, 0.03, x, 0.08, z, ry);
-    box(root, railMat, len, 0.035, 0.02, x, 1.0, z, ry);
-    box(root, railMat, len, 0.05, 0.025, x, 2.62, z, ry);
+    // Hazard-striped kick plate lip.
+    box(root, brassGlowMat(0.35), len, 0.012, 0.034, x, 0.165, z, ry);
+    box(root, dadoNeon, len, 0.022, 0.022, x, 1.0, z, ry);
+    box(root, pictureNeon, len, 0.022, 0.022, x, 2.62, z, ry);
+    // Clips every metre, holding the tubes off the wall.
+    const n = Math.max(2, Math.round(len));
+    for (let i = 0; i < n; i++) {
+      const t = (i + 0.5) / n - 0.5;
+      const cx = x + Math.cos(ry) * t * len;
+      const cz = z - Math.sin(ry) * t * len;
+      box(root, skirt, 0.04, 0.05, 0.03, cx, 1.0, cz, ry);
+      box(root, skirt, 0.04, 0.05, 0.03, cx, 2.62, cz, ry);
+    }
   };
+  void railMat;
   // The north runs die into the mirror's frame the way the south's die
   // into the door portal — a dado rail straight across the glass would be
   // a brass line through everyone's reflection.
@@ -387,28 +402,49 @@ function buildWalls(root: Group, W: number, NZ: number, SZ: number, H: number): 
   const ROOMS = [CLUB.arcade, CLUB.quiet, CLUB.step];
   const inRoom = (x: number, z: number): boolean =>
     ROOMS.some((r) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ);
+  // RIVETED I-BEAM COLUMNS pace the long walls where the fluted brass
+  // pilasters stood: a web between two flanges, a base plate bolted down,
+  // a row of rivet heads up each flange edge, and a cap plate under the
+  // slab. Spacing still varies subtly (no five modules identical).
   const pilaster = (x: number, z: number): void => {
     if (inRoom(x, z)) return;
     const g = new Group();
     g.position.set(x, 0, z);
-    const plinthL = new Mesh(new BoxGeometry(0.4, 0.14, 0.24), skirt);
-    plinthL.position.y = 0.07;
-    g.add(plinthL);
-    const core = new Mesh(new CylinderGeometry(0.085, 0.1, 2.44, 10), coreMat);
-    core.position.y = 1.36;
-    g.add(core);
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2;
-      const reed = new Mesh(new CylinderGeometry(0.02, 0.024, 2.4, 6), reedMat);
-      reed.position.set(Math.sin(a) * 0.085, 1.36, Math.cos(a) * 0.085);
-      g.add(reed);
+    const base = new Mesh(new BoxGeometry(0.44, 0.05, 0.3), skirt);
+    base.position.y = 0.025;
+    g.add(base);
+    const H = 2.7;
+    const web = new Mesh(new BoxGeometry(0.03, H, 0.16), coreMat);
+    web.position.y = 0.05 + H / 2;
+    g.add(web);
+    for (const sx of [-1, 1]) {
+      const flange = new Mesh(new BoxGeometry(0.03, H, 0.26), reedMat);
+      flange.position.set(sx * 0.1, 0.05 + H / 2, 0);
+      g.add(flange);
+      // Rivet heads up both edges of each flange.
+      for (let k = 0; k < 9; k++) {
+        for (const sz of [-1, 1]) {
+          const rivet = new Mesh(new CylinderGeometry(0.014, 0.016, 0.012, 8), skirt);
+          rivet.rotation.z = Math.PI / 2;
+          rivet.position.set(sx * 0.12, 0.25 + k * 0.28, sz * 0.095);
+          g.add(rivet);
+        }
+      }
     }
-    const cap = new Mesh(new BoxGeometry(0.36, 0.09, 0.22), railMat);
-    cap.position.y = 2.62;
+    // Four bolts at the base plate's corners.
+    for (const [bx, bz] of [
+      [-0.17, -0.11],
+      [0.17, -0.11],
+      [-0.17, 0.11],
+      [0.17, 0.11],
+    ]) {
+      const bolt = new Mesh(new CylinderGeometry(0.018, 0.018, 0.02, 6), reedMat);
+      bolt.position.set(bx, 0.06, bz);
+      g.add(bolt);
+    }
+    const cap = new Mesh(new BoxGeometry(0.36, 0.05, 0.3), skirt);
+    cap.position.y = 0.05 + H + 0.025;
     g.add(cap);
-    const capStep = new Mesh(new BoxGeometry(0.28, 0.07, 0.18), skirt);
-    capStep.position.y = 2.71;
-    g.add(capStep);
     root.add(g);
   };
   // East wall (between bar and corners) + west wall (pacing the booths).
@@ -427,24 +463,46 @@ function buildWalls(root: Group, W: number, NZ: number, SZ: number, H: number): 
     depthWrite: false,
     opacity: 0.5,
   });
+  // CAGE LAMPS where the deco sconces hung: a junction box on the wall, a
+  // short conduit, and a bulb in a wire cage — the bulb a hot amber core
+  // in a warm sprite, the cage six bars and two rings of black steel.
+  const bulbMat = new MeshStandardMaterial({
+    color: 0xfff1d6,
+    emissive: DECOR.candle,
+    emissiveIntensity: 1.6,
+    roughness: 0.4,
+  });
   const sconce = (x: number, z: number, ry: number): void => {
     if (inRoom(x, z)) return;
     const g = new Group();
     g.position.set(x, 1.78, z);
     g.rotation.y = ry;
-    const back = new Mesh(new BoxGeometry(0.1, 0.34, 0.02), coreMat);
+    const back = new Mesh(new BoxGeometry(0.12, 0.12, 0.05), coreMat);
     g.add(back);
-    const shade = new Mesh(new CylinderGeometry(0.075, 0.045, 0.2, 10, 1, true), shadeMat);
-    shade.position.set(0, 0.06, 0.09);
-    g.add(shade);
-    const up = new Sprite(glowMat);
-    up.scale.setScalar(0.55);
-    up.position.set(0, 0.28, 0.1);
-    g.add(up);
-    const down = new Sprite(glowMat);
-    down.scale.setScalar(0.34);
-    down.position.set(0, -0.18, 0.1);
-    g.add(down);
+    const conduit = new Mesh(new CylinderGeometry(0.014, 0.014, 0.16, 8), coreMat);
+    conduit.rotation.x = Math.PI / 2;
+    conduit.position.set(0, 0, 0.1);
+    g.add(conduit);
+    const bulb = new Mesh(new SphereGeometry(0.038, 12, 10), bulbMat);
+    bulb.position.set(0, 0, 0.21);
+    g.add(bulb);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const bar = new Mesh(new CylinderGeometry(0.003, 0.003, 0.15, 4), skirt);
+      bar.rotation.x = Math.PI / 2;
+      bar.position.set(Math.sin(a) * 0.055, Math.cos(a) * 0.055, 0.215);
+      g.add(bar);
+    }
+    for (const dz of [0.15, 0.27]) {
+      const ring = new Mesh(new TorusGeometry(0.055, 0.003, 4, 18), skirt);
+      ring.position.set(0, 0, dz);
+      g.add(ring);
+    }
+    const glow = new Sprite(glowMat);
+    glow.scale.setScalar(0.5);
+    glow.position.set(0, 0, 0.22);
+    g.add(glow);
+    void shadeMat;
     root.add(g);
   };
   for (const z of [-7.0, 0.5, 2.4]) sconce(W - 0.16, z, -Math.PI / 2);
@@ -458,7 +516,14 @@ function buildCeiling(root: Group, W: number, NZ: number, SZ: number, H: number)
   const F = CLUB.floor;
   const slabMat = new MeshStandardMaterial({ color: DECOR.plasterDeep, roughness: 0.95, metalness: 0.02 });
   const fasciaMat = new MeshStandardMaterial({ color: 0x1c1922, roughness: 0.9, metalness: 0.05 });
-  const coveMat = brassGlowMat(1.5);
+  // The dome's step coves burn cyan (neon), the perimeter run hazard amber.
+  const coveMat = new MeshStandardMaterial({
+    color: 0x1d2228,
+    emissive: DECOR.neon,
+    emissiveIntensity: 1.5,
+    metalness: 0.5,
+    roughness: 0.4,
+  });
 
   // Main slab with a circular opening over the dance floor — built as four
   // rectangles + a ring closing the circle.
@@ -541,8 +606,15 @@ function buildChandelier(root: Group): ClubRefs['chandelier'] {
     brass.rotation.x = Math.PI / 2;
     pivot.add(brass);
 
-    // The LED channel on the ring's underside — this is what phases.
-    const glowMat = brassGlowMat(1.4);
+    // The LED channel on the ring's underside — this is what phases. Cyan
+    // now: the rings are the venue's neon, not its brass.
+    const glowMat = new MeshStandardMaterial({
+      color: 0x1d2228,
+      emissive: DECOR.neon,
+      emissiveIntensity: 1.4,
+      metalness: 0.5,
+      roughness: 0.4,
+    });
     const glow = new Mesh(new TorusGeometry(def.r, 0.011, 6, 56), glowMat);
     glow.rotation.x = Math.PI / 2;
     glow.position.y = -0.035;
@@ -565,6 +637,44 @@ function buildChandelier(root: Group): ClubRefs['chandelier'] {
   const stem = new Mesh(new CylinderGeometry(0.012, 0.012, 1.6, 6), cableMat);
   stem.position.y = 0.8;
   group.add(stem);
+
+  // THE TRUSS. A square lattice frame hung in the dome's mouth, the rings
+  // turning inside it: four chords, a rail of diagonals between each pair,
+  // and the ring cables now read as hung from something. Static, so it
+  // lives beside the live group rather than in it.
+  const truss = new Group();
+  const T = 3.05; // half-span, just inside the dome's opening (R0 3.3)
+  const chordMat = bronzeMat();
+  const diagMat = brassMat(0.4);
+  const ty = CLUB.ceilH + 0.28;
+  for (const side of [0, 1, 2, 3]) {
+    const a = (side * Math.PI) / 2;
+    const cx = F.x + Math.cos(a) * T;
+    const cz = F.z + Math.sin(a) * T;
+    for (const dy of [-0.16, 0.16]) {
+      const chord = new Mesh(new BoxGeometry(T * 2, 0.05, 0.05), chordMat);
+      chord.position.set(cx, ty + dy, cz);
+      chord.rotation.y = -a + Math.PI / 2;
+      truss.add(chord);
+    }
+    // Diagonals, zig-zagging between the chords.
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      const t0 = (i / n - 0.5) * T * 2;
+      const t1 = ((i + 1) / n - 0.5) * T * 2;
+      const len = Math.hypot(t1 - t0, 0.32);
+      const diag = new Mesh(new BoxGeometry(len, 0.028, 0.028), diagMat);
+      const along = (t0 + t1) / 2;
+      // Place along the chord's line (it runs across the side).
+      const dx = Math.sin(a) * along;
+      const dz = -Math.cos(a) * along;
+      diag.position.set(cx + dx, ty, cz + dz);
+      diag.rotation.y = -a + Math.PI / 2;
+      diag.rotation.z = (i % 2 ? 1 : -1) * Math.atan2(0.32, t1 - t0);
+      truss.add(diag);
+    }
+  }
+  root.add(truss);
 
   return { group, rings };
 }
@@ -599,8 +709,8 @@ function buildStage(root: Group): MeshBasicMaterial {
   box(root, stepMat, 1.6, 0.15, 0.34, 0, 0.075, S.z + S.r + 0.14);
   box(root, stepMat, 1.2, 0.3, 0.3, 0, 0.15, S.z + S.r - 0.05);
 
-  // THE SUNBURST: brass ribs fanning from a half-disc hub on the wall — the
-  // deco signature, sized to crown the whole stage.
+  // THE SUNBURST: steel ribs fanning from a half-disc hub on the wall — the
+  // deco signature kept, in the new metal, with the hub burning cyan.
   const hubY = S.h + 1.15;
   const wallZ = CLUB.minZ + 0.1;
   const ribMat = brassMat(0.3);
@@ -613,26 +723,34 @@ function buildStage(root: Group): MeshBasicMaterial {
     rib.rotation.z = -a;
     root.add(rib);
   }
-  const hub = new Mesh(new CircleGeometry(0.42, 24, 0, Math.PI), brassGlowMat(0.8));
+  const hub = new Mesh(
+    new CircleGeometry(0.42, 24, 0, Math.PI),
+    new MeshStandardMaterial({ color: 0x1d2228, emissive: DECOR.neon, emissiveIntensity: 1.1, metalness: 0.5, roughness: 0.4 }),
+  );
   hub.position.set(0, hubY, wallZ + 0.01);
   root.add(hub);
 
-  // Velvet drapes across the whole north wall behind the burst: full-height
-  // panels hung in alternating relief so the pleats catch the cove light.
-  // They PART around the mirror in the east corner — its glass is a window
-  // through this wall, and buildMirror() hangs the tied-back pair that
-  // frames it.
-  const drapeMat = new MeshStandardMaterial({ map: velvetTexture([2, 1], 6), roughness: 0.96, metalness: 0 });
+  // CORRUGATED STEEL across the whole north wall behind the burst, where
+  // the velvet hung: full-height sheets in alternating relief so the ribs
+  // catch the light, a magenta neon tube run along their foot washing up
+  // the metal, and a steel channel capping the top. They PART around the
+  // mirror in the east corner — its glass is a window through this wall.
+  const sheetMat = new MeshStandardMaterial({ map: corrugatedTexture([1.4, 3.2]), roughness: 0.48, metalness: 0.78 });
   const MR = CLUB.mirror;
+  const footNeon = neonMat(DECOR.neonHot, 1.1);
   for (let i = 0; i < 12; i++) {
     const x = -8.25 + i * 1.5;
     if (Math.abs(x - MR.x) < MR.w / 2 + 1.0) continue; // the mirror's span
-    const panel = new Mesh(new PlaneGeometry(1.56, 4.6), drapeMat);
+    const panel = new Mesh(new PlaneGeometry(1.56, 4.6), sheetMat);
     panel.position.set(x, 2.3, CLUB.minZ + 0.05 + (i % 2) * 0.05);
     root.add(panel);
+    // The tube at its foot, on clips, just clear of the stage lid.
+    box(root, footNeon, 1.4, 0.022, 0.022, x, S.h + 0.06, CLUB.minZ + 0.16);
+    box(root, blackSteelMat(), 0.04, 0.05, 0.05, x - 0.6, S.h + 0.06, CLUB.minZ + 0.14);
+    box(root, blackSteelMat(), 0.04, 0.05, 0.05, x + 0.6, S.h + 0.06, CLUB.minZ + 0.14);
   }
-  // Brass drape rail with finials.
-  box(root, brassMat(0.3), 16.9, 0.05, 0.05, 0, 4.62, CLUB.minZ + 0.09);
+  // A steel channel caps the sheets where the drape rail hung.
+  box(root, bronzeMat(), 16.9, 0.08, 0.12, 0, 4.62, CLUB.minZ + 0.09);
 
   // The DJ console: an angled smoked-oak desk with a glowing fader strip
   // and two platters — where the MC earns the name.
@@ -2200,8 +2318,10 @@ export function buildFoyer(scene: Scene): FoyerRefs {
 /* ── real lights: four points + a hemisphere, and not one more ──────────── */
 
 function buildLights(root: Group): void {
-  // The base wash: cool sky, near-black ground — the plaster stays charcoal.
-  root.add(new HemisphereLight(0x8f88b0, 0x0e0a12, 0.62));
+  // The base wash: a cool sky, near-black ground — enough for board-formed
+  // concrete to read as concrete across the hall (plaster could stay in
+  // shadow; concrete that does is just black).
+  root.add(new HemisphereLight(0xa4b0cc, 0x0b0c10, 0.9));
 
   const F = CLUB.floor;
   // The chandelier's warmth over the dance floor — the room's key.

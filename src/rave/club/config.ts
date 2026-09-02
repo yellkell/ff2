@@ -8,12 +8,14 @@
  * the host drops the set the club packs away and the raid's void takes
  * the room; when the set resolves everyone lands back here together.
  *
- * The look is deliberately the opposite pole from FIRE FIGHT's steel boozer:
- * restrained Art Deco fused with the rave's neon — charcoal lime plaster,
- * smoked oak, champagne brass, oxblood velvet, ribbed glass — with saturated
- * colour reserved for light, drinks and signage. Its hero is the ECLIPSE
- * CHANDELIER: concentric suspended brass rings over the dance floor that
- * slowly counter-rotate and phase with the music.
+ * The look is NEON INDUSTRIAL now that the venue is FIRE FIGHT's (DESIGN
+ * §3.3): board-formed concrete, checker plate, galvanised steel, riveted
+ * I-beams, black quilted vinyl, hazard amber — the deco plan and its craft
+ * level kept, the wardrobe swapped, with saturated colour reserved for
+ * light, drinks and signage. Its hero is still the ECLIPSE: concentric
+ * suspended steel rings over the dance floor, cyan LED channels on their
+ * undersides, slowly counter-rotating and phasing with the music, under a
+ * lattice truss.
  *
  * Everything in metres, world space. You SPAWN at the origin — the same spot
  * the raid puts your platform — standing at the near edge of the dance
@@ -174,22 +176,35 @@ export const CLUB = {
   },
 } as const;
 
-/* ── the venue's palette (the deco pole; the rave neon stays in PALETTE) ── */
+/* ── the venue's palette: NEON INDUSTRIAL ────────────────────────────────
+ * The keys are the deco wardrobe's — build.ts asks for `brass`, `velvet`,
+ * `oak` in a hundred places and there is no reason to rename a hundred
+ * places — but what the keys MEAN changed when the venue came over to FIRE
+ * FIGHT (DESIGN §3.3): the fight-club language, gunmetal, hazard amber and
+ * riveted steel, fused with the supper-club craft level, every edge with
+ * thickness, saturated colour reserved for LIGHT. So `brass` is galvanised
+ * steel now, `bronze` is gunmetal, `velvet` is black quilted vinyl, `oak`
+ * is painted plate, `plaster` is board-formed concrete — and the coves, the
+ * signage and the rings burn neon. */
 export const DECOR = {
-  plaster: 0x2b2830, // charcoal lime plaster
-  plasterDeep: 0x211e27,
-  oak: 0x4a3524, // smoked oak
-  oakDark: 0x33241a,
-  brass: 0xc9a86a, // champagne brass
-  brassDeep: 0x8a6f3f,
-  bronze: 0x5f4a33, // oxidised bronze
-  velvet: 0x5e1f26, // oxblood
-  velvetDeep: 0x431419,
-  stone: 0x24262c, // dark veined stone
-  candle: 0xffc678, // 2400 K practical
-  cove: 0xffb45e, // 2700 K architectural cove
+  plaster: 0x3a3b40, // board-formed concrete
+  plasterDeep: 0x2a2b30,
+  oak: 0x2c2e33, // painted steel plate (was smoked oak)
+  oakDark: 0x1e2024,
+  brass: 0x9aa4ac, // galvanised steel (was champagne brass)
+  brassDeep: 0x5e666d,
+  bronze: 0x3b4048, // gunmetal (was oxidised bronze)
+  velvet: 0x17181c, // black quilted vinyl (was oxblood)
+  velvetDeep: 0x0e0f12,
+  stone: 0x2e3035, // sealed concrete (was dark veined stone)
+  candle: 0xffc678, // 2400 K practical — the one warmth kept
+  cove: 0xffb000, // HAZARD AMBER: the coves, the strips, the warnings
   face: 0xffd9ac, // 3200 K flattering key
-  moon: 0xf2ecff, // the eclipse's moon-white
+  moon: 0xdff6ff, // the cyan-white the neon runs at
+  /** The neon itself: cyan for the architecture's lines, magenta for the
+   *  signage, both the rave's own (PALETTE). */
+  neon: 0x4fb7ff,
+  neonHot: 0xff2ad5,
 } as const;
 
 /* ── teleport-only locomotion (the FIRE FIGHT club's system, carried over
