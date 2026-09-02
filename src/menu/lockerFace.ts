@@ -14,7 +14,7 @@
  * gear piece's silhouette). A tile in the store that is being TRIED ON
  * grows a real BUY button; the rest of its chrome is drawn.
  *
- * The COLOUR face keeps its two live tracks (the gauntlet neon's hue and
+ * The COLOUR face keeps its two live tracks (the hands' neon hue and
  * lightness). They are scrubbed by the trigger — MenuSystem reads the hit
  * UV every frame — so their geometry and the `accentBarHue` /
  * `accentBarLight` mappers below must agree; that is why both live here.
@@ -45,7 +45,7 @@ const GAP = 20;
 const TILE_W = (INNER - (COLS - 1) * GAP) / COLS;
 const FOOT_Y = LOCKER_H - 140;
 
-/** The gauntlet-neon tracks — ghost rects the body paints and the trigger
+/** The hand-neon tracks — ghost rects the body paints and the trigger
  *  scrubs. (See the note at the top: the mappers below read these.) */
 const BASE_Y = 248;
 const BASE_H = 108;
@@ -281,7 +281,7 @@ function drawTile(g: CanvasRenderingContext2D, t: Tile, locker: boolean, hover: 
   }
 }
 
-/* ── COLOUR: the base tone, and the gauntlet neon ─────────────────────── */
+/* ── COLOUR: the base tone, and the hands' neon ───────────────────────── */
 
 function colourButtons(): PanelButton[] {
   const onyx = customization.avatar === 'onyx';
@@ -341,7 +341,7 @@ function colourBody(g: CanvasRenderingContext2D): void {
   g.fillStyle = KIT.dim;
   g.fillText('everything past the base tone is PAINT — the bay is on the YOU wing', M, BASE_Y + BASE_H + 26);
 
-  label('GAUNTLET NEON', HUE_BAR.y - 28);
+  label('HAND NEON', HUE_BAR.y - 28);
   drawTrack(g, HUE_BAR, app.accentHue, (i, x, w) => {
     g.fillStyle = css(hueToColor(i, 0.55));
     g.fillRect(x, HUE_BAR.y, w, HUE_BAR.h);
@@ -366,7 +366,7 @@ function colourBody(g: CanvasRenderingContext2D): void {
   g.font = font(700, 24);
   g.letterSpacing = '4px';
   g.fillStyle = 'rgba(10,8,6,0.72)';
-  g.fillText('YOUR GAUNTLETS', LOCKER_W / 2, 734);
+  g.fillText('YOUR HANDS', LOCKER_W / 2, 734);
   g.letterSpacing = '0px';
 }
 

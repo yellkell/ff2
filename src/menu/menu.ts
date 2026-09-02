@@ -1037,7 +1037,7 @@ interface AttachInfo {
   desc: string;
 }
 const ATTACHMENTS: AttachInfo[] = [
-  { name: 'SPLIT', color: UI.cool, desc: 'Splits on return.' },
+  { name: 'SPLIT', color: UI.cool, desc: 'Splits into three on return — each a third the damage.' },
   { name: 'GROW', color: UI.emberBright, desc: 'Gets bigger on return with less damage.' },
   { name: 'SHRINK', color: UI.amber, desc: 'Gets smaller on return for more damage.' },
 ];

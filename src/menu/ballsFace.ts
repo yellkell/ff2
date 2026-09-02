@@ -1,7 +1,8 @@
 /**
  * THE BALL LOADOUT (MENUS 3) — what each fist throws, on the panel kit.
  *
- * Two rows, one per fist, three attachments each: SPLIT, GROW, SHRINK.
+ * Two rows, one per fist, three attachments each: SPLIT (into three),
+ * GROW, SHRINK.
  * Tap one to arm that fist with it; tap it again to go back to a plain
  * ball. Below them, a line saying what the last one you touched does —
  * the panel teaches as you poke it.
@@ -35,7 +36,7 @@ const DESC_Y = 546;
 
 const TYPES = [ATTACH.split, ATTACH.grow, ATTACH.shrink];
 const ATTACHMENTS = [
-  { name: 'SPLIT', color: KIT.info, desc: 'Splits on return.' },
+  { name: 'SPLIT', color: KIT.info, desc: 'Splits into three on return — each a third the damage.' },
   { name: 'GROW', color: '#ff7a18', desc: 'Gets bigger on return with less damage.' },
   { name: 'SHRINK', color: KIT.accent, desc: 'Gets smaller on return for more damage.' },
 ];
@@ -214,18 +215,19 @@ function drawAttachIcon(g: CanvasRenderingContext2D, type: number, cx: number, c
   g.fillStyle = color;
   g.lineWidth = 3;
   if (type === 0) {
-    // SPLIT: one line forking into two.
+    // SPLIT: one ball forking into THREE — the count the attachment
+    // actually throws (ATTACH.splitCount), so the glyph can't lie about it.
     g.beginPath();
     g.moveTo(cx - r, cy);
-    g.lineTo(cx, cy);
+    g.lineTo(cx - r * 0.15, cy);
     g.stroke();
-    for (const s of [-1, 1]) {
+    for (const s of [-1, 0, 1]) {
       g.beginPath();
-      g.moveTo(cx, cy);
-      g.lineTo(cx + r * 0.8, cy + s * r * 0.62);
+      g.moveTo(cx - r * 0.15, cy);
+      g.lineTo(cx + r * 0.66, cy + s * r * 0.66);
       g.stroke();
       g.beginPath();
-      g.arc(cx + r * 0.86, cy + s * r * 0.67, 5, 0, Math.PI * 2);
+      g.arc(cx + r * 0.74, cy + s * r * 0.72, 5.5, 0, Math.PI * 2);
       g.fill();
     }
     return;
