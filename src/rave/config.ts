@@ -819,7 +819,52 @@ export const MC = {
   hue: 0.8,
   /** Sticks/accents flip to WARN amber while a move charges. */
   warnColor: 0xffb03a,
+  /**
+   * THE WARDROBE. He does not wear one colour all night: the map, the
+   * floor, the count-in, the record and the podium each dress him, and a
+   * SET takes its colour from the record on the decks — so walking from
+   * the menu into a song visibly changes the headliner.
+   *
+   * THE ONE LAW: never red, never yellow. Danger speaks hazard amber→red
+   * (telegraphs, beams, novas — PALETTE DISCIPLINE above), so an MC in
+   * either is an MC who looks like a warning. Every hue he can wear is
+   * folded into a SAFE BAND that starts past yellow and stops before red
+   * comes round again: greens, cyans, blues, violets, magentas. The band
+   * is the guarantee — nothing that picks his colour, not even a hash of
+   * a track id, can put him in the danger vocabulary.
+   */
+  band: { lo: 0.28, hi: 0.92 },
+  /** His outfit per place (hues; folded through the band anyway). */
+  wear: { tour: 0.8, lobby: 0.88, countdown: 0.55, podium: 0.36 },
+  /** How fast he changes between them (hue units per second). */
+  changeRate: 0.5,
 };
+
+/** Fold any hue into the MC's SAFE BAND — out of red and yellow, for good. */
+export function mcSafeHue(hue: number): number {
+  const t = (((hue % 1) + 1) % 1);
+  return MC.band.lo + t * (MC.band.hi - MC.band.lo);
+}
+
+/** The colour the MC should be wearing right now: the place he's in, and —
+ *  once a record is on the decks — that record's own hue (a stable hash of
+ *  the track id, folded into the safe band, so every song dresses him
+ *  differently and the same song always dresses him the same). */
+export function mcHueFor(screen: string, trackId: string): number {
+  if ((screen === 'raid' || screen === 'countdown') && trackId) {
+    let h = 2166136261;
+    for (let i = 0; i < trackId.length; i++) {
+      h ^= trackId.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    const t = ((h >>> 0) % 10007) / 10007;
+    // The count-in keeps its own cool blue-cyan; the record's colour lands
+    // with the first downbeat.
+    return screen === 'countdown' ? mcSafeHue(MC.wear.countdown) : mcSafeHue(t);
+  }
+  const wear = MC.wear as Record<string, number>;
+  return mcSafeHue(wear[screen] ?? MC.hue);
+}
 
 /* ─────────────────────────────── THE TOUR ────────────────────────────────
  * The campaign proper: NIGHTS grouped into SETS of three records. Nights

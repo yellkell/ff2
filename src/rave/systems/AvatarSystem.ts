@@ -23,7 +23,8 @@ import { BOTS, OCTAGON_HALF_DEPTH, OCTAGON_HALF_WIDTH } from '../config.js';
 import { platformRoot } from '../arena/arena.js';
 import { choreoView } from './ChoreoSystem.js';
 import type { Zone } from '../choreo/setlist.js';
-import { accentHex, buildDancer, type DancerPose, type DancerRig } from '../game/blankDancer.js';
+import { accentHex, buildDancer, type DancerPose, type DancerRig } from '../game/avatars.js';
+import { buildDancer as buildBlank } from '../game/blankDancer.js';
 import { PoseMotion, type MotionTuning } from '../game/poseMotion.js';
 import { roll } from '../game/rng.js';
 import { seatBearing, seatIsNear } from '../game/ring.js';
@@ -76,10 +77,12 @@ export class AvatarSystem extends createSystem({}) {
       if (d.kind === 'local') continue; // you never see your own body
       const parent = platformRoot(d.seat);
       if (!parent) continue;
-      // THE BLANK (game/blankDancer.ts): groupies alternate the two base
-      // tones round the ring; a remote human wears the bare white until
-      // their look rides the wire.
-      const rig = buildDancer(d.hue, { tone: d.kind === 'bot' && d.seat % 2 === 1 ? 'onyx' : 'white' });
+      // WHO WEARS WHAT: the GROUPIES are the house's own figures — the
+      // RAVE RAID couture dancer, in their seat's neon (game/avatars.ts).
+      // A REAL PERSON wears THE BLANK (game/blankDancer.ts): one town, one
+      // body, so the fighter you met in the arena is the dancer beside you
+      // here. Their look rides the wire and bakes on arrival.
+      const rig = d.kind === 'remote' ? buildBlank(d.hue) : buildDancer(d.hue);
       // DETAIL, decided once — see seatIsNear(). The choreography asks the
       // same question of the same seat, so a far deck loses its dancer's
       // jewellery, its falling blocks and its strike sparks together.

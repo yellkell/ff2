@@ -7,8 +7,10 @@
  *
  * Boots rave.html in headless Chromium (IWER provides WebXR), enters, and
  * drives the rave through its dev hook (window.__gdr): the shared identity
- * (the arena's callsign and accent are the dancer's), a solo set on the
- * ring with the blank dancers and the giant blank MC, the podium paying
+ * (the arena's callsign and accent are the dancer's), a solo set whose
+ * groupies and MC are the house's own RAVE RAID figures (only real people
+ * wear THE BLANK) with the MC changing colour and never wearing the
+ * telegraphs' red or yellow, the podium paying
  * bolt-dollars into the ONE wallet, and the rail's FIRE FIGHT door hopping
  * back to the arena page. --shots saves the ring beside this script.
  */
@@ -74,7 +76,8 @@ check("the dancer's name is the arena's callsign", name === 'PROBE-ONE', String(
 const railHasFF = await page.evaluate(() => window.__gdr.menu.boardButtons?.().includes('tab-ff'));
 check('the rail offers FIRE FIGHT (the way back)', railHasFF === true, String(railHasFF));
 
-console.log('\n=== a solo set: blank dancers, a blank MC, the one wallet ===');
+console.log('\n=== a solo set: the house figures, the MC\'s wardrobe, the one wallet ===');
+const mcMenu = await page.evaluate(() => ({ ...window.__gdr.mc }));
 const coinsBefore = await page.evaluate(() => Number(localStorage.getItem('ff-coins')));
 await page.evaluate(() => window.__gdr.startRaid({ seats: 8 }));
 const live = await page
@@ -86,19 +89,31 @@ check('the set goes live (count-in → raid)', live, screen);
 await page.waitForTimeout(900); // early in the record — before the first landing's flash
 const ring = await page.evaluate(() => {
   const scene = window.__gdr.scene();
-  let dancers = 0;
-  let heads = 0;
+  let blanks = 0;
   scene?.traverse((o) => {
-    if (o.name === 'blank-dancer') dancers++;
-    if (o.name === 'opponent-head') heads++;
+    if (o.name === 'blank-dancer') blanks++;
   });
   const mc = scene?.getObjectByName('the-mc');
-  return { dancers, heads, mc: !!mc, mcBlank: !!mc?.getObjectByName('opponent-head'), players: window.__gdr.match.players.length, mine: window.__gdr.match.players[0]?.hue };
+  return {
+    blanks,
+    mc: !!mc,
+    // The house figure has no mannequin head in it; the blank does.
+    mcBlank: !!mc?.getObjectByName('opponent-head'),
+    players: window.__gdr.match.players.length,
+    bots: window.__gdr.match.players.filter((p) => p.kind === 'bot').length,
+    mine: window.__gdr.match.players[0]?.hue,
+  };
 });
-// Seven groupies wear the blank-dancer root; the MC's root is renamed
-// 'the-mc' and counts by his blank head instead.
-check('the ring wears the blank: seven groupies + the MC, all mannequins', ring.dancers === 7 && ring.heads >= 8 && ring.mc && ring.mcBlank, JSON.stringify(ring));
+// The groupies and the MC are the house's own RAVE RAID figures; THE BLANK
+// is the players' body, so a solo ring (no remote humans) carries none.
+check('the groupies and the MC keep the house figure', ring.mc && !ring.mcBlank && ring.blanks === 0 && ring.bots === 7, JSON.stringify(ring));
 check("your own colour is the arena's accent", Math.abs((hue ?? -1) - 0.5) < 0.01 || Math.abs((ring.mine ?? -1) - 0.5) < 0.01, String(ring.mine));
+{
+  const mcSet = await page.evaluate(() => ({ ...window.__gdr.mc }));
+  const band = (h) => h >= 0.279 && h <= 0.921; // never red, never yellow
+  check('the MC changes colour from the map to the record', Math.abs(mcSet.hue - mcMenu.hue) > 0.01, JSON.stringify({ map: mcMenu.hue, set: mcSet.hue }));
+  check('and never wears the telegraphs\' red or yellow', band(mcMenu.hue) && band(mcSet.hue), JSON.stringify([mcMenu.hue, mcSet.hue]));
+}
 if (shots) {
   const file = join(here, 'rave-ring.png');
   await page.screenshot({ path: file });

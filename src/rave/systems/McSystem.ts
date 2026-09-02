@@ -38,10 +38,10 @@
 
 import { createSystem } from '@iwsdk/core';
 import type { MeshBasicMaterial, MeshStandardMaterial } from 'three';
-import { MC, RING, hueToColor, ringRadius } from '../config.js';
+import { MC, RING, hueToColor, ringRadius, mcHueFor } from '../config.js';
 import { arena } from '../arena/arena.js';
 import { CLUB as CLUB_LAYOUT } from '../club/config.js';
-import { ACCENT_REST, accentHex, buildDancer, type DancerPose, type DancerRig } from '../game/blankDancer.js';
+import { ACCENT_REST, accentHex, buildDancer, type DancerPose, type DancerRig } from '../game/avatars.js';
 import { PoseMotion } from '../game/poseMotion.js';
 import { match, type GestureCue, showBeat } from '../game/state.js';
 import { net } from '../net/session.js';
@@ -77,6 +77,10 @@ const MENU_SPOT = { x: 1.55, y: 0, z: -2.55, scale: 1.35 };
  *  the stage behind his console, playing the record the room hears. */
 const DECK_SPOT = { x: 0, y: CLUB_LAYOUT.stage.h, z: CLUB_LAYOUT.stage.z + 0.5, scale: 1.35 };
 
+/** What the headliner is wearing right now — the probe reads it to prove
+ *  he changes between the map and the record, and never wears red/yellow. */
+export const mcView = { hue: MC.hue, color: 0, screen: '', track: '' };
+
 export class McSystem extends createSystem({}) {
   private rig: DancerRig | null = null;
   /** The RENDERED pose — everything below writes `tgt` and the motion
@@ -93,20 +97,28 @@ export class McSystem extends createSystem({}) {
   private generation = -1;
   private mime: ActiveMime | null = null;
   private warn = 0;
+  /** Last frame's delta — applyAccents eases the wardrobe on it. */
+  private lastDelta = 0;
   private baseColor = 0;
+  /** The hue he is WEARING (eased toward the wardrobe's target — see
+   *  config.mcHueFor). Never leaves the safe band, so he is never red or
+   *  yellow: those belong to the telegraphs. */
+  private hue = MC.hue;
   private eaten = false;
 
   private rebuild(): void {
     this.generation = match.generation;
     if (!this.rig) {
-      // A giant of the dancers' own kind — a giant BLANK, onyx (FF2's
-      // titans were always the same machine).
-      this.rig = buildDancer(MC.hue, { tone: 'onyx' });
+      // A giant of the dancers' own kind: the RAVE RAID figure, at 3.4 m.
+      // (The blank is the PLAYERS' body — see game/blankDancer.ts. The
+      // headliner and the groupies are the house's own, and stay.)
+      this.hue = mcHueFor(match.screen, match.trackId);
+      this.rig = buildDancer(this.hue);
       this.rig.root.name = 'the-mc'; // headless probes find him by name
       this.rig.root.scale.setScalar(MC.scale);
       // He faces the crowd — every client renders him looking at THEM.
       this.rig.root.rotation.y = Math.PI;
-      this.baseColor = hueToColor(MC.hue, 0.6);
+      this.baseColor = hueToColor(this.hue, 0.6);
       this.scene.add(this.rig.root);
     }
     // A fresh night starts from the neutral stance — an eased pose is state,
@@ -126,6 +138,11 @@ export class McSystem extends createSystem({}) {
   }
 
   update(delta: number): void {
+    this.lastDelta = delta;
+    mcView.hue = this.hue;
+    mcView.color = this.baseColor;
+    mcView.screen = match.screen;
+    mcView.track = match.trackId;
     if (this.generation !== match.generation) this.rebuild();
     const rig = this.rig;
     if (!rig) return;
@@ -564,9 +581,25 @@ export class McSystem extends createSystem({}) {
     }
   }
 
+  /** Walk his colour toward what the place (and the record) call for. Both
+   *  ends live inside the safe band, so the walk between them can never
+   *  pass through red or yellow — it is a scalar ease, not a trip round
+   *  the wheel. */
+  private wardrobe(delta: number): void {
+    const want = mcHueFor(match.screen, match.trackId);
+    if (Math.abs(want - this.hue) < 1e-4) {
+      this.hue = want;
+    } else {
+      const step = MC.changeRate * delta;
+      this.hue += Math.max(-step, Math.min(step, want - this.hue));
+    }
+    this.baseColor = hueToColor(this.hue, 0.6);
+  }
+
   private applyAccents(warn: number): void {
     const rig = this.rig;
     if (!rig) return;
+    this.wardrobe(this.lastDelta);
     // WARN burns everything of his that GLOWS amber — sticks, collar, belt,
     // cuffs, seams, scan-slit, halos, and the lit sleeves and midriff with
     // them — while the dark cloth and the helm hold his own colour.

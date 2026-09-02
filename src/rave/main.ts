@@ -167,6 +167,7 @@ import { match } from './game/state.js';
 import { arena } from './arena/arena.js';
 import { choreoView } from './systems/ChoreoSystem.js';
 import { menuView } from './systems/MenuSystem.js';
+import { mcView } from './systems/McSystem.js';
 import { socialView } from './systems/ClubSocialSystem.js';
 import { propsView } from './systems/ClubPropsSystem.js';
 import { teleportView } from './systems/ClubTeleportSystem.js';
@@ -231,6 +232,8 @@ declare global {
       scene: () => import('three').Scene | null;
       /** The title card, for captures that need to know where the show is. */
       intro: typeof introView;
+      /** THE MC's wardrobe: the hue and colour he is wearing this frame. */
+      mc: typeof mcView;
       /** Voice speakers currently gated off (mute, block, or wrong room). */
       mutedVoices: typeof mutedSpeakerIds;
       /** Which record the room is spinning right now, by track id. */
@@ -273,6 +276,7 @@ window.__gdr = {
   },
   club: { call: callBall, touch: joinBall, cancel: cancelBall, go: startBall },
   intro: introView,
+  mc: mcView,
   mutedVoices: mutedSpeakerIds,
   ambient: ambientTrackId,
   ambientMuted,
