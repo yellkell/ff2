@@ -21,9 +21,16 @@
  *      already looking at, which is where the club puts its telegraphs too
  *      (research/01 §3).
  *
- * The decks ride the void's black glass and their reflection SHARES the live
- * instance buffers (banks.ts), so the circuit hangs over its own image the
- * whole way round for one extra draw per bank.
+ * THE MACHINE (VOIDSTEP 2's second pass): a deck is not a tile, it is a
+ * thing that carries you across nothing, and it looks like one. Gunmetal
+ * face with an ETCH of circuit traces lit from inside in the state colour;
+ * a two-step keel underneath with VENTS on its flanks that burn when it
+ * drives; an UNDERGLOW spilling onto the void's glass; a SCAN LINE sweeping
+ * the face once a bar so every docked deck keeps the beat in your eye. All
+ * of it is per-instance colour on shared banks — the whole circuit is nine
+ * draws, and its reflection SHARES the live instance buffers (banks.ts), so
+ * it hangs over its own image the whole way round for one extra draw per
+ * bank.
  */
 
 import { createSystem } from '@iwsdk/core';
@@ -35,12 +42,13 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  PlaneGeometry,
 } from 'three';
 import { COLOR, COUNTDOWN, GRID, SLIP_FLASH } from '../course/config.js';
 import { conductor } from '../course/conductor.js';
 import { Bank, mirrorBank, shadedBoxGeometry } from '../course/banks.js';
 import { registerDim } from '../course/dimmer.js';
-import { patternTexture, plateTexture } from '../course/textures.js';
+import { deckTexture, etchTexture, glowTexture, patternTexture } from '../course/textures.js';
 import {
   anchorAt,
   dwellInfo,
@@ -75,12 +83,31 @@ interface TileSlot {
   ox: number;
   oz: number;
   deck: number;
-  /** The machine's body under the deck — dark steel at rest, an engine
-   *  when the deck is travelling. */
-  keel: number;
+  /** The lit traces on the face — the deck's own neon. */
+  etch: number;
+  /** The machine's body under the deck, two steps of it — dark steel at
+   *  rest, an engine when the deck is travelling. */
+  keel: [number, number];
+  /** Slots in the keel's flanks that burn when it drives. */
+  vents: number[];
+  /** The bloom under the whole machine, on the void's glass. */
+  glow: number;
+  /** The line that sweeps the face once a bar. */
+  scan: number;
   rims: Record<string, number>;
   posts: number[];
 }
+
+/** The keel's two steps and where the vents sit on the upper one. */
+const KEEL_UPPER = { w: 0.78, h: 0.12, y: -0.16 };
+const KEEL_LOWER = { w: 0.52, h: 0.1, y: -0.27 };
+const VENT_SIDES: [number, number, number, number][] = [
+  // cx, cz, sx, sz — a slot on each flank, lying along the flank
+  [1, 0, 0, 1],
+  [-1, 0, 0, 1],
+  [0, 1, 1, 0],
+  [0, -1, 1, 0],
+];
 
 /** The keel's colours: a machine at rest, one counting itself out, one
  *  under way — the same three words the rims speak, from underneath. */
@@ -97,7 +124,11 @@ interface FenceSlot {
 
 export class CoursePlatformSystem extends createSystem({}) {
   private decks!: Bank;
+  private etches!: Bank;
   private keels!: Bank;
+  private vents!: Bank;
+  private glows!: Bank;
+  private scans!: Bank;
   private rims!: Bank;
   private posts!: Bank;
   private fences!: Bank;
@@ -126,15 +157,37 @@ export class CoursePlatformSystem extends createSystem({}) {
     }));
 
     const box = shadedBoxGeometry();
-    // The plate is the deck's own picture; the instance colour tints it
-    // (the amber count-out, the red burn), so the checker survives both.
-    const deckMat = new MeshBasicMaterial({ vertexColors: true, map: plateTexture() });
+    // A unit plane lying flat, for the layers that are only light.
+    const flat = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    // The face is the dark half of the sign: gunmetal, tinted per instance
+    // (the amber count-out, the red burn) — nothing on it glows by itself.
+    const deckMat = new MeshBasicMaterial({ vertexColors: true, map: deckTexture() });
+    // The etch is the lit half: traces, additive, pure instance colour.
+    const etchMat = new MeshBasicMaterial({
+      map: etchTexture(),
+      transparent: true,
+      blending: AdditiveBlending,
+      depthWrite: false,
+    });
     const keelMat = new MeshBasicMaterial({ vertexColors: true });
+    const ventMat = new MeshBasicMaterial({});
+    const glowMat = new MeshBasicMaterial({
+      map: glowTexture(),
+      transparent: true,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      side: DoubleSide,
+    });
+    const scanMat = new MeshBasicMaterial({});
     const rimMat = new MeshBasicMaterial({});
     const postMat = new MeshBasicMaterial({});
     const fenceMat = new MeshBasicMaterial({});
     registerDim(deckMat, 'scenery');
+    registerDim(etchMat, 'ground');
     registerDim(keelMat, 'ground');
+    registerDim(ventMat, 'ground');
+    registerDim(glowMat, 'ground');
+    registerDim(scanMat, 'ground');
     registerDim(rimMat, 'ground');
     registerDim(postMat, 'ground');
     registerDim(fenceMat, 'ground');
@@ -143,7 +196,11 @@ export class CoursePlatformSystem extends createSystem({}) {
     for (const p of PLATFORMS) tileCount += p.claim.length;
 
     this.decks = new Bank(box, deckMat, tileCount);
-    this.keels = new Bank(box, keelMat, tileCount);
+    this.etches = new Bank(flat, etchMat, tileCount);
+    this.keels = new Bank(box, keelMat, tileCount * 2);
+    this.vents = new Bank(box, ventMat, tileCount * 4);
+    this.glows = new Bank(flat, glowMat, tileCount);
+    this.scans = new Bank(box, scanMat, tileCount);
     this.rims = new Bank(box, rimMat, tileCount * 4);
     this.posts = new Bank(box, postMat, tileCount * 4);
 
@@ -160,10 +217,20 @@ export class CoursePlatformSystem extends createSystem({}) {
           ox: o.x,
           oz: o.z,
           deck: this.decks.add(0, 0, 0, GRID.tile, 0.1, GRID.tile, 0xffffff),
-          keel: this.keels.add(0, 0, 0, GRID.tile * 0.78, 0.16, GRID.tile * 0.78, KEEL.rest),
+          etch: this.etches.add(0, 0, 0, GRID.tile, 1, GRID.tile, COLOR.rimSafe),
+          keel: [
+            this.keels.add(0, 0, 0, GRID.tile * KEEL_UPPER.w, KEEL_UPPER.h, GRID.tile * KEEL_UPPER.w, KEEL.rest),
+            this.keels.add(0, 0, 0, GRID.tile * KEEL_LOWER.w, KEEL_LOWER.h, GRID.tile * KEEL_LOWER.w, KEEL.rest),
+          ],
+          vents: [],
+          glow: this.glows.add(0, 0, 0, GRID.tile * 2.0, 1, GRID.tile * 2.0, COLOR.rimSafe),
+          scan: this.scans.add(0, 0, 0, 0.008, 0.006, GRID.tile * 0.9, COLOR.rimSafe),
           rims: {},
           posts: [],
         };
+        for (let k = 0; k < 4; k++) {
+          slot.vents.push(this.vents.add(0, 0, 0, 0.02, 0.03, 0.02, COLOR.rimSafe));
+        }
         for (const e of FILL_ORDER) {
           slot.rims[e] = this.rims.add(0, 0, 0, 0.05, 0.09, 0.05, COLOR.rimSafe);
         }
@@ -190,8 +257,25 @@ export class CoursePlatformSystem extends createSystem({}) {
       }
     });
 
-    root.add(this.decks.mesh, this.keels.mesh, this.rims.mesh, this.posts.mesh, this.fences.mesh);
-    root.add(mirrorBank(this.decks, FLOOR_Y), mirrorBank(this.keels, FLOOR_Y, 0.3), mirrorBank(this.rims, FLOOR_Y, 0.22));
+    root.add(
+      this.decks.mesh,
+      this.keels.mesh,
+      this.vents.mesh,
+      this.rims.mesh,
+      this.posts.mesh,
+      this.fences.mesh,
+      this.scans.mesh,
+      this.etches.mesh,
+      this.glows.mesh,
+    );
+    root.add(
+      mirrorBank(this.decks, FLOOR_Y),
+      mirrorBank(this.keels, FLOOR_Y, 0.3),
+      mirrorBank(this.rims, FLOOR_Y, 0.22),
+      mirrorBank(this.vents, FLOOR_Y, 0.3),
+      mirrorBank(this.etches, FLOOR_Y, 0.45),
+      mirrorBank(this.glows, FLOOR_Y, 0.5),
+    );
 
     this.buildGhosts(root);
   }
@@ -319,7 +403,10 @@ export class CoursePlatformSystem extends createSystem({}) {
       const y = st.anchor.y;
       const z = st.anchor.z + t.oz;
       this.decks.set(t.deck, x, y - 0.05, z, GRID.tile, 0.1, GRID.tile);
-      this.keels.set(t.keel, x, y - 0.18, z, GRID.tile * 0.78, 0.16, GRID.tile * 0.78);
+      this.etches.set(t.etch, x, y + 0.004, z, GRID.tile, 1, GRID.tile);
+      this.keels.set(t.keel[0], x, y + KEEL_UPPER.y, z, GRID.tile * KEEL_UPPER.w, KEEL_UPPER.h, GRID.tile * KEEL_UPPER.w);
+      this.keels.set(t.keel[1], x, y + KEEL_LOWER.y, z, GRID.tile * KEEL_LOWER.w, KEEL_LOWER.h, GRID.tile * KEEL_LOWER.w);
+      this.glows.set(t.glow, x, y + KEEL_LOWER.y - 0.09, z, GRID.tile * 2.0, 1, GRID.tile * 2.0);
 
       const warn = st.departIn <= 1;
       const fill = warn ? 1 - st.departIn : 0;
@@ -342,14 +429,94 @@ export class CoursePlatformSystem extends createSystem({}) {
       // the same red the rims wear, pulsing with the beat, so a machine
       // crossing the void reads as a machine and not as a tile sliding.
       // Counting out, it warms amber with the deck; at rest it is steel.
+      for (const k of t.keel) {
+        if (burn > 0) {
+          this.keels.color(k, KEEL.drive, 0.5 + burn);
+        } else if (warn) {
+          this.keels.color(k, KEEL.warn, 0.25 + 0.4 * fill);
+        } else if (st.moving) {
+          this.keels.color(k, KEEL.drive, 0.7 + 0.5 * beatPulse);
+        } else {
+          this.keels.color(k, KEEL.rest);
+        }
+      }
+
+      // THE ETCH: the traces on the face carry the state in light. Docked
+      // and aligned they breathe cyan with the beat; counting out they
+      // fill amber; under way and burnt they are red like everything else.
       if (burn > 0) {
-        this.keels.color(t.keel, KEEL.drive, 0.5 + burn);
+        this.etches.color(t.etch, COLOR.rimDanger, 1.1 + burn);
       } else if (warn) {
-        this.keels.color(t.keel, KEEL.warn, 0.25 + 0.4 * fill);
+        this.etches.color(t.etch, COLOR.rimWarn, (0.55 + 0.9 * fill) * (0.75 + 0.35 * beatPulse));
       } else if (st.moving) {
-        this.keels.color(t.keel, KEEL.drive, 0.7 + 0.5 * beatPulse);
+        this.etches.color(t.etch, COLOR.rimDanger, 0.7 + 0.4 * beatPulse);
+      } else if (st.aligned) {
+        this.etches.color(t.etch, COLOR.rimSafe, 1.1 + 0.4 * beatPulse);
       } else {
-        this.keels.color(t.keel, KEEL.rest);
+        this.etches.color(t.etch, COLOR.rimSafe, 0.6);
+      }
+
+      // THE VENTS in the keel's flanks: a machine at rest shows a cool
+      // pilot glow; one under way blows red with the beat.
+      for (let k = 0; k < 4; k++) {
+        const [vcx, vcz, vsx, vsz] = VENT_SIDES[k];
+        const half = (GRID.tile * KEEL_UPPER.w) / 2 + 0.004;
+        this.vents.set(
+          t.vents[k],
+          x + vcx * half,
+          y + KEEL_UPPER.y,
+          z + vcz * half,
+          vsx === 1 ? GRID.tile * 0.5 : 0.012,
+          0.045,
+          vsz === 1 ? GRID.tile * 0.5 : 0.012,
+        );
+        if (burn > 0) {
+          this.vents.color(t.vents[k], COLOR.rimDanger, 1 + burn);
+        } else if (warn) {
+          this.vents.color(t.vents[k], COLOR.rimWarn, 0.6 + 0.8 * fill);
+        } else if (st.moving) {
+          this.vents.color(t.vents[k], COLOR.rimDanger, 1.1 + 0.7 * beatPulse);
+        } else if (st.aligned) {
+          this.vents.color(t.vents[k], COLOR.rimSafe, 0.75 + 0.25 * beatPulse);
+        } else {
+          this.vents.color(t.vents[k], COLOR.rimSafe, 0.32);
+        }
+      }
+
+      // THE UNDERGLOW on the glass: the same light, spilt.
+      if (burn > 0) {
+        this.glows.color(t.glow, COLOR.rimDanger, 0.55 + 0.6 * burn);
+      } else if (warn) {
+        this.glows.color(t.glow, COLOR.rimWarn, 0.3 + 0.35 * fill);
+      } else if (st.moving) {
+        this.glows.color(t.glow, COLOR.rimDanger, 0.55 + 0.35 * beatPulse);
+      } else if (st.aligned) {
+        this.glows.color(t.glow, COLOR.rimSafe, 0.4 + 0.14 * beatPulse);
+      } else {
+        this.glows.color(t.glow, COLOR.rimSafe, 0.26);
+      }
+
+      // THE SCAN LINE: once a bar, west to east across every docked face,
+      // so the whole circuit visibly keeps time — and twice a bar, in red,
+      // across a machine under way.
+      const sweep = st.moving ? (G.transport.barPhase * 2) % 1 : G.transport.barPhase;
+      this.scans.set(
+        t.scan,
+        x + GRID.tile * (0.45 * (2 * sweep - 1)),
+        y + 0.008,
+        z,
+        0.008,
+        0.006,
+        GRID.tile * 0.9,
+      );
+      if (burn > 0) {
+        this.scans.color(t.scan, COLOR.rimDanger, 1.2);
+      } else if (warn) {
+        this.scans.color(t.scan, COLOR.rimWarn, 1.3);
+      } else if (st.moving) {
+        this.scans.color(t.scan, COLOR.rimDanger, 1.1);
+      } else {
+        this.scans.color(t.scan, COLOR.rimSafe, st.aligned ? 1.4 : 0.7);
       }
 
       // Rims wrap the deck edge — visible from the side and from below.
@@ -363,9 +530,9 @@ export class CoursePlatformSystem extends createSystem({}) {
           x + cx * half,
           y - 0.01,
           z + cz * half,
-          sx === 1 ? GRID.tile + 0.05 : 0.045,
-          0.09,
-          sz === 1 ? GRID.tile + 0.05 : 0.045,
+          sx === 1 ? GRID.tile + 0.06 : 0.055,
+          0.1,
+          sz === 1 ? GRID.tile + 0.06 : 0.055,
         );
         if (burn > 0) {
           this.rims.color(idx, COLOR.rimDanger, 0.6 + burn);

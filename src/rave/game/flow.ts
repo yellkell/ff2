@@ -10,7 +10,7 @@
  * boundaries are fractions of the set) stretches to fit whatever is on.
  */
 
-import { MUSIC, RING, TOUR, chartBpm, countInBeatsFor } from '../config.js';
+import { MUSIC, RING, TOUR, chartBpm, countInBeatsFor, nextMcVisit } from '../config.js';
 import { pickRaidTrack, trackById, trackPhrases, type Track } from '../audio/tracks.js';
 import { submitWorldScore } from '../net/scores.js';
 import { addCoins } from '../../menu/wallet.js';
@@ -176,6 +176,8 @@ export function toTour(): void {
 
 /** Back to the lobby floor. */
 export function toLobby(): void {
+  // Every arrival on the floor is a visit, and the MC dresses for it.
+  if (match.screen !== 'lobby') nextMcVisit();
   match.screen = 'lobby';
   match.playing = false;
   match.beat = -Infinity;

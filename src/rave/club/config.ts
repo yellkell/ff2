@@ -24,7 +24,7 @@
  *
  *          z = −11.5 ───────── stage + drape wall ─────────
  *          │ STILL RM │        ◠ stage ◠         │ back    │
- *          │ (quiet)  │      DJ + sunburst       │  bar    │
+ *          │ (quiet)  │      DJ + ziggurat       │  bar    │
  *          x = −9 ────┤                          ├─ BAR ───│ x = +9
  *          │  booths  │      DANCE FLOOR         │ counter │
  *          │ (velvet) │     (eclipse above)      │ stools  │
@@ -60,7 +60,7 @@ export const CLUB = {
   spawn: { x: 0, z: 0 },
 
   /** The stage: a raised crescent hugging the north wall, DJ console at its
-   *  heart, brass sunburst behind. You can get up on it (TELEPORT_AREAS) —
+   *  heart, neon ziggurat behind. You can get up on it (TELEPORT_AREAS) —
    *  the deck is a half-drum, so the standable spots are cut to fit inside
    *  the curve rather than one rectangle overhanging its lip.
    *

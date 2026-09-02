@@ -4,7 +4,7 @@
  *
  * One double-height Art Deco hall the social floor fills: herringbone
  * parquet under an eclipse of counter-rotating brass rings, a crescent
- * stage under a brass sunburst, a smoked-oak bar with a backlit
+ * stage under a neon ziggurat, a smoked-oak bar with a backlit
  * ribbed-glass wall, oxblood velvet booths, a raised brass-railed terrace,
  * and a hushed STILL ROOM off the north-west corner for coming down. Where
  * FIRE FIGHT's club was diamond-plate and hazard amber, this is plaster,
@@ -376,7 +376,7 @@ function buildWalls(root: Group, W: number, NZ: number, SZ: number, H: number): 
   trimRun(SZ - NZ, W - 0.02, (NZ + SZ) / 2, -Math.PI / 2);
   // The SOUTH wall's runs die into the entrance portal instead of ploughing
   // through it: a door surround interrupts the mouldings, and the picture
-  // rail in particular used to draw a brass line clean across the fanlight
+  // rail in particular used to draw a brass line clean across the transom
   // sitting in front of it. The gap clears the widest frame (±1.635).
   const doorGap = 1.75;
   const southRun = W - doorGap;
@@ -679,7 +679,7 @@ function buildChandelier(root: Group): ClubRefs['chandelier'] {
   return { group, rings };
 }
 
-/* ── the stage: crescent riser, DJ console, sunburst, drapes ────────────── */
+/* ── the stage: crescent riser, DJ console, neon ziggurat, sheets ────────── */
 
 function buildStage(root: Group): MeshBasicMaterial {
   const S = CLUB.stage;
@@ -709,28 +709,56 @@ function buildStage(root: Group): MeshBasicMaterial {
   box(root, stepMat, 1.6, 0.15, 0.34, 0, 0.075, S.z + S.r + 0.14);
   box(root, stepMat, 1.2, 0.3, 0.3, 0, 0.15, S.z + S.r - 0.05);
 
-  // THE SUNBURST: steel ribs fanning from a half-disc hub on the wall — the
-  // deco signature kept, in the new metal, with the hub burning cyan.
-  const hubY = S.h + 1.15;
+  // THE ZIGGURAT: the house motif, in neon, behind the decks — where the
+  // brass sunburst hung (no sun symbols in this house; the transom and the
+  // mirror crown already stepped). Seven tiers of tube narrowing upward,
+  // cyan and magenta by turns, on clips over the corrugated sheet; a steel
+  // spine climbs the centre and a caged pilot lamp caps it. It is the one
+  // thing in the room the MC stands in front of, so it stands taller than
+  // he does.
+  const zigY0 = S.h + 0.62;
   const wallZ = CLUB.minZ + 0.1;
-  const ribMat = brassMat(0.3);
-  const RIBS = 21;
-  for (let i = 0; i < RIBS; i++) {
-    const a = (i / (RIBS - 1)) * Math.PI - Math.PI / 2; // −90°…+90° fan
-    const len = 2.5 + (i % 2) * 0.5; // alternating lengths — a real burst
-    const rib = new Mesh(new BoxGeometry(0.05, len, 0.03), ribMat);
-    rib.position.set(Math.sin(a) * (len / 2 + 0.42), hubY + Math.cos(a) * (len / 2 + 0.42), wallZ);
-    rib.rotation.z = -a;
-    root.add(rib);
+  const clipMat = blackSteelMat();
+  const TIERS = 7;
+  for (let i = 0; i < TIERS; i++) {
+    const w = 4.8 - i * 0.56;
+    const y = zigY0 + i * 0.42;
+    const tube = i % 2 === 0 ? neonMat(DECOR.neon, 1.3) : neonMat(DECOR.neonHot, 1.2);
+    box(root, tube, w, 0.045, 0.045, 0, y, wallZ + 0.06);
+    // Uprights joining each tier to the next, at its ends — a stepped outline.
+    if (i < TIERS - 1) {
+      const wn = 4.8 - (i + 1) * 0.56;
+      for (const side of [-1, 1] as const) {
+        box(root, tube, 0.045, 0.42, 0.045, side * (wn / 2), y + 0.21, wallZ + 0.06);
+        // The stub from this tier's end in to the upright.
+        box(root, tube, (w - wn) / 2, 0.045, 0.045, side * ((w + wn) / 4), y, wallZ + 0.06);
+      }
+    }
+    for (const side of [-1, 1] as const) {
+      box(root, clipMat, 0.05, 0.06, 0.05, side * (w / 2 - 0.12), y, wallZ + 0.04);
+    }
   }
-  const hub = new Mesh(
-    new CircleGeometry(0.42, 24, 0, Math.PI),
-    new MeshStandardMaterial({ color: 0x1d2228, emissive: DECOR.neon, emissiveIntensity: 1.1, metalness: 0.5, roughness: 0.4 }),
+  // The spine: a riveted steel bar up the middle, the top tier's height.
+  const spineH = TIERS * 0.42 + 0.3;
+  box(root, brassMat(0.3), 0.12, spineH, 0.05, 0, zigY0 + spineH / 2 - 0.2, wallZ + 0.02);
+  for (let i = 0; i < 6; i++) {
+    box(root, blackSteelMat(), 0.03, 0.03, 0.02, 0, zigY0 + i * 0.5, wallZ + 0.055);
+  }
+  // The pilot lamp: a caged cyan cell at the crown.
+  const crownY = zigY0 + TIERS * 0.42 + 0.02;
+  const cell = new Mesh(
+    new CylinderGeometry(0.1, 0.1, 0.16, 12),
+    new MeshStandardMaterial({ color: 0x1d2228, emissive: DECOR.neon, emissiveIntensity: 1.3, metalness: 0.5, roughness: 0.4 }),
   );
-  hub.position.set(0, hubY, wallZ + 0.01);
-  root.add(hub);
+  cell.position.set(0, crownY, wallZ + 0.1);
+  root.add(cell);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    box(root, clipMat, 0.012, 0.22, 0.012, Math.cos(a) * 0.11, crownY, wallZ + 0.1 + Math.sin(a) * 0.11);
+  }
+  box(root, clipMat, 0.26, 0.02, 0.26, 0, crownY + 0.11, wallZ + 0.1);
 
-  // CORRUGATED STEEL across the whole north wall behind the burst, where
+  // CORRUGATED STEEL across the whole north wall behind the ziggurat, where
   // the velvet hung: full-height sheets in alternating relief so the ribs
   // catch the light, a magenta neon tube run along their foot washing up
   // the metal, and a steel channel capping the top. They PART around the
@@ -1232,8 +1260,8 @@ function buildMirror(root: Group): void {
   root.add(sheen);
 
   /* The FRAME — champagne brass over a bronze under-step, deco to match
-   * the pilasters; a chunky sill below, a rib fan crown above (the stage
-   * sunburst's little echo, so the two ends of the wall rhyme). Every
+   * the pilasters; a chunky sill below, a stepped crest above (the stage
+   * ziggurat's little echo, so the two ends of the wall rhyme). Every
    * face bar OVERLAPS both the glass edge and the wall opening's rim —
    * a frame that covers neither is a picture taped to a hole. */
   const brass = brassMat(0.3);
@@ -1256,8 +1284,8 @@ function buildMirror(root: Group): void {
   // dies into it from either side.
   box(root, brass, M.w + 0.56, 0.07, 0.22, M.x, 0.155, wallZ + 0.1);
   box(root, bronze, M.w + 0.44, 0.16, 0.1, M.x, 0.08, wallZ + 0.05);
-  // The crown: a stepped Deco crest over the frame (the sunray fan is
-  // retired everywhere — the ziggurat is the house motif now).
+  // The crown: a stepped Deco crest over the frame (the ziggurat is the
+  // house motif, here in brass, on the north wall in neon).
   const crownY = yTop + 0.24;
   const crest: Array<[number, number]> = [
     [M.w * 0.62, 0.07],
@@ -1469,12 +1497,10 @@ function buildVestibule(root: Group): void {
 
   // Three nested portal frames stepping outward — the deco doorway.
   //
-  // The heads sit HIGH above the doors on purpose: the frames used to clear
-  // the leaf by 0.22 m and step 0.28 apart, which put the second crossbar
-  // at y ≈ 3.0 — straight across the middle of the fanlight, and standing
-  // 5 mm proud of it, so the sunburst was cut in half by a bronze bar. A
-  // 0.5 m tympanum over the doors gives the fanlight the field it needs,
-  // and the tighter 0.14 step keeps the outermost head under the cornice.
+  // The heads sit HIGH above the doors on purpose: a 0.5 m tympanum over
+  // the doors gives the transom the field it needs (a lower head used to
+  // cut straight across it), and the tighter 0.14 step keeps the outermost
+  // head under the cornice.
   for (let i = 0; i < 3; i++) {
     const w = doorW + 0.3 + i * 0.36;
     const h = doorH + 0.5 + i * 0.14;
@@ -1494,10 +1520,9 @@ function buildVestibule(root: Group): void {
     box(root, brassMat(0.3), 0.05, 0.34, 0.02, side * 0.16, 1.12, SZ - 0.14);
     box(root, brassMat(0.4), doorW / 2 - 0.1, 0.16, 0.02, (side * doorW) / 4, 0.12, SZ - 0.14);
   }
-  // THE TRANSOM: the sunburst fanlight is gone (no sun symbols over the
-  // doors in this house). In its place, a stepped Deco ziggurat: three
-  // brass tiers narrowing upward over a soft backlit glass strip — the
-  // same tympanum, a different god.
+  // THE TRANSOM: a stepped Deco ziggurat (no sun symbols over the doors in
+  // this house): three brass tiers narrowing upward over a soft backlit
+  // glass strip.
   const fanY = doorH + 0.06;
   const fanZ = SZ - 0.13;
   const glass = new Mesh(

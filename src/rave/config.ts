@@ -846,10 +846,46 @@ export function mcSafeHue(hue: number): number {
   return MC.band.lo + t * (MC.band.hi - MC.band.lo);
 }
 
+/**
+ * THE VISIT. He does not wear the same colour on the floor two nights
+ * running: every arrival in the club (from the arena's door, from the
+ * foyer, from the podium after a set) turns his wardrobe one notch, and
+ * the notch is remembered across sessions so tomorrow's visit is not a
+ * repeat of tonight's. The stride is a big irrational-ish step through the
+ * band, so consecutive visits land far apart on the wheel — and it is
+ * folded through the safe band like everything else, so the floor never
+ * dresses him red or yellow either.
+ */
+const VISIT_KEY = 'gdr-mc-visits';
+const VISIT_STRIDE = 0.38;
+let mcVisit = ((): number => {
+  try {
+    return Number(localStorage.getItem(VISIT_KEY) ?? 0) || 0;
+  } catch {
+    return 0;
+  }
+})();
+
+/** A new visit to the floor: turn the wardrobe one notch and remember it. */
+export function nextMcVisit(): void {
+  mcVisit++;
+  try {
+    localStorage.setItem(VISIT_KEY, String(mcVisit));
+  } catch {
+    /* private mode — this session still turns */
+  }
+}
+
+/** Which visit this is (the probe reads it to prove the notch turned). */
+export function mcVisitCount(): number {
+  return mcVisit;
+}
+
 /** The colour the MC should be wearing right now: the place he's in, and —
  *  once a record is on the decks — that record's own hue (a stable hash of
  *  the track id, folded into the safe band, so every song dresses him
- *  differently and the same song always dresses him the same). */
+ *  differently and the same song always dresses him the same). On the
+ *  floor, the visit turns the colour too (see THE VISIT above). */
 export function mcHueFor(screen: string, trackId: string): number {
   if ((screen === 'raid' || screen === 'countdown') && trackId) {
     let h = 2166136261;
@@ -862,6 +898,7 @@ export function mcHueFor(screen: string, trackId: string): number {
     // with the first downbeat.
     return screen === 'countdown' ? mcSafeHue(MC.wear.countdown) : mcSafeHue(t);
   }
+  if (screen === 'lobby') return mcSafeHue(MC.wear.lobby + mcVisit * VISIT_STRIDE);
   const wear = MC.wear as Record<string, number>;
   return mcSafeHue(wear[screen] ?? MC.hue);
 }

@@ -39,7 +39,7 @@ export const MUSIC = {
 };
 
 export const COLOR = {
-  deckTop: 0x2a2838, // lifted a step so the checker plate reads as plate, not as black
+  deckTop: 0x262433, // gunmetal under the etch — dark enough that the traces own the face
   /** Docked ground you may step on. */
   rimSafe: 0x66d9ff,
   /** Ground counting itself out — the amber half of the club's own
@@ -84,7 +84,7 @@ export const PLAY_AREA = {
 };
 
 export const COUNTDOWN = {
-  postIdle: 0.05,
+  postIdle: 0.07,
   postWarn: 0.34,
   postSize: 0.05,
 };

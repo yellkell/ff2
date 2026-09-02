@@ -38,7 +38,7 @@
 
 import { createSystem } from '@iwsdk/core';
 import type { MeshBasicMaterial, MeshStandardMaterial } from 'three';
-import { MC, RING, hueToColor, ringRadius, mcHueFor } from '../config.js';
+import { MC, RING, hueToColor, ringRadius, mcHueFor, mcVisitCount } from '../config.js';
 import { arena } from '../arena/arena.js';
 import { CLUB as CLUB_LAYOUT } from '../club/config.js';
 import { ACCENT_REST, accentHex, buildDancer, type DancerPose, type DancerRig } from '../game/avatars.js';
@@ -79,7 +79,7 @@ const DECK_SPOT = { x: 0, y: CLUB_LAYOUT.stage.h, z: CLUB_LAYOUT.stage.z + 0.5, 
 
 /** What the headliner is wearing right now — the probe reads it to prove
  *  he changes between the map and the record, and never wears red/yellow. */
-export const mcView = { hue: MC.hue, color: 0, screen: '', track: '' };
+export const mcView = { hue: MC.hue, color: 0, screen: '', track: '', visit: 0 };
 
 export class McSystem extends createSystem({}) {
   private rig: DancerRig | null = null;
@@ -143,6 +143,7 @@ export class McSystem extends createSystem({}) {
     mcView.color = this.baseColor;
     mcView.screen = match.screen;
     mcView.track = match.trackId;
+    mcView.visit = mcVisitCount();
     if (this.generation !== match.generation) this.rebuild();
     const rig = this.rig;
     if (!rig) return;

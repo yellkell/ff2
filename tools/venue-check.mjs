@@ -125,6 +125,11 @@ check("the arena's furniture is put away (the sign, the podium)", arenaHidden.wr
 await page.evaluate(() => window.__gdr.rig(0, 0.5, 0));
 await page.waitForTimeout(400);
 await shot('club');
+// THE VISIT: the MC dresses for each arrival on the floor. Remember what
+// he wears tonight; the second visit below must find him changed.
+await page.waitForTimeout(1600); // his wardrobe eases at 0.5 hue/s
+const mcFirst = await page.evaluate(() => ({ visit: window.__gdr.mc.visit, hue: window.__gdr.mc.hue }));
+check('the MC is dressed for this visit, inside his safe band', mcFirst.visit > 0 && mcFirst.hue >= 0.28 && mcFirst.hue <= 0.92, JSON.stringify(mcFirst));
 
 console.log('\n=== the dumbwaiter serves without a relay ===');
 const served = await page
@@ -296,6 +301,9 @@ t = await town();
 // Headless Chromium renders this scene slowly and the fade waits on real
 // frames, so the bar is relative: a kept mount must beat the first visit.
 check('the venue comes back under the same curtain, faster than it was built', t.place === 'venue' && dt < firstMs, `${dt} ms vs ${firstMs} ms first`);
+await page.waitForTimeout(1600);
+const mcSecond = await page.evaluate(() => ({ visit: window.__gdr.mc.visit, hue: window.__gdr.mc.hue }));
+check('the MC changed colour between visits', mcSecond.visit > mcFirst.visit && Math.abs(mcSecond.hue - mcFirst.hue) > 0.05 && mcSecond.hue >= 0.28 && mcSecond.hue <= 0.92, JSON.stringify({ first: mcFirst, second: mcSecond }));
 await page.evaluate(() => window.__town.leave());
 await settle();
 

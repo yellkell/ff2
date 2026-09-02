@@ -57,85 +57,179 @@ export function patternTexture(): CanvasTexture {
 }
 
 /**
- * THE DECK PLATE — what a platform's top wears. The decks were flat colour
- * with a lit rim; the surface you are asked to trust your feet to should
- * look like it was made by someone. Checker-plate hatching (the industrial
- * floor everyone has stood on), an inset border, a rivet at each corner:
- * drawn once, tinted per instance by the bank's colour, so the amber wash
- * and the red burn ride over it rather than replacing it.
+ * THE DECK FACE — what a platform's top wears under its light. The decks
+ * were checker plate tinted per instance, and the checker fought the tint:
+ * every state the deck can be in (docked, counting out, under way, burnt)
+ * was a wash over hatching, and from a metre up it read as a dirty tile.
+ * Now the face is the DARK half of a neon sign: brushed gunmetal, a
+ * machined groove around the inset panel, a bolt at each corner — nothing
+ * on it glows. The glow is the ETCH (etchTexture) laid over it as its own
+ * layer, so the state colours light the traces and leave the metal alone.
  */
-export function plateTexture(): CanvasTexture {
+export function deckTexture(): CanvasTexture {
   const size = 256;
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const g = c.getContext('2d')!;
   g.fillStyle = '#ffffff';
   g.fillRect(0, 0, size, size);
-  // Checker plate: two families of short diagonal bars on a staggered grid.
-  g.strokeStyle = 'rgba(0,0,0,0.34)';
-  g.lineCap = 'round';
+  // Brushed grain: fine horizontal streaks, deterministic (no RNG — the
+  // circuit looks the same every night).
+  for (let y = 0; y < size; y += 2) {
+    const k = ((y * 7919) % 97) / 97;
+    g.fillStyle = `rgba(0,0,0,${0.06 + 0.12 * k})`;
+    g.fillRect(0, y, size, 1);
+  }
+  // The inset panel, a shade darker, with a machined groove around it.
+  g.fillStyle = 'rgba(0,0,0,0.22)';
+  g.fillRect(size * 0.09, size * 0.09, size * 0.82, size * 0.82);
+  g.strokeStyle = 'rgba(0,0,0,0.6)';
   g.lineWidth = size * 0.02;
-  const cell = size / 8;
-  for (let r = 0; r < 8; r++) {
-    for (let col = 0; col < 8; col++) {
-      const cx = col * cell + cell / 2 + (r % 2 ? cell / 2 : 0);
-      const cy = r * cell + cell / 2;
-      const d = cell * 0.26;
-      g.beginPath();
-      if ((r + col) % 2) {
-        g.moveTo(cx - d, cy - d);
-        g.lineTo(cx + d, cy + d);
-      } else {
-        g.moveTo(cx - d, cy + d);
-        g.lineTo(cx + d, cy - d);
-      }
-      g.stroke();
-    }
-  }
-  // The highlight side of every bar, a hair up-left of it.
-  g.strokeStyle = 'rgba(255,255,255,0.16)';
-  g.lineWidth = size * 0.012;
-  for (let r = 0; r < 8; r++) {
-    for (let col = 0; col < 8; col++) {
-      const cx = col * cell + cell / 2 + (r % 2 ? cell / 2 : 0) - size * 0.012;
-      const cy = r * cell + cell / 2 - size * 0.012;
-      const d = cell * 0.26;
-      g.beginPath();
-      if ((r + col) % 2) {
-        g.moveTo(cx - d, cy - d);
-        g.lineTo(cx + d, cy + d);
-      } else {
-        g.moveTo(cx - d, cy + d);
-        g.lineTo(cx + d, cy - d);
-      }
-      g.stroke();
-    }
-  }
-  // Inset border, and a rivet in each corner.
-  g.strokeStyle = 'rgba(0,0,0,0.55)';
-  g.lineWidth = size * 0.028;
-  g.strokeRect(size * 0.06, size * 0.06, size * 0.88, size * 0.88);
-  g.strokeStyle = 'rgba(255,255,255,0.22)';
-  g.lineWidth = size * 0.01;
-  g.strokeRect(size * 0.085, size * 0.085, size * 0.83, size * 0.83);
+  g.strokeRect(size * 0.09, size * 0.09, size * 0.82, size * 0.82);
+  g.strokeStyle = 'rgba(255,255,255,0.18)';
+  g.lineWidth = size * 0.006;
+  g.strokeRect(size * 0.105, size * 0.105, size * 0.79, size * 0.79);
+  // Hex bolts in the corners of the outer frame.
   for (const [x, y] of [
-    [0.13, 0.13],
-    [0.87, 0.13],
-    [0.13, 0.87],
-    [0.87, 0.87],
+    [0.045, 0.045],
+    [0.955, 0.045],
+    [0.045, 0.955],
+    [0.955, 0.955],
   ]) {
-    g.fillStyle = 'rgba(0,0,0,0.6)';
+    g.fillStyle = 'rgba(0,0,0,0.55)';
     g.beginPath();
-    g.arc(x * size, y * size, size * 0.028, 0, Math.PI * 2);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const r = size * 0.024;
+      g.lineTo(x * size + Math.cos(a) * r, y * size + Math.sin(a) * r);
+    }
+    g.closePath();
     g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.fillStyle = 'rgba(255,255,255,0.5)';
     g.beginPath();
-    g.arc(x * size - size * 0.006, y * size - size * 0.006, size * 0.014, 0, Math.PI * 2);
+    g.arc(x * size - size * 0.005, y * size - size * 0.005, size * 0.009, 0, Math.PI * 2);
     g.fill();
   }
   const tex = new CanvasTexture(c);
   tex.minFilter = LinearMipmapLinearFilter;
   tex.anisotropy = 4;
+  return tex;
+}
+
+/**
+ * THE ETCH — the neon half of the deck. Circuit traces cut into the inset
+ * panel and lit from inside: a lattice of fine lines, nodes where they
+ * cross, a hollow diamond at the centre (the mark to stand on), and
+ * brackets in the four corners. White on transparent with the halo baked
+ * in, so the instance colour is the whole story: cyan on ground you may
+ * step on, amber as it counts out, red under way. Additive over the metal.
+ */
+export function etchTexture(): CanvasTexture {
+  const size = 512;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  g.clearRect(0, 0, size, size);
+  const in0 = size * 0.12;
+  const in1 = size * 0.88;
+  g.shadowColor = 'rgba(255,255,255,0.9)';
+  g.shadowBlur = size * 0.012;
+  g.lineCap = 'round';
+  // The lattice: a 4×4 field of traces inside the panel, thin and faint —
+  // at a distance it must average to next to nothing, or the whole face
+  // reads as a wash instead of as lines.
+  g.strokeStyle = 'rgba(255,255,255,0.2)';
+  g.lineWidth = size * 0.005;
+  const cells = 4;
+  for (let i = 1; i < cells; i++) {
+    const t = in0 + ((in1 - in0) * i) / cells;
+    g.beginPath();
+    g.moveTo(in0, t);
+    g.lineTo(in1, t);
+    g.stroke();
+    g.beginPath();
+    g.moveTo(t, in0);
+    g.lineTo(t, in1);
+    g.stroke();
+  }
+  // Nodes where traces cross — small filled squares, brighter.
+  g.fillStyle = 'rgba(255,255,255,0.7)';
+  for (let i = 1; i < cells; i++) {
+    for (let j = 1; j < cells; j++) {
+      if ((i + j) % 2) continue;
+      const x = in0 + ((in1 - in0) * i) / cells;
+      const y = in0 + ((in1 - in0) * j) / cells;
+      g.fillRect(x - size * 0.012, y - size * 0.012, size * 0.024, size * 0.024);
+    }
+  }
+  // The frame trace, bright, just inside the groove.
+  g.strokeStyle = 'rgba(255,255,255,1)';
+  g.lineWidth = size * 0.018;
+  g.strokeRect(in0, in0, in1 - in0, in1 - in0);
+  // Corner brackets outside it, on the outer frame.
+  const bl = size * 0.08;
+  g.lineWidth = size * 0.018;
+  for (const [sx, sy] of [
+    [1, 1],
+    [-1, 1],
+    [1, -1],
+    [-1, -1],
+  ]) {
+    const x = size / 2 - sx * size * 0.455;
+    const y = size / 2 - sy * size * 0.455;
+    g.beginPath();
+    g.moveTo(x, y + sy * bl);
+    g.lineTo(x, y);
+    g.lineTo(x + sx * bl, y);
+    g.stroke();
+  }
+  // The diamond at the centre, hollow, with a dot in it.
+  const d = size * 0.12;
+  g.lineWidth = size * 0.02;
+  g.beginPath();
+  g.moveTo(size / 2, size / 2 - d);
+  g.lineTo(size / 2 + d, size / 2);
+  g.lineTo(size / 2, size / 2 + d);
+  g.lineTo(size / 2 - d, size / 2);
+  g.closePath();
+  g.stroke();
+  g.beginPath();
+  g.arc(size / 2, size / 2, size * 0.02, 0, Math.PI * 2);
+  g.fill();
+  const tex = new CanvasTexture(c);
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/**
+ * THE UNDERGLOW — a soft radial bloom under every machine, the light of
+ * whatever drives it spilling onto the void's glass. Square-ish rather
+ * than round (a superellipse), so it reads as a deck's shadow lit from
+ * inside rather than a spotlight.
+ */
+export function glowTexture(): CanvasTexture {
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  const img = g.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = (x + 0.5) / size * 2 - 1;
+      const v = (y + 0.5) / size * 2 - 1;
+      // Superellipse radius (n = 3): rounder than a box, squarer than a disc.
+      const r = Math.pow(Math.pow(Math.abs(u), 3) + Math.pow(Math.abs(v), 3), 1 / 3);
+      const a = Math.max(0, 1 - r);
+      const k = a * a * (3 - 2 * a);
+      const i = (y * size + x) * 4;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = 255;
+      img.data[i + 3] = Math.round(k * 255);
+    }
+  }
+  g.putImageData(img, 0, 0);
+  const tex = new CanvasTexture(c);
+  tex.minFilter = LinearMipmapLinearFilter;
   return tex;
 }
 
