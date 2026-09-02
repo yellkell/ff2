@@ -64,6 +64,7 @@ import {
   tourNightUnlocked,
 } from '../game/state.js';
 import {
+  inRoom,
   autoJoinFromUrl,
   enterPublicRoom,
   hostRoom,
@@ -97,6 +98,7 @@ const PAUSE_ROWS = 5;
 const PAUSE_ROW0 = 322;
 const PAUSE_VOICE_Y = 660;
 import { PointerRay } from '../ui/pointer.js';
+import { raveBridge } from '../bridge.js';
 
 const SEATS_KEY = 'gdr-seats';
 const TRACK_KEY = 'gdr-track';
@@ -399,7 +401,7 @@ export class MenuSystem extends createSystem({}) {
     // THE CLUB keeps no front desk: with a room open you're standing on the
     // social floor, and the floor's controls live on the SOCIAL panel
     // (right Ⓐ). The board belongs to the foyer.
-    const social = (net.phase === 'hosting' || net.phase === 'joined') && !match.holdFoyer;
+    const social = inRoom() && !match.holdFoyer;
     // `introUp`: the title card is still opaque and the board is sitting
     // right behind it. Holding it down until the black starts lifting does
     // two things at once — it takes no rays and no clicks while nobody can
@@ -610,14 +612,20 @@ export class MenuSystem extends createSystem({}) {
       this.leaveMulti();
       if (match.screen !== 'lobby') toLobby();
     } else if (id === 'tab-ff') {
-      // Back to FIRE FIGHT 2's lobby: end the XR session (the arena runs
-      // its own), then hop pages — same origin, so the wallet, the name and
-      // the body are already there.
+      // Back to FIRE FIGHT 2's lobby. Mounted inside the arena (the usual
+      // case now) the bridge folds the rave away under a curtain and the
+      // session never ends; on the standalone page the door is still a
+      // page hop — same origin, so the wallet, the name and the body are
+      // already there.
       this.leaveMulti();
-      const session = this.world.session as XRSession | undefined;
-      const go = (): void => window.location.assign('index.html');
-      if (session) void Promise.resolve(session.end()).then(go, go);
-      else go();
+      if (raveBridge.leaveToArena) {
+        raveBridge.leaveToArena();
+      } else {
+        const session = this.world.session as XRSession | undefined;
+        const go = (): void => window.location.assign('index.html');
+        if (session) void Promise.resolve(session.end()).then(go, go);
+        else go();
+      }
     } else if (id === 'raid') {
       // The board is foyer-only now, so a raid from here is always the solo
       // booking — on the club floor the SOCIAL panel sends the ball up.
@@ -782,7 +790,7 @@ export class MenuSystem extends createSystem({}) {
     if (key === this.lastKey) return;
     this.lastKey = key;
 
-    const social = (net.phase === 'hosting' || net.phase === 'joined') && !match.holdFoyer;
+    const social = inRoom() && !match.holdFoyer;
     if ((match.screen === 'lobby' || match.screen === 'tour') && !social) {
       this.paintBoard();
     }

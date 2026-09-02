@@ -25,6 +25,10 @@
  */
 
 import { NET, seatHue, serverUrl } from '../config.js';
+import { raveBridge } from '../bridge.js';
+import { bellView, isFightMode, type BellMode, type DealtMember, type FightDeal } from '../club/bell.js';
+import { CURRENCY } from '../../config.js';
+import { addCoins, coins } from '../../menu/wallet.js';
 import { audioContext, ensureAudio } from '../audio/sfx.js';
 import { clearVoiceSpeakers, removeVoiceSpeaker, stopVoiceCapture } from '../club/voice.js';
 import { startRaid } from '../game/flow.js';
@@ -60,6 +64,10 @@ export interface LobbyMember {
 export interface BallState {
   callerIdx: number;
   callerName: string;
+  /** What the ball calls: the record, or one of the arena's fights. */
+  mode: BellMode;
+  /** A fight's arena room code (empty for a rave). */
+  code: string;
   track: string;
   /** The caller's difficulty — the whole ring dances one chart. */
   diff: number;
@@ -70,6 +78,12 @@ export interface BallState {
 
 export const net = {
   phase: 'off' as NetPhase,
+  /** A ROOM OF ONE. The venue is a place before it is a party: with no
+   *  relay to be had (offline, a dev serve with no server up, a relay
+   *  that never answered) the floor still opens, for you alone, with the
+   *  dumbwaiter served off a clock in this file rather than the relay's.
+   *  Every club system reads inRoom(), which is true here too. */
+  solo: false,
   code: '',
   members: [] as LobbyMember[],
   isHost: false,
@@ -81,6 +95,11 @@ export const net = {
   myIdx: -1,
   /** The raid-summoning ball currently in the air, or null. */
   ball: null as BallState | null,
+  /** THE BELL dealt me to the arena: I am away on a fight, still a member
+   *  of this room, and the floor is where I come home to. Walking out of
+   *  the venue under the curtain must NOT leave the room while this is
+   *  set, and walking back in must not join it again. */
+  dealtAway: false,
   /** Members currently away playing a set (the floor sees them out). */
   gamePlayers: new Set<number>(),
   /** THE CROWN: member idx of the last club raid's winner, worn on their
@@ -98,6 +117,14 @@ export const net = {
 export const seatByIdx = new Map<number, number>();
 
 let ws: WebSocket | null = null;
+
+/** Am I on the club floor — in a relay room, or the room of one? The one
+ *  gate every club system reads (ClubSystem, teleport, mirror, props, the
+ *  course door…), so a solo night and a full one agree on what "the floor
+ *  is open" means. */
+export function inRoom(): boolean {
+  return net.solo || net.phase === 'hosting' || net.phase === 'joined';
+}
 let pingTimer: number | null = null;
 let myHue: number | null = null;
 let myName = 'DANCER';
@@ -106,6 +133,11 @@ let myName = 'DANCER';
 let myBody: { lk: string; gr: string; tn: string } = { lk: '', gr: '', tn: 'white' };
 
 function send(obj: unknown): void {
+  if (net.solo) {
+    const m = obj as Record<string, unknown>;
+    if (typeof m.t === 'string' && m.t.startsWith('prop')) soloProp(m);
+    return;
+  }
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
 }
 
@@ -170,6 +202,10 @@ function stopPing(): void {
 
 function teardown(reason: string): void {
   stopPing();
+  net.solo = false;
+  net.dealtAway = false;
+  window.clearTimeout(soloServeTimer);
+  soloServeTimer = 0;
   if (ws) {
     ws.onclose = null;
     ws.onmessage = null;
@@ -269,6 +305,8 @@ function handle(msg: Record<string, unknown>): void {
       net.ball = {
         callerIdx: Number(msg.idx),
         callerName: String(msg.name ?? ''),
+        mode: typeof msg.mode === 'string' && isFightMode(msg.mode) ? msg.mode : 'rave',
+        code: typeof msg.code === 'string' ? msg.code : '',
         track: typeof msg.track === 'string' ? msg.track : '',
         diff: Number.isFinite(Number(msg.diff)) ? Number(msg.diff) : 1,
         pos:
@@ -309,9 +347,40 @@ function handle(msg: Record<string, unknown>): void {
       break;
     }
     case 'start': {
+      net.ball = null;
+      // The bell dealt me out: remember the wallet, so the homecoming can
+      // say what the trip paid (backToClub).
+      bellView.balanceAtDeal = coins.balance;
+      if (typeof msg.mode === 'string' && isFightMode(msg.mode)) {
+        // THE BELL rang for a FIGHT with me on it. The relay has dealt the
+        // roster; the arena room it names is where the fight happens, and
+        // the host carries me there. I stay a member here, away, until I
+        // come home through backToClub().
+        const people = (list: unknown): DealtMember[] =>
+          Array.isArray(list)
+            ? list
+                .filter((p) => p && Number.isFinite(Number((p as { idx: unknown }).idx)))
+                .map((p) => ({ idx: Number((p as { idx: unknown }).idx), name: String((p as { name?: unknown }).name ?? '') }))
+            : [];
+        const deal: FightDeal = {
+          mode: msg.mode,
+          code: typeof msg.code === 'string' ? msg.code : '',
+          role: msg.role === 'watcher' ? 'watcher' : 'fighter',
+          callerIdx: Number(msg.callerIdx),
+          mine: Number(msg.callerIdx) === net.myIdx,
+          fighters: people(msg.fighters),
+          watchers: people(msg.watchers),
+          seed: Number(msg.seed ?? 1),
+        };
+        net.phase = 'live';
+        net.dealtAway = true;
+        net.dirty++;
+        if (raveBridge.dealToFight) raveBridge.dealToFight(deal);
+        else backToClub(); // nowhere to cross to — the floor keeps me
+        break;
+      }
       // The ball fired with ME on it: seed + seats + my ring seat + the
       // player seat map + a shared "beat 0 in N ms" (RTT-compensated).
-      net.ball = null;
       const players =
         (msg.players as { seat: number; name: string; idx?: number; you?: boolean; lk?: string; gr?: string; tn?: string }[]) ?? [];
       const humans = new Map<number, { name: string; netId?: number; look?: string; gear?: string; tone?: string }>();
@@ -515,12 +584,123 @@ export function leaveRoom(): void {
   teardown('');
 }
 
+/* ── THE ROOM OF ONE ────────────────────────────────────────────────────── */
+
+const SOLO_SERVE_MS = 1600; // the relay's own pace (server/rave.mjs SERVE_MS)
+const SOLO_RETRY_MS = 900;
+let soloServeTimer = 0;
+/** The house's glass ledger while solo: what the relay would remember. */
+const soloProps: Array<{ mode: 'idle' | 'pedestal' | 'held' | 'flight' | 'rest'; restedAt: number }> = [];
+
+/**
+ * Open the floor with nobody else on it. Same shape the relay hands a host
+ * (idx 0, no code, a public-looking room), so nothing downstream has to
+ * know — and the dumbwaiter runs off a local clock that speaks the wire's
+ * own words back through the prop hook, so ClubPropsSystem serves, grants
+ * and rests glasses exactly as it would with a relay brokering them.
+ */
+export function enterSoloFloor(): void {
+  teardown('');
+  net.solo = true;
+  net.phase = 'off';
+  net.myIdx = 0;
+  net.isHost = true;
+  net.isPublic = false;
+  net.members = [{ idx: 0, name: myName, hue: myHue, ...myBody } as unknown as LobbyMember];
+  net.dirty++;
+  match.holdFoyer = false;
+  soloProps.length = 0;
+  armSoloServe(SOLO_SERVE_MS);
+}
+
+function armSoloServe(ms: number): void {
+  window.clearTimeout(soloServeTimer);
+  soloServeTimer = window.setTimeout(fireSoloServe, ms);
+}
+
+/** The relay's fireServe(), at home: a fresh glass first, else the one
+ *  that has stood longest. */
+function fireSoloServe(): void {
+  soloServeTimer = 0;
+  if (!net.solo || !propHook) return;
+  const count = soloPoolSize();
+  while (soloProps.length < count) soloProps.push({ mode: 'idle', restedAt: 0 });
+  let id = soloProps.findIndex((p) => p && p.mode === 'idle');
+  if (id < 0) {
+    let oldest = Infinity;
+    soloProps.forEach((p, i) => {
+      if (p.mode === 'rest' && p.restedAt < oldest) {
+        oldest = p.restedAt;
+        id = i;
+      }
+    });
+  }
+  if (id < 0) {
+    armSoloServe(SOLO_RETRY_MS);
+    return;
+  }
+  soloProps[id].mode = 'pedestal';
+  propHook({ t: 'serve', id });
+}
+
+/** ClubPropsSystem tells us its pool size once (it owns POOL). */
+let soloPool = 6;
+export function setPropPoolSize(n: number): void {
+  soloPool = n;
+}
+function soloPoolSize(): number {
+  return soloPool;
+}
+
+/** A prop word from my own hands, answered by the house instead of the
+ *  relay — the same grant, the same rest, the same next serve, answered
+ *  SYNCHRONOUSLY. A relay applies the room's words in order, so a glass
+ *  re-thrown after it settled sees its rest echo before its new flight;
+ *  deferring the echo here (tried) let a stale rest land on top of a
+ *  fresh throw and snap the glass back to the floor. */
+function soloProp(msg: Record<string, unknown>): void {
+  if (!propHook) return;
+  const id = Number(msg.id);
+  while (soloProps.length <= id) soloProps.push({ mode: 'idle', restedAt: 0 }); // no holes — findIndex walks them
+  const p = soloProps[id];
+  let echo: PropWire | null = null;
+  switch (msg.t) {
+    case 'prop-grab':
+      if (p.mode === 'pedestal') armSoloServe(SOLO_SERVE_MS);
+      p.mode = 'held';
+      echo = { t: 'prop-grab', id, idx: 0 };
+      break;
+    case 'prop-release':
+      p.mode = 'flight';
+      echo = { t: 'prop-release', id, idx: 0 };
+      break;
+    case 'prop-rest':
+      if (msg.idle) {
+        p.mode = 'idle';
+        echo = { t: 'prop-rest', id, idle: true };
+      } else {
+        p.mode = 'rest';
+        p.restedAt = Date.now();
+        echo = { t: 'prop-rest', id, pos: msg.pos as number[], quat: msg.quat as number[] };
+      }
+      break;
+    default:
+      break; // pose streams have nobody to reach
+  }
+  if (echo) propHook(echo);
+}
+
 /* ── THE BALL: how games start from the floor ──────────────────────────── */
 
 /** Send the ball up at `pos` — my song pick and ring-size preference ride
  *  along. The relay owns the 60-second clock from here. */
-export function callBall(pos: [number, number, number]): void {
+export function callBall(pos: [number, number, number], call?: { mode: BellMode; code: string }): void {
   if (net.phase !== 'hosting' && net.phase !== 'joined') return;
+  if (call && call.mode !== 'rave') {
+    // THE BELL: a fight rides the ball with the arena room it deals into.
+    send({ t: 'ball-up', mode: call.mode, code: call.code, track: match.preferredTrack, diff: match.difficulty, pos });
+    return;
+  }
   // No seat count rides the ball. A club raid is sized by WHO TURNS UP —
   // the relay deals everyone who touched onto the smallest ring that fits
   // them and fills the rest with groupies. It used to carry `match.seats`,
@@ -564,7 +744,17 @@ export function startBall(): void {
 export function backToClub(winnerIdx?: number | null): void {
   if (net.phase !== 'live') return;
   net.phase = net.isHost ? 'hosting' : 'joined';
+  net.dealtAway = false;
   net.dirty++;
+  // THE HOUSE PAYS on the way back in: the bell's bonus on top of whatever
+  // the record, the fight or the raid paid out there — and the desk reads
+  // the whole trip's take off the wallet's change since the deal.
+  addCoins(CURRENCY.bell);
+  if (bellView.balanceAtDeal >= 0) {
+    bellView.lastPay = Math.max(0, coins.balance - bellView.balanceAtDeal);
+    bellView.paidAt = performance.now();
+    bellView.balanceAtDeal = -1;
+  }
   send(winnerIdx === undefined ? { t: 'game-out' } : { t: 'game-out', winner: winnerIdx });
   remotePoses.clear();
   seatByIdx.clear();
@@ -581,28 +771,25 @@ export function sendClubPose(d: number[]): void {
 
 /* ── DRINKS: the glasses' side of the wire (see PropWire) ──────────────── */
 
-function onClubFloor(): boolean {
-  return net.phase === 'hosting' || net.phase === 'joined';
-}
 
 /** Ask the relay for glass `id` — the hand has already taken it on spec. */
 export function sendPropGrab(id: number): void {
-  if (onClubFloor()) send({ t: 'prop-grab', id });
+  if (inRoom()) send({ t: 'prop-grab', id });
 }
 
 /** The glass left my hand — mark it catchable; I still fly it. */
 export function sendPropRelease(id: number): void {
-  if (onClubFloor()) send({ t: 'prop-release', id });
+  if (inRoom()) send({ t: 'prop-release', id });
 }
 
 /** Owner pose stream: [px,py,pz, qx,qy,qz,qw, full01] at ~20 Hz. */
 export function sendPropPose(id: number, d: number[]): void {
-  if (onClubFloor()) send({ t: 'prop', id, d });
+  if (inRoom()) send({ t: 'prop', id, d });
 }
 
 /** My throw settled at pos/quat — or fell out of the world (nulls: idle). */
 export function sendPropRest(id: number, pos: number[] | null, quat: number[] | null): void {
-  if (!onClubFloor()) return;
+  if (!inRoom()) return;
   send(pos && quat ? { t: 'prop-rest', id, pos, quat } : { t: 'prop-rest', id, idle: true });
 }
 

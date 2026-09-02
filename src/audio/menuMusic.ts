@@ -13,7 +13,7 @@
  * three gates — entered VR, in the lobby, not muted — funnelled through sync().
  */
 
-import musicUrl from '../assets/music/smoldering.m4a?url';
+import musicUrl from '../assets/music/smoldering.mp3?url';
 import { MusicTrack } from './musicTrack.js';
 import { musicVolume, onMusicVolume } from './musicVolume.js';
 

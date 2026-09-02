@@ -1,5 +1,5 @@
 /**
- * Coins in the pub — the bolt-dollar currency made physical.
+ * Coins in the pub — the iron-dollar currency made physical.
  *
  * You wear your balance above your LEFT wrist (the riveted "$" symbol with the
  * count over it) — private, only you see it. Bring your RIGHT hand to that
@@ -205,7 +205,7 @@ function makeTag(): WristTag {
   return { panel, shown: -1 };
 }
 
-/** Paint a wrist tag: count on top, the bolt-dollar symbol beneath it. */
+/** Paint a wrist tag: count on top, the iron-dollar symbol beneath it. */
 function drawTag(tag: WristTag, count: number): void {
   tag.shown = count;
   tag.panel.drawBare((ctx, w, h) => {

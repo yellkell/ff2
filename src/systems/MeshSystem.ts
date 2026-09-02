@@ -23,7 +23,7 @@ import { Combatant } from '../components/Combatant.js';
 import { Health } from '../components/Health.js';
 import { BallState, Fireball } from '../components/Fireball.js';
 import { ballCommands, opponents, MAX_OPPONENTS } from '../combat/opponentBus.js';
-import { localIndexOf, localLayout, peerPos, peerQuat, peerVel } from '../combat/layout.js';
+import { classicDuel, localIndexOf, localLayout, peerPos, peerQuat, peerVel } from '../combat/layout.js';
 import { syncNetRoster } from '../combat/setup.js';
 import { raidInbox } from '../campaign/campaignState.js';
 import { match } from '../combat/matchState.js';
@@ -115,8 +115,10 @@ export class MeshSystem extends createSystem({
       return;
     }
 
-    // The duel is NetworkSystem's job; the mesh only ever runs the brawls.
-    if (app.arcade === '1v1') {
+    // The CLASSIC duel is NetworkSystem's job; the mesh runs the brawls —
+    // and a duel THE BELL dealt, which rides the mesh so its watchers have
+    // seats (combat/layout.ts classicDuel).
+    if (classicDuel()) {
       this.clearVoice();
       return;
     }

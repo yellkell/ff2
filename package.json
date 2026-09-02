@@ -9,7 +9,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "server": "node server/index.mjs",
+    "server": "node server/room.mjs",
+    "server:ff": "node server/index.mjs",
     "server:pub": "node server/pub.mjs",
     "server:rave": "node server/rave.mjs",
     "check:wrap": "node tools/wrap-check.mjs",
@@ -17,7 +18,9 @@
     "check:grammar": "node tools/grammar-check.mjs",
     "check:pages": "node tools/pages-check.mjs",
     "check:desert": "node tools/desert-check.mjs",
-    "check:rave": "node tools/rave-check.mjs"
+    "check:rave": "node tools/rave-check.mjs",
+    "check:venue": "node tools/venue-check.mjs",
+    "check:course": "node tools/course-check.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "0.4.2",

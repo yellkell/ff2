@@ -12,15 +12,16 @@
  *
  * Protocol: see src/pub/protocol.ts.
  *
- *   npm run server:pub        # listens on :8788 (or PORT=...)
+ *   npm run server:pub        # alone, on :8788 (or PORT=...)
+ *   npm run server            # inside THE ROOM SERVER (room.mjs), at /pub
  */
 
-import { createServer } from 'node:http';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { WebSocketServer } from 'ws';
+import { isMain, serve } from './mount.mjs';
 
 const PORT = Number(process.env.PORT || 8788);
 const MAX_PLAYERS = 12;
@@ -629,7 +630,7 @@ if (DISCORD_TOKEN) {
 }
 
 // --- wiring ---------------------------------------------------------------------
-const http = createServer((req, res) => {
+export function handleHttp(req, res) {
   const url = new URL(req.url, 'http://localhost');
 
   // Browser fetches the voice token cross-origin (Firebase Hosting → Render).
@@ -665,17 +666,16 @@ const http = createServer((req, res) => {
       },
     }),
   );
-});
+}
 
 // Frames here are small JSON envelopes; `ws` would otherwise accept 100 MiB
 // each, letting one punter park a huge allocation on the shared pub server.
-const wss = new WebSocketServer({ server: http, maxPayload: 64 * 1024 });
+export const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
 // An 'error' event with no listener is re-thrown as an uncaught exception, so
 // one ECONNRESET (a headset dropping off Wi-Fi) would take the whole pub down
 // and everyone in it. Every socket needs a handler, and so does the server.
 wss.on('error', (err) => console.error('[pub] server error', err));
-http.on('clientError', (_err, socket) => socket.destroy());
 
 wss.on('connection', (ws, req) => {
   ws.isAlive = true;
@@ -947,6 +947,11 @@ setInterval(() => {
   }
 }, 10_000);
 
-http.listen(PORT, () => {
-  console.log(`[iron-balls-pub] pub open on :${PORT} — hi-score ${data.snakeHi.score} (${data.snakeHi.name})`);
-});
+if (isMain(import.meta.url)) {
+  serve({
+    port: PORT,
+    http: handleHttp,
+    wss,
+    onListen: () => console.log(`[iron-balls-pub] pub open on :${PORT} — hi-score ${data.snakeHi.score} (${data.snakeHi.name})`),
+  });
+}

@@ -38,13 +38,13 @@
 
 import { createSystem } from '@iwsdk/core';
 import type { MeshBasicMaterial, MeshStandardMaterial } from 'three';
-import { MC, RING, hueToColor, ringRadius, mcHueFor } from '../config.js';
+import { MC, RING, hueToColor, ringRadius, mcHueFor, mcVisitCount } from '../config.js';
 import { arena } from '../arena/arena.js';
 import { CLUB as CLUB_LAYOUT } from '../club/config.js';
 import { ACCENT_REST, accentHex, buildDancer, type DancerPose, type DancerRig } from '../game/avatars.js';
 import { PoseMotion } from '../game/poseMotion.js';
 import { match, type GestureCue, showBeat } from '../game/state.js';
-import { net } from '../net/session.js';
+import { inRoom } from '../net/session.js';
 
 /** The eat window (song beats, negative = count-in) — mirrors GoopliathSystem. */
 const EAT_START = -2.8;
@@ -79,7 +79,7 @@ const DECK_SPOT = { x: 0, y: CLUB_LAYOUT.stage.h, z: CLUB_LAYOUT.stage.z + 0.5, 
 
 /** What the headliner is wearing right now — the probe reads it to prove
  *  he changes between the map and the record, and never wears red/yellow. */
-export const mcView = { hue: MC.hue, color: 0, screen: '', track: '' };
+export const mcView = { hue: MC.hue, color: 0, screen: '', track: '', visit: 0 };
 
 export class McSystem extends createSystem({}) {
   private rig: DancerRig | null = null;
@@ -143,6 +143,7 @@ export class McSystem extends createSystem({}) {
     mcView.color = this.baseColor;
     mcView.screen = match.screen;
     mcView.track = match.trackId;
+    mcView.visit = mcVisitCount();
     if (this.generation !== match.generation) this.rebuild();
     const rig = this.rig;
     if (!rig) return;
@@ -177,7 +178,7 @@ export class McSystem extends createSystem({}) {
       this.mime = null;
       // Foyer: beside the board, the live-service hero. Club floor open
       // (a room is hosting/joined): he's up at his decks, working.
-      const social = net.phase === 'hosting' || net.phase === 'joined';
+      const social = inRoom();
       const spot = social ? DECK_SPOT : MENU_SPOT;
       rig.root.position.set(spot.x, spot.y, spot.z);
       this.faceCrowd(spot.x, spot.z);

@@ -106,14 +106,22 @@ nav = await wrap(`nav()`);
 check('ARCADE tab: modes + the demoted SHOOT BACK', nav.center === 'arcade' && has(slab, 'start-tutorial', 'open-campaign', 'open-raid', 'start-training', 'toggle-shootback'), notTabs(slab).join(','));
 check('ARCADE tab: the door to RAVE RAID', slab.includes('open-rave'), String(slab.includes('open-rave')));
 save('arcade', await wrap(`snap('train')`));
+// CLUB is a DOOR now, not a picker: pressing it crosses to the venue's
+// floor in-session (tools/venue-check.mjs walks that place properly — here
+// we only prove the tab opens the door and the arena comes back whole).
+await page.evaluate(() => localStorage.setItem('gdr-server', 'ws://127.0.0.1:1')); // no relay: the room of one
 await wrap(`act('wrap:tab-club')`);
-slab = await wrap(`buttons('train')`);
-nav = await wrap(`nav()`);
-check('CLUB tab: the region doors on the slab', nav.club && notTabs(slab).every((b) => b.startsWith('pub-go-')) && notTabs(slab).length > 0, notTabs(slab).join(','));
-save('club', await wrap(`snap('train')`));
+const crossed = await page
+  .waitForFunction(() => window.__town && window.__town.place === 'venue' && !window.__town.busy, { timeout: 40000 })
+  .then(() => true)
+  .catch(() => false);
+check('CLUB tab: the door onto the venue floor, in-session', crossed && (await page.evaluate(() => document.body.classList.contains('app-entered'))), JSON.stringify(await page.evaluate(() => ({ place: window.__town?.place }))));
+await page.evaluate(() => window.__town.leave());
+await page.waitForFunction(() => window.__town && window.__town.place === 'arena' && !window.__town.busy, { timeout: 40000 });
+await page.waitForTimeout(300);
 await wrap(`act('wrap:tab-fight')`);
 nav = await wrap(`nav()`);
-check('FIGHT tab again folds the club picker', nav.center === 'fight' && !nav.club, JSON.stringify(nav));
+check('home again, and FIGHT is the slab', nav.center === 'fight' && !nav.club, JSON.stringify(nav));
 
 console.log('\n=== through FIGHT: the flows still drill in and BACK out ===');
 await wrap(`act('private-open')`);
@@ -175,7 +183,7 @@ await wrap(`act('wrap:tab-town')`);
 
 console.log('\n=== the YOU wing: YOU · SETTINGS ===');
 you = await wrap(`buttons('info')`);
-check('YOU leads with the paint bay + body; rename moved to the card', has(you, 'open-paintbay', 'open-custom') && !you.includes('rename') && !you.includes('open-pub'), notTabs(you).join(','));
+check('YOU is PAINT, CUSTOMIZATION and the purse — nothing else', has(you, 'open-paintbay', 'open-custom', 'you-coins') && !you.includes('rename') && !you.includes('you-record') && !you.includes('you-tip'), notTabs(you).join(','));
 save('you', await wrap(`snap('info')`));
 await wrap(`act('wrap:tab-settings')`);
 you = await wrap(`buttons('info')`);
@@ -216,7 +224,7 @@ console.log('\n=== THE MODALS: locker, store, line-up, lobby, loadout ===');
   await wrap(`act('open-custom')`);
   await page.waitForTimeout(400);
   let ids = await m(`buttons('custom')`);
-  check('the LOCKER wears LOCKER · STORE and its four boards', has(ids, 'open-locker', 'open-shop', 'tab-platforms', 'tab-gear', 'tab-colour', 'tab-arena'), ids.slice(0, 8).join(','));
+  check('the LOCKER wears LOCKER · STORE and its three boards', has(ids, 'open-locker', 'open-shop', 'tab-platforms', 'tab-gear', 'tab-colour') && !ids.includes('tab-arena'), ids.slice(0, 8).join(','));
   check('and the loadout stands beside it', await m(`up('balls')`), String(await m(`up('balls')`)));
   await shot('custom');
   await shot('balls');
@@ -227,16 +235,11 @@ console.log('\n=== THE MODALS: locker, store, line-up, lobby, loadout ===');
   check('COLOUR: the two base tones and the neon tracks', has(ids, 'base-white', 'base-black', 'accent-color', 'accent-light', 'accent-default'), ids.filter((b) => !b.startsWith('tab-')).join(','));
   await shot('custom', 'locker-colour');
 
-  await wrap(`act('tab-arena')`);
-  await page.waitForTimeout(300);
-  ids = await m(`buttons('custom')`);
-  check('ARENA: the deserts, the ones that exist live', ids.includes('env-desert') && ids.includes('env-ar'), ids.filter((b) => b.startsWith('env-') || b.startsWith('arena-')).join(','));
-
   await wrap(`act('tab-platforms')`);
   await wrap(`act('open-shop')`);
   await page.waitForTimeout(400);
   ids = await m(`buttons('shop')`);
-  check('the STORE is up, with no COLOUR or ARENA to sell', (await m(`up('shop')`)) && !ids.includes('tab-colour') && !ids.includes('tab-arena'), ids.slice(0, 6).join(','));
+  check('the STORE is up, with no COLOUR to sell', (await m(`up('shop')`)) && !ids.includes('tab-colour'), ids.slice(0, 6).join(','));
   await shot('shop', 'store');
   await wrap(`act('custom-close')`);
 

@@ -146,17 +146,43 @@ caller, one orbiting pip per person touched in). The ball is
 mode-agnostic: it carries `{ mode, params, caller, seats[] }` and the
 relay deals seats + seed + a shared start clock, whether that's a duel,
 a titan gauntlet or a rave set.
-*(Shipped so far: THE BALL's visual ported whole (`src/club/ball.ts` +
-the mirror-ball glint in materials/glow), the record shelf as data
-(`src/club/records.ts`, 24 RR masters' measured metadata), and the
-tabbed console face + local state (`src/club/console.ts`) — the relay
-drop/deal wiring lands with presence.)*
+*(Shipped: THE BELL rings. The floor's desk has the two tabs
+(`rave/systems/ClubSocialSystem.ts`) and one verb; a fight ball carries
+`{ mode, code }` — the arena opens a private room for the caller at the
+call (`rave/bridge.ts` openFightRoom, implemented by the town in
+`experience/ClubExperienceManager.ts`: the duel stack for 1V1, the mesh
+for 2V2/FFA/RAID) and the ball rises only once the room exists. The
+relay (`server/rave.mjs`) owns the clock and DEALS: the caller and the
+touched-in in touch order, the first `capacity` as fighters and the rest
+as watchers, one `start` to each with the roster and their role
+(`rave/club/bell.ts`). Every dealt headset crosses under the curtain
+with its arena lobby state already set, joins the room by code (a
+watcher on the rail), the host launches once the squad is seated or
+after a grace, and when the bout is over everyone folds home to the
+floor — still members of the room the whole time (`net.dealtAway`),
+the floor seeing them OUT. Every fight the bell calls rides the MESH, the
+duel included (`combat/layout.ts` classicDuel tells the two-peer duel wire
+apart from a mesh-hosted 1V1), so a duel's extra touchers are seated on
+the terrace like a brawl's. THE HOUSE PAYS: a game dealt by the bell — a
+record, a fight, a raid — pays `CURRENCY.bell` on top of its own take the
+moment you fold home, and the desk's header reads the wallet and what the
+last trip paid. Not yet: a fight's winner claiming THE CROWN.)*
 
 Joining is physical (walk up, touch, trigger), leaving is touching again,
 the caller can START early or cancel, and at zero the squad is dealt into
 the match **without leaving the venue** (see 3.2). The floor never closes:
 stay-behinds keep talking, newcomers keep arriving, finished players fold
 back home automatically.
+
+**The match UI** (`ui/scoreboard.ts`): every fighter gets a CARD — smoked
+glass with a lit team notch, the callsign, a big numeric health readout,
+a health bar with a DAMAGE TRAIL, the round pips, LOW (hazard chevrons
+breathing under the bar) and OUT (the card dims under a red stamp), and
+a rim flash on every hit. 1V1 hangs the classic pair over the rival's pad
+with the ROUND PLAQUE (round, first-to, a clock that goes amber then red)
+between; 2V2 stacks the columns with TEAM totals; FFA hangs the east and
+west fighters' cards OVER THEIR OWN PADS, turned to face you, with a
+STANDINGS strip over the plaque.
 
 ### 3.2 Watching — travel together, and the crowd that can't be heard
 
@@ -203,7 +229,9 @@ architecture (`club/build.ts` + `merge.ts` + place-scoped fog/voice/music)
 brokering — but **re-skinned into FF2's world**: the industrial fight-club
 language (gunmetal, hazard amber, riveted steel) fused with the supper-club
 craft level (every edge carries thickness; saturated colour reserved for
-light). Rooms: the floor + bar, the locker room (paint + shop in person
+light). *(Shipped: NEON INDUSTRIAL, phase 5 — the venue is the rave's
+club, mounted in the arena's World and entered under a curtain from the
+CLUB tab.)* Rooms: the floor + bar, the locker room (paint + shop in person
 — your mannequin on a plinth), the arcade corner (cabinets carry over),
 and a dark door we keep for whatever the next experiment is — THE STEP
 taught us the value of an unexplained door. No pit, no ring, no
@@ -212,8 +240,11 @@ place it happens is elsewhere.
 
 Both games' clubs keep their servers' good bones: RAVE RAID's relay owns
 the bell clock and deals seats; FF1's pub server contributes the voice
-bubble, prop ownership brokering and ban tooling. Target one merged FF2
-room server (`server/`), 24 heads, region-picked like `PUB_REGIONS`.
+bubble, prop ownership brokering and ban tooling. *(Shipped: THE ROOM
+SERVER, `server/room.mjs` — one process, one port, three relays told
+apart by path: `/rave` the club and the bell, `/pub` the pub, `/ff` the
+duel relay (and `/` for old clients); each still runs alone under its
+own script. Region-picking like `PUB_REGIONS` is still to come.)*
 
 ---
 
@@ -343,8 +374,8 @@ raid pit body, and the player doc (`gear`, beside `pad`, the deck) — re-valida
 `cleanGear` (unknown ids dropped, one per slot, hard length cap: the
 paint's fail-soft law). Probes: `check:wrap` dresses the podium through
 `__ff2.gear` and asserts the wire form; `check:paint`'s two-client room
-sees a punter's gear arrive on the hello. Not yet: gear as a PAINT
-surface (stripes stay on the body and head for now).
+sees a punter's gear arrive on the hello. PAINT 2 later made gear a
+PAINT SURFACE too, with its own canvases per slot.
 
 **SHIPPED — THE PADS, rebuilt entire.** The platform shop no longer sells
 neon tints over one steel slab with a grin, a bolt and a grid on top. A
@@ -604,18 +635,53 @@ Each phase is shippable; nothing waits on everything.
    tab, synced over the existing skin wire). Below the hips the loft is
    monotonic: hips, then only narrower, closing at a rounded tip — the
    silhouette finally agrees with the hitbox, which always ended at the
-   pelvis sphere. Still to come: the attachments shop.)*
+   pelvis sphere. THE GEAR shop shipped after it — crest, pauldrons and
+   the rest, fitted to the rig and carried on every cosmetics channel.)*
 4. **The paint** — stripe data model, per-part bake, locker paint mode,
    cosmetics sync. (The moment "lasting through games" works, ship it.)
 5. **The venue + THE BELL** — new club on RAVE RAID's club architecture,
    merged room server, bell-launch for 1v1/2v2/FFA first.
-   *(Opened: RAVE RAID's club VENUE is ported whole into `src/club/` —
-   build.ts, config, materials, merge, the arcade + step ref registries,
-   a palette shim carrying the disco magenta/cyan and per-guest hue
-   helper — compiling clean against FF2's kit fonts and glow, with the
-   foyer left behind (FF2 has its own lobby). `club-preview.html` walks
-   it for screenshots. Next: presence + teleport systems, then the
-   bell.)*
+   *(THE VENUE IS OVER, in-session: the rave — its club, the course
+   behind the west door, the foyer and the set — mounts inside the
+   arena's own World (`src/rave/experience.ts`, the pub's pattern), its
+   systems registered once and paused, its objects kept and hidden, and
+   every crossing is a curtain (`experience/Curtain.ts`): the black
+   falls, the outgoing place is paused and put away, the incoming one
+   shown and played, the black lifts — the XR session never ends. CLUB
+   lands on the venue floor, ARCADE → RAVE RAID lands in the foyer, the
+   rave board's FIRE FIGHT door comes home the same way. THE ROOM OF ONE:
+   the floor opens without a relay (`net/session.ts` enterSoloFloor), the
+   dumbwaiter served off a local clock speaking the wire's own words;
+   every club system reads one gate, `inRoom()`. NEON INDUSTRIAL: the
+   wardrobe repainted (board-formed concrete, checker plate, galvanised
+   steel, riveted plate, black quilted vinyl, brushed stainless, rubber
+   matting, corrugated sheet) and the geometry swapped where the deco
+   needed it (neon tube rails, riveted I-beams, cage lamps, cyan LED
+   rings under a lattice truss, a magenta-footed corrugated backdrop);
+   THE SUN stays: the stage's deco sunburst is the thing the MC stands in
+   front of, its ribs in the new metal and its centre burning GOLD (the
+   fanlight over the doors is still a stepped transom). THE VISIT:
+   the MC dresses differently for every arrival on the floor (a
+   remembered notch through his safe band, `config.mcHueFor`).
+   VOIDSTEP 2 (`course/score.ts`): thirteen platforms, two lifts, a
+   shuttle with a turn, the skywalk, an elevator, at 128 with two-bar
+   dwells; the score is SWEPT in time so no two decks ever share space,
+   every deck is a MACHINE — gunmetal face under an ETCH of circuit
+   traces lit in the state colour (a deep true blue, not the hall's
+   cyan), a two-step keel with vents that burn
+   when it drives, an underglow on the void's glass, a scan line keeping
+   the bar across every docked face — and THE GATE on the home pad lights
+   the way back. THE MIRROR casts shadows of the
+   live rigs (twins driven by world matrices through a reflection, unlit,
+   no recess light, one solve — yours). TWELVE GLASSES with two-sphere
+   contact, bowl-radius walls, bounce tumble, tipping, rolling in an arc,
+   per-surface friction. THE BELL RINGS: the desk's FIGHT tab calls a
+   1V1/2V2/FFA/RAID, the relay deals fighters and watchers into an arena
+   room the caller opened, the squad crosses under the curtain and folds
+   home when it's over (§3.1); and THE ROOM SERVER (`server/room.mjs`)
+   is one process for all three relays (§3.3). `tools/venue-check.mjs`
+   walks all of it, the bell on a room server of its own with two
+   headsets.)*
 6. **Audience ground + the crowd** — watchers travel with the squad,
    audience terraces in the arenas, voice bubble, hands-up roar wire,
    sourced crowd beds.
@@ -645,26 +711,33 @@ Each phase is shippable; nothing waits on everything.
    the fighters can see. THE ROAR is aggregated per headset off those
    same frames (no relay needed: everyone receives everyone), and the
    voice split is enforced where it bites, in MeshSystem's speaker
-   attach: a fighter never opens a watcher's voice. Still to land:
-   sourced crowd recordings behind the same API, and the bell dealing the
-   audience from the club floor once presence ships.)*
+   attach: a fighter never opens a watcher's voice. The bell now deals
+   the audience from the club floor (§3.1). Still to land: sourced crowd
+   recordings behind the same API.)*
 7. **RAVE mode** — port the set, decks, records; mannequin on the ring;
    coins per song; bell learns RAVE SET.
-   *(Shipped as a PAGE: `rave.html` boots `src/rave/` — the dance repo's
-   source ported whole, file identities intact, its own relay as
-   `server/rave.mjs`. The ARCADE tab's RAVE RAID button hops there; the
-   rave board's rail grew a FIRE FIGHT entry that hops back. ONE TOWN:
+   *(Shipped as a PAGE, then MOUNTED: `rave.html` still boots `src/rave/`
+   standalone — the dance repo's source ported whole, file identities
+   intact, its own relay as `server/rave.mjs` — and the same code now
+   mounts in-session inside the arena (phase 5): the ARCADE tab's RAVE
+   RAID button crosses under a curtain, and the rave board's FIRE FIGHT
+   entry comes back the same way, no page hop, no session end. ONE TOWN:
    the profile reads the arena's callsign and accent first and writes
    them back on a rename; a finished record pays `songCoins(grade)` into
    the one wallet and the grade card names it; every figure — groupies,
    the giant MC, the club's room-mates, your reflection — wears THE BLANK
    through `rave/game/blankDancer.ts` (the arena's rig, `solveTorso`,
-   gear and paint bakes, glowsticks out of the fists). Still to land:
-   looks and gear on the rave's own wire (remote humans dance bare
-   today), the bell's RAVE SET, the two clubs folding into one, and
-   the goopliath/choreo copies deduplicated.)*
+   gear and paint bakes, glowsticks out of the fists). Looks and gear
+   now ride the rave's own wire, the two club copies are folded into
+   one, and the bell's RAVE tab calls a record off the same desk that
+   calls a fight. Still to land: the goopliath/choreo copies
+   deduplicated between `src/campaign/` and `src/rave/choreo/`.)*
 8. **Campaign 2** — move-grammar port (telegraphs/setlist/floor manager),
    new titan line-up, the on-beat titan, raid cut.
+   *(Shipped: the grammar module (`campaign/grammar.ts`) with the
+   telegraph and blockfall vocabulary ported, folded into the classic
+   five titans so each one dances its own shape with a bespoke windup,
+   and the raid arc riding the mesh.)*
 9. **Desert 2.0** — the dusk rebuild, then the venue exterior, then the
    rest of the environments.
    *(First pass shipped: golden hour dying into night — deep violet-navy

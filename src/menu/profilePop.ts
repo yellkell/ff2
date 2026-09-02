@@ -1,6 +1,6 @@
 /**
  * THE PROFILE POP-OUT (MENUS 2) — what the floating coin readout became.
- * A chip above the YOU wing wears your name, rank and bolt-dollars; tap
+ * A chip above the YOU wing wears your name, rank and iron-dollars; tap
  * it and your card drops out over the wing (the RAVE RAID profile-card
  * pattern): the painting behind your name, rank and XP, honours,
  * achievements, your note — and RENAME, which is where a callsign changes

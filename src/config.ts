@@ -63,7 +63,7 @@ export const PROGRESSION = {
 };
 
 /**
- * The bolt-dollar currency — a riveted "$" earned at the SAME moments as XP
+ * The iron-dollar currency — a riveted "$" earned at the SAME moments as XP
  * (every match, bot bout, arcade brawl and training run; see net/leaderboard).
  * A flat amount per completed game, win or loss, so the shop prices read as
  * round "games of play": a platform recolour or the GOLD RUSH premium pad
@@ -179,6 +179,11 @@ export const CURRENCY = {
   /** One-time graduation gift for finishing the tutorial — enough to feel
    *  the store's pull ('get yourself some drip') without skipping the grind. */
   tutorial: 50,
+  /** THE HOUSE PAYS: a game called from the club floor — a record, a
+   *  fight, a raid dealt by THE BELL — pays this on top of whatever the
+   *  game itself paid, the moment you fold home to the floor. Turning up
+   *  with people is worth a little more than queueing alone. */
+  bell: 5,
 };
 
 /** What a finished record pays, by the night's grade (menu/wallet.ts). */

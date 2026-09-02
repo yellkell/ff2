@@ -12,7 +12,7 @@
  *   RIGHT    YOU · SETTINGS               (the gear disc became a tab)
  *
  * Above the right wing, THE PROFILE pop-out — what the floating coin
- * readout became: a chip with your name, rank and bolt-dollars that drops
+ * readout became: a chip with your name, rank and iron-dollars that drops
  * your card out over the wing (rename lives there now).
  *
  * The few-doors law still holds inside each tab: FIGHT's flows (private →
@@ -241,7 +241,7 @@ function fightRoot(): Face {
   ];
   return {
     title: 'FIRE FIGHT 2',
-    body: note('every finished bout banks 10 bolt-dollars', 900, CW),
+    body: note('every finished bout banks 10 iron-dollars', 900, CW),
     buttons,
   };
 }
@@ -510,11 +510,11 @@ function youBoard(): Face {
   const W = LW - 192;
   return {
     title: '',
-    body: note("that's you on the podium — everyone sees this body", 940, LW),
+    body: () => {},
     buttons: [
       {
         id: 'open-paintbay',
-        label: 'THE PAINT BAY',
+        label: 'PAINT',
         sub: lock ? SEAL_SUB : 'stripes · splotches · dots · squares',
         x: X, y: 170, w: W, h: 160,
         primary: !lock,
@@ -522,14 +522,15 @@ function youBoard(): Face {
       },
       {
         id: 'open-custom',
-        label: 'YOUR BLANK',
-        sub: lock ? SEAL_SUB : 'base tone · gear · pads · arena',
+        label: 'CUSTOMIZATION',
+        sub: lock ? SEAL_SUB : 'base tone · gear · pads',
         x: X, y: 360, w: W, h: 130,
         disabled: lock,
       },
-      { id: 'you-coins', label: `$ ${coins.balance}`, sub: 'bolt-dollars', x: X, y: 540, w: (W - 32) / 2, h: 110, display: true, small: true, tone: KIT.accent },
-      { id: 'you-record', label: `${app.stats.wins}W — ${app.stats.losses}L`, sub: 'lifetime', x: X + (W + 32) / 2, y: 540, w: (W - 32) / 2, h: 110, display: true, small: true },
-      { id: 'you-tip', label: 'your name lives in the card above', sub: 'tap it to rename', x: X, y: 700, w: W, h: 100, display: true, small: true, px: 24 },
+      // The wallet, on its own and full width: the record and the rename
+      // hint are gone (the card above already carries the name, and a
+      // lifetime W—L is a number nobody asked to be reminded of).
+      { id: 'you-coins', label: `$ ${coins.balance}`, sub: 'iron-dollars', x: X, y: 540, w: W, h: 110, display: true, small: true, tone: KIT.accent },
     ],
   };
 }

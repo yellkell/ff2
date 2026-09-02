@@ -1,12 +1,16 @@
 /**
- * THE LOCKER and THE STORE (MENUS 3) — one plate, two faces, on the panel
- * kit. What you own and wear; what you don't and could.
+ * CUSTOMIZATION — THE LOCKER and THE STORE (MENUS 3): one plate, two faces,
+ * on the panel kit. What you own and wear; what you don't and could.
+ *
+ * The panel is named for what you came to do, not for what the body is
+ * called under the hood. "THE BLANK" is the mannequin's engineering name
+ * (avatar/mannequin.ts) and it stays there; nothing in the menus asks a
+ * player to learn it.
  *
  * The tab grammar the wrap wears (MENUS 2) comes to the modals: LOCKER ·
  * STORE across the top, and under it the row of sub-boards each face
- * offers — PLATFORMS · GEAR · COLOUR · ARENA in the locker, PLATFORMS ·
- * GEAR in the store (there is nothing to buy about your own base tone or
- * which desert you fight in).
+ * offers — PLATFORMS · GEAR · COLOUR in the locker, PLATFORMS · GEAR in
+ * the store (there is nothing to buy about your own base tone).
  *
  * The TILES are ghost buttons the body paints: the kit owns the plate, the
  * hover ease and the hit-test, while the artwork stays the bespoke icon
@@ -14,7 +18,7 @@
  * gear piece's silhouette). A tile in the store that is being TRIED ON
  * grows a real BUY button; the rest of its chrome is drawn.
  *
- * The COLOUR face keeps its two live tracks (the gauntlet neon's hue and
+ * The COLOUR face keeps its two live tracks (the hands' neon hue and
  * lightness). They are scrubbed by the trigger — MenuSystem reads the hit
  * UV every frame — so their geometry and the `accentBarHue` /
  * `accentBarLight` mappers below must agree; that is why both live here.
@@ -22,7 +26,7 @@
 
 import { KIT, type PanelButton } from '../ui/kit/panel.js';
 import { font } from '../ui/kit/fonts.js';
-import { app, DEFAULT_ACCENT_HUE, type AppEnvironment } from './appState.js';
+import { app, DEFAULT_ACCENT_HUE } from './appState.js';
 import { customization, platformOwned, gearOwned } from './customization.js';
 import { canAfford, coins } from './wallet.js';
 import { hueToColor } from '../config.js';
@@ -45,7 +49,7 @@ const GAP = 20;
 const TILE_W = (INNER - (COLS - 1) * GAP) / COLS;
 const FOOT_Y = LOCKER_H - 140;
 
-/** The gauntlet-neon tracks — ghost rects the body paints and the trigger
+/** The hand-neon tracks — ghost rects the body paints and the trigger
  *  scrubs. (See the note at the top: the mappers below read these.) */
 const BASE_Y = 248;
 const BASE_H = 108;
@@ -64,7 +68,7 @@ export function accentBarLight(u: number): number {
 /** The brand mark in the tab strip. The TABS say which face is up, so the
  *  mark says what the plate is FOR — repeating "LOCKER" beside the lit
  *  LOCKER tab told you nothing twice. */
-const TITLE = 'THE BLANK';
+const TITLE = 'CUSTOMIZATION';
 
 const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
 
@@ -76,13 +80,13 @@ export interface LockerFace {
 
 /* ── which board is showing ───────────────────────────────────────────── */
 
-type Board = 'platforms' | 'gear' | 'colour' | 'arena';
+type Board = 'platforms' | 'gear' | 'colour';
 
-/** COLOUR and ARENA are the locker's alone; the store falls back to pads. */
+/** COLOUR is the locker's alone; the store falls back to pads. */
 function board(locker: boolean): Board {
   const t = customization.tab;
-  if (!locker && (t === 'colour' || t === 'arena')) return 'platforms';
-  if (t === 'gear' || t === 'colour' || t === 'arena') return t;
+  if (!locker && t === 'colour') return 'platforms';
+  if (t === 'gear' || t === 'colour') return t;
   return 'platforms';
 }
 
@@ -140,18 +144,11 @@ const buyRect = (t: Tile): { x: number; y: number; w: number; h: number } => ({
 
 /* ── the faces ────────────────────────────────────────────────────────── */
 
-const ARENA: Array<{ env: AppEnvironment | null; label: string; sub: string; id: string | null }> = [
-  { env: 'desert', label: 'THE DESERT', sub: 'dusk over the flats', id: 'env-desert' },
-  { env: 'ar', label: 'YOUR ROOM', sub: 'passthrough — fight where you stand', id: 'env-ar' },
-  { env: 'saltflats', label: 'THE SALT FLATS', sub: 'coming soon', id: null },
-  { env: 'factory', label: 'THE FACTORY', sub: 'coming soon', id: null },
-];
-
 export function lockerFace(locker: boolean): LockerFace {
   const b = board(locker);
   const buttons: PanelButton[] = [
-    { id: 'open-locker', label: 'LOCKER', tab: true, x: 300, y: TAB_Y, w: 200, h: TAB_H, selected: locker },
-    { id: 'open-shop', label: 'STORE', tab: true, x: 520, y: TAB_Y, w: 200, h: TAB_H, selected: !locker },
+    { id: 'open-locker', label: 'LOCKER', tab: true, x: 400, y: TAB_Y, w: 200, h: TAB_H, selected: locker },
+    { id: 'open-shop', label: 'STORE', tab: true, x: 620, y: TAB_Y, w: 200, h: TAB_H, selected: !locker },
   ];
 
   // The sub-board chips: what this face has to show.
@@ -160,7 +157,6 @@ export function lockerFace(locker: boolean): LockerFace {
         ['platforms', 'PLATFORMS', 'tab-platforms'],
         ['gear', 'GEAR', 'tab-gear'],
         ['colour', 'COLOUR', 'tab-colour'],
-        ['arena', 'ARENA', 'tab-arena'],
       ]
     : [
         ['platforms', 'PLATFORMS', 'tab-platforms'],
@@ -176,7 +172,7 @@ export function lockerFace(locker: boolean): LockerFace {
     buttons.push({
       id: 'store-wallet',
       label: `$ ${coins.balance}`,
-      sub: 'bolt-dollars',
+      sub: 'iron-dollars',
       x: M, y: FOOT_Y + 24, w: 280, h: 84,
       display: true,
       small: true,
@@ -185,7 +181,6 @@ export function lockerFace(locker: boolean): LockerFace {
   }
 
   if (b === 'colour') return { title: TITLE, buttons: [...buttons, ...colourButtons()], body: colourBody };
-  if (b === 'arena') return { title: TITLE, buttons: [...buttons, ...arenaButtons()], body: () => {} };
 
   const shown = tiles(locker);
   for (const t of shown) {
@@ -281,14 +276,14 @@ function drawTile(g: CanvasRenderingContext2D, t: Tile, locker: boolean, hover: 
   }
 }
 
-/* ── COLOUR: the base tone, and the gauntlet neon ─────────────────────── */
+/* ── COLOUR: the base tone, and the hands' neon ───────────────────────── */
 
 function colourButtons(): PanelButton[] {
   const onyx = customization.avatar === 'onyx';
   const half = (INNER - 24) / 2;
   return [
-    { id: 'base-white', label: 'ALL WHITE', sub: onyx ? 'the blank, bare' : 'worn', x: M, y: BASE_Y, w: half, h: BASE_H, selected: !onyx },
-    { id: 'base-black', label: 'ALL BLACK', sub: onyx ? 'worn' : 'the blank, in onyx', x: M + half + 24, y: BASE_Y, w: half, h: BASE_H, selected: onyx },
+    { id: 'base-white', label: 'ALL WHITE', sub: onyx ? 'you, bare' : 'worn', x: M, y: BASE_Y, w: half, h: BASE_H, selected: !onyx },
+    { id: 'base-black', label: 'ALL BLACK', sub: onyx ? 'worn' : 'you, in onyx', x: M + half + 24, y: BASE_Y, w: half, h: BASE_H, selected: onyx },
     { id: 'accent-color', label: '', ghost: true, x: HUE_BAR.x, y: HUE_BAR.y, w: HUE_BAR.w, h: HUE_BAR.h },
     { id: 'accent-light', label: '', ghost: true, x: LIGHT_BAR.x, y: LIGHT_BAR.y, w: LIGHT_BAR.w, h: LIGHT_BAR.h },
     {
@@ -341,7 +336,7 @@ function colourBody(g: CanvasRenderingContext2D): void {
   g.fillStyle = KIT.dim;
   g.fillText('everything past the base tone is PAINT — the bay is on the YOU wing', M, BASE_Y + BASE_H + 26);
 
-  label('GAUNTLET NEON', HUE_BAR.y - 28);
+  label('HAND NEON', HUE_BAR.y - 28);
   drawTrack(g, HUE_BAR, app.accentHue, (i, x, w) => {
     g.fillStyle = css(hueToColor(i, 0.55));
     g.fillRect(x, HUE_BAR.y, w, HUE_BAR.h);
@@ -366,22 +361,7 @@ function colourBody(g: CanvasRenderingContext2D): void {
   g.font = font(700, 24);
   g.letterSpacing = '4px';
   g.fillStyle = 'rgba(10,8,6,0.72)';
-  g.fillText('YOUR GAUNTLETS', LOCKER_W / 2, 734);
+  g.fillText('YOUR HANDS', LOCKER_W / 2, 734);
   g.letterSpacing = '0px';
 }
 
-/* ── ARENA: where the bouts happen ────────────────────────────────────── */
-
-function arenaButtons(): PanelButton[] {
-  return ARENA.map((opt, i) => ({
-    id: opt.id ?? `arena-soon-${i}`,
-    label: opt.label,
-    sub: opt.sub,
-    x: M,
-    y: 248 + i * 150,
-    w: INNER,
-    h: 128,
-    selected: opt.id !== null && app.environment === opt.env,
-    disabled: opt.id === null,
-  }));
-}

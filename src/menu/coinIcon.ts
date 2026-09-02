@@ -1,5 +1,5 @@
 /**
- * The bolt-dollar currency symbol (src/assets/currency/coin.png) — a riveted
+ * The iron-dollar currency symbol (src/assets/currency/coin.png) — a riveted
  * mechanical "$". Vite bundles the PNG to a hashed URL; we kick the image load
  * off on import and hand canvas panels the decoded <img> once it's ready
  * (panels redraw on a cadence, so they pick it up the moment it lands).

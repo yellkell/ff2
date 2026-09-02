@@ -12,8 +12,8 @@
 
 import { launchXR, SessionMode, World } from '@iwsdk/core';
 import { installCrashTrap } from './debug/crashTrap.js';
-import { installClubExperienceManager } from './experience/ClubExperienceManager.js';
-import { requestArenaReturn, requestClubEntry } from './experience/clubNavigation.js';
+import { installTownExperienceManager } from './experience/ClubExperienceManager.js';
+import { requestArenaReturn, requestVenueEntry } from './experience/clubNavigation.js';
 import { initLeaderboard } from './net/leaderboard.js';
 import { initGazette } from './net/gazette.js';
 import { enterMenuMusic, preloadMenuMusic } from './audio/menuMusic.js';
@@ -49,7 +49,7 @@ import { FXSystem } from './systems/FXSystem.js';
 import { DesertSystem } from './systems/DesertSystem.js';
 import { PlatformFXSystem } from './systems/PlatformFXSystem.js';
 import { PerfHudSystem } from './systems/PerfHudSystem.js';
-import { FOVEATION, pubUrl } from './config.js';
+import { FOVEATION } from './config.js';
 
 installCrashTrap(); // headset playtests have no console — trap + persist crashes
 
@@ -119,6 +119,18 @@ World.create(container, {
   // without ever hiding the camera, XR origin or controller spaces.
   const sceneBaseline = new Set(world.scene.children);
   const levelBaseline = new Set(world.getActiveRoot().children);
+  // …and the same for the camera, the XR origin and the controller spaces:
+  // anything either place hangs off those later (a glove, a glowstick, a
+  // held glass, a head-locked card) is the place's, not the shell's.
+  const bodyBaseline = new Set<import('three').Object3D>([...world.camera.children, ...world.player.children]);
+  {
+    const spaces = world.playerSpaceEntities as
+      | { gripSpaces?: Record<string, { object3D?: import('three').Object3D }>; raySpaces?: Record<string, { object3D?: import('three').Object3D }> }
+      | undefined;
+    for (const table of [spaces?.gripSpaces, spaces?.raySpaces]) {
+      for (const hand of ['left', 'right']) for (const c of table?.[hand]?.object3D?.children ?? []) bodyBaseline.add(c);
+    }
+  }
 
   world.renderer.xr.setFoveation(FOVEATION);
 
@@ -189,9 +201,10 @@ World.create(container, {
     world.getSystem(PlatformFXSystem)!,
     world.getSystem(DesertSystem)!,
   ];
-  installClubExperienceManager(world, arenaSystems, {
+  installTownExperienceManager(world, arenaSystems, {
     scene: sceneBaseline,
     level: levelBaseline,
+    body: bodyBaseline,
   });
 
   // Desktop-only transition harness for repeatable production-build smoke
@@ -205,10 +218,10 @@ World.create(container, {
     const status = document.createElement('output');
     status.textContent = 'arena';
     const enter = document.createElement('button');
-    enter.textContent = 'Test Enter Club';
+    enter.textContent = 'Test Enter Venue';
     enter.addEventListener('click', () => {
       document.body.classList.add('app-entered');
-      requestClubEntry(world, pubUrl());
+      requestVenueEntry(world);
     });
     const leave = document.createElement('button');
     leave.textContent = 'Test Return Arena';

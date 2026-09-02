@@ -59,10 +59,45 @@ export const PROP_PHYS = {
   slideStop: 0.14,
   /** Tumble bleeds off in the air (exponential, per second). */
   spinDamp: 0.5,
-  /** GLASS ON GLASS: one sphere round the bowl is plenty to clack with —
-   *  centre height up the local axis, and the radius of the sphere. */
+  /** A bounce with sideways speed puts SPIN into the glass — the tumble a
+   *  thrown coupe takes off a bar top — per m/s of horizontal speed. */
+  spinFromBounce: 1.6,
+
+  /* ── ROLLING ───────────────────────────────────────────────────────────
+   * A coupe on its side ROLLS, and because its rim is wider than its foot
+   * it rolls in an ARC round the foot, the way a dropped glass always
+   * does. Below `rollUprightMax` (world-Y of the glass's up axis) a
+   * grounded glass rolls rather than skids: it turns about the floor-axis
+   * perpendicular to its travel at rim speed, its heading bends toward the
+   * foot side, and it loses speed to rolling resistance rather than to a
+   * skid's grind. */
+  rollUprightMax: 0.55,
+  /** Heading bend per metre travelled (1/m): (rimR − baseR) / rimR over the
+   *  glass's own length, which is the geometry of a rolling cone. */
+  rollCurvature: 1.9,
+  rollFriction: 1.6,
+  /** A grounded glass TIPS: past this (world-Y of its up axis) it is
+   *  standing on its foot and rights itself; below it, it is on its rim
+   *  edge and gravity takes it over onto its side. Rates in rad/s. */
+  tipUprightMin: 0.75,
+  tipRate: 6,
+  /** While rolling, the glass's axis swings across its travel (a cylinder
+   *  cannot roll along its own axis) at this rate. */
+  rollAlignRate: 4,
+  /** Skid friction by surface — a bar top is polished, a floor is not.
+   *  (Looked up by the surface's height; see ClubPropsSystem.frictionAt.) */
+  frictionBar: 1.5,
+  frictionTable: 1.9,
+  frictionFloor: 2.6,
+  /** GLASS ON GLASS: TWO spheres per glass now — one round the bowl, one
+   *  round the foot — so a coupe lying on its side has a length, and two
+   *  glasses meeting stem-to-bowl or foot-to-foot actually meet instead of
+   *  passing through each other everywhere but the bowls. Centre heights
+   *  up the local axis, and the radii. */
   bodyY: 0.12,
   bodyR: 0.072,
+  footY: 0.02,
+  footR: 0.042,
   /** Energy kept when two glasses meet (they ring more than they stick). */
   glassRestitution: 0.45,
   /** How fast a settled glass eases upright (per second). Righting is what

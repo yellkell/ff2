@@ -23,7 +23,7 @@ import { Hitbox, HitboxKind } from '../components/Hitbox.js';
 import { Health } from '../components/Health.js';
 import { Combatant } from '../components/Combatant.js';
 import { fighterTeam } from '../combat/fighters.js';
-import { localLayout } from '../combat/layout.js';
+import { classicDuel, localLayout } from '../combat/layout.js';
 import { MAX_OPPONENTS, opponents } from '../combat/opponentBus.js';
 import { mesh } from '../net/mesh.js';
 import { TargetState, TrainingTarget } from '../components/TrainingTarget.js';
@@ -123,7 +123,7 @@ export class CollisionSystem extends createSystem({
         // Your balls score targets; the targets' return fire (owner 1) hits you.
         if (owner === 0) this.myBallVsTargets(ball, radius, returning);
         else this.enemyBallVsMe(ball, owner, hitboxes, radius, damage, returning);
-      } else if (app.mode === 'net' && app.arcade === '1v1') {
+      } else if (app.mode === 'net' && classicDuel()) {
         // Online 1v1: you rule hits against YOURSELF only; your hits on the
         // rival are ruled by THEIR client and arrive as a `hit` message.
         if (owner === 1) this.enemyBallVsMe(ball, owner, hitboxes, radius, damage, returning);
@@ -187,7 +187,7 @@ export class CollisionSystem extends createSystem({
       if (app.mode === 'net' && app.state === 'playing') {
         const hand = (ball.getValue(Fireball, 'hand') ?? 0) as 0 | 1;
         const ret = returning ? { ret: true } : {};
-        if (app.arcade === '1v1') {
+        if (classicDuel()) {
           net.send({ k: 'hit', hand, dmg: actualDamage, ...ret });
         } else {
           // Arcade mesh: tag the attacker's canonical seat so only they act.

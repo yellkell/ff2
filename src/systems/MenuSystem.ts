@@ -123,9 +123,9 @@ import {
   syncLookMirror,
 } from '../net/leaderboard.js';
 import { gazette, markGazetteRead, refreshGazette, type GazetteArticle } from '../net/gazette.js';
-import { hueToColor, pubUrl, raveUrl, teamColor, WATCHER_SLOT } from '../config.js';
+import { hueToColor, teamColor, WATCHER_SLOT } from '../config.js';
 import * as sfx from '../audio/sfx.js';
-import { requestClubEntry, requestRaveEntry } from '../experience/clubNavigation.js';
+import { requestRaveEntry, requestVenueEntry } from '../experience/clubNavigation.js';
 
 const _origin = new Vector3();
 const _dir = new Vector3();
@@ -1111,16 +1111,16 @@ export class MenuSystem extends createSystem({}) {
         this.redrawPanel('info');
         break;
       case 'open-pub':
-        // Don't navigate yet — open the EU/USA region picker first.
-        app.infoView = 'pubpick';
+        // THE CLUB: the venue's floor, in-session, under a curtain.
+        this.gotoVenue();
         break;
       case 'pub-back':
         app.infoView = 'root';
         break;
       case 'open-rave':
-        // RAVE RAID is its own page (src/rave/): same wallet, same name,
-        // same body — its rail's FIRE FIGHT entry brings you back here.
-        requestRaveEntry(this.world, raveUrl());
+        // RAVE RAID's foyer, in-session: same wallet, same name, same body
+        // — its rail's FIRE FIGHT entry brings you back here the same way.
+        requestRaveEntry(this.world);
         break;
       case 'base-white':
         setAvatarSkin('blank'); // applyOwnSkins swaps every rig next frame
@@ -1283,7 +1283,7 @@ export class MenuSystem extends createSystem({}) {
           if (region) {
             localStorage.setItem('ibb-pub-server', region.url);
             app.infoView = 'root';
-            this.gotoPub();
+            this.gotoVenue();
           }
         } else if (action.startsWith('ranked-join-')) {
           // Join a listed ranked room by its doc id (stay on the list, showing
@@ -1402,10 +1402,11 @@ export class MenuSystem extends createSystem({}) {
     setAvatarSkin(id); // applyOwnSkins repaints the rig + mirror next frame
   }
 
-  /** Walk into the club without leaving the active XR document. The navigation
-   *  bridge falls back to the standalone pub page when no shared shell exists. */
-  private gotoPub(): void {
-    requestClubEntry(this.world, pubUrl());
+  /** Walk onto the venue's floor without leaving the XR session. The
+   *  navigation bridge falls back to the rave's own page when no shared
+   *  shell has installed handlers. */
+  private gotoVenue(): void {
+    requestVenueEntry(this.world);
   }
 
   /** Passthrough and opaque rendering need different Quest compositor modes.

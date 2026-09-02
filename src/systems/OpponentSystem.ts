@@ -34,7 +34,7 @@ import { BallState, Fireball } from '../components/Fireball.js';
 import { Health } from '../components/Health.js';
 import { Hitbox, HitboxKind } from '../components/Hitbox.js';
 import { MAX_OPPONENTS, opponents } from '../combat/opponentBus.js';
-import { localLayout } from '../combat/layout.js';
+import { classicDuel, localLayout } from '../combat/layout.js';
 import { app } from '../menu/appState.js';
 import { mesh } from '../net/mesh.js';
 import { rival } from '../net/leaderboard.js';
@@ -244,7 +244,7 @@ export class OpponentSystem extends createSystem({
     // The classic duel rival syncs through the 1v1 net client's store; it is
     // NOT valid in mesh bouts (it holds whoever you last duelled — reading it
     // for mesh slot 1 was why 2v2/FFA rivals sometimes wore a stranger's kit).
-    const duel = app.mode === 'net' && app.arcade === '1v1' && slot === 1;
+    const duel = app.mode === 'net' && classicDuel() && slot === 1;
     // Any seated mesh peer: look their cosmetics up by canonical seat.
     const seat = !duel && mesh.joined ? (localLayout()[slot]?.canonical ?? -1) : -1;
     const peer = seat >= 0 ? mesh.cosmetics[seat] : undefined;

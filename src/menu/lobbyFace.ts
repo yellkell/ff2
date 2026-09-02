@@ -42,7 +42,7 @@ export interface LobbyFace {
   buttons: PanelButton[];
 }
 
-const TITLE: Record<ArcadeMode, string> = { '1v1': 'LOBBY', '2v2': '2V2', ffa: 'FFA', raid: 'TITAN RAID' };
+const TITLE: Record<ArcadeMode, string> = { '1v1': '1V1', '2v2': '2V2', ffa: 'FFA', raid: 'TITAN RAID' };
 
 /** A sub-face's name, right-aligned in the title band (the wrap's crumb). */
 function crumb(text: string): (g: CanvasRenderingContext2D) => void {

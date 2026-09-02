@@ -44,14 +44,15 @@
  *  - A departing host is replaced by the longest-standing member instead of
  *    folding the party.
  *
- *   npm run server            # listens on :8788 (or PORT=…)
+ *   npm run server:rave       # alone, on :8788 (or PORT=…)
+ *   npm run server            # inside THE ROOM SERVER (room.mjs), at /rave
  *
  * Point clients at it with ?server=wss://your-host:8788 (ws:// in dev).
  * BALL_MS=4000 shrinks the ball timer (the two-headset test uses it).
  */
 
-import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
+import { isMain, serve } from './mount.mjs';
 
 const PORT = Number(process.env.PORT || 8788);
 const BALL_MS = Number(process.env.BALL_MS || 60_000);
@@ -70,8 +71,16 @@ const MAX_ROOM = 24;
  *  eight leaves three groupies dancing between them. */
 const RING_SIZES = [4, 8, 12, 16, 20, 24];
 const ringFor = (n) => RING_SIZES.find((size) => size >= n) ?? MAX_ROOM;
+/** THE BELL (FF2 DESIGN §3.1): the ball is the launcher for EVERYTHING.
+ *  A 'rave' ball deals a ring as it always did; a FIGHT ball names a
+ *  FIRE FIGHT room the caller opened when they called, and the deal
+ *  splits the willing into FIGHTERS (the first `capacity` who touched in,
+ *  the caller first) and WATCHERS (everyone after, dealt to the terrace).
+ *  Capacities mirror the arena's own (src/net/meshImpl.ts CAPACITY). */
+const FIGHT_CAPACITY = { '1v1': 2, '2v2': 4, ffa: 4, raid: 5 };
+const BELL_MODES = new Set(['rave', ...Object.keys(FIGHT_CAPACITY)]);
 const START_IN_MS = 5500; // count-in cushion: 8 beats at 128 BPM is 3750 ms
-const PROP_COUNT = 6; // mirrors the client's glass pool (ClubPropsSystem)
+const PROP_COUNT = 12; // mirrors the client's glass pool (ClubPropsSystem)
 const SERVE_MS = 1600; // the plate's sink + pause before the next coupe rises
 const SERVE_RETRY_MS = 900; // every glass out on the floor — bide, try again
 
@@ -79,7 +88,7 @@ const SERVE_RETRY_MS = 900; // every glass out on the floor — bide, try again
  * code → {
  *   members: Map<ws, {name, idx, seat}>,
  *   host: ws,
- *   ball: { caller: idx, track, diff, pos, joins: Set<idx>, timer, deadline } | null,
+ *   ball: { caller: idx, mode, code, track, diff, pos, joins: Set<idx>, timer, deadline } | null,
  *   playing: Set<idx>,   // members currently away on the ring
  *   props: [{ holder: idx|null, mode, pos, quat, full, restedAt }],  // the glasses
  *   serveTimer,          // the dumbwaiter's clock (server-owned, like the ball's)
@@ -97,12 +106,12 @@ const SERVE_RETRY_MS = 900; // every glass out on the floor — bide, try again
  */
 const rooms = new Map();
 
-const http = createServer((req, res) => {
+export function handleHttp(req, res) {
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ game: 'goopliath-dance-raid', rooms: rooms.size }));
-});
+}
 
-const wss = new WebSocketServer({ server: http });
+export const wss = new WebSocketServer({ noServer: true });
 
 function send(ws, obj) {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
@@ -187,6 +196,8 @@ function joinRoomByCode(ws, msg, code) {
       t: 'ball-up',
       idx: room.ball.caller,
       name: memberByIdx(room, room.ball.caller)?.[1].name ?? '',
+      mode: room.ball.mode,
+      code: room.ball.code,
       track: room.ball.track,
       diff: room.ball.diff,
       pos: room.ball.pos,
@@ -302,6 +313,10 @@ function fireBall(code) {
   if (idxs.length === 0) return; // the caller walked — the ball just fades
 
   const players = idxs.map((idx) => memberByIdx(room, idx));
+  if (ball.mode !== 'rave') {
+    fireFight(code, room, ball, players);
+    return;
+  }
   const seats = ringFor(players.length);
   players.forEach(([, info], i) => {
     info.seat = Math.floor((i * seats) / players.length);
@@ -341,6 +356,49 @@ function fireBall(code) {
   // Nobody carries a coupe onto the ring — held drinks drop to the floor.
   for (const [, info] of players) dropProps(room, info.idx);
   console.log(`[dance-raid] room ${code}: the ball fired — ${players.length} on a ${seats}-ring, ${room.members.size - players.length} hold the floor`);
+}
+
+/**
+ * A FIGHT ball fired: the deal names the arena room and who stands where.
+ * The caller is fighter one (they opened the room and hold its host seat),
+ * then whoever touched in, in touch order, up to the mode's capacity;
+ * everyone after that watches. Every dealt headset gets the whole roster
+ * and its own role, and the floor sees them all as OUT until they come
+ * home through 'game-out' like any ring would.
+ */
+function fireFight(code, room, ball, players) {
+  const cap = FIGHT_CAPACITY[ball.mode] ?? 2;
+  const fighters = players.slice(0, cap).map(([, h]) => ({ idx: h.idx, name: h.name }));
+  const watchers = players.slice(cap).map(([, h]) => ({ idx: h.idx, name: h.name }));
+  const seed = (Math.random() * 0xffffffff) >>> 0;
+  players.forEach(([ws, h], i) => {
+    send(ws, {
+      t: 'start',
+      mode: ball.mode,
+      code: ball.code,
+      role: i < cap ? 'fighter' : 'watcher',
+      callerIdx: ball.caller,
+      fighters,
+      watchers,
+      seed,
+      startInMs: START_IN_MS,
+      you: h.idx,
+    });
+  });
+  room.playing = new Set(players.map(([, info]) => info.idx));
+  broadcastGame(room);
+  // THE CROWN comes off at the door here too; the fight's winner is the
+  // arena's to name, so this set settles with no claim unless one comes.
+  room.lastSet = new Set(room.playing);
+  room.crownSettled = false;
+  if (room.crown !== null && room.playing.has(room.crown)) {
+    room.crown = null;
+    broadcast(room, { t: 'crown', idx: null });
+  }
+  for (const [, info] of players) dropProps(room, info.idx);
+  console.log(
+    `[dance-raid] room ${code}: the bell — ${ball.mode} in arena room ${ball.code}, ${fighters.length} fight, ${watchers.length} watch, ${room.members.size - players.length} hold the floor`,
+  );
 }
 
 function leaveRoom(ws) {
@@ -515,6 +573,14 @@ wss.on('connection', (ws) => {
         }
         const pos = Array.isArray(msg.pos) && msg.pos.length === 3 ? msg.pos.map(Number) : [0, 1.5, -1.5];
         const track = typeof msg.track === 'string' ? msg.track.slice(0, 32) : '';
+        // THE BELL: what the ball calls. A fight needs the arena room it
+        // will deal into — a caller who could not open one has no ball.
+        const mode = typeof msg.mode === 'string' && BELL_MODES.has(msg.mode) ? msg.mode : 'rave';
+        const roomCode = typeof msg.code === 'string' ? msg.code.replace(/[^A-Za-z0-9-]/g, '').slice(0, 12) : '';
+        if (mode !== 'rave' && !roomCode) {
+          send(ws, { t: 'ball-off' });
+          break;
+        }
         // The caller's difficulty rides the ball like their song pick does.
         const diff = Number.isFinite(Number(msg.diff)) ? Math.max(0, Math.min(3, Number(msg.diff))) : 1;
         // Capture the code now — ws.room clears if the caller walks, and
@@ -522,6 +588,8 @@ wss.on('connection', (ws) => {
         const code = ws.room;
         room.ball = {
           caller: info.idx,
+          mode,
+          code: roomCode,
           track,
           diff,
           pos,
@@ -533,13 +601,17 @@ wss.on('connection', (ws) => {
           t: 'ball-up',
           idx: info.idx,
           name: info.name,
+          mode,
+          code: roomCode,
           track,
           diff,
           pos,
           ms: BALL_MS,
           joins: [],
         });
-        console.log(`[dance-raid] room ${code}: ${info.name} sent the ball up (${track || 'shuffle'})`);
+        console.log(
+          `[dance-raid] room ${code}: ${info.name} sent the ball up (${mode === 'rave' ? track || 'shuffle' : `${mode} → ${roomCode}`})`,
+        );
         break;
       }
 
@@ -757,6 +829,6 @@ setInterval(() => {
   }
 }, 10_000);
 
-http.listen(PORT, () => {
-  console.log(`[dance-raid] relay listening on :${PORT} (ball: ${BALL_MS} ms)`);
-});
+if (isMain(import.meta.url)) {
+  serve({ port: PORT, http: handleHttp, wss, onListen: () => console.log(`[dance-raid] relay listening on :${PORT} (ball: ${BALL_MS} ms)`) });
+}

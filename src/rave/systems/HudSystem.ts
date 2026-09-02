@@ -395,7 +395,7 @@ export class HudSystem extends createSystem({}) {
     // chain-out still earns one: GAME OVER explains why the night ended
     // early and why the letter under it is an F.
     if (!d.alive) ink(g, 'GAME OVER', CW / 2, 46, 32, '#ff5040');
-    // What the night banked — FIRE FIGHT's bolt-dollars, the one wallet.
+    // What the night banked — FIRE FIGHT's iron-dollars, the one wallet.
     if (match.coinsPaid > 0) ink(g, `+ $ ${match.coinsPaid} BANKED`, CW / 2, d.alive ? 46 : 84, 28, '#ffb02e');
     // The letter, huge, with its own halo.
     g.shadowColor = color;

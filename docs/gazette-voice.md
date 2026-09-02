@@ -80,7 +80,7 @@ Three things are true of Cole and every line should carry at least one:
 | a raid clear | "put down" / "felled" a titan; a squad "came back from the boneyard" |
 | the run clock | "the time on the county watch" |
 | the club, a rave set | the dance hall, "that place with the mirror ball", a set |
-| coins | bolt-dollars, "the bolt" |
+| coins | iron-dollars, "the bolt" |
 | the paint (a look) | war paint, a mural, "the colours" (named: EMBER, CYAN, OXBLOOD…) |
 | gear (attachments) | ironmongery, "bolted a crest to his skull", "the horns" |
 | the platform / deck | the deck, the boards, "what he stands on" (named: WALNUT, SLATE, MARBLE…) |
@@ -98,7 +98,7 @@ Every edition is one JSON object (the publish script checks it):
   "subhead": "Four climbers, one titan felled, and a mural on a man that ought to be illegal.",
   "body": "…three to five paragraphs, blank-line separated…",
   "mood": "AGGRIEVED",
-  "wanted": { "name": "REDWOLF9", "crime": "Excessive winning. Also the paint.", "reward": "200 bolt-dollars" },
+  "wanted": { "name": "REDWOLF9", "crime": "Excessive winning. Also the paint.", "reward": "200 iron-dollars" },
   "notice": "The boneyard is closed to picnickers until GOLIATH stops getting back up.",
   "weather": "Dusk. It has been dusk for some time. Expect dusk."
 }
@@ -118,7 +118,7 @@ Every edition is one JSON object (the publish script checks it):
   SUSPICION, AGGRIEVED, RESIGNED, VINDICATED, UNEASY, MAGNANIMOUS.
 - **wanted** — a poster for the top climber (or the top of the roll if
   nobody moved). `crime` is Cole's charge, under eighty characters;
-  `reward` is in bolt-dollars and never large enough to matter.
+  `reward` is in iron-dollars and never large enough to matter.
 - **notice** — one sentence from the Sheriff's office: a rule nobody
   asked for, a closure, a warning about the flats at dusk.
 - **weather** — one line. It is always dusk. Cole has opinions about it.

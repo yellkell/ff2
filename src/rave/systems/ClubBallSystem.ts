@@ -20,7 +20,7 @@ import { BALL_TOUCH_RADIUS, ballAnchor, buildBallVisual, type BallVisual } from 
 import { seatHue } from '../config.js';
 import { match } from '../game/state.js';
 import { course } from '../course/state.js';
-import { cancelBall, joinBall, memberHue, net } from '../net/session.js';
+import { cancelBall, joinBall, memberHue, net, inRoom } from '../net/session.js';
 
 const _hand = new Vector3();
 const _cam = new Vector3();
@@ -68,7 +68,7 @@ export class ClubBallSystem extends createSystem({}) {
   update(delta: number): void {
     const inClub =
       (match.screen === 'lobby' || match.screen === 'tour') &&
-      (net.phase === 'hosting' || net.phase === 'joined') &&
+      inRoom() &&
       !course.active;
     const ballUp = inClub && net.ball !== null;
 
@@ -192,6 +192,7 @@ export class ClubBallSystem extends createSystem({}) {
       const nameOf = (idx: number): string => net.members.find((m) => m.idx === idx)?.name ?? `#${idx}`;
       v.paint({
         seconds,
+        mode: state.mode,
         trackId: state.track,
         callerName: state.callerName || nameOf(state.callerIdx),
         joinNames: joinIdxs.map(nameOf),

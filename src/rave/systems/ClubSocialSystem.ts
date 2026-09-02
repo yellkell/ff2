@@ -79,8 +79,10 @@ import {
   seatByIdx,
   sendClubPose,
   sendVoice,
-  startBall,
-} from '../net/session.js';
+  startBall, inRoom as roomOpen } from '../net/session.js';
+import { raveBridge } from '../bridge.js';
+import { bellView, FIGHTS, type BellMode } from '../club/bell.js';
+import { coins } from '../../menu/wallet.js';
 import { font } from '../ui/fonts.js';
 import { Panel, UI, type PanelButton } from '../ui/panel.js';
 import {
@@ -159,6 +161,9 @@ export interface FloorFigure {
   pose: DancerPose;
   hue: number;
   shown: boolean;
+  /** The live puppet itself — the mirror SHADOWS it (twins of its meshes
+   *  driven by its world matrices) rather than solving a second rig. */
+  rig: DancerRig;
 }
 
 /** The club floor's figures by member idx (me excluded — I have no figure;
@@ -193,6 +198,15 @@ export class ClubSocialSystem extends createSystem({}) {
   private panel!: Panel;
   /** The song list, flown out beside the desk (see SONGS). */
   private songs!: Panel;
+  /** THE BELL's two tabs (FF2 DESIGN §3.1): FIGHT calls one of the
+   *  arena's fights, RAVE calls a record. FIGHT is only on offer where a
+   *  host can open an arena room (raveBridge.openFightRoom) — the
+   *  standalone rave page has no arena and shows the shelf alone. */
+  private tab: 'fight' | 'rave' = raveBridge.openFightRoom ? 'fight' : 'rave';
+  private fight: Exclude<BellMode, 'rave'> = '2v2';
+  /** A fight call in flight: the arena is opening the room. */
+  private calling = false;
+  private callError = '';
   private songsOpen = false;
   private songsKey = '';
   private pointers!: Record<'left' | 'right', PointerRay>;
@@ -243,7 +257,7 @@ export class ClubSocialSystem extends createSystem({}) {
     // The west door takes you out of the hall entirely: the floor's
     // figures, its crowd and its panel all belong to a room you aren't in.
     const inClub = (match.screen === 'lobby' || match.screen === 'tour') && !course.active;
-    const inRoom = net.phase === 'hosting' || net.phase === 'joined';
+    const inRoom = roomOpen();
     const liveSet = net.phase === 'live';
 
     this.syncRoster(inRoom || liveSet);
@@ -465,7 +479,7 @@ export class ClubSocialSystem extends createSystem({}) {
         tgt: { ...pose }, motion: new PoseMotion(), live: false,
       });
       // The mirror watches the same pose object the puppet dances with.
-      clubFloorFigures.set(idx, { pose, hue, shown: false });
+      clubFloorFigures.set(idx, { pose, hue, shown: false, rig });
     }
     this.paintKey = ''; // roster changed → repaint the panel
   }
@@ -593,8 +607,15 @@ export class ClubSocialSystem extends createSystem({}) {
       toggleClubMusic();
     } else if (id === 'track') {
       this.openSongs(!this.songsOpen);
+    } else if (id === 'tab-fight' || id === 'tab-rave') {
+      this.tab = id === 'tab-fight' ? 'fight' : 'rave';
+      this.callError = '';
+    } else if (id.startsWith('fight-')) {
+      const pick = FIGHTS.find((f) => f.id === id.slice(6));
+      if (pick) this.fight = pick.id;
     } else if (id === 'call') {
-      this.callFromHere();
+      if (this.tab === 'fight' && raveBridge.openFightRoom) this.callFight();
+      else this.callFromHere();
     } else if (id === 'cancel') {
       cancelBall();
     } else if (id === 'start') {
@@ -745,6 +766,35 @@ export class ClubSocialSystem extends createSystem({}) {
     preload(trackById(match.preferredTrack) ?? pickRaidTrack(match.seed));
   }
 
+  /** THE BELL, a fight: ask the arena for a room, then send the ball up
+   *  carrying its code. The ball only rises once the room exists — a
+   *  deal into a room that isn't there would strand the squad. */
+  private callFight(): void {
+    const open = raveBridge.openFightRoom;
+    const headObj = this.playerHeadEntity?.object3D;
+    if (!open || !headObj || this.calling) return;
+    headObj.getWorldPosition(_v);
+    headObj.getWorldQuaternion(_q);
+    _fwd.set(0, 0, -1).applyQuaternion(_q);
+    const pos = ballSpawnPos(_v, _fwd);
+    const mode = this.fight;
+    const me = net.members.find((m) => m.idx === net.myIdx);
+    this.calling = true;
+    this.callError = '';
+    this.paintKey = '';
+    open(mode, me?.name ?? '')
+      .then((code) => {
+        callBall(pos, { mode, code });
+      })
+      .catch((err: unknown) => {
+        this.callError = err instanceof Error && err.message ? err.message : 'the arena could not open a room';
+      })
+      .finally(() => {
+        this.calling = false;
+        this.paintKey = '';
+      });
+  }
+
   /** In front of you at waist height with a lectern lean, facing you. */
   private place(): void {
     this.camera.getWorldPosition(_cam);
@@ -766,46 +816,96 @@ export class ClubSocialSystem extends createSystem({}) {
     const ballUp = net.ball !== null;
     const mine = ballUp && net.ball!.callerIdx === net.myIdx;
     const setOut = net.gamePlayers.size > 0;
-    const inRoom = net.phase === 'hosting' || net.phase === 'joined';
+    const inRoom = roomOpen();
     const key =
       safetyKey(members, more) +
       `#${this.hover ?? ''}#${music ? 1 : 0}#${net.phase}#${cued?.id ?? ''}#${ballUp ? (mine ? `B${net.ball!.joins.size}` : 'b') : ''}#${setOut ? net.gamePlayers.size : 0}#${match.difficulty}#${this.songsOpen ? 1 : 0}#${net.crownIdx ?? ''}`;
-    if (key === this.paintKey) return;
-    this.paintKey = key;
+    // The last take fades off the header after a while; quantised so the
+    // fade costs a few repaints, not one a frame.
+    const takeAge = performance.now() - bellView.paidAt;
+    const takeShown = bellView.lastPay > 0 && takeAge < 20_000;
+    const deskKey = `${key}#${this.tab}#${this.fight}#${this.calling ? 1 : 0}#${this.callError}#${coins.balance}#${takeShown ? bellView.lastPay : 0}`;
+    if (deskKey === this.paintKey) return;
+    this.paintKey = deskKey;
 
     const ROW0 = 172;
     const ROW_H = 58;
     const rowsAt: SafetyLayout = { left: 28, right: 682, y: ROW0, rowH: ROW_H };
     const buttons: PanelButton[] = safetyButtons(members, rowsAt);
 
-    // ── calling a raid: the song pick, the chart, the ball ──────────────
-    buttons.push({
-      id: 'track',
-      // The chevron says the row opens onto something, rather than
-      // advancing one notch per press.
-      label: `${this.songsOpen ? '◂' : '▸'}  ♪ ${cued ? cued.title : 'SHUFFLE'}`,
-      sub: cued ? `${cued.bpm.toFixed(cued.bpm % 1 ? 2 : 0)} BPM` : undefined,
-      selected: this.songsOpen,
-      x: 24,
-      y: 652,
-      w: 652,
-      h: 74,
-      small: true,
-    });
-    // DIFFICULTY: the chart's act floor — the caller's pick rides the ball
-    // with the song (the board's row, moved in with the rest of the desk).
-    DIFFICULTY.labels.forEach((label, i) => {
+    // ── THE BELL: two tabs, one verb ──────────────────────────────────────
+    // FIGHT picks one of the arena's fights; RAVE picks the record and its
+    // chart. Either way the CTA is CALL THE BALL, and whoever touches the
+    // ball rides along when the relay's clock hits zero.
+    const fights = Boolean(raveBridge.openFightRoom);
+    const tab = fights ? this.tab : 'rave';
+    if (fights) {
       buttons.push({
-        id: `diff${i}`,
-        label,
-        selected: match.difficulty === i,
-        x: 24 + i * 165,
-        y: 740,
-        w: 157,
-        h: 54,
+        id: 'tab-fight',
+        label: 'FIGHT',
+        selected: tab === 'fight',
+        x: 24,
+        y: 644,
+        w: 318,
+        h: 44,
         small: true,
       });
-    });
+      buttons.push({
+        id: 'tab-rave',
+        label: 'RAVE',
+        selected: tab === 'rave',
+        x: 358,
+        y: 644,
+        w: 318,
+        h: 44,
+        small: true,
+      });
+    }
+    if (tab === 'fight') {
+      // The four fights, names only.
+      FIGHTS.forEach((f, i) => {
+        buttons.push({
+          id: `fight-${f.id}`,
+          label: f.label,
+          selected: this.fight === f.id,
+          x: 24 + (i % 2) * 334,
+          y: 698 + Math.floor(i / 2) * 54,
+          w: 318,
+          h: 48,
+          small: true,
+        });
+      });
+    } else {
+      buttons.push({
+        id: 'track',
+        // The chevron says the row opens onto something, rather than
+        // advancing one notch per press.
+        label: `${this.songsOpen ? '◂' : '▸'}  ♪ ${cued ? cued.title : 'SHUFFLE'}`,
+        sub: cued ? `${cued.bpm.toFixed(cued.bpm % 1 ? 2 : 0)} BPM` : undefined,
+        selected: this.songsOpen,
+        x: 24,
+        y: fights ? 698 : 652,
+        w: 652,
+        h: fights ? 58 : 74,
+        small: true,
+      });
+      // DIFFICULTY: the chart's act floor — the caller's pick rides the ball
+      // with the song (the board's row, moved in with the rest of the desk).
+      DIFFICULTY.labels.forEach((label, i) => {
+        buttons.push({
+          id: `diff${i}`,
+          label,
+          selected: match.difficulty === i,
+          x: 24 + i * 165,
+          y: fights ? 764 : 740,
+          w: 157,
+          h: fights ? 40 : 54,
+          small: true,
+        });
+      });
+    }
+    const ctaY = fights ? 810 : 808;
+    const ctaH = fights ? 72 : 74;
     if (mine) {
       // MY BALL IS UP, so the row splits: call it off, or drop the needle
       // now. The clock is a courtesy to a room still walking over, and a
@@ -821,20 +921,20 @@ export class ClubSocialSystem extends createSystem({}) {
         label: 'CALL IT OFF',
         tone: UI.danger,
         x: 24,
-        y: 808,
+        y: ctaY,
         w: 318,
-        h: 74,
+        h: ctaH,
         small: true,
       });
       buttons.push({
         id: 'start',
         label: 'START',
-        sub: aboard > 1 ? `${aboard} on the ring` : 'just you',
+        sub: aboard > 1 ? `${aboard} on the ${net.ball!.mode === 'rave' ? 'ring' : 'ball'}` : 'just you',
         primary: true,
         x: 358,
-        y: 808,
+        y: ctaY,
         w: 318,
-        h: 74,
+        h: ctaH,
         small: true,
       });
     } else {
@@ -843,14 +943,15 @@ export class ClubSocialSystem extends createSystem({}) {
       // can see the ball hanging in front of them.
       buttons.push({
         id: 'call',
-        label: ballUp ? 'BALL IS UP' : setOut ? 'SET IS OUT' : 'HOST',
-        sub: setOut ? `${net.gamePlayers.size} on the ring` : undefined,
+        label: ballUp ? 'BALL IS UP' : setOut ? 'SET IS OUT' : this.calling ? 'OPENING A ROOM…' : 'CALL THE BALL',
+        // No explaining: the lit chip above says what is being called.
+        sub: setOut ? `${net.gamePlayers.size} out` : this.callError || undefined,
         primary: true,
-        disabled: ballUp || setOut,
+        disabled: ballUp || setOut || this.calling,
         x: 24,
-        y: 808,
+        y: ctaY,
         w: 652,
-        h: 74,
+        h: ctaH,
         small: true,
       });
     }
@@ -861,7 +962,7 @@ export class ClubSocialSystem extends createSystem({}) {
     // dance), and reading them side by side is what makes "turn the music
     // down so we can chat" a single glance. The ring's card gets no music
     // switch: out there the record is the set's, not the floor's.
-    buttons.push(...voiceButtons(24, 896, 652, { music: clubMusicOn() }));
+    buttons.push(...voiceButtons(24, fights ? 900 : 896, 652, { music: clubMusicOn() }));
     if (inRoom) {
       // The board's LEAVE moved in with the desk — the one door out of the
       // room that isn't a set.
@@ -907,6 +1008,20 @@ export class ClubSocialSystem extends createSystem({}) {
           g.font = font(500, 20);
           g.fillStyle = UI.faint;
           g.fillText('right Ⓐ closes', 28, 138);
+          // THE WALLET, and what the last trip through the bell paid —
+          // the floor is where the money shows, so a night here reads as
+          // a night that earned.
+          g.textAlign = 'right';
+          g.font = font(700, 24);
+          g.letterSpacing = '1px';
+          g.fillStyle = UI.info;
+          g.fillText(`$${coins.balance}`, 676, 102);
+          if (takeShown) {
+            g.font = font(600, 19);
+            g.fillStyle = UI.accent;
+            g.fillText(`+${bellView.lastPay} from the bell`, 676, 138);
+          }
+          g.textAlign = 'left';
         } else {
           g.font = font(500, 21);
           g.letterSpacing = '0.5px';
@@ -920,7 +1035,7 @@ export class ClubSocialSystem extends createSystem({}) {
         // Section seams: the ball's console, the voice desk, the door.
         g.fillStyle = UI.lineFaint;
         g.fillRect(24, 634, 652, 2);
-        g.fillRect(24, 884, 652, 2);
+        g.fillRect(24, fights ? 890 : 884, 652, 2);
         if (inRoom) g.fillRect(24, 1024, 652, 2);
       },
       buttons,

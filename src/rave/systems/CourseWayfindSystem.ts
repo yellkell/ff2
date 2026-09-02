@@ -17,13 +17,13 @@
  */
 
 import { createSystem } from '@iwsdk/core';
-import { AdditiveBlending, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
+import { AdditiveBlending, BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
 import { glowTexture } from '../materials/glow.js';
 import { COLOR, GRID, WAYFIND } from '../course/config.js';
 import { conductor } from '../course/conductor.js';
 import { Bank, shadedBoxGeometry } from '../course/banks.js';
 import { registerDim } from '../course/dimmer.js';
-import { endpointsOf, HOME_INDEX, INDEX, PLATFORMS, ROUTE, sqOffset } from '../course/score.js';
+import { endpointsOf, homeward, HOME_INDEX, INDEX, PLATFORMS, ROUTE, sqOffset } from '../course/score.js';
 import { course, G } from '../course/state.js';
 import { courseRoot } from '../course/world.js';
 import { courseView } from './CourseSystem.js';
@@ -40,6 +40,11 @@ export class CourseWayfindSystem extends createSystem({}) {
   private berths!: Bank;
   private berthSlots: BerthSlot[] = [];
   private lastTracked = 0;
+  /** THE GATE — the door home, standing on the home pad's south edge. */
+  private gatePane!: MeshBasicMaterial;
+  private gateEdge!: MeshBasicMaterial;
+  /** Bar time the lap closed at (−1 = still out), for the gate's flare. */
+  private closedAt = -1;
   /** The invitation's tile in play-area coordinates, or null when the
    *  route's next ground isn't here — the dev window's step hint. */
   private next: { x: number; z: number } | null = null;
@@ -94,6 +99,63 @@ export class CourseWayfindSystem extends createSystem({}) {
       }
     }
     root.add(this.berths.mesh);
+    this.buildGate(root);
+  }
+
+  /**
+   * THE GATE. The way out was invisible: the lap closed and the black came
+   * down. Now the door home is a thing you can see from the far side of
+   * the void — a frame the size of THE STEP's own, standing at the south
+   * edge of the home pad, dark on the way out and lit by how much of the
+   * way back is done: a whisper from the ferry, a glow down the elevator,
+   * full on the runner home, and a flare when you step through onto the
+   * pad and the bell rings.
+   */
+  private buildGate(root: Group): void {
+    const g = new Group();
+    g.name = 'the-gate';
+    const W = 1.3;
+    const H = 2.1;
+    const T = 0.08;
+    // The frame stands just past the pad's south fence.
+    g.position.set(0, 0, GRID.pitch + GRID.tile / 2 + 0.22);
+    const steel = new MeshBasicMaterial({ color: 0x1a1826 });
+    registerDim(steel, 'scenery');
+    for (const sx of [-1, 1]) {
+      const post = new Mesh(new BoxGeometry(T, H, T), steel);
+      post.position.set(sx * (W / 2 + T / 2), H / 2, 0);
+      g.add(post);
+    }
+    const lintel = new Mesh(new BoxGeometry(W + T * 2, T, T), steel);
+    lintel.position.set(0, H + T / 2, 0);
+    g.add(lintel);
+    // The lit inner edge: a slim strip inside each post and the lintel.
+    // NOT registered with the dimmer: applyDim() restores a registered
+    // material's colour every frame, and this one's colour IS the level.
+    this.gateEdge = new MeshBasicMaterial({ color: COLOR.rimSafe });
+    for (const sx of [-1, 1]) {
+      const strip = new Mesh(new BoxGeometry(0.02, H, 0.03), this.gateEdge);
+      strip.position.set(sx * (W / 2 - 0.01), H / 2, 0);
+      g.add(strip);
+    }
+    const top = new Mesh(new BoxGeometry(W, 0.02, 0.03), this.gateEdge);
+    top.position.set(0, H - 0.01, 0);
+    g.add(top);
+    // The pane: the void's light, filling the frame as home comes closer.
+    this.gatePane = new MeshBasicMaterial({
+      map: glowTexture(),
+      color: COLOR.rimSafe,
+      transparent: true,
+      opacity: 0,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      side: DoubleSide,
+    });
+    registerDim(this.gatePane, 'ground');
+    const pane = new Mesh(new PlaneGeometry(W * 1.15, H * 1.08), this.gatePane);
+    pane.position.set(0, H / 2, 0.01);
+    g.add(pane);
+    root.add(g);
   }
 
   update(): void {
@@ -106,9 +168,11 @@ export class CourseWayfindSystem extends createSystem({}) {
       if (G.tracked === HOME_INDEX && this.lastTracked === INDEX['runner-home']) {
         course.laps++;
         conductor.bell(course.laps);
+        this.closedAt = G.transport.bars;
       }
       this.lastTracked = G.tracked;
     }
+    if (G.handovers === 0) this.closedAt = -1; // a fresh ride: the door is dark again
 
     const trackedId = PLATFORMS[G.tracked].id;
     let at = -1;
@@ -117,6 +181,20 @@ export class CourseWayfindSystem extends createSystem({}) {
         at = i;
         break;
       }
+    }
+
+    // THE GATE: lit by how far home you are. Standing on the pad with the
+    // lap closed is all the way home (the route's last entry, not its
+    // first), and the door flares for a bar as the bell rings.
+    const closed = this.closedAt >= 0;
+    const lit = closed ? 1 : homeward(at);
+    G.wayfind.homeward = lit;
+    {
+      const flare = closed ? Math.max(0, 1 - (G.transport.bars - this.closedAt) / 1.5) : 0;
+      const breathe = 0.85 + 0.15 * Math.sin(G.transport.bars * Math.PI * 2);
+      const level = Math.min(1, lit * breathe + flare * 0.8);
+      this.gatePane.opacity = 0.03 + level * 0.62;
+      this.gateEdge.color.setHex(COLOR.rimSafe).multiplyScalar(0.18 + level * 1.3);
     }
     const target = at >= 0 ? INDEX[ROUTE[at + 1]] : -1;
     G.wayfind.targetIndex = target;

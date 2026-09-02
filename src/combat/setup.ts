@@ -17,7 +17,7 @@ import { Hitbox, HitboxKind } from '../components/Hitbox.js';
 import { Combatant } from '../components/Combatant.js';
 import { BodyPart, PlayerBodyPart } from '../components/PlayerBodyPart.js';
 import { MAX_OPPONENTS } from '../combat/opponentBus.js';
-import { localLayout } from '../combat/layout.js';
+import { classicDuel, localLayout } from '../combat/layout.js';
 import { app } from '../menu/appState.js';
 import { mesh } from '../net/mesh.js';
 import { BODY_IK, COMBAT } from '../config.js';
@@ -70,7 +70,7 @@ export function applyRoster(): void {
   // this bout out. Bot bouts and the duel keep every roster slot. RAID runs
   // with app.mode === 'campaign' (the titan is the opponent) but its raiders
   // still ride the mesh, so it gates on occupancy too.
-  const liveNet = (app.mode === 'net' || app.arcade === 'raid') && app.arcade !== '1v1';
+  const liveNet = (app.mode === 'net' || app.arcade === 'raid') && !classicDuel();
   for (let slot = 0; slot < fighters.length; slot++) {
     const e = fighters[slot];
     if (!e) continue;
@@ -105,7 +105,7 @@ export function applyRoster(): void {
  * a live net arcade bout. Returns true if any fighter's state just changed.
  */
 export function syncNetRoster(): boolean {
-  const live = (app.mode === 'net' || app.arcade === 'raid') && app.arcade !== '1v1';
+  const live = (app.mode === 'net' || app.arcade === 'raid') && !classicDuel();
   if (!live) return false;
   const roster = localLayout();
   let changed = false;

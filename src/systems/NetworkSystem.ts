@@ -37,6 +37,7 @@ import * as sfx from '../audio/sfx.js';
 import { playVictory, startBattleMusic } from '../audio/battleMusic.js';
 import { InputComponent } from '@iwsdk/core';
 import { FIREBALL, NET } from '../config.js';
+import { classicDuel } from '../combat/layout.js';
 
 const HANDS = ['left', 'right'] as const;
 
@@ -73,7 +74,7 @@ export class NetworkSystem extends createSystem({
   update(delta: number): void {
     // The duel only. Arcade 2v2/FFA online bouts are MeshSystem's job; this
     // path stays exactly as it was for 1v1.
-    if (app.mode !== 'net' || app.state !== 'playing' || app.arcade !== '1v1') {
+    if (app.mode !== 'net' || app.state !== 'playing' || !classicDuel()) {
       // Still drain so stale packets never leak into the next bout.
       if (net.inbox.length) net.inbox.length = 0;
       this.sentIam = false;

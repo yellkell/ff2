@@ -42,7 +42,7 @@ import { CLUB } from '../club/config.js';
 import { stepRefs } from '../club/step.js';
 import { course } from '../course/state.js';
 import { match } from '../game/state.js';
-import { net } from '../net/session.js';
+import { inRoom } from '../net/session.js';
 
 export class ClubSystem extends createSystem({}) {
   private club: ClubRefs | null = null;
@@ -68,7 +68,7 @@ export class ClubSystem extends createSystem({}) {
     const menuRoom = match.screen === 'lobby' || match.screen === 'tour';
     // `holdFoyer`: the room is open but its host is still reading their
     // code off the board. The doors stay shut until they walk through.
-    const social = (net.phase === 'hosting' || net.phase === 'joined') && !match.holdFoyer;
+    const social = inRoom() && !match.holdFoyer;
     // THE WEST DOOR is a fourth place, and it takes the whole hall with it:
     // through THE STEP the club is not a room you can see from, so it packs
     // away exactly the way it does when a set books the floor.

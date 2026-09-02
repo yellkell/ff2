@@ -18,7 +18,21 @@
 
 import { Quaternion, Vector3 } from 'three';
 import { app } from '../menu/appState.js';
+import { mesh } from '../net/mesh.js';
 import { MODE_LAYOUT, modeTeams, type FighterSlot } from '../config.js';
+
+/**
+ * THE CLASSIC DUEL: a 1v1 on the original two-peer wire (quick match,
+ * ranked, a private code typed on the pad, VS BOT, the tutorial). Every
+ * other bout — the brawls, the raid, and a 1V1 CALLED FROM THE BELL — rides
+ * the MESH, whose seat array runs past the fighters into the audience band:
+ * that is the only way a duel gets watchers on its terrace. The systems
+ * that used to ask "is this 1v1?" to pick a transport ask this instead, so
+ * a mesh-hosted duel flows down the brawl branches like a two-seat FFA.
+ */
+export function classicDuel(): boolean {
+  return app.arcade === '1v1' && !mesh.joined;
+}
 
 /** Local roster entry: canonical seat it came from, plus my-frame transform. */
 export interface LocalSlot extends FighterSlot {

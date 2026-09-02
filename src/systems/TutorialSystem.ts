@@ -101,10 +101,12 @@ const PERCH_POS = new Vector3(1.5, 2.5, -1.9);
 
 // --- canvases ---------------------------------------------------------------
 const CAP_W = 768;
-const CAP_H = 224;
+const CAP_H = 236;
 const CON_W = 384;
-const CON_H = 224;
-const BEGIN_BTN = { x: 72, y: 116, w: 240, h: 64 };
+const CON_H = 300;
+const BEGIN_BTN = { x: 72, y: 206, w: 240, h: 64 };
+/** What the console promises, in the seven beats she teaches. */
+const CONSOLE_BEATS = 'IGNITE · THROW · RECALL · BLOCK · MOVE · LOADOUT · ONE ROUND';
 /** Loadout console canvas: the lobby's 560x480 panel plus a READY footer. */
 const LOAD_W = BALLS_W;
 const LOAD_H = BALLS_H + 110;
@@ -1194,18 +1196,30 @@ export class TutorialSystem extends createSystem({
     if (this.captionText) {
       plate(ctx, 6, 6, CAP_W - 12, CAP_H - 12, {
         cut: 14,
-        fill: 'rgba(8,9,13,0.78)',
+        fill: 'rgba(8,9,13,0.8)',
         stroke: 'rgba(255,192,77,0.55)',
         rivets: false,
       });
+      // Her name tag: a lit ember notch, stencil, and a rule that fades
+      // out to the right — the subtitle reads as one of the house's cards.
+      ctx.fillStyle = UI.emberBright;
+      ctx.shadowColor = UI.emberBright;
+      ctx.shadowBlur = 12;
+      ctx.fillRect(30, 26, 6, 30);
+      ctx.shadowBlur = 0;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
       ctx.font = stencilFont(26);
       ctx.fillStyle = UI.emberBright;
-      ctx.fillText('EMBER', 34, 48);
+      ctx.fillText('EMBER', 46, 50);
+      const rule = ctx.createLinearGradient(46, 0, CAP_W - 40, 0);
+      rule.addColorStop(0, 'rgba(255,192,77,0.7)');
+      rule.addColorStop(1, 'rgba(255,192,77,0)');
+      ctx.fillStyle = rule;
+      ctx.fillRect(46, 62, CAP_W - 86, 2);
       ctx.font = '600 31px system-ui, sans-serif';
       ctx.fillStyle = UI.text;
-      wrapText(ctx, this.captionText, 34, 88, CAP_W - 68, 38);
+      wrapText(ctx, this.captionText, 34, 102, CAP_W - 68, 38);
     }
     this.caption.tex.needsUpdate = true;
   }
@@ -1245,11 +1259,29 @@ export class TutorialSystem extends createSystem({
     const ctx = this.console.ctx;
     ctx.clearRect(0, 0, CON_W, CON_H);
     plate(ctx, 8, 8, CON_W - 16, CON_H - 16, { cut: 18, fill: 'rgba(10,12,16,0.92)', stroke: UI.emberBright });
+    // The keying notch and the title, the way every card in the house opens.
+    ctx.fillStyle = UI.emberBright;
+    ctx.shadowColor = UI.emberBright;
+    ctx.shadowBlur = 14;
+    ctx.fillRect(30, 40, 7, 40);
+    ctx.shadowBlur = 0;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.font = stencilFont(38);
     ctx.fillStyle = UI.emberBright;
-    ctx.fillText('TUTORIAL', 36, 72);
+    ctx.fillText('TUTORIAL', 50, 72);
+    ctx.font = '600 20px system-ui, sans-serif';
+    ctx.fillStyle = UI.textDim;
+    ctx.fillText('EMBER shows you the ropes.', 50, 106);
+    // The seven beats, in the amber the console keys everything with.
+    ctx.font = '700 15px system-ui, sans-serif';
+    ctx.letterSpacing = '1px';
+    ctx.fillStyle = UI.amberSoft;
+    wrapText(ctx, CONSOLE_BEATS, 50, 140, CON_W - 100, 22);
+    ctx.letterSpacing = '0px';
+    ctx.font = '500 17px system-ui, sans-serif';
+    ctx.fillStyle = UI.textDim;
+    ctx.fillText('Graduate and the house pays fifty.', 50, 190);
     buttonPlate(ctx, BEGIN_BTN.x, BEGIN_BTN.y, BEGIN_BTN.w, BEGIN_BTN.h, 'BEGIN', UI.amber, this.console.hot);
     this.console.tex.needsUpdate = true;
   }

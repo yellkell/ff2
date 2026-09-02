@@ -1,5 +1,5 @@
 /**
- * The player's coin wallet — the bolt-dollar currency (the riveted "$").
+ * The player's coin wallet — the iron-dollar currency (the riveted "$").
  *
  * It's a single non-negative integer kept in localStorage under 'ff-coins'.
  * Both entry points share it: the arena (index.html) and the pub (pub.html)

@@ -12,8 +12,8 @@
  * each with its best clocks read out beside it, each sealed until the run
  * before it is earned.
  *
- * Pressing a run opens THE LAUNCH CARD rather than firing: pick the damage,
- * then START. While it is up it owns every click on the panel — the face
+ * Pressing a run opens THE LAUNCH CARD rather than firing: the run's name,
+ * the four damage tiers, and START. While it is up it owns every click on the panel — the face
  * returns its buttons and nothing else, so there is no clicking through a
  * modal at a titan behind it.
  */
@@ -69,7 +69,7 @@ function clocks(times: number[]): string {
     .join('   ·   ');
 }
 
-const LAUNCH = { x: CAMP_W / 2 - 450, y: 190, w: 900, h: 400 };
+const LAUNCH = { x: CAMP_W / 2 - 450, y: 190, w: 900, h: 360 };
 
 export function campaignFace(): CampaignFace {
   if (campaignModal.pending) return launchFace(campaignModal.pending);
@@ -221,13 +221,6 @@ function padlock(g: CanvasRenderingContext2D, cx: number, cy: number, s = 1): vo
 function launchFace(kind: 'gauntlet' | 'hardcore' | 'goopliath'): CampaignFace {
   const accent = kind === 'hardcore' ? KIT.danger : kind === 'goopliath' ? GOOP_GREEN : KIT.accent;
   const title = kind === 'hardcore' ? 'HARDCORE RUN' : kind === 'goopliath' ? 'FIGHT GOOPLIATH' : 'RUN THE GAUNTLET';
-  const blurb =
-    kind === 'hardcore'
-      ? 'no healing between titans — pick your damage'
-      : kind === 'goopliath'
-        ? 'the tide rises from beneath — pick your damage'
-        : 'all five titans, on the clock — pick your damage';
-
   const chipW = 186;
   const gap = 16;
   const chipsW = DIFFICULTY_ORDER.length * (chipW + gap) - gap;
@@ -237,7 +230,7 @@ function launchFace(kind: 'gauntlet' | 'hardcore' | 'goopliath'): CampaignFace {
     label: DIFFICULTY[tier].label,
     sub: DIFFICULTY[tier].blurb,
     x: chipX + i * (chipW + gap),
-    y: LAUNCH.y + 132,
+    y: LAUNCH.y + 112,
     w: chipW,
     h: 110,
     small: true,
@@ -281,11 +274,8 @@ function launchFace(kind: 'gauntlet' | 'hardcore' | 'goopliath'): CampaignFace {
       g.font = font(700, 40);
       g.letterSpacing = '3px';
       g.fillStyle = accent;
-      g.fillText(title, CAMP_W / 2, LAUNCH.y + 56);
+      g.fillText(title, CAMP_W / 2, LAUNCH.y + 62);
       g.letterSpacing = '0px';
-      g.font = font(500, 24);
-      g.fillStyle = KIT.dim;
-      g.fillText(blurb, CAMP_W / 2, LAUNCH.y + 98);
     },
   };
 }

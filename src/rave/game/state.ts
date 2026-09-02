@@ -178,7 +178,7 @@ export interface MatchState {
   roomCode: string;
 
   /* ── the one wallet (FF2) ── */
-  /** Bolt-dollars the last finished record paid into FIRE FIGHT's wallet
+  /** Iron-dollars the last finished record paid into FIRE FIGHT's wallet
    *  (menu/wallet.ts) — the grade card names it. */
   coinsPaid: number;
 }

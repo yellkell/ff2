@@ -5,7 +5,7 @@
  * wing. Left half: THE TRAY — your owned, unplaced units, a chip per
  * colour with its count; tap one and it rides your ray as THE HAND.
  * Right half: THE RACK — the same colours for sale (base rack + neon
- * rack; the top shelf arrives later), priced in bolt-dollars.
+ * rack; the top shelf arrives later), priced in iron-dollars.
  *
  * The BODY work happens off-panel: MenuSystem raycasts the mirror's
  * paint surfaces while the bay is open — the held unit ghosts onto the
@@ -66,7 +66,7 @@ export function bayFace(): BayFace {
     {
       id: 'pb:wallet',
       label: `$ ${coins.balance}`,
-      sub: 'bolt-dollars',
+      sub: 'iron-dollars',
       x: BAY_W - M - 260, y: 170, w: 260, h: 84,
       display: true,
       small: true,

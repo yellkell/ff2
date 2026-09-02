@@ -24,7 +24,7 @@ export const LINES = {
   },
   begin: {
     id: 'e012',
-    text: "Clear yourself a little room, Clanker. Then press the button here, and we'll begin.",
+    text: "Clear yourself a little room, Clanker. Then press BEGIN on the console here, and we'll go.",
   },
 
   // Beat 1 — ignite
@@ -80,7 +80,7 @@ export const LINES = {
   },
 
   // Beat 6 — attachments
-  attach: { id: 'e070', text: 'Now, my favourite part. Come look. This is your ball loadout.' },
+  attach: { id: 'e070', text: 'Now, my favourite part. Come look. This is your ball loadout — the attachments.' },
   attachList: {
     id: 'e071',
     text: 'Split breaks it into three on the way home. Grow makes it big and mean. Shrink makes it small and spiteful. Curve bends around their guard. Pick one.',
@@ -100,11 +100,11 @@ export const LINES = {
   fightLow: { id: 'e083', text: "It's done for. Finish it." },
   win: {
     id: 'e084',
-    text: "Down goes the rust bucket. Well done, well done, well done. Go check out the locker and the store, get yourself some drip. Gasket's waiting for you, Clanker.",
+    text: "Down goes the rust bucket. Well done, well done, well done. That's fifty iron-dollars for graduating — go see CUSTOMIZATION and the store, get yourself some drip. Then find the CLUB. Gasket's waiting for you, Clanker.",
   },
   lose: {
     id: 'e085',
-    text: "Up you get. He's been at this for years. You, about ten minutes. Come back swinging. I'll be here.",
+    text: "Up you get. He's been at this for years. You, about ten minutes. Come back swinging — I'll be here, and so will he.",
   },
 
   // Praise pool — repeat successes; rotate, never repeating the last pick.
