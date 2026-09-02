@@ -55,6 +55,8 @@ import { desertHeight } from './terrain.js';
 import { fence, signpost, skull } from './props.js';
 import { barkMat, rockMat, rustMat, softSprite, woodMat } from './textures.js';
 import { collapseStatic } from '../merge.js';
+import { buildFlankBanks } from './audience.js';
+import { ARENA_GAP, ARENA_BOUNDS, RAID_RING_RADIUS } from '../../config.js';
 
 export type DesertSite = 'trailhead' | 'flats' | 'boneyard';
 
@@ -416,6 +418,11 @@ function buildFlats(yaw: number): SiteSet {
   place(far, -14, -11, 1.9);
   collapseStatic(statics);
   root.add(statics);
+  // AUDIENCE GROUND (§3.2): standing terraces on both flanks, their lips a
+  // stride outside the cage wall, looking in on the two platforms.
+  for (const bank of buildFlankBanks(0, -ARENA_GAP / 2, ARENA_BOUNDS.halfWidth + 1.2, 0.62, (x, z) => groundAt(x, z, yaw))) {
+    root.add(bank);
+  }
   return { root, update: () => {} };
 }
 
@@ -520,6 +527,11 @@ function buildBoneyard(yaw: number): SiteSet {
   place(drums[3].group, 7.6, 6.2, 0, root);
   collapseStatic(statics);
   root.add(statics);
+  // AUDIENCE GROUND: the terraces flank the ring, outside the seats' arc
+  // and short of the wreck plates, looking down on the pit and the squad.
+  for (const bank of buildFlankBanks(0, -RAID_RING_RADIUS, RAID_RING_RADIUS + 5.2, 0.5, (x, z) => groundAt(x, z, yaw))) {
+    root.add(bank);
+  }
   return {
     root,
     update(delta, time) {

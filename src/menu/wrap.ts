@@ -370,6 +370,13 @@ function arcadeFace(): Face {
     },
     { id: 'start-training', label: 'AIM TRAINING', sub: 'the heart of the game', x: C2, y: 390, w: COL, h: 200 },
     {
+      id: 'open-rave',
+      label: 'RAVE RAID',
+      sub: 'the record shelf — dance the night, bank the coins',
+      x: M, y: 620, w: COL, h: 200,
+      tone: KIT.info,
+    },
+    {
       id: 'toggle-shootback',
       label: 'SHOOT BACK',
       sub: 'aim-training targets return fire',
@@ -380,7 +387,7 @@ function arcadeFace(): Face {
   ];
   return {
     title: 'FIRE FIGHT 2',
-    body: note('every finished run pays the same flat coins', 900, CW),
+    body: note('every finished run — and every finished record — pays the same flat coins', 900, CW),
     buttons,
   };
 }

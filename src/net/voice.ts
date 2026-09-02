@@ -11,10 +11,11 @@
 
 import type { Quaternion, Vector3 } from 'three';
 import { audioContext } from '../audio/sfx.js';
-import { voiceEnabled } from '../audio/voicePref.js';
+import { hearAllowed } from './voiceRules.js';
 
-/** Playback gain — 0 (deaf) when the player turned voice chat off. */
-const hearGain = (): number => (voiceEnabled() ? 1.5 : 0);
+/** Playback gain — 0 (deaf) when voice chat is off, or the room is one
+ *  nobody hears in (RANKED — see net/voiceRules.ts). */
+const hearGain = (): number => (hearAllowed() ? 1.5 : 0);
 
 let el: HTMLAudioElement | null = null;
 let source: MediaStreamAudioSourceNode | null = null;

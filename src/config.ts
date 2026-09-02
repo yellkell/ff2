@@ -172,10 +172,28 @@ export const PAINT = {
 export const CURRENCY = {
   /** Coins banked per completed game (any mode, win or loss). */
   perGame: 10,
+  /** RAVE RAID: a finished record pays the same flat coins as a bout, and
+   *  a clean night pays a little on top — the one wallet, both games. */
+  song: 10,
+  songGrade: { S: 15, A: 10, B: 5 } as Record<string, number>,
   /** One-time graduation gift for finishing the tutorial — enough to feel
    *  the store's pull ('get yourself some drip') without skipping the grind. */
   tutorial: 50,
 };
+
+/** What a finished record pays, by the night's grade (menu/wallet.ts). */
+export function songCoins(grade: string): number {
+  return CURRENCY.song + (CURRENCY.songGrade[grade] ?? 0);
+}
+
+/**
+ * Where RAVE RAID lives: the third page (rave.html, src/rave/) — the
+ * ARCADE tab's RAVE RAID button hops there, and its rail's FIRE FIGHT
+ * entry hops back. Override with ?rave=<url>.
+ */
+export function raveUrl(): string {
+  return new URLSearchParams(location.search).get('rave') ?? 'rave.html';
+}
 
 /**
  * Where the IRON BALLS CLUB social area lives. It builds side by side with

@@ -148,6 +148,8 @@ export type MenuAction =
   | `badge-${string}`
   | 'open-pub'
   | 'pub-back'
+  /** ARCADE → RAVE RAID (the rave page, src/rave/). */
+  | 'open-rave'
   | `pub-go-${string}`
   | 'open-custom'
   | 'custom-close'

@@ -138,7 +138,7 @@ export function settingsFace(): SettingsFace {
     { id: 'sfx-vol', label: '', ghost: true, x: M, y: SFX.track, w: INNER, h: TRACK_H },
     { id: 'music-vol', label: '', ghost: true, x: M, y: MUSIC.track, w: INNER, h: TRACK_H },
     { id: 'toggle-mute', label: 'MUTE MUSIC', x: M, y: 400, w: third, h: 96, small: true, selected: isMusicMuted() },
-    { id: 'toggle-voice', label: 'VOICE CHAT', x: M + third + 20, y: 400, w: third, h: 96, small: true, selected: voiceEnabled() },
+    { id: 'toggle-voice', label: 'VOICE CHAT', sub: 'never in ranked', x: M + third + 20, y: 400, w: third, h: 96, small: true, selected: voiceEnabled() },
     { id: 'toggle-hide-paint', label: 'HIDE PAINT', sub: 'everyone bare', x: M + 2 * (third + 20), y: 400, w: third, h: 96, small: true, selected: paintHiddenAll() },
     reportSent
       ? { id: 'settings-report', label: 'REPORT SENT ✓', x: M, y: 540, w: 360, h: 96, small: true, disabled: true }

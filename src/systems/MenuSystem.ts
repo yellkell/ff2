@@ -55,6 +55,7 @@ import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, wrapNav, type Wrap } from '../menu/wrap.js';
 import { clearReportSent, markReportSent, musicVolFromU, setCreditsOpen, sfxVolFromU } from '../menu/settingsFace.js';
 import { profilePop } from '../menu/profilePop.js';
+import { currentVoiceContext, VOICE_RULES, voiceAllowed, hearAllowed } from '../net/voiceRules.js';
 import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
 import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
@@ -119,9 +120,9 @@ import {
   syncLookMirror,
 } from '../net/leaderboard.js';
 import { gazette, markGazetteRead, refreshGazette, type GazetteArticle } from '../net/gazette.js';
-import { hueToColor, pubUrl, teamColor } from '../config.js';
+import { hueToColor, pubUrl, raveUrl, teamColor } from '../config.js';
 import * as sfx from '../audio/sfx.js';
-import { requestClubEntry } from '../experience/clubNavigation.js';
+import { requestClubEntry, requestRaveEntry } from '../experience/clubNavigation.js';
 
 const _origin = new Vector3();
 const _dir = new Vector3();
@@ -274,6 +275,16 @@ export class MenuSystem extends createSystem({}) {
     this.menu.panels.push(this.bayPanel);
     this.menu.group.add(this.bayPanel.mesh);
     installPaintDevHook(); // __ff2.paint — THE PAINT's dev/probe verbs
+    // WHO HEARS WHOM (net/voiceRules.ts), readable headlessly.
+    (window.__ff2 as unknown as Record<string, unknown>).voice = {
+      context: currentVoiceContext,
+      rules: VOICE_RULES,
+      allowed: voiceAllowed,
+      hear: hearAllowed,
+      ranked: (on: boolean): void => {
+        app.fromRanked = on;
+      },
+    };
     installGrammarDevHook(); // __ff2.grammar — THE ENCORE's pure move grammar
     // Probe-only: drive the bay panel's own click path (wallet included).
     (window.__ff2 as unknown as Record<string, unknown>).bayClick = (id: string): void => {
@@ -1002,6 +1013,11 @@ export class MenuSystem extends createSystem({}) {
         break;
       case 'pub-back':
         app.infoView = 'root';
+        break;
+      case 'open-rave':
+        // RAVE RAID is its own page (src/rave/): same wallet, same name,
+        // same body — its rail's FIRE FIGHT entry brings you back here.
+        requestRaveEntry(this.world, raveUrl());
         break;
       case 'base-white':
         setAvatarSkin('blank'); // applyOwnSkins swaps every rig next frame

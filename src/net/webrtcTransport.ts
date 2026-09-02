@@ -41,7 +41,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseConfig } from './firebaseConfig.js';
 import { clockConfident, serverNow, syncServerClock } from './serverClock.js';
-import { voiceEnabled } from '../audio/voicePref.js';
+import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
 import type { PeerMessage } from './protocol.js';
 import type { Transport, TransportEvents } from './transport.js';
@@ -371,8 +371,9 @@ export class WebRtcTransport implements Transport {
         this.micStream = null;
         return;
       }
-      // Honour the voice-chat preference: a disabled mic transmits nothing.
-      for (const track of this.micStream.getAudioTracks()) track.enabled = voiceEnabled();
+      // Honour the voice rules: a disabled mic — the settings breaker, or a
+      // RANKED bout (net/voiceRules.ts) — transmits nothing.
+      for (const track of this.micStream.getAudioTracks()) track.enabled = voiceAllowed();
       for (const track of this.micStream.getTracks()) pc.addTrack(track, this.micStream);
     } catch {
       // Mic denied/unavailable — still set up to RECEIVE their voice.

@@ -619,8 +619,34 @@ Each phase is shippable; nothing waits on everything.
 6. **Audience ground + the crowd** — watchers travel with the squad,
    audience terraces in the arenas, voice bubble, hands-up roar wire,
    sourced crowd beds.
+   *(Opened: WHO HEARS WHOM is one table (`net/voiceRules.ts`) read by
+   every voice path — RANKED is silence, no mic and no ears; duels hear
+   their fighters, brawls every fighter, the raid its squad, the club the
+   room, an audience everyone. THE CROWD BED ships synthesised
+   (`audio/crowd.ts`): distant murmur under every bout, a rumble that
+   swells with the landings, roar stings on hits, cores, rounds and the
+   win, and the HANDS-UP channel (`systems/CrowdSystem.ts`) — both hands
+   over the head swell the roar — ready for the relay's aggregate.
+   AUDIENCE GROUND stands on the flanks of the flats and the boneyard
+   (`arena/desert/audience.ts`): two-tier terraces outside the cage line,
+   rails capped hazard amber, dark. Still to land with presence: the
+   watchers travelling with the squad, the spectator pose wire, the
+   room-wide roar aggregate, sourced recordings behind the same API.)*
 7. **RAVE mode** — port the set, decks, records; mannequin on the ring;
    coins per song; bell learns RAVE SET.
+   *(Shipped as a PAGE: `rave.html` boots `src/rave/` — the dance repo's
+   source ported whole, file identities intact, its own relay as
+   `server/rave.mjs`. The ARCADE tab's RAVE RAID button hops there; the
+   rave board's rail grew a FIRE FIGHT entry that hops back. ONE TOWN:
+   the profile reads the arena's callsign and accent first and writes
+   them back on a rename; a finished record pays `songCoins(grade)` into
+   the one wallet and the grade card names it; every figure — groupies,
+   the giant MC, the club's room-mates, your reflection — wears THE BLANK
+   through `rave/game/blankDancer.ts` (the arena's rig, `solveTorso`,
+   gear and paint bakes, glowsticks out of the fists). Still to land:
+   looks and gear on the rave's own wire (remote humans dance bare
+   today), the bell's RAVE SET, the two clubs folding into one, and
+   the goopliath/choreo copies deduplicated.)*
 8. **Campaign 2** — move-grammar port (telegraphs/setlist/floor manager),
    new titan line-up, the on-beat titan, raid cut.
 9. **Desert 2.0** — the dusk rebuild, then the venue exterior, then the

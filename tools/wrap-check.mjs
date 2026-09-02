@@ -104,6 +104,7 @@ await wrap(`act('wrap:tab-arcade')`);
 slab = await wrap(`buttons('train')`);
 nav = await wrap(`nav()`);
 check('ARCADE tab: modes + the demoted SHOOT BACK', nav.center === 'arcade' && has(slab, 'start-tutorial', 'open-campaign', 'open-raid', 'start-training', 'toggle-shootback'), notTabs(slab).join(','));
+check('ARCADE tab: the door to RAVE RAID', slab.includes('open-rave'), String(slab.includes('open-rave')));
 save('arcade', await wrap(`snap('train')`));
 await wrap(`act('wrap:tab-club')`);
 slab = await wrap(`buttons('train')`);
@@ -189,6 +190,23 @@ await wrap(`act('wrap:tab-you')`);
 you = await wrap(`buttons('info')`);
 nav = await wrap(`nav()`);
 check('YOU tab again', nav.you === 'you' && you.includes('open-paintbay'), nav.you);
+
+console.log('\n=== WHO HEARS WHOM (net/voiceRules.ts) ===');
+{
+  const v = await page.evaluate(() => {
+    const voice = window.__ff2.voice;
+    localStorage.setItem('ff-voice', '1');
+    const before = { ctx: voice.context(), allowed: voice.allowed(), hear: voice.hear() };
+    voice.ranked(true);
+    const ranked = { ctx: voice.context(), allowed: voice.allowed(), hear: voice.hear() };
+    voice.ranked(false);
+    const table = Object.fromEntries(Object.entries(voice.rules).map(([k, r]) => [k, `${r.speak ? 'mic' : 'no mic'}/${r.hear}`]));
+    return { before, ranked, table };
+  });
+  check('a duel opens mics and ears', v.before.ctx === 'duel' && v.before.allowed && v.before.hear, JSON.stringify(v.before));
+  check('RANKED is silence: no mic, no ears', v.ranked.ctx === 'ranked' && !v.ranked.allowed && !v.ranked.hear, JSON.stringify(v.ranked));
+  check('the table: club hears the room, the audience hears everyone, ranked nobody', v.table.club === 'mic/room' && v.table.audience === 'mic/everyone' && v.table.ranked === 'no mic/nobody', JSON.stringify(v.table));
+}
 
 console.log('\n=== THE PROFILE: the chip and its card ===');
 const chip = await wrap(`buttons('profile')`);

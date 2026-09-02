@@ -28,7 +28,7 @@ import {
 } from 'firebase/firestore';
 import { firebaseConfig } from './firebaseConfig.js';
 import { serverNow } from './serverClock.js';
-import { voiceEnabled } from '../audio/voicePref.js';
+import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
 import type { ArcadeMode } from '../config.js';
 import type { PeerMessage } from './protocol.js';
@@ -549,8 +549,8 @@ export class MeshImpl {
       .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
       .then((s) => {
         this.micStream = s;
-        // Honour the voice-chat preference: a disabled mic transmits nothing.
-        for (const t of s.getAudioTracks()) t.enabled = voiceEnabled();
+        // Honour the voice rules (net/voiceRules.ts): a disabled mic transmits nothing.
+        for (const t of s.getAudioTracks()) t.enabled = voiceAllowed();
         return s;
       })
       .catch(() => null);

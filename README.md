@@ -34,6 +34,32 @@ carried over verbatim: everything in it still applies to this code.
   note, and RENAME (the only place a callsign changes now). Headless
   probe: `npm run dev` then `npm run check:wrap` (add `--shots` for
   face PNGs).
+- **RAVE RAID, INSIDE** (DESIGN.md §7, phase 7) — the rhythm game is a
+  third page of this app: `rave.html` boots `src/rave/` (the dance repo's
+  source, file identities intact: the set, THE VOID, the decks and the 26
+  masters, the tour, the club, the relay client) — reached from the
+  ARCADE tab's RAVE RAID button, and its rail's FIRE FIGHT entry hops
+  back. ONE TOWN: the dancer's name is the arena's callsign and their
+  colour the arena's accent (`src/rave/game/profile.ts` reads FIRE
+  FIGHT's keys first and writes them back on a rename); every finished
+  record pays bolt-dollars into the one wallet (`config.songCoins`,
+  named on the grade card); and every figure on the ring — the groupies,
+  the giant MC, your reflection in the club's pier glass — wears THE
+  BLANK (`src/rave/game/blankDancer.ts`: the arena's rig, IK, gear and
+  paint bakes, with glowsticks). Relay: `npm run server:rave`. Headless
+  probe: `npm run check:rave` (add `--shots`).
+- **WHO HEARS WHOM** (DESIGN.md §3.2, phase 6) — `src/net/voiceRules.ts`
+  is the one table every voice path reads: RANKED is silence (no mic, no
+  ears), quick/private bouts hear their fighters, brawls every fighter,
+  the raid its squad, the club the room, an audience everyone (fighters
+  never hear a watcher's words). THE CROWD: a synthesised bed under every
+  bout (`src/audio/crowd.ts` — distant murmur, a rumble that swells with
+  the landings, roar stings on hits, cores, rounds and the win) with the
+  HANDS-UP channel (`systems/CrowdSystem.ts`: both hands over the head
+  swell the roar — the audience's one way into a fighter's ears), and
+  AUDIENCE GROUND: standing terraces on the flanks of the flats and the
+  boneyard (`src/arena/desert/audience.ts`), outside the cage line, rails
+  capped hazard amber. The watchers' wire lands with presence.
 - **THE BLANK** — the mannequin (DESIGN.md §5): `src/avatar/mannequin.ts`,
   the ONLY body. TWO pieces and no more — ONE continuous lofted surface
   from the neck through shoulders, waist and hips to a monotonic taper,
