@@ -7,7 +7,8 @@
  *
  * Boots rave.html in headless Chromium (IWER provides WebXR), enters, and
  * drives the rave through its dev hook (window.__gdr): the shared identity
- * (the arena's callsign and accent are the dancer's), a solo set whose
+ * (the arena's callsign is the dancer's; the colour is the rave's own
+ * pick, the arena having no accent to share), a solo set whose
  * groupies and MC are the house's own RAVE RAID figures (only real people
  * wear THE BLANK) with the MC changing colour and never wearing the
  * telegraphs' red or yellow, the podium paying
@@ -42,10 +43,9 @@ page.on('pageerror', (e) => {
 // The arena's identity, planted before the page loads: the rave must dance as it.
 await page.addInitScript(() => {
   localStorage.setItem('ff-player-name', 'PROBE-ONE');
-  localStorage.setItem('ff-accent', '0.5');
+  localStorage.setItem('gdr-hue', '0.5');
   localStorage.setItem('ff-coins', '120');
   localStorage.removeItem('gdr-name');
-  localStorage.removeItem('gdr-hue');
 });
 
 await page.goto(`${base}/rave.html`, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => page.goto(`${base}/rave.html`));
@@ -107,7 +107,7 @@ const ring = await page.evaluate(() => {
 // The groupies and the MC are the house's own RAVE RAID figures; THE BLANK
 // is the players' body, so a solo ring (no remote humans) carries none.
 check('the groupies and the MC keep the house figure', ring.mc && !ring.mcBlank && ring.blanks === 0 && ring.bots === 7, JSON.stringify(ring));
-check("your own colour is the arena's accent", Math.abs((hue ?? -1) - 0.5) < 0.01 || Math.abs((ring.mine ?? -1) - 0.5) < 0.01, String(ring.mine));
+check('your own colour is the hue you picked', Math.abs((hue ?? -1) - 0.5) < 0.01 || Math.abs((ring.mine ?? -1) - 0.5) < 0.01, String(ring.mine));
 {
   // His wardrobe is a function of the screen AND the record, eased toward
   // at MC.changeRate — so a record whose hue happens to sit near the map's

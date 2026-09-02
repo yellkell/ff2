@@ -5,10 +5,10 @@
  * same-origin, so this module reads the arena's stored name first
  * ('ff-player-name', net/leaderboard.ts) and a rename here writes it back
  * — with the arena's rename clock, so its cloud reconciliation takes the
- * newer of the two — before the rave's own key. The colour is the arena's
- * accent hue ('ff-accent', menu/appState.ts): the neon your gloves and
- * platform wear is the neon your figure dances in. The rave's own keys
- * stay as the fallback for a headset that only ever danced.
+ * newer of the two — before the rave's own key. The COLOUR is the rave's
+ * alone ('gdr-hue'): the arena has no accent pick any more (its gloves
+ * wear the house ember for everyone), so a figure dances in the hue you
+ * chose here, or in its seat's.
  *
  * It rides everything identity-shaped: the solo leaderboards, the club's
  * name tag over your head (net/session is handed it at boot and on every
@@ -24,7 +24,6 @@ const HUE_KEY = 'gdr-hue';
 /** FIRE FIGHT's keys (net/leaderboard.ts, menu/appState.ts) — the shared identity. */
 const FF_NAME_KEY = 'ff-player-name';
 const FF_NAME_AT_KEY = 'ff-player-name-at';
-const FF_HUE_KEY = 'ff-accent';
 export const NAME_MAX = 12;
 
 /** A coarse net over the worst of it — names ride a PUBLIC board now, and
@@ -105,9 +104,8 @@ let cachedHue: number | null | undefined;
 export function profileHue(): number | null {
   if (cachedHue !== undefined) return cachedHue;
   try {
-    // The rave's own pick, else the arena's accent (a slider the player
-    // dragged in the locker), else the seat's.
-    const raw = localStorage.getItem(HUE_KEY) ?? localStorage.getItem(FF_HUE_KEY);
+    // The rave's own pick, else the seat's.
+    const raw = localStorage.getItem(HUE_KEY);
     const n = raw === null ? NaN : Number(raw);
     cachedHue = Number.isFinite(n) && n >= 0 && n < 1 ? n : null;
   } catch {
@@ -124,7 +122,6 @@ export function setProfileHue(hue: number | null): void {
       localStorage.removeItem(HUE_KEY);
     } else {
       localStorage.setItem(HUE_KEY, cachedHue.toFixed(4));
-      localStorage.setItem(FF_HUE_KEY, cachedHue.toFixed(4)); // the arena's gloves follow
     }
   } catch {
     /* fine */
