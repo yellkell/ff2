@@ -68,7 +68,8 @@ import { goTelegraph, type Telegraph } from '../campaign/telegraphs.js';
 import { LINES, PRAISE_POOL, type LineKey } from '../tutorial/script.js';
 import { grantGraduationStripe } from '../avatar/paint.js';
 import { customization } from '../menu/customization.js';
-import { BALL_H, BALL_W, clickBalls, drawBalls, wrapText } from '../menu/menu.js';
+import { wrapText } from '../menu/menu.js';
+import { BALLS_H, BALLS_W, ballsClick, ballsHit, renderBallsPanel } from '../menu/ballsFace.js';
 
 /** The bot's health in tutorial — deliberately low so a beginner can win. */
 const TUT_BOT_HP = 55;
@@ -105,9 +106,9 @@ const CON_W = 384;
 const CON_H = 224;
 const BEGIN_BTN = { x: 72, y: 116, w: 240, h: 64 };
 /** Loadout console canvas: the lobby's 560x480 panel plus a READY footer. */
-const LOAD_W = BALL_W;
-const LOAD_H = BALL_H + 80;
-const READY_BTN = { x: 170, y: BALL_H + 16, w: 220, h: 54 };
+const LOAD_W = BALLS_W;
+const LOAD_H = BALLS_H + 110;
+const READY_BTN = { x: BALLS_W / 2 - 150, y: BALLS_H + 20, w: 300, h: 72 };
 
 /** The footwork reps: one clean dodge each way (failures repeat the side —
  *  playtest said four scripted reps was a slog). */
@@ -1265,7 +1266,9 @@ export class TutorialSystem extends createSystem({
     if (!this.loadout) return;
     const ctx = this.loadout.ctx;
     ctx.clearRect(0, 0, LOAD_W, LOAD_H);
-    drawBalls(ctx, null); // the lobby's exact BALL LOADOUT panel, re-hosted
+    // The lobby's exact BALL LOADOUT panel, re-hosted: one implementation,
+    // painted off screen by the kit and blitted here (menu/ballsFace.ts).
+    ctx.drawImage(renderBallsPanel(null), 0, 0, BALLS_W, BALLS_H);
     buttonPlate(ctx, READY_BTN.x, READY_BTN.y, READY_BTN.w, READY_BTN.h, 'READY', UI.emberBright, this.loadout.hot);
     this.loadout.tex.needsUpdate = true;
   }
@@ -1290,9 +1293,10 @@ export class TutorialSystem extends createSystem({
       this.goto('grad');
       return;
     }
-    if (hit.y <= BALL_H) {
+    if (hit.y <= BALLS_H) {
       // Map into the lobby panel's own coordinate space and share its hit-test.
-      if (clickBalls(hit.x / BALL_W, 1 - hit.y / BALL_H)) {
+      const id = ballsHit(hit.x / BALLS_W, 1 - hit.y / BALLS_H);
+      if (id && ballsClick(id)) {
         sfx.uiClick();
         this.drawLoadout();
       }

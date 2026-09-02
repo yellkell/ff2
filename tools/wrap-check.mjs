@@ -208,6 +208,65 @@ console.log('\n=== WHO HEARS WHOM (net/voiceRules.ts) ===');
   check('the table: club hears the room, the audience hears everyone, ranked nobody', v.table.club === 'mic/room' && v.table.audience === 'mic/everyone' && v.table.ranked === 'no mic/nobody', JSON.stringify(v.table));
 }
 
+console.log('\n=== THE MODALS: locker, store, line-up, lobby, loadout ===');
+{
+  const m = (expr) => page.evaluate(`window.__ff2.modals.${expr}`);
+  const shot = async (id, name = id) => save(name, await m(`snap('${id}')`));
+
+  await wrap(`act('open-custom')`);
+  await page.waitForTimeout(400);
+  let ids = await m(`buttons('custom')`);
+  check('the LOCKER wears LOCKER · STORE and its four boards', has(ids, 'open-locker', 'open-shop', 'tab-platforms', 'tab-gear', 'tab-colour', 'tab-arena'), ids.slice(0, 8).join(','));
+  check('and the loadout stands beside it', await m(`up('balls')`), String(await m(`up('balls')`)));
+  await shot('custom');
+  await shot('balls');
+
+  await wrap(`act('tab-colour')`);
+  await page.waitForTimeout(300);
+  ids = await m(`buttons('custom')`);
+  check('COLOUR: the two base tones and the neon tracks', has(ids, 'base-white', 'base-black', 'accent-color', 'accent-light', 'accent-default'), ids.filter((b) => !b.startsWith('tab-')).join(','));
+  await shot('custom', 'locker-colour');
+
+  await wrap(`act('tab-arena')`);
+  await page.waitForTimeout(300);
+  ids = await m(`buttons('custom')`);
+  check('ARENA: the deserts, the ones that exist live', ids.includes('env-desert') && ids.includes('env-ar'), ids.filter((b) => b.startsWith('env-') || b.startsWith('arena-')).join(','));
+
+  await wrap(`act('tab-platforms')`);
+  await wrap(`act('open-shop')`);
+  await page.waitForTimeout(400);
+  ids = await m(`buttons('shop')`);
+  check('the STORE is up, with no COLOUR or ARENA to sell', (await m(`up('shop')`)) && !ids.includes('tab-colour') && !ids.includes('tab-arena'), ids.slice(0, 6).join(','));
+  await shot('shop', 'store');
+  await wrap(`act('custom-close')`);
+
+  await wrap(`act('open-campaign')`);
+  await page.waitForTimeout(400);
+  ids = await m(`buttons('campaign')`);
+  check('THE TITAN GAUNTLET: five cards, three runs, a way out', has(ids, 'campaign-0', 'campaign-4', 'campaign-speedrun', 'campaign-hardcore', 'campaign-goopliath', 'campaign-close'), ids.join(','));
+  await shot('campaign');
+  // A run opens the LAUNCH card, and it owns every click while it is up.
+  const wasLive = (await m(`live('campaign')`)).includes('campaign-0');
+  await wrap(`act('campaign-speedrun')`);
+  await page.waitForTimeout(300);
+  ids = await m(`buttons('campaign')`);
+  const modalOwns = has(ids, 'diff-normal', 'campaign-launch-start', 'campaign-launch-cancel') && !ids.includes('campaign-0');
+  check('a run opens the LAUNCH card, and nothing behind it answers', modalOwns, ids.join(','));
+  await shot('campaign', 'campaign-launch');
+  await wrap(`act('campaign-launch-cancel')`);
+  await page.waitForTimeout(200);
+  check('cancelling hands the line-up back', (await m(`buttons('campaign')`)).includes('campaign-0') && wasLive);
+  await wrap(`act('campaign-close')`);
+
+  await wrap(`act('open-raid')`);
+  await page.waitForTimeout(500);
+  ids = await m(`buttons('lobby')`);
+  check('THE ARCADE LOBBY: host a raid, and a way out', has(ids, 'lobby-host', 'lobby-close'), ids.join(','));
+  await shot('lobby');
+  await wrap(`act('lobby-close')`);
+  await page.waitForTimeout(300);
+}
+
 console.log('\n=== THE AUDIENCE: the terrace, the bodies, the roar ===');
 {
   const a = (expr) => page.evaluate(`window.__ff2.audience.${expr}`);

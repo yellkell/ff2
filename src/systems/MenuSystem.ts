@@ -31,13 +31,7 @@ import { bootIntroActive } from '../experience/introGate.js';
 import { DIFFICULTY_ORDER, type Difficulty, PAINT } from '../config.js';
 import { difficultyUnlocked } from '../campaign/campaignState.js';
 import {
-  accentBarHue,
-  accentBarLight,
   clearProfileKeyboardHint,
-  colorBarHue,
-  clickBalls,
-  colorBarLight,
-  campaignModal,
   createActionPanel,
   createMenu,
   flashProfileKeyboardHint,
@@ -54,6 +48,11 @@ import {
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, wrapNav, type Wrap } from '../menu/wrap.js';
 import { clearReportSent, markReportSent, musicVolFromU, setCreditsOpen, sfxVolFromU } from '../menu/settingsFace.js';
+// MENUS 3: the modals are kit faces now, each in its own module.
+import { accentBarHue, accentBarLight, lockerFace, LOCKER_H, LOCKER_W } from '../menu/lockerFace.js';
+import { campaignFace, campaignModal, CAMP_H, CAMP_W } from '../menu/campaignFace.js';
+import { lobbyFace, LOBBY_H, LOBBY_W } from '../menu/lobbyFace.js';
+import { ballsClick, ballsFace, ballsFaceKey, ballsHit, BALLS_H, BALLS_W } from '../menu/ballsFace.js';
 import { profilePop } from '../menu/profilePop.js';
 import { audienceStands } from '../arena/desert/audience.js';
 import { audienceView } from './AudienceSystem.js';
@@ -63,6 +62,7 @@ import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, m
 import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
 import { KitMenuPanel } from '../menu/wrap.js';
+import type { PanelButton } from '../ui/kit/panel.js';
 import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey } from '../menu/paintbay.js';
 import {
   avatarOwned,
@@ -73,7 +73,6 @@ import {
   ownPlatform,
   platformOwned,
   setAvatarColor,
-  setAvatarLight,
   setAvatarSkin,
   setPlatformSkin,
   setShopPreview, gearOwned, gearWith, myGear, myPackedGear, ownGear, setGear, toggleGear } from '../menu/customization.js';
@@ -161,6 +160,10 @@ export class MenuSystem extends createSystem({}) {
   private wrap!: Wrap;
   private paintVersionSeen = 0;
   private bayPanel!: KitMenuPanel;
+  /** The kit modals (MENUS 3) — ticked with the wrap so their hovers ease. */
+  private modals: KitMenuPanel[] = [];
+  /** Last loadout state the ball panel was drawn at (its own repaint key). */
+  private ballsKey = '';
   private bayKey = '';
   private bayMeshes: Object3D[] = [];
   private bayGhostAt = 0;
@@ -278,6 +281,36 @@ export class MenuSystem extends createSystem({}) {
     this.bayPanel.mesh.visible = false;
     this.menu.panels.push(this.bayPanel);
     this.menu.group.add(this.bayPanel.mesh);
+    // THE MODALS (MENUS 3), all on the kit: the locker and the store, the
+    // titan line-up, the arcade lobby and the ball loadout. Same panel ids
+    // as the plates they replace, so every bit of the visibility and
+    // routing machinery below is untouched — only the faces changed.
+    this.addModal('custom', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(true), [0.5, 1.53, -1.1], -0.3);
+    this.addModal('shop', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(false), [0.5, 1.5, -1.1], -0.3);
+    this.addModal('campaign', 1.5, 1.5 * (CAMP_H / CAMP_W), CAMP_W, CAMP_H, campaignFace, [0, 1.5, -1.2], 0);
+    this.addModal('lobby', 1.05, 1.05, LOBBY_W, LOBBY_H, lobbyFace, [0, 1.5, -1.18], 0);
+    // The loadout hangs out on the RIGHT, clear of the mirror on the left,
+    // and answers its own `ball:*` ids before anything global.
+    this.addModal('balls', 0.8, 0.8, BALLS_W, BALLS_H, ballsFace, [1.32, 1.18, -0.66], -0.6, (id) => ballsClick(id));
+    // THE MODALS, readable headlessly: what each one is offering, and its
+    // canvas, so a probe can walk every face without a headset.
+    (window.__ff2 as unknown as Record<string, unknown>).modals = {
+      buttons: (id: string): string[] => {
+        const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
+        return p?.kit?.buttonIds() ?? [];
+      },
+      live: (id: string): string[] => {
+        const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
+        return p?.kit?.liveButtons() ?? [];
+      },
+      snap: (id: string): string => {
+        const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
+        if (!p?.kit) return '';
+        p.redraw(null);
+        return (p.kit.ctx().canvas as HTMLCanvasElement).toDataURL('image/png');
+      },
+      up: (id: string): boolean => this.menu.panels.find((x) => x.id === id)?.mesh.visible === true,
+    };
     installPaintDevHook(); // __ff2.paint — THE PAINT's dev/probe verbs
     // THE AUDIENCE (DESIGN §3.2), drivable headlessly: take a place on the
     // terrace, put a watcher on the wire, read the room's roar.
@@ -359,6 +392,13 @@ export class MenuSystem extends createSystem({}) {
     // halo breath) every frame — a no-op while nothing moves.
     this.wrap.tick(delta);
     this.bayPanel?.tick(delta, 0);
+    for (const m of this.modals) if (m.mesh.visible) m.tick(delta, 0);
+    // The loadout answers its own clicks, so nothing else knows to repaint it.
+    const bk = ballsFaceKey();
+    if (bk !== this.ballsKey) {
+      this.ballsKey = bk;
+      this.redrawPanel('balls');
+    }
 
     // The BOOT INTRO owns the view: the lobby is live behind the black shade,
     // so without this the pointers sweep panels nobody can see — chirping the
@@ -516,13 +556,6 @@ export class MenuSystem extends createSystem({}) {
       if (hit.uv && panel.drag && (down || owns) && panel.drag(hit.uv.x, hit.uv.y)) {
         if (down) this.sliderGrab = { hand, panel: panel.id };
         dragged = true;
-      } else if (hit.uv && action === 'av-color' && (down || owns)) {
-        if (down) this.sliderGrab = { hand, panel: panel.id };
-        // The hue bar is continuous: scrub the armour colour live while held.
-        setAvatarColor(colorBarHue(hit.uv.x));
-      } else if (hit.uv && action === 'av-light' && (down || owns)) {
-        if (down) this.sliderGrab = { hand, panel: panel.id };
-        setAvatarLight(colorBarLight(hit.uv.x)); // scrub the armour lightness live
       } else if (hit.uv && action === 'accent-color' && (down || owns)) {
         if (down) this.sliderGrab = { hand, panel: panel.id };
         app.accentHue = accentBarHue(hit.uv.x); // scrub the neon accent live
@@ -645,6 +678,34 @@ export class MenuSystem extends createSystem({}) {
     // primary CTA — its glow needs no canvas re-upload, and a full-frame
     // 1024² repaint every frame is exactly what the kit's repaint
     // discipline exists to avoid.)
+  }
+
+  /**
+   * Build one modal as a kit panel and hang it in the lobby group, hidden.
+   * `local` gets first refusal on a pressed id (the loadout settles its own);
+   * anything it declines goes to the global dispatcher.
+   */
+  private addModal(
+    id: PanelId,
+    wM: number,
+    hM: number,
+    pxW: number,
+    pxH: number,
+    face: () => { title: string; body: (g: CanvasRenderingContext2D, hover: string | null) => void; buttons: PanelButton[] },
+    pos: [number, number, number],
+    rotY: number,
+    local?: (id: string) => boolean,
+  ): void {
+    const panel = new KitMenuPanel(id, wM, hM, pxW, pxH, face, (pressed) => {
+      if (local?.(pressed)) return;
+      this.run(pressed as MenuAction);
+    });
+    panel.mesh.position.set(pos[0], pos[1], pos[2]);
+    panel.mesh.rotation.y = rotY;
+    panel.mesh.visible = false;
+    this.menu.panels.push(panel);
+    this.menu.group.add(panel.mesh);
+    this.modals.push(panel);
   }
 
   /** Repaint one panel by id, preserving its live hover highlight. */
@@ -1731,7 +1792,8 @@ export class MenuSystem extends createSystem({}) {
       // The loadout section: taps equip/clear attachments between rounds.
       if (down && content.loadout) {
         const bh = this.panel.ballsHit(hit.uv.x, hit.uv.y);
-        if (bh && clickBalls(bh.u, bh.v)) {
+        const bid = bh ? ballsHit(bh.u, bh.v) : null;
+        if (bid && ballsClick(bid)) {
           sfx.uiClick();
           this.panelKey = ''; // repaint with the new equip state
         }
