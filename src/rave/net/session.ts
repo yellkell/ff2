@@ -26,7 +26,9 @@
 
 import { NET, seatHue, serverUrl } from '../config.js';
 import { raveBridge } from '../bridge.js';
-import { isFightMode, type BellMode, type DealtMember, type FightDeal } from '../club/bell.js';
+import { bellView, isFightMode, type BellMode, type DealtMember, type FightDeal } from '../club/bell.js';
+import { CURRENCY } from '../../config.js';
+import { addCoins, coins } from '../../menu/wallet.js';
 import { audioContext, ensureAudio } from '../audio/sfx.js';
 import { clearVoiceSpeakers, removeVoiceSpeaker, stopVoiceCapture } from '../club/voice.js';
 import { startRaid } from '../game/flow.js';
@@ -346,6 +348,9 @@ function handle(msg: Record<string, unknown>): void {
     }
     case 'start': {
       net.ball = null;
+      // The bell dealt me out: remember the wallet, so the homecoming can
+      // say what the trip paid (backToClub).
+      bellView.balanceAtDeal = coins.balance;
       if (typeof msg.mode === 'string' && isFightMode(msg.mode)) {
         // THE BELL rang for a FIGHT with me on it. The relay has dealt the
         // roster; the arena room it names is where the fight happens, and
@@ -741,6 +746,15 @@ export function backToClub(winnerIdx?: number | null): void {
   net.phase = net.isHost ? 'hosting' : 'joined';
   net.dealtAway = false;
   net.dirty++;
+  // THE HOUSE PAYS on the way back in: the bell's bonus on top of whatever
+  // the record, the fight or the raid paid out there — and the desk reads
+  // the whole trip's take off the wallet's change since the deal.
+  addCoins(CURRENCY.bell);
+  if (bellView.balanceAtDeal >= 0) {
+    bellView.lastPay = Math.max(0, coins.balance - bellView.balanceAtDeal);
+    bellView.paidAt = performance.now();
+    bellView.balanceAtDeal = -1;
+  }
   send(winnerIdx === undefined ? { t: 'game-out' } : { t: 'game-out', winner: winnerIdx });
   remotePoses.clear();
   seatByIdx.clear();

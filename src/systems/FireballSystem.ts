@@ -33,6 +33,7 @@ import { pulseHand } from '../input/haptics.js';
 import * as sfx from '../audio/sfx.js';
 import { ARENA_BOUNDS, ARENA_GAP, ATTACH, CURL, curlRateFor, FIREBALL, NET } from '../config.js';
 import { recordThrow } from '../debug/throwProbe.js';
+import { classicDuel } from '../combat/layout.js';
 
 const HANDS = ['left', 'right'] as const;
 type Hand = 0 | 1;
@@ -163,7 +164,7 @@ export class FireballSystem extends createSystem({
    *  dropped every squad member's fire and left their balls glued to their
    *  fists. Both transports no-op outside a live bout. */
   private sendNet(msg: PeerMessage): void {
-    if (app.arcade === '1v1') net.send(msg);
+    if (classicDuel()) net.send(msg);
     else if (mesh.joined) mesh.send(msg);
   }
 

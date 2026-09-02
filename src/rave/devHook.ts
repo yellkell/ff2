@@ -21,6 +21,7 @@ import { socialView } from './systems/ClubSocialSystem.js';
 import { propsView } from './systems/ClubPropsSystem.js';
 import { teleportView } from './systems/ClubTeleportSystem.js';
 import { courseView } from './systems/CourseSystem.js';
+import { bellView } from './club/bell.js';
 import { grooveView } from './systems/PlayerSystem.js';
 import { introView } from './systems/IntroSystem.js';
 import {
@@ -96,6 +97,7 @@ declare global {
       /** THE STEP: cross into the course and back without a doorway, and
        *  read the ride's ledger (tracked platform, laps, slips, handovers). */
       course: typeof courseView;
+      bell: typeof bellView;
     };
   }
 }
@@ -133,6 +135,8 @@ export function installRaveDevHook(getWorld: () => World | null): void {
     ambientMuted,
     move: teleportView,
     course: courseView,
+    /** THE BELL's house money, as the desk reads it (club/bell.ts). */
+    bell: bellView,
     props: propsView,
     menu: new Proxy({} as typeof menuView & typeof socialView, {
       // The views are populated in each system's init — resolve lazily.

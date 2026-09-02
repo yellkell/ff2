@@ -130,24 +130,6 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   });
 }
 
-function waitFor<T>(read: () => T | null, ms: number, what: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const t0 = performance.now();
-    const tick = (): void => {
-      const v = read();
-      if (v !== null) {
-        resolve(v);
-        return;
-      }
-      if (performance.now() - t0 > ms) {
-        reject(new Error(what));
-        return;
-      }
-      window.setTimeout(tick, 100);
-    };
-    tick();
-  });
-}
 
 export function installTownExperienceManager(
   world: World,
@@ -335,11 +317,10 @@ export function installTownExperienceManager(
   raveBridge.openFightRoom = async (mode, name) => {
     const who = name || myStats().name;
     if (paperRooms()) return `P${String(Math.floor(Math.random() * 9000) + 1000)}`;
-    if (mode === '1v1') {
-      app.privateCode = '';
-      duel.createPrivate();
-      return waitFor(() => app.privateCode || null, ROOM_OPEN_MS, 'the duel room never opened');
-    }
+    // Every fight the bell calls — the duel included — is a MESH room: its
+    // seat array runs past the fighters into the audience band, which is
+    // what seats a duel's watchers on the terrace (combat/layout.ts
+    // classicDuel). The two-peer duel wire stays for quick match and ranked.
     return withTimeout(
       mesh.hostPrivate(mode, who, (s) => {
         app.netStatus = s;
@@ -410,15 +391,11 @@ export function installTownExperienceManager(
     // wakes already seated in the room and never tears it down as stale.
     app.privateCode = deal.code;
     app.netStatus = deal.role === 'watcher' ? 'dealt to the rail' : 'dealt to the platforms';
-    if (deal.mode === '1v1') {
-      app.state = 'queueing';
-      app.duelView = deal.mine ? 'hosting' : 'keypad';
-    } else {
-      app.lobbyMode = deal.mode;
-      app.lobbyView = 'lobby';
-      app.state = 'menu';
-      app.duelView = 'root';
-    }
+    app.quickDuel = false; // a called duel is the long format, like a private one
+    app.lobbyMode = deal.mode;
+    app.lobbyView = 'lobby';
+    app.state = 'menu';
+    app.duelView = 'root';
     await leaveRave();
     // (Narrowing: the crossing above changes the place under the await.)
     if ((townView.place as TownPlace) !== 'arena') {
@@ -427,28 +404,24 @@ export function installTownExperienceManager(
     }
     if (!paperRooms()) {
       if (!deal.mine) {
-        if (deal.mode === '1v1') {
-          duel.joinPrivate(deal.code);
-        } else {
-          const joined = await withTimeout(
-            mesh.joinPrivate(
-              deal.code,
-              myStats().name,
-              (s) => {
-                app.netStatus = s;
-              },
-              deal.role === 'watcher',
-            ),
-            ROOM_OPEN_MS,
-            'the arena room was gone',
-          ).catch(() => null);
-          if (!joined) {
-            app.netStatus = 'the arena room was gone';
-            await foldHome();
-            return;
-          }
+        const joined = await withTimeout(
+          mesh.joinPrivate(
+            deal.code,
+            myStats().name,
+            (s) => {
+              app.netStatus = s;
+            },
+            deal.role === 'watcher',
+          ),
+          ROOM_OPEN_MS,
+          'the arena room was gone',
+        ).catch(() => null);
+        if (!joined) {
+          app.netStatus = 'the arena room was gone';
+          await foldHome();
+          return;
         }
-      } else if (deal.mode !== '1v1') {
+      } else {
         startWhenSeated(deal);
       }
     }

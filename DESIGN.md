@@ -160,14 +160,29 @@ with its arena lobby state already set, joins the room by code (a
 watcher on the rail), the host launches once the squad is seated or
 after a grace, and when the bout is over everyone folds home to the
 floor — still members of the room the whole time (`net.dealtAway`),
-the floor seeing them OUT. Not yet: watchers on a 1V1 (the duel stack
-seats two and no rail), and a fight's winner claiming THE CROWN.)*
+the floor seeing them OUT. Every fight the bell calls rides the MESH, the
+duel included (`combat/layout.ts` classicDuel tells the two-peer duel wire
+apart from a mesh-hosted 1V1), so a duel's extra touchers are seated on
+the terrace like a brawl's. THE HOUSE PAYS: a game dealt by the bell — a
+record, a fight, a raid — pays `CURRENCY.bell` on top of its own take the
+moment you fold home, and the desk's header reads the wallet and what the
+last trip paid. Not yet: a fight's winner claiming THE CROWN.)*
 
 Joining is physical (walk up, touch, trigger), leaving is touching again,
 the caller can START early or cancel, and at zero the squad is dealt into
 the match **without leaving the venue** (see 3.2). The floor never closes:
 stay-behinds keep talking, newcomers keep arriving, finished players fold
 back home automatically.
+
+**The match UI** (`ui/scoreboard.ts`): every fighter gets a CARD — smoked
+glass with a lit team notch, the callsign, a big numeric health readout,
+a health bar with a DAMAGE TRAIL, the round pips, LOW (hazard chevrons
+breathing under the bar) and OUT (the card dims under a red stamp), and
+a rim flash on every hit. 1V1 hangs the classic pair over the rival's pad
+with the ROUND PLAQUE (round, first-to, a clock that goes amber then red)
+between; 2V2 stacks the columns with TEAM totals; FFA hangs the east and
+west fighters' cards OVER THEIR OWN PADS, turned to face you, with a
+STANDINGS strip over the plaque.
 
 ### 3.2 Watching — travel together, and the crowd that can't be heard
 

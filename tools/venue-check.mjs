@@ -410,6 +410,26 @@ const homeB = await bellOf(toucher);
 check('and fold home to the same floor, in the same room, nobody OUT', fa.phase === 'hosting' && fb.phase === 'joined' && fa.code === fb.code && fa.members.length === 2 && !homeA.away && !homeB.away && homeA.lobbyMode === null, JSON.stringify({ caller: fa, toucher: fb, a: homeA, b: homeB }));
 const dealt = relayLog.find((l) => l.includes('the bell'));
 check("the relay's log names the deal", !!dealt, dealt);
+
+// A DUEL from the bell rides the mesh like a brawl — the only way its
+// watchers get seats — so the caller's 1V1 lands both in a 1V1 LOBBY, not
+// on the two-peer duel wire.
+await caller.evaluate(() => {
+  window.__gdr.menu.press('fight-1v1');
+  window.__gdr.menu.press('call');
+});
+const duelUp = await toucher.waitForFunction(() => window.__gdr.net.state.ball?.mode === '1v1', { timeout: 8000 }).then(() => true).catch(() => false);
+await toucher.evaluate(() => window.__gdr.club.touch(true));
+await caller.waitForFunction(() => window.__gdr.net.state.ball?.joins.size === 1, { timeout: 5000 }).catch(() => {});
+await caller.evaluate(() => window.__gdr.club.go());
+await Promise.all([caller, toucher].map((p) => p.waitForFunction(() => window.__town.place === 'arena' && !window.__town.busy, { timeout: 20000 }).catch(() => {})));
+const dA = await bellOf(caller);
+const dB = await bellOf(toucher);
+check('a 1V1 from the bell is dealt into a mesh lobby, watchers welcome', duelUp && dA.mode === '1v1' && dA.lobbyMode === '1v1' && dB.lobbyMode === '1v1' && dA.role === 'fighter' && dB.role === 'fighter', JSON.stringify({ caller: dA, toucher: dB }));
+await Promise.all([caller, toucher].map((p) => p.evaluate(() => window.__town.foldHome())));
+await Promise.all([caller, toucher].map((p) => p.waitForFunction(() => window.__town.place === 'venue' && !window.__town.busy, { timeout: 20000 }).catch(() => {})));
+const paid = await caller.evaluate(() => ({ visit: window.__gdr.mc.visit, lastPay: window.__gdr.bell?.lastPay ?? null }));
+check('the house pays on the homecoming', paid.lastPay !== null && paid.lastPay >= 5, JSON.stringify(paid));
 await caller.close();
 await toucher.close();
 relay.kill();

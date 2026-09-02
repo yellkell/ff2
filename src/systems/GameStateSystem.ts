@@ -20,7 +20,7 @@ import { Combatant } from '../components/Combatant.js';
 import { Health } from '../components/Health.js';
 import { match } from '../combat/matchState.js';
 import { applyRoster, syncNetRoster } from '../combat/setup.js';
-import { localLayout } from '../combat/layout.js';
+import { classicDuel, localLayout } from '../combat/layout.js';
 import { mesh } from '../net/mesh.js';
 import { applyArenaLayout } from '../arena/arena.js';
 import { app, saveStats, training, type AppMode } from '../menu/appState.js';
@@ -120,11 +120,11 @@ export class GameStateSystem extends createSystem({
     // A brawler whose headset died counts as DEAD: deactivate + zero them so
     // the round resolves and we play on short-handed (not against a frozen,
     // un-hittable statue). Runs on every client so their local view agrees.
-    if (app.mode === 'net' && app.arcade !== '1v1') syncNetRoster();
+    if (app.mode === 'net' && !classicDuel()) syncNetRoster();
 
     const authority = app.mode === 'bot' || app.side === 0;
     if (authority) {
-      if (app.arcade === '1v1') {
+      if (classicDuel()) {
         const them = actives.find((e) => (e.getValue(Combatant, 'slot') ?? -1) === 1);
         if (them) this.runAuthority({ me, them }, me.getValue(Health, 'current') ?? 0, them.getValue(Health, 'current') ?? 0, delta);
       } else {
@@ -140,7 +140,7 @@ export class GameStateSystem extends createSystem({
   // --- HUD -----------------------------------------------------------------
 
   private buildHud(actives: Entity[]): FighterHud[] {
-    const duel = app.arcade === '1v1';
+    const duel = classicDuel();
     return actives
       .slice()
       .sort((a, b) => (a.getValue(Combatant, 'slot') ?? 0) - (b.getValue(Combatant, 'slot') ?? 0))
@@ -160,7 +160,18 @@ export class GameStateSystem extends createSystem({
           const peerName = canonical != null ? mesh.names[canonical] : undefined;
           name = displayName(peerName ?? '', team === 0 ? 'ALLY' : 'BOT');
         } else name = team === 0 ? 'ALLY' : 'BOT';
-        return { name, neon: teamNeon(team), hpFrac: hp / hpMax, pips, team };
+        return {
+          slot,
+          name,
+          neon: teamNeon(team),
+          hpFrac: hp / hpMax,
+          hp,
+          pips,
+          team,
+          // Standing this round: a fighter at zero is OUT (the card dims
+          // and the stamp lands) until the next round refills them.
+          alive: hp > 0,
+        };
       });
   }
 
@@ -288,8 +299,8 @@ export class GameStateSystem extends createSystem({
 
 
 
-    if (app.arcade !== '1v1') {
-      this.beginCountdownArcade(actives, MATCH.startDelay); // 2v2 / FFA open on the 3-2-1 too
+    if (!classicDuel()) {
+      this.beginCountdownArcade(actives, MATCH.startDelay); // 2v2 / FFA (and a mesh duel) open on the 3-2-1 too
       return;
     }
     // Classic duel: drive the original 1v1 flow.

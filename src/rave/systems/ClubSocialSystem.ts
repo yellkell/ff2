@@ -81,7 +81,8 @@ import {
   sendVoice,
   startBall, inRoom as roomOpen } from '../net/session.js';
 import { raveBridge } from '../bridge.js';
-import { FIGHTS, type BellMode } from '../club/bell.js';
+import { bellView, FIGHTS, type BellMode } from '../club/bell.js';
+import { coins } from '../../menu/wallet.js';
 import { font } from '../ui/fonts.js';
 import { Panel, UI, type PanelButton } from '../ui/panel.js';
 import {
@@ -819,7 +820,11 @@ export class ClubSocialSystem extends createSystem({}) {
     const key =
       safetyKey(members, more) +
       `#${this.hover ?? ''}#${music ? 1 : 0}#${net.phase}#${cued?.id ?? ''}#${ballUp ? (mine ? `B${net.ball!.joins.size}` : 'b') : ''}#${setOut ? net.gamePlayers.size : 0}#${match.difficulty}#${this.songsOpen ? 1 : 0}#${net.crownIdx ?? ''}`;
-    const deskKey = `${key}#${this.tab}#${this.fight}#${this.calling ? 1 : 0}#${this.callError}`;
+    // The last take fades off the header after a while; quantised so the
+    // fade costs a few repaints, not one a frame.
+    const takeAge = performance.now() - bellView.paidAt;
+    const takeShown = bellView.lastPay > 0 && takeAge < 20_000;
+    const deskKey = `${key}#${this.tab}#${this.fight}#${this.calling ? 1 : 0}#${this.callError}#${coins.balance}#${takeShown ? bellView.lastPay : 0}`;
     if (deskKey === this.paintKey) return;
     this.paintKey = deskKey;
 
@@ -1003,6 +1008,20 @@ export class ClubSocialSystem extends createSystem({}) {
           g.font = font(500, 20);
           g.fillStyle = UI.faint;
           g.fillText('right Ⓐ closes', 28, 138);
+          // THE WALLET, and what the last trip through the bell paid —
+          // the floor is where the money shows, so a night here reads as
+          // a night that earned.
+          g.textAlign = 'right';
+          g.font = font(700, 24);
+          g.letterSpacing = '1px';
+          g.fillStyle = UI.info;
+          g.fillText(`$${coins.balance}`, 676, 102);
+          if (takeShown) {
+            g.font = font(600, 19);
+            g.fillStyle = UI.accent;
+            g.fillText(`+${bellView.lastPay} from the bell`, 676, 138);
+          }
+          g.textAlign = 'left';
         } else {
           g.font = font(500, 21);
           g.letterSpacing = '0.5px';

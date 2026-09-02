@@ -70,3 +70,17 @@ export interface FightDeal {
   watchers: DealtMember[];
   seed: number;
 }
+
+/**
+ * THE HOUSE MONEY, as the floor reads it: what the wallet held when the
+ * bell dealt you out, and what the whole trip paid — the game's own pay
+ * plus the house's bell bonus — when you folded home. The desk shows it.
+ */
+export const bellView = {
+  /** Wallet balance the moment the deal landed (−1 = not dealt). */
+  balanceAtDeal: -1,
+  /** What the last trip through the bell paid, all in. */
+  lastPay: 0,
+  /** When it was paid (performance.now ms), for the desk's fade. */
+  paidAt: 0,
+};

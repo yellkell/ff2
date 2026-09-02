@@ -179,6 +179,11 @@ export const CURRENCY = {
   /** One-time graduation gift for finishing the tutorial — enough to feel
    *  the store's pull ('get yourself some drip') without skipping the grind. */
   tutorial: 50,
+  /** THE HOUSE PAYS: a game called from the club floor — a record, a
+   *  fight, a raid dealt by THE BELL — pays this on top of whatever the
+   *  game itself paid, the moment you fold home to the floor. Turning up
+   *  with people is worth a little more than queueing alone. */
+  bell: 5,
 };
 
 /** What a finished record pays, by the night's grade (menu/wallet.ts). */
