@@ -8,10 +8,19 @@
  * page) the doors fall back to what they were — end the session, hop the
  * page — which is the one thing a session can't hide, and why the handlers
  * exist.
+ *
+ * Every door is also where PRESENCE changes hands. This is the one chokepoint
+ * the whole town passes through, so announcing the room here means no screen
+ * has to remember to do it — and a player who walks from the arena to the
+ * venue to the rave leaves exactly one record behind, rewritten, rather than
+ * three that disagree.
  */
 
 import type { World } from '@iwsdk/core';
 import { raveUrl } from '../config.js';
+import { enter } from '../net/presence.js';
+import { myName } from '../net/leaderboard.js';
+import { myPackedLook } from '../avatar/paint.js';
 
 type NavigationHandler = () => void | Promise<void>;
 
@@ -40,8 +49,21 @@ function endSessionAndNavigate(world: World, url: string): void {
   else go();
 }
 
+/**
+ * Say which room we are in now. Fire-and-forget and fails soft: a headset
+ * with no cloud simply isn't listed, and every door still opens.
+ */
+function announce(where: 'arena' | 'club' | 'rave'): void {
+  try {
+    enter(where, myName(), myPackedLook());
+  } catch {
+    /* presence is a courtesy — never let it stand in a doorway */
+  }
+}
+
 /** Walk onto the venue's floor. */
 export function requestVenueEntry(world: World): void {
+  announce('club');
   if (handlers) {
     void handlers.enterVenue();
     return;
@@ -51,6 +73,7 @@ export function requestVenueEntry(world: World): void {
 
 /** Cross to RAVE RAID's foyer. */
 export function requestRaveEntry(world: World): void {
+  announce('rave');
   if (handlers) {
     void handlers.enterRave();
     return;
@@ -59,6 +82,7 @@ export function requestRaveEntry(world: World): void {
 }
 
 export function requestArenaReturn(world: World): void {
+  announce('arena');
   if (handlers) {
     void handlers.leaveToArena();
     return;

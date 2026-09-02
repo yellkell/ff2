@@ -1,7 +1,7 @@
 {
   "name": "fire-fight-2",
   "version": "0.1.0",
-  "description": "FIRE FIGHT 2 — the WebXR fireball-boxing sequel: Rave Raid folded in as a mode, a shared social club that launches everything, paintable mannequin fighters, and next-gen dark desert arenas. Built on the Immersive Web SDK.",
+  "description": "FIRE FIGHT 2 \u2014 the WebXR fireball-boxing sequel: Rave Raid folded in as a mode, a shared social club that launches everything, paintable mannequin fighters, and next-gen dark desert arenas. Built on the Immersive Web SDK.",
   "type": "module",
   "private": true,
   "scripts": {
@@ -21,7 +21,8 @@
     "check:rave": "node tools/rave-check.mjs",
     "check:venue": "node tools/venue-check.mjs",
     "check:course": "node tools/course-check.mjs",
-    "check:bot": "node tools/bot-check.mjs"
+    "check:bot": "node tools/bot-check.mjs",
+    "check:rules": "firebase emulators:exec --only firestore --project ff2-rules-check \"node tools/rules-check.mjs\""
   },
   "dependencies": {
     "@iwsdk/core": "0.4.2",
@@ -30,6 +31,7 @@
     "three": "0.184.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@iwsdk/vite-plugin-dev": "0.4.2",
     "@types/three": "0.184.0",
     "firebase-admin": "^14.3.0",
