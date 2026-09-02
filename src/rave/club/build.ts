@@ -988,8 +988,6 @@ export interface MirrorRefs {
   figures: Group;
   /** The translucent murk planes that swallow deep reflections. */
   haze: Group;
-  /** The recess's own key — warm, and only paid for while the glass wakes. */
-  light: PointLight;
 }
 
 /** buildClub() → ClubMirrorSystem hand-off (same pattern as socialView:
@@ -1086,13 +1084,10 @@ function buildMirror(root: Group): void {
     haze.add(ember);
   }
   root.add(haze);
-  // The recess key hangs just BEHIND the glass, so it rakes the fronts of
-  // the reflections (which face the pane, and therefore you) rather than
-  // backlighting them into silhouettes.
-  const light = new PointLight(DECOR.face, 0, 6.5, 1.5);
-  light.position.set(M.x, 2.15, wallZ - 0.5);
-  light.name = 'live-mirror-light';
-  root.add(light);
+  // No light in the recess. The reflections wear unlit materials (a smoked
+  // mirror shows a dim, flat image), and a PointLight toggled as you
+  // approached was a light-count change — every lit material in the
+  // building recompiled on the frame you turned to face the glass.
 
   /* The GLASS — one smoked pane at the wall plane. Asleep it is black
    * glass; awake it thins to a tint over the recess. ('live-': its
@@ -1167,7 +1162,7 @@ function buildMirror(root: Group): void {
     root.add(panel);
   }
 
-  mirrorRefs.current = { pane, figures, haze, light };
+  mirrorRefs.current = { pane, figures, haze };
 }
 
 /* ── booths: velvet horseshoes, marble tables, candlelight ──────────────── */

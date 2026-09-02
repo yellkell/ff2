@@ -158,6 +158,9 @@ export interface FloorFigure {
   pose: DancerPose;
   hue: number;
   shown: boolean;
+  /** The live puppet itself — the mirror SHADOWS it (twins of its meshes
+   *  driven by its world matrices) rather than solving a second rig. */
+  rig: DancerRig;
 }
 
 /** The club floor's figures by member idx (me excluded — I have no figure;
@@ -464,7 +467,7 @@ export class ClubSocialSystem extends createSystem({}) {
         tgt: { ...pose }, motion: new PoseMotion(), live: false,
       });
       // The mirror watches the same pose object the puppet dances with.
-      clubFloorFigures.set(idx, { pose, hue, shown: false });
+      clubFloorFigures.set(idx, { pose, hue, shown: false, rig });
     }
     this.paintKey = ''; // roster changed → repaint the panel
   }

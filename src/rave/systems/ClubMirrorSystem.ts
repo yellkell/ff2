@@ -3,33 +3,58 @@
  * place in the game you can see your own body.
  *
  * The trick is theatre, not render-to-texture: behind the glass is a dark
- * recess (built with the club), and this system stands REAL mirrored rigs
- * in it — your own figure solved from your live head + hands (exactly the
- * body everyone else is shown), plus whoever's near you, reflected across
- * the wall plane. Geometry mirrors are stereo-correct in VR for free,
- * which a Reflector render-to-texture is not, and they cost nothing when
- * nobody's looking.
+ * recess (built with the club), and this system stands mirrored figures in
+ * it. Geometry mirrors are stereo-correct in VR for free, which a Reflector
+ * render-to-texture is not, and they cost nothing when nobody's looking.
  *
- * Performance is the design: the glass SLEEPS as near-black smoke until
- * your head is within CLUB.mirror.range of it. Asleep: zero rigs posed,
- * recess contents hidden, the recess light off — the whole feature is one
- * tinted quad. Awake: at most 1 + maxFigures slender rigs, one point
- * light, three murk planes. Reflections beyond reflectRange simply aren't
- * cast (the murk swallows the boundary), so a packed dance floor never
- * pours 20 extra rigs into the glass.
+ * THE SECOND CUT of this system is about what a reflection COSTS. The first
+ * built a whole second rig per figure and solved it every frame from a
+ * hand-swapped copy of the pose, rebuilt it on every hue or look change,
+ * and lit the recess with a PointLight it switched on as you approached —
+ * and a light toggled in a forward renderer is a light count change, which
+ * recompiles every lit material in the building on the frame you turn to
+ * face the glass. None of that survives:
  *
- * Honest by construction: your reflection is driven by the SAME head/hand
- * frame sendClubPose() streams (full framerate, unsmoothed), in the hue
- * the room sees you in; room-mates' reflections reuse the exact pose
- * objects their floor puppets dance with — blocked dancers cast no
- * reflection because their figures aren't shown. The one lie is chirality
- * (a true mirror flips left/right; posing a normal rig with swapped hand
- * targets flips everything that matters — asymmetric haircuts stay on
- * their built side), which nobody has ever noticed in a nightclub.
+ *  - A room-mate's reflection is a SHADOW of their live puppet: every mesh
+ *    gets a twin sharing its geometry, and each frame the twin's world
+ *    matrix is the puppet's, multiplied through the reflection across the
+ *    wall plane. No second solve, no second pose, and whatever the puppet
+ *    wears — paint, gear, the crown, a raised glowstick — is in the glass
+ *    because it IS the puppet's geometry. (Three flips face winding for a
+ *    negative-determinant matrix by itself.) The one figure still SOLVED
+ *    is your own, because there is no live rig of you in the room to
+ *    shadow — and it is shadowed the same way from a private source rig
+ *    that never enters the scene.
+ *  - The twins wear UNLIT materials: the source's colour dimmed toward
+ *    smoke plus whatever it was emitting, clipped at the pane. A smoked
+ *    mirror shows a dim, flat image, so this is not a compromise, it is
+ *    the look — and it needs no light at all. The recess light is gone.
+ *  - Chirality is honest now (a true reflection, not swapped hands),
+ *    which nobody will notice either, in the other direction.
+ *
+ * Performance stays the design: the glass SLEEPS as near-black smoke until
+ * your head is within CLUB.mirror.range of it. Asleep: nothing is posed,
+ * nothing is walked, the recess contents are hidden — the whole feature is
+ * one tinted quad. Awake: one solve (yours), one matrix walk per figure in
+ * range, up to maxFigures. Reflections beyond reflectRange simply aren't
+ * cast (the murk swallows the boundary).
  */
 
 import { createSystem } from '@iwsdk/core';
-import { Euler, Plane, Quaternion, Vector3, type Material, type Mesh } from 'three';
+import {
+  Euler,
+  Matrix4,
+  Mesh,
+  MeshBasicMaterial,
+  Plane,
+  Quaternion,
+  Sprite,
+  SpriteMaterial,
+  Vector3,
+  type Material,
+  type MeshStandardMaterial,
+  type Object3D,
+} from 'three';
 import { mirrorRefs } from '../club/build.js';
 import { CLUB } from '../club/config.js';
 import { buildCoupe, type CoupeRefs } from '../club/props.js';
@@ -49,37 +74,138 @@ const _fwd = new Vector3();
 const _e = new Euler(0, 0, 0, 'YXZ');
 
 /** How fast the smoke thins/thickens (per-second exponential chase). */
-const WAKE_RATE = 5;
+const WAKE_RATE = 6;
 /** Pane opacity: asleep (black glass) → awake (light smoke over the room). */
 const SMOKE_ASLEEP = 0.93;
-const SMOKE_AWAKE = 0.26;
+const SMOKE_AWAKE = 0.42;
+/** How much of a source's own colour survives the smoke, and how much of
+ *  what it emits. A smoked mirror is a dim mirror. */
+const SMOKE_COLOR = 0.62;
+const SMOKE_EMIT = 0.85;
 
 /**
  * The glass, as a clipping plane: keep everything at or BEHIND z = the
  * north wall, discard the rest. A reflection stands as deep as you are
- * far, so pressing up to the pane brings its toes (0.16 m ahead of the
- * face standing, 0.29 m in a crouch) out through the glass and into the
- * room — the one thing that cannot be allowed to happen to a mirror.
- * Clipping is the guarantee: the reflection still walks all the way in to
- * meet you, and simply stops existing in front of the frame.
+ * far, so pressing up to the pane brings its toes out through the glass
+ * and into the room — the one thing that cannot be allowed to happen to a
+ * mirror. Clipping is the guarantee.
  */
 const GLASS_CLIP = [new Plane(new Vector3(0, 0, -1), CLUB.minZ)];
 
-/** Turn through π about Y — the sagittal flip the swapped hands stand in
- *  for, as a quaternion. See castGlasses(). */
-const Y_FLIP = new Quaternion(0, 1, 0, 0);
-
-interface PoolEntry {
-  rig: DancerRig;
-  hue: number;
-  /** Is this reflection wearing THE CROWN? Tracked because the crown is
-   *  built lazily on first wear — after the build-time clip traverse — so
-   *  its materials need the pane's planes handed to them at that moment. */
-  crowned: boolean;
+/** The reflection across the pane, z = glassZ: T(glassZ) · S(1,1,−1) · T(−glassZ). */
+function reflectionAcross(glassZ: number): Matrix4 {
+  const m = new Matrix4();
+  m.set(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 2 * glassZ, 0, 0, 0, 1);
+  return m;
 }
 
-/** buildCoupe() hands back a Group with no disposer of its own; a mirrored
- *  one is built and dropped with the floor it stands on, so it needs one. */
+/** A Y-flip through π, for the coupes (their orientation is written by
+ *  hand rather than shadowed). */
+const Y_FLIP = new Quaternion(0, 1, 0, 0);
+
+interface Twin {
+  src: Object3D;
+  twin: Object3D;
+}
+
+/** One figure's reflection: the twins of its source's meshes. */
+interface Shadow {
+  source: Object3D;
+  root: Object3D;
+  twins: Twin[];
+  /** How many drawables the source had when the twins were made — a new
+   *  one (the crown, built lazily on first wear) means rebuild. */
+  count: number;
+  materials: Material[];
+}
+
+/** The unlit twin of a lit material: the source's colour dimmed toward
+ *  smoke plus what it was emitting, same maps, same transparency, clipped
+ *  at the pane. */
+function smokedMaterial(src: Material): Material {
+  if ((src as SpriteMaterial).isSpriteMaterial) {
+    const s = src as SpriteMaterial;
+    const m = new SpriteMaterial({
+      map: s.map,
+      color: s.color.clone().multiplyScalar(SMOKE_EMIT),
+      transparent: true,
+      opacity: s.opacity * 0.8,
+      blending: s.blending,
+      depthWrite: false,
+    });
+    m.clippingPlanes = GLASS_CLIP;
+    return m;
+  }
+  const s = src as MeshStandardMaterial;
+  const m = new MeshBasicMaterial({
+    map: s.map ?? null,
+    transparent: s.transparent,
+    opacity: s.opacity,
+    side: s.side,
+    depthWrite: s.depthWrite,
+    blending: s.blending,
+  });
+  m.color.copy(s.color).multiplyScalar(SMOKE_COLOR);
+  if (s.emissive) {
+    const k = (s.emissiveIntensity ?? 1) * SMOKE_EMIT;
+    m.color.r = Math.min(1, m.color.r + s.emissive.r * k);
+    m.color.g = Math.min(1, m.color.g + s.emissive.g * k);
+    m.color.b = Math.min(1, m.color.b + s.emissive.b * k);
+  }
+  m.clippingPlanes = GLASS_CLIP;
+  return m;
+}
+
+function countDrawables(root: Object3D): number {
+  let n = 0;
+  root.traverse((o) => {
+    if ((o as Mesh).isMesh || (o as Sprite).isSprite) n++;
+  });
+  return n;
+}
+
+/** Twin every drawable under `source`. The twins are flat under one root
+ *  (no hierarchy — their matrices are written directly). */
+function buildShadow(source: Object3D, into: Object3D): Shadow {
+  const root = new Mesh();
+  root.name = 'mirror-shadow';
+  root.matrixAutoUpdate = false;
+  const twins: Twin[] = [];
+  const materials: Material[] = [];
+  source.traverse((o) => {
+    let twin: Object3D | null = null;
+    if ((o as Mesh).isMesh) {
+      const mesh = o as Mesh;
+      const mat = Array.isArray(mesh.material) ? mesh.material.map(smokedMaterial) : smokedMaterial(mesh.material);
+      const t = new Mesh(mesh.geometry, mat);
+      t.renderOrder = mesh.renderOrder;
+      for (const m of Array.isArray(mat) ? mat : [mat]) materials.push(m);
+      twin = t;
+    } else if ((o as Sprite).isSprite) {
+      const sprite = o as Sprite;
+      const mat = smokedMaterial(sprite.material) as SpriteMaterial;
+      const t = new Sprite(mat);
+      t.renderOrder = sprite.renderOrder;
+      materials.push(mat);
+      twin = t;
+    }
+    if (!twin) return;
+    twin.matrixAutoUpdate = false;
+    twin.matrixWorldAutoUpdate = false;
+    twin.frustumCulled = false;
+    root.add(twin);
+    twins.push({ src: o, twin });
+  });
+  into.add(root);
+  return { source, root, twins, count: twins.length, materials };
+}
+
+function disposeShadow(s: Shadow): void {
+  s.root.removeFromParent();
+  for (const m of s.materials) m.dispose();
+}
+
+/** buildCoupe() hands back a Group with no disposer of its own. */
 function disposeCoupe(cup: CoupeRefs): void {
   cup.root.traverse((o) => {
     const mesh = o as Mesh;
@@ -105,19 +231,18 @@ export class ClubMirrorSystem extends createSystem({}) {
     this.renderer.localClippingEnabled = true;
   }
 
-  /** 0 asleep … 1 awake — drives the smoke, the light and the rig work. */
+  /** 0 asleep … 1 awake — drives the smoke and whether anything is walked. */
   private wake = 0;
-  /** Mirrored rigs by member idx; −1 is me. Kept while the floor is open
-   *  (hidden when asleep — posing stops, building doesn't churn). */
-  private pool = new Map<number, PoolEntry>();
-  /** Mirrored drinks by GLASS id — at most one per glass in the room's
-   *  pool, so a figure with one in each hand casts both. */
-  private cups = new Map<number, CoupeRefs>();
-  /** Were reflections standing last frame? (Stand them down exactly once
-   *  on the way to sleep, rather than every frame we're asleep.) */
-  private lit = false;
+  private reflect = reflectionAcross(CLUB.minZ);
+  /** Shadows by member idx; −1 is me. Kept while the floor is open. */
+  private shadows = new Map<number, Shadow>();
+  /** MY source: a private rig, solved from my live head + hands, never in
+   *  the scene — its world matrices are what my shadow copies. */
+  private me: { rig: DancerRig; hue: number } | null = null;
   private mine = freshPose();
-  private out = freshPose();
+  /** Mirrored drinks by GLASS id. */
+  private cups = new Map<number, CoupeRefs>();
+  private lit = false;
 
   update(delta: number): void {
     const refs = mirrorRefs.current;
@@ -125,14 +250,10 @@ export class ClubMirrorSystem extends createSystem({}) {
     const M = CLUB.mirror;
     const glassZ = CLUB.minZ;
 
-    const onFloor =
-      (match.screen === 'lobby' || match.screen === 'tour') &&
-      inRoom() &&
-      !course.active;
+    const onFloor = (match.screen === 'lobby' || match.screen === 'tour') && inRoom() && !course.active;
 
-    // Head → glass distance (to the pane's span, not its centre — a wide
-    // mirror wakes for someone at its corner too), with hysteresis so the
-    // boundary doesn't flicker.
+    // Head → glass distance (to the pane's span, not its centre), with
+    // hysteresis so the boundary doesn't flicker.
     const dx = Math.max(0, Math.abs(match.headX - M.x) - M.w / 2);
     const dz = Math.max(0, match.headZ - glassZ);
     const near = Math.hypot(dx, dz) < M.range + (this.wake > 0.5 ? 0.4 : 0);
@@ -143,29 +264,27 @@ export class ClubMirrorSystem extends createSystem({}) {
     refs.pane.opacity = SMOKE_ASLEEP + (SMOKE_AWAKE - SMOKE_ASLEEP) * this.wake;
     refs.figures.visible = awake;
     refs.haze.visible = awake;
-    refs.light.visible = awake;
-    refs.light.intensity = 3.2 * this.wake;
 
     if (!onFloor) {
-      // The floor is gone (set out, room left) — give the rigs back.
-      if (this.pool.size) {
-        for (const p of this.pool.values()) p.rig.dispose();
-        this.pool.clear();
-        for (const cup of this.cups.values()) disposeCoupe(cup);
-        this.cups.clear();
+      // The floor is gone (set out, room left) — give everything back.
+      if (this.shadows.size) {
+        for (const s of this.shadows.values()) disposeShadow(s);
+        this.shadows.clear();
       }
+      if (this.me) {
+        this.me.rig.dispose();
+        this.me = null;
+      }
+      for (const cup of this.cups.values()) disposeCoupe(cup);
+      this.cups.clear();
       this.lit = false;
       return;
     }
     if (!awake) {
-      // Asleep: the figures group is hidden, so nothing draws either way —
-      // but leave the rigs flagged visible and the graph lies about what
-      // the mirror is holding. Stand them down once, then do no work at
-      // all until someone walks back over. (The rigs stay BUILT: a pool
-      // that rebuilds on every approach would hitch at the one moment
-      // you're looking straight at it.)
+      // Asleep: the figures group is hidden, so nothing draws either way.
+      // Stand the shadows down once, then do no work at all.
       if (this.lit) {
-        for (const p of this.pool.values()) p.rig.root.visible = false;
+        for (const s of this.shadows.values()) s.root.visible = false;
         for (const cup of this.cups.values()) cup.root.visible = false;
         this.lit = false;
       }
@@ -175,46 +294,61 @@ export class ClubMirrorSystem extends createSystem({}) {
 
     /* ── cast the room into the glass ── */
     const used = new Set<number>();
-    /* Whose reflections are standing — only THEIR drinks get cast, or a
-     * blocked dancer's pint would float across the glass on its own. */
     const holders = new Set<number>();
 
-    // ME — the reflection this mirror exists for.
+    // ME — the reflection this mirror exists for: solve the private rig,
+    // then shadow it like anyone else's.
     if (this.readMyPose()) {
       const myIdx = net.myIdx;
-      const me = net.members.find((m) => m.idx === myIdx);
-      const hue = me ? memberHue(me) : danceHue(Math.max(0, myIdx), true);
-      this.cast(-1, hue, this.mine, glassZ);
+      const meMember = net.members.find((m) => m.idx === myIdx);
+      const hue = meMember ? memberHue(meMember) : danceHue(Math.max(0, myIdx), true);
+      if (this.me && Math.abs(this.me.hue - hue) > 1e-4) {
+        this.me.rig.dispose();
+        this.me = null;
+      }
+      if (!this.me) {
+        // My tone, gear and paint — the body the arena shows everyone.
+        this.me = { rig: buildDancer(hue, { tone: myTone(), gear: myGear(), look: myLook() }), hue };
+        const old = this.shadows.get(-1);
+        if (old) {
+          disposeShadow(old);
+          this.shadows.delete(-1);
+        }
+      }
+      this.me.rig.setCrown(net.crownIdx !== null && net.crownIdx === myIdx);
+      this.me.rig.pose(this.mine);
+      // Not in the scene: nothing updates its matrices but us.
+      this.me.rig.root.updateMatrixWorld(true);
+      this.cast(-1, this.me.rig.root, refs.figures);
       used.add(-1);
       holders.add(myIdx);
     }
 
     // Room-mates near the glass, nearest first up to the cap.
-    const nearby: { idx: number; hue: number; pose: DancerPose; d: number }[] = [];
+    const nearby: { idx: number; rig: Object3D; d: number }[] = [];
     for (const [idx, f] of clubFloorFigures) {
       if (!f.shown) continue;
       const d = Math.max(0, f.pose.hz - glassZ);
       if (d > M.reflectRange || Math.abs(f.pose.hx - M.x) > M.reflectRange) continue;
-      nearby.push({ idx, hue: f.hue, pose: f.pose, d });
+      nearby.push({ idx, rig: f.rig.root, d });
     }
     nearby.sort((a, b) => a.d - b.d);
     for (const n of nearby.slice(0, M.maxFigures)) {
-      this.cast(n.idx, n.hue, n.pose, glassZ);
+      this.cast(n.idx, n.rig, refs.figures);
       used.add(n.idx);
       holders.add(n.idx);
     }
 
     // …and every glass those figures are carrying, plus any stood down
-    // near the pane. (After the figures, because it needs to know whose
-    // reflections actually made it into the glass.)
+    // near the pane.
     this.castGlasses(holders, glassZ, M);
 
-    // Everyone else's reflection stands down (kept built, hidden).
-    for (const [idx, p] of this.pool) {
-      if (!used.has(idx)) p.rig.root.visible = false;
+    // Everyone else's reflection stands down; anyone gone is let go.
+    for (const [idx, s] of this.shadows) {
+      if (!used.has(idx)) s.root.visible = false;
       if (idx >= 0 && !clubFloorFigures.has(idx)) {
-        p.rig.dispose(); // left the room — the pool lets go too
-        this.pool.delete(idx);
+        disposeShadow(s);
+        this.shadows.delete(idx);
       }
     }
   }
@@ -264,97 +398,46 @@ export class ClubMirrorSystem extends createSystem({}) {
     return true;
   }
 
-  /** Reflect `src` across the glass plane and pose idx's pooled rig with
-   *  it (building the rig on first sight, rebuilding on a hue change). */
-  private cast(idx: number, hue: number, src: DancerPose, glassZ: number): void {
-    let entry = this.pool.get(idx);
-    if (entry && Math.abs(entry.hue - hue) > 1e-4) {
-      entry.rig.dispose();
-      entry = undefined;
+  /**
+   * Shadow `source` into the glass as idx's reflection: build the twins on
+   * first sight (or when the source is a different rig, or has grown a
+   * drawable — the crown), then copy every drawable's world matrix through
+   * the reflection, honouring the source's own visibility down the tree.
+   */
+  private cast(idx: number, source: Object3D, into: Object3D): void {
+    let s = this.shadows.get(idx);
+    if (s && (s.source !== source || countDrawables(source) !== s.count)) {
+      disposeShadow(s);
+      s = undefined;
     }
-    if (!entry) {
-      // YOUR reflection (idx −1) wears your tone, gear and paint — the
-      // body the arena shows everyone; room-mates come bare until their
-      // look rides the wire.
-      entry = {
-        rig: idx === -1 ? buildDancer(hue, { tone: myTone(), gear: myGear(), look: myLook() }) : buildDancer(hue),
-        hue,
-        crowned: false,
-      };
-      // Clip every surface of this reflection at the pane (set before the
-      // rig has ever been drawn, so no shader recompiles mid-approach).
-      entry.rig.root.traverse((o) => {
-        const mat = (o as Mesh).material as Material | Material[] | undefined;
-        if (!mat) return;
-        for (const m of Array.isArray(mat) ? mat : [mat]) m.clippingPlanes = GLASS_CLIP;
-      });
-      mirrorRefs.current!.figures.add(entry.rig.root);
-      this.pool.set(idx, entry);
+    if (!s) {
+      s = buildShadow(source, into);
+      this.shadows.set(idx, s);
     }
-    // THE CROWN reflects with its wearer — including your own (the mirror
-    // is the one place you get to see yourself wearing it).
-    const wearsCrown = net.crownIdx !== null && net.crownIdx === (idx === -1 ? net.myIdx : idx);
-    if (wearsCrown !== entry.crowned) {
-      entry.crowned = wearsCrown;
-      entry.rig.setCrown(wearsCrown);
-      // First wear builds the crown — AFTER the clip traverse above — so
-      // hand its materials the pane's planes before their first draw, or a
-      // crowned reflection pressed to the glass would poke its coronet
-      // (and worse, its glow halo) out of the frame into the room.
-      if (wearsCrown) {
-        entry.rig.root.getObjectByName('crown')?.traverse((o) => {
-          const mat = (o as Mesh).material as Material | Material[] | undefined;
-          if (!mat) return;
-          for (const m of Array.isArray(mat) ? mat : [mat]) m.clippingPlanes = GLASS_CLIP;
-        });
+    s.root.visible = true;
+    // Walk the source with a visibility stack: a part hidden by setDetail
+    // (or a crown parked invisible) casts nothing, whatever its parent.
+    const R = this.reflect;
+    const twinsBySrc = s.twins;
+    let k = 0;
+    const walk = (o: Object3D, vis: boolean): void => {
+      const v = vis && o.visible;
+      const t = k < twinsBySrc.length && twinsBySrc[k].src === o ? twinsBySrc[k++] : null;
+      if (t) {
+        t.twin.visible = v;
+        if (v) t.twin.matrixWorld.multiplyMatrices(R, o.matrixWorld);
       }
-    }
-    // Mirror across z = glassZ: positions reflect, yaw flips through the
-    // plane, and the HANDS SWAP — the reflection's arm on your left is
-    // fed by your right hand, or it reaches across its own chest.
-    //
-    // The head's nod and tilt follow from the same swap. Reflecting a frame
-    // across z and then flipping it back through its own sagittal plane
-    // (which is what feeding a normal rig swapped hands amounts to) works
-    // out to yaw → π − yaw, pitch → pitch, roll → −roll: nod down and the
-    // reflection nods down with you; tilt toward your right shoulder and it
-    // tilts toward the shoulder facing yours.
-    const o = this.out;
-    o.hx = src.hx;
-    o.hy = src.hy;
-    o.hz = 2 * glassZ - src.hz;
-    o.yaw = Math.PI - src.yaw;
-    o.pitch = src.pitch;
-    o.roll = -src.roll;
-    o.lx = src.rx;
-    o.ly = src.ry;
-    o.lz = 2 * glassZ - src.rz;
-    o.rx = src.lx;
-    o.ry = src.ly;
-    o.rz = 2 * glassZ - src.lz;
-    o.slump = src.slump;
-    entry.rig.root.visible = true;
-    entry.rig.pose(o);
+      for (const c of o.children) walk(c, v);
+    };
+    walk(source, true);
   }
 
   /**
-   * EVERY glass the glass should be holding.
-   *
-   * Pooled by GLASS, not by figure: keyed by holder it was one drink each,
-   * so a second in your other hand, or one set down on the ledge while
-   * three of you posed, simply wasn't there. A drink in somebody's hand is
-   * cast only if THEY are cast — a blocked dancer's pint must not float
-   * across the mirror on its own — and a glass nobody is carrying is cast
-   * on the same proximity rule the bodies use.
-   *
-   * It needs no hand-swapping of its own: the reflection's left hand is
-   * already standing where your right hand's mirror image is, so a glass
-   * reflected purely by POSITION lands in it. Orientation is the body's
-   * transform written for a quaternion — negate x and y (the mirror across
-   * z) and turn the result through π about Y (the sagittal flip the swapped
-   * hands stand in for). For a coupe, a surface of revolution, that flip
-   * changes nothing you can see; what it buys is a glass that leans the way
-   * the arm holding it leans.
+   * EVERY glass the glass should be holding — pooled by GLASS, cast only if
+   * its holder is cast (a blocked dancer's pint must not float across the
+   * mirror on its own) or, unheld, on the bodies' proximity rule. Reflected
+   * by hand rather than shadowed: a coupe is a surface of revolution and a
+   * position plus a mirrored quaternion is the whole of it.
    */
   private castGlasses(holders: Set<number>, glassZ: number, M: typeof CLUB.mirror): void {
     const shown = new Set<number>();
@@ -367,8 +450,6 @@ export class ClubMirrorSystem extends createSystem({}) {
       let cup = this.cups.get(g.id);
       if (!cup) {
         cup = buildCoupe();
-        // Clipped at the pane like the bodies: press a drink to the glass
-        // and it must stop existing at the frame, not poke into the room.
         cup.root.traverse((o) => {
           const mat = (o as Mesh).material as Material | Material[] | undefined;
           if (!mat) return;
@@ -380,7 +461,7 @@ export class ClubMirrorSystem extends createSystem({}) {
       cup.root.visible = true;
       cup.root.position.set(g.pos.x, g.pos.y, 2 * glassZ - g.pos.z);
       cup.root.quaternion.set(-g.quat.x, -g.quat.y, g.quat.z, g.quat.w).multiply(Y_FLIP);
-      cup.fill.visible = g.full; // drink it and the reflection's empties too
+      cup.fill.visible = g.full;
       shown.add(g.id);
     }
     for (const [id, cup] of this.cups) if (!shown.has(id)) cup.root.visible = false;

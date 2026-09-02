@@ -134,6 +134,33 @@ const served = await page
 const glasses = await page.evaluate(() => window.__gdr.props?.glasses?.().map((g) => g.mode) ?? []);
 check('a coupe rises on the plate', served, glasses.join(','));
 
+console.log('\n=== THE MIRROR: shadows, not a second rig, and no light ===');
+await page.evaluate(() => window.__gdr.rig(6.65, -8.6, 0)); // up to the glass, facing it
+await page.waitForTimeout(900);
+const mirror = await page.evaluate(() => {
+  const scene = window.__gdr.scene();
+  const figures = scene.getObjectByName('live-mirror-figures');
+  let shadows = 0;
+  let twins = 0;
+  let lit = 0;
+  figures?.traverse((o) => {
+    if (o.name === 'mirror-shadow') {
+      shadows++;
+      twins += o.children.length;
+    }
+    if (o.isMesh && o.material && !o.material.isMeshBasicMaterial && !o.material.isSpriteMaterial && o.parent?.name === 'mirror-shadow') lit++;
+  });
+  const light = scene.getObjectByName('live-mirror-light');
+  return { awake: figures?.visible ?? null, shadows, twins, lit, light: !!light };
+});
+check('the glass wakes and casts ME as a shadow of twins', mirror.awake === true && mirror.shadows === 1 && mirror.twins > 8, JSON.stringify(mirror));
+check('every twin is unlit, and the recess has no light', mirror.lit === 0 && !mirror.light, JSON.stringify({ lit: mirror.lit, light: mirror.light }));
+await shot('mirror');
+await page.evaluate(() => window.__gdr.rig(0, 0.5, 0));
+await page.waitForTimeout(600);
+const asleep = await page.evaluate(() => window.__gdr.scene().getObjectByName('live-mirror-figures')?.visible);
+check('walk away and the glass sleeps', asleep === false, String(asleep));
+
 console.log('\n=== THE STEP: into the course and back, still in-session ===');
 await page.evaluate(() => window.__gdr.course.enter());
 const riding = await page.waitForFunction(() => window.__gdr.course.state().active, { timeout: 8000 }).then(() => true).catch(() => false);
