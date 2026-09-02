@@ -86,9 +86,13 @@ function layer(ctx: AudioContext, buf: AudioBuffer, out: GainNode, type: BiquadF
   return src;
 }
 
+/** THE BED'S BREAKER. Off: the synthesised bed was noise in the headset.
+ *  Flip it when real crowd recordings land behind this API. */
+export const CROWD_BED = false;
+
 /** Raise the bed (a bout began). Idempotent. */
 export function startCrowd(): void {
-  if (bed) return;
+  if (!CROWD_BED || bed) return;
   const ctx = audioContext();
   const out = sfxOut();
   if (!ctx || !out) return;

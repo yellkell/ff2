@@ -2,7 +2,7 @@
  * THE BELL — what a ball can carry (DESIGN.md §3.1).
  *
  * RAVE RAID's ball called one thing: a record. In this house it is the
- * launcher for EVERYTHING — pick a fight or pick a record, CALL THE BALL,
+ * launcher for EVERYTHING — pick a fight or pick a record, press HOST,
  * and whoever touches in rides along when the relay's clock hits zero.
  * The ball is mode-agnostic: it carries `{ mode, code }` up and the relay
  * deals `{ mode, code, fighters, watchers, seed, startInMs }` down.
@@ -66,6 +66,9 @@ export interface FightDeal {
   callerIdx: number;
   /** Am I the caller (and so the arena room's host)? */
   mine: boolean;
+  /** Dealt from a ROOM OF ONE: there is no arena room to join — the
+   *  arena starts the fight against its own bots. */
+  solo: boolean;
   fighters: DealtMember[];
   watchers: DealtMember[];
   seed: number;

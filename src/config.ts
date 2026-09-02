@@ -137,15 +137,19 @@ export const PAINT = {
    * paint is worth.
    */
   canvas: { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128 } as Record<string, number>,
-  /** Unit prices in coins; racks multiply (see tierOf). A basic stripe is
-   *  two games' pay — a first paint job lands around a session of play.
-   *  DOTS and SQUARES are the cheap geometry — a dot is the paint's atom. */
-  price: { stripe: 20, splotch: 30, dot: 15, square: 20 },
+  /** Unit prices in coins; racks multiply (see tierOf). Paint is CHEAP —
+   *  every unit lands between five and ten, under a game's pay, so a first
+   *  paint job is an afternoon's idea and not a saving-up. DOTS are the
+   *  cheapest geometry: a dot is the paint's atom. */
+  price: { stripe: 8, splotch: 10, dot: 5, square: 7 },
   /** The biggest a unit can be sized in the bay (fraction of its part's
    *  canvas). Big enough for a sash across the chest, never a whole-body
    *  fill — the blank's silhouette stays the picture. */
   maxSize: 0.55,
-  tierMult: [1, 2, 10], // base rack · neon rack · top shelf
+  // The racks still cost more, but the top shelf no longer multiplies a
+  // cheap unit back into an expensive one: a GOLD LEAF splotch is 40, not
+  // 300. Base rack · neon rack · top shelf.
+  tierMult: [1, 2, 4],
   /** Rack boundaries by colour index: 0–7 base, 8–19 neon, 20+ top. */
   tierOf: (colour: number): number => (colour < 8 ? 0 : colour < 20 ? 1 : 2),
   /** The sold colours. */
@@ -182,8 +186,9 @@ export const CURRENCY = {
   /** THE HOUSE PAYS: a game called from the club floor — a record, a
    *  fight, a raid dealt by THE BELL — pays this on top of whatever the
    *  game itself paid, the moment you fold home to the floor. Turning up
-   *  with people is worth a little more than queueing alone. */
-  bell: 5,
+   *  with people is worth REAL money: twice a game's own pay, so a night
+   *  spent calling the ball outearns a night spent queueing alone. */
+  bell: 20,
 };
 
 /** What a finished record pays, by the night's grade (menu/wallet.ts). */

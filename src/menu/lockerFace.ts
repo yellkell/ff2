@@ -44,6 +44,11 @@ const TAB_H = 76;
 const SUB_Y = 140;
 const SUB_H = 64;
 const GRID_TOP = 240;
+/** The GEAR board carries a shelf row under the board chips, so its grid
+ *  starts lower — and holds at most six pieces, two rows at full size. */
+const SHELF_Y = 216;
+const SHELF_H = 52;
+const GEAR_GRID_TOP = SHELF_Y + SHELF_H + 24;
 const COLS = 3;
 const GAP = 20;
 const TILE_W = (INNER - (COLS - 1) * GAP) / COLS;
@@ -108,23 +113,24 @@ function tiles(locker: boolean): Tile[] {
   const picked: Array<{ kind: 'platform' | 'gear'; def: PlatformSkin | GearDef; index: number }> = [];
   if (b === 'gear') {
     GEAR_CATALOGUE.forEach((g, i) => {
-      if (gearOwned(g.id) === locker) picked.push({ kind: 'gear', def: g, index: i });
+      if (g.slot === customization.gearSlot && gearOwned(g.id) === locker) picked.push({ kind: 'gear', def: g, index: i });
     });
   } else if (b === 'platforms') {
     PLATFORM_SKINS.forEach((s, i) => {
       if (platformOwned(s.id) === locker) picked.push({ kind: 'platform', def: s, index: i });
     });
   }
+  const top = b === 'gear' ? GEAR_GRID_TOP : GRID_TOP;
   const rows = Math.max(1, Math.ceil(picked.length / COLS));
   // Three rows fit at full height; a deeper catalogue shares the same span.
-  const span = FOOT_Y - 24 - GRID_TOP;
+  const span = FOOT_Y - 24 - top;
   const step = rows <= 3 ? 250 : Math.floor(span / rows);
   const h = Math.min(230, step - 20);
   return picked.map((p, i) => ({
     id: `shop-${p.kind === 'gear' ? 'gr' : 'pf'}-${p.index}`,
     ...p,
     x: M + (i % COLS) * (TILE_W + GAP),
-    y: GRID_TOP + Math.floor(i / COLS) * step,
+    y: top + Math.floor(i / COLS) * step,
     w: TILE_W,
     h,
   }));
@@ -166,6 +172,26 @@ export function lockerFace(locker: boolean): LockerFace {
   boards.forEach(([key, label, id], i) => {
     buttons.push({ id, label, x: M + i * (cw + 16), y: SUB_Y, w: cw, h: SUB_H, small: true, selected: b === key });
   });
+  // THE SHELVES: the gear board shows one slot at a time — six pieces at
+  // most, two rows at full size, every price on its tile.
+  if (b === 'gear') {
+    const shelves: Array<['head' | 'body' | 'hands', string]> = [
+      ['head', 'HEAD'],
+      ['body', 'BODY'],
+      ['hands', 'HANDS'],
+    ];
+    const sw = (INNER - 2 * 16) / 3;
+    shelves.forEach(([slot, label], i) => {
+      buttons.push({
+        id: `gear-${slot}`,
+        label,
+        x: M + i * (sw + 16), y: SHELF_Y, w: sw, h: SHELF_H,
+        small: true,
+        px: 22,
+        selected: customization.gearSlot === slot,
+      });
+    });
+  }
 
   buttons.push({ id: 'custom-close', label: 'CLOSE', x: LOCKER_W - M - 240, y: FOOT_Y + 24, w: 240, h: 84, small: true });
   if (!locker) {
@@ -213,7 +239,7 @@ export function lockerFace(locker: boolean): LockerFace {
         g.fillText(
           locker ? 'nothing here yet — the STORE has the rest' : "you own every one of these",
           LOCKER_W / 2,
-          GRID_TOP + 160,
+          (b === 'gear' ? GEAR_GRID_TOP : GRID_TOP) + 160,
         );
       }
     },

@@ -286,6 +286,8 @@ World.create(container, {
       // the AudioContext on headsets that haven't earned autoplay yet, and
       // any music already started while suspended simply begins sounding.
       world.session.addEventListener('select', ensureAudio);
+      world.session.addEventListener('selectstart', ensureAudio);
+      world.session.addEventListener('squeezestart', ensureAudio);
       if (!introPlayed) {
         introPlayed = true; // once per page load — relaunches are a fresh page
         try {

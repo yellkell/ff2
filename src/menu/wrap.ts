@@ -37,7 +37,6 @@ import { app } from './appState.js';
 import { coins } from './wallet.js';
 import { leaderboard, setLeaderboardTab } from '../net/leaderboard.js';
 import { gazette } from '../net/gazette.js';
-import { PUB_REGIONS } from '../pub/config.js';
 import { ladderFace } from './ladder.js';
 import { settingsFace } from './settingsFace.js';
 import { CARD_H, CARD_W, CHIP_H, CHIP_W, profileCardFace, profileChipFace } from './profilePop.js';
@@ -99,12 +98,11 @@ export class KitMenuPanel implements MenuPanel {
 
 /* ── the wrap's tab state ─────────────────────────────────────────────── */
 
-export type CenterTab = 'fight' | 'arcade';
+export type CenterTab = 'fight' | 'arcade' | 'club';
 export type TownTab = 'town' | 'ladder' | 'news';
 export type YouTab = 'you' | 'settings';
 
-/** Which tab each panel is on. (The CLUB tab is derived: it's up while the
- *  region picker is — `app.infoView === 'pubpick'`.) */
+/** Which tab each panel is on. */
 export const wrapNav = {
   center: 'fight' as CenterTab,
   town: 'town' as TownTab,
@@ -155,14 +153,14 @@ const WIDE = CW - M * 2; // 1344
 const COL = 656; // half column
 const C2 = M + COL + 32; // right column x
 
-const clubUp = (): boolean => app.infoView === 'pubpick';
+const clubUp = (): boolean => wrapNav.center === 'club';
 
 function centerTabs(): PanelButton[] {
   const lock = sealed();
   const club = clubUp();
   return [
-    { id: 'wrap:tab-fight', label: 'FIGHT', tab: true, x: 400, y: TAB_Y, w: 220, h: TAB_H, selected: !club && wrapNav.center === 'fight' },
-    { id: 'wrap:tab-arcade', label: 'ARCADE', tab: true, x: 640, y: TAB_Y, w: 240, h: TAB_H, selected: !club && wrapNav.center === 'arcade', disabled: lock },
+    { id: 'wrap:tab-fight', label: 'FIGHT', tab: true, x: 400, y: TAB_Y, w: 220, h: TAB_H, selected: wrapNav.center === 'fight' },
+    { id: 'wrap:tab-arcade', label: 'ARCADE', tab: true, x: 640, y: TAB_Y, w: 240, h: TAB_H, selected: wrapNav.center === 'arcade', disabled: lock },
     {
       id: 'wrap:tab-club',
       label: 'CLUB',
@@ -210,30 +208,26 @@ function fightRoot(): Face {
       : {
           id: 'quick-match',
           label: 'QUICK MATCH',
-          sub: app.searching > 0 ? `${app.searching} searching now` : 'best of three · drop in',
           x: M, y: 160, w: COL, h: 200,
           primary: true,
         },
     {
       id: 'ranked-match',
       label: 'RANKED',
-      sub: app.onlyBots ? 'off while ONLY BOTS is on' : 'best of five · the ladder',
       x: M, y: 390, w: COL, h: 150,
       disabled: app.onlyBots || queueing,
     },
     {
       id: 'private-open',
       label: 'PRIVATE MATCH',
-      sub: 'a five-digit code for your lot',
       x: M, y: 570, w: COL, h: 150,
       disabled: queueing,
     },
-    { id: 'arcade-2v2', label: '2V2', sub: 'tag brawl', x: C2, y: 160, w: COL, h: 170, disabled: queueing },
-    { id: 'arcade-ffa', label: 'FFA', sub: 'last one up', x: C2, y: 360, w: COL, h: 170, disabled: queueing },
+    { id: 'arcade-2v2', label: '2V2', x: C2, y: 160, w: COL, h: 170, disabled: queueing },
+    { id: 'arcade-ffa', label: 'FFA', x: C2, y: 360, w: COL, h: 170, disabled: queueing },
     {
       id: 'toggle-onlybots',
       label: 'ONLY BOTS',
-      sub: 'never queue online',
       x: C2, y: 590, w: COL, h: 110,
       small: true,
       selected: app.onlyBots,
@@ -241,7 +235,9 @@ function fightRoot(): Face {
   ];
   return {
     title: 'FIRE FIGHT 2',
-    body: note('every finished bout banks 10 iron-dollars', 900, CW),
+    // No note under the buttons: the main menu says what it is, and the
+    // wallet on the YOU wing already says what a bout pays.
+    body: () => {},
     buttons,
   };
 }
@@ -359,27 +355,24 @@ function browserFace(): Face {
 
 function arcadeFace(): Face {
   const buttons: PanelButton[] = [
-    { id: 'start-tutorial', label: 'TUTORIAL', sub: 'the guided basics', x: M, y: 160, w: COL, h: 200 },
-    { id: 'open-campaign', label: 'CAMPAIGN', sub: 'five titans, left to right', x: C2, y: 160, w: COL, h: 200 },
+    { id: 'start-tutorial', label: 'TUTORIAL', x: M, y: 160, w: COL, h: 200 },
+    { id: 'open-campaign', label: 'CAMPAIGN', x: C2, y: 160, w: COL, h: 200 },
     {
       id: 'open-raid',
       label: 'RAID',
-      sub: app.raidsOpen > 0 ? `${app.raidsOpen} squad${app.raidsOpen === 1 ? '' : 's'} forming now` : 'four boxers, one gauntlet',
       x: M, y: 390, w: COL, h: 200,
       tone: app.raidsOpen > 0 ? KIT.positive : undefined,
     },
-    { id: 'start-training', label: 'AIM TRAINING', sub: 'the heart of the game', x: C2, y: 390, w: COL, h: 200 },
+    { id: 'start-training', label: 'AIM TRAINING', x: C2, y: 390, w: COL, h: 200 },
     {
       id: 'open-rave',
       label: 'RAVE RAID',
-      sub: 'the record shelf — dance the night, bank the coins',
       x: M, y: 620, w: COL, h: 200,
       tone: KIT.info,
     },
     {
       id: 'toggle-shootback',
       label: 'SHOOT BACK',
-      sub: 'aim-training targets return fire',
       x: C2, y: 630, w: COL, h: 110,
       small: true,
       selected: app.shootBack,
@@ -387,35 +380,37 @@ function arcadeFace(): Face {
   ];
   return {
     title: 'FIRE FIGHT 2',
-    body: note('every finished run — and every finished record — pays the same flat coins', 900, CW),
+    body: () => {},
     buttons,
   };
 }
 
-function pubPickFace(): Face {
-  const buttons: PanelButton[] = PUB_REGIONS.map((region, i) => {
-    const count = app.pubRegionCounts[region.id] ?? -1;
-    return {
-      id: `pub-go-${region.id}` as MenuAction,
-      label: region.label,
-      sub: count >= 0 ? `${count} inside` : 'knock and see',
-      x: M, y: 200 + i * 200, w: WIDE, h: 170,
-      tone: count > 0 ? KIT.positive : undefined,
-    };
-  });
+/** THE CLUB TAB — one door, the size of the board. The tab used to walk
+ *  you straight through it, which meant the top bar had a button that
+ *  wasn't a tab; now CLUB shows you the way in and you take it. */
+function clubFace(): Face {
   return {
     title: 'FIRE FIGHT 2',
-    body: both(
-      crumb(app.pubCount > 0 ? `${app.pubCount} INSIDE RIGHT NOW` : 'THE SOCIAL SCENE', CW),
-      note('same club, different corner of the map — pick a door', 720, CW),
-    ),
-    buttons,
+    // The headcount is the only thing worth saying here, and only when
+    // there IS one — a board with one button doesn't need a caption.
+    body: app.pubCount > 0 ? crumb(`${app.pubCount} INSIDE RIGHT NOW`, CW) : () => {},
+    buttons: [
+      {
+        id: 'open-pub',
+        label: 'ENTER CLUB',
+        // A button the size of the board reads as the board. This is a
+        // button: the same height as the ones on every other face, sitting
+        // in the same first-row slot, just wider because it's alone.
+        x: M + 220, y: 300, w: WIDE - 440, h: 200,
+        primary: true,
+      },
+    ],
   };
 }
 
 function centerFace(): Face {
   let face: Face;
-  if (clubUp()) face = pubPickFace();
+  if (clubUp() && !sealed()) face = clubFace();
   else if (wrapNav.center === 'arcade' && !sealed()) face = arcadeFace();
   else {
     switch (app.duelView) {
@@ -515,7 +510,7 @@ function youBoard(): Face {
       {
         id: 'open-paintbay',
         label: 'PAINT',
-        sub: lock ? SEAL_SUB : 'stripes · splotches · dots · squares',
+        sub: lock ? SEAL_SUB : undefined,
         x: X, y: 170, w: W, h: 160,
         primary: !lock,
         disabled: lock,
@@ -523,7 +518,7 @@ function youBoard(): Face {
       {
         id: 'open-custom',
         label: 'CUSTOMIZATION',
-        sub: lock ? SEAL_SUB : 'base tone · gear · pads',
+        sub: lock ? SEAL_SUB : undefined,
         x: X, y: 360, w: W, h: 130,
         disabled: lock,
       },
@@ -576,11 +571,8 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
     switch (id) {
       case 'wrap:tab-fight':
       case 'wrap:tab-arcade':
-        if (clubUp()) act?.('pub-back');
-        wrapNav.center = id === 'wrap:tab-fight' ? 'fight' : 'arcade';
-        return;
       case 'wrap:tab-club':
-        act?.('open-pub');
+        wrapNav.center = id === 'wrap:tab-fight' ? 'fight' : id === 'wrap:tab-arcade' ? 'arcade' : 'club';
         return;
       case 'wrap:tab-town':
         wrapNav.town = 'town';

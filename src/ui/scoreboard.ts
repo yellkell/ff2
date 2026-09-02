@@ -6,15 +6,19 @@
  * bar with a DAMAGE TRAIL (the ember ghost of what they just lost, easing
  * away behind the live level), the round pips, and the two states a glance
  * has to catch — LOW (a hazard chevron strip breathing under the bar) and
- * OUT (the card dims and a red stamp lands across it). A hit flashes the
- * card's rim. Nothing is a box: your real room shows through everything.
+ * OUT (the card dims; no stamp, no word — the dim is the word). A hit
+ * flashes the card's rim. Nothing is a box: your real room shows through
+ * everything.
  *
  * WHERE THE CARDS HANG depends on the format:
  *
  *   1V1   the classic pair — YOURS left, THEIRS right — over the rival's
- *         pad, with the ROUND PLAQUE (round, first-to, the clock) between.
+ *         pad, with the CLOCK between.
  *   2V2   your column (you, your ally above) and theirs, each column with
- *         its TEAM total under the lower card.
+ *         its TEAM total under the lower card. A stacked bout RE-HANGS the
+ *         whole board: the cards shrink and sit a little lower so the two
+ *         in a column never cross, and the verdict lifts clear of the top
+ *         card instead of landing across it.
  *   FFA   the north rival keeps the right-hand card, but the fighters on
  *         the east and west pads wear their cards OVER THEIR OWN PADS,
  *         turned to face you — so the fighter you are looking at is the
@@ -319,15 +323,6 @@ function healthBar(
   }
 }
 
-/** The OUT stamp — a red metal word slammed across a dimmed card. */
-function outStamp(ctx: CanvasRenderingContext2D): void {
-  ctx.save();
-  ctx.translate(W / 2, H / 2 + 10);
-  ctx.rotate(-0.12);
-  metalText(ctx, 'OUT', 0, 0, 150, UI.danger);
-  ctx.restore();
-}
-
 /* ── the board ────────────────────────────────────────────────────────── */
 
 export function createScoreboard(scene: Scene): Scoreboard {
@@ -348,17 +343,15 @@ export function createScoreboard(scene: Scene): Scoreboard {
   right.mesh.rotation.y = -0.18;
 
   // The columns: a teammate above your card, extra opponents above theirs.
-  // Each card's readout sits in the top ~two-thirds of its plate, so a tight
-  // step stacks the cards close (the overlap is empty margin).
-  const STACK_STEP = 0.56;
+  // A card's readout runs the FULL height of its plate — name and health at
+  // the top, bar and pips below — so the step has to clear the whole card,
+  // not just its margin. (It used to be 0.56 against a 0.72 card: the upper
+  // card's rim cut straight through the lower one's name and number.)
   const extraLeft = makeBoard(CARD_W, CARD_H);
-  extraLeft.mesh.position.set(-1.0, BOARD_Y + STACK_STEP, BOARD_Z);
   extraLeft.mesh.rotation.y = 0.18;
   const extraRightA = makeBoard(CARD_W, CARD_H);
-  extraRightA.mesh.position.set(1.0, BOARD_Y + STACK_STEP, BOARD_Z);
   extraRightA.mesh.rotation.y = -0.18;
   const extraRightB = makeBoard(CARD_W, CARD_H);
-  extraRightB.mesh.position.set(1.0, BOARD_Y + 2 * STACK_STEP, BOARD_Z);
   extraRightB.mesh.rotation.y = -0.18;
 
   // FFA: PAD CARDS for the fighters on the flanking pads, hung over their
@@ -391,6 +384,54 @@ export function createScoreboard(scene: Scene): Scoreboard {
   glow.position.set(0, CENTRE_Y, CENTRE_Z - 0.04);
   glow.renderOrder = 11;
   const glowColor = new Color();
+
+  /**
+   * THE HANG — where everything sits, in one of two shapes.
+   *
+   * CLASSIC (1v1, FFA) is the pair at full size with the verdict just over
+   * them. STACKED (2v2, or any bout that puts two cards in a column) shrinks
+   * the cards, drops the row a little and steps the column by a clear card
+   * height, then lifts the verdict above the top card — so nothing in the
+   * bout is read through anything else.
+   */
+  interface Hang {
+    /** The lower row's height. */
+    y: number;
+    /** Rise from one card in a column to the next. */
+    step: number;
+    cardScale: number;
+    centreY: number;
+    centreScale: number;
+  }
+  const HANG: Record<'classic' | 'stacked', Hang> = {
+    classic: { y: BOARD_Y, step: 0.62, cardScale: 1, centreY: CENTRE_Y, centreScale: 1 },
+    stacked: { y: 2.04, step: 0.63, cardScale: 0.8, centreY: 3.5, centreScale: 0.8 },
+  };
+  let hang: Hang = HANG.classic;
+  let hangKey = '';
+  /** Re-hang the boards (a no-op unless the shape actually changed). */
+  const setHang = (stacked: boolean): void => {
+    const key = stacked ? 'stacked' : 'classic';
+    if (key === hangKey) return;
+    hangKey = key;
+    hang = stacked ? HANG.stacked : HANG.classic;
+    const { y, step, cardScale } = hang;
+    for (const [b, sign, row] of [
+      [left, -1, 0],
+      [right, 1, 0],
+      [extraLeft, -1, 1],
+      [extraRightA, 1, 1],
+      [extraRightB, 1, 2],
+    ] as const) {
+      b.mesh.position.set(sign * 1.0, y + row * step, BOARD_Z);
+      b.mesh.scale.setScalar(cardScale);
+    }
+    plaque.mesh.position.set(0, y + 0.14, BOARD_Z);
+    standings.mesh.position.set(0, y + 0.66, BOARD_Z);
+    centre.mesh.position.y = hang.centreY;
+    glow.position.y = hang.centreY;
+  };
+  setHang(false);
 
   group.add(
     left.mesh,
@@ -447,8 +488,8 @@ export function createScoreboard(scene: Scene): Scoreboard {
       verdictStart = now;
     }
     if (!message) {
-      centre.mesh.scale.setScalar(1);
-      centre.mesh.position.y = CENTRE_Y;
+      centre.mesh.scale.setScalar(hang.centreScale);
+      centre.mesh.position.y = hang.centreY;
       glow.visible = false;
       return;
     }
@@ -456,8 +497,8 @@ export function createScoreboard(scene: Scene): Scoreboard {
     // Slam in: a quick overshoot that springs to rest, then a slow breathe.
     const spring = 1 + 0.6 * Math.exp(-t * 8) * Math.cos(t * 17);
     const breathe = 1 + 0.02 * Math.sin(now * 0.0042);
-    centre.mesh.scale.setScalar(Math.max(0.25, spring * breathe));
-    centre.mesh.position.y = CENTRE_Y + 0.012 * Math.sin(now * 0.0032);
+    centre.mesh.scale.setScalar(Math.max(0.25, spring * breathe * hang.centreScale));
+    centre.mesh.position.y = hang.centreY + 0.012 * Math.sin(now * 0.0032);
 
     // Aura: a bright impact flash on arrival decaying into a steady pulse.
     glow.visible = true;
@@ -471,13 +512,13 @@ export function createScoreboard(scene: Scene): Scoreboard {
   };
 
   /** THE ROUND PLAQUE. */
-  const drawPlaque = (state: MatchState, target: number, now: number): void => {
+  const drawPlaque = (state: MatchState, now: number): void => {
     const secs = Math.max(0, Math.ceil(state.roundTimer));
     const live = state.phase === 'playing';
     const hot = live && secs <= CLOCK_HOT;
     const warn = live && secs <= CLOCK_WARN;
     const text = state.phase === 'countdown' ? 'READY' : fmtTime(state.roundTimer);
-    const key = `p|${text}|${state.round}|${target}|${hot ? 'h' : warn ? 'w' : ''}`;
+    const key = `p|${text}|${hot ? 'h' : warn ? 'w' : ''}`;
     // The hot clock's pulse rides the mesh, not the canvas.
     plaque.mesh.scale.setScalar(hot ? 1 + 0.05 * Math.sin(now * 0.012) : 1);
     if (plaque.key === key) return;
@@ -486,14 +527,10 @@ export function createScoreboard(scene: Scene): Scoreboard {
     ctx.clearRect(0, 0, w, h);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Round and format, small, above the digits.
-    ctx.font = futuristicFont(24, 700);
-    ctx.letterSpacing = '4px';
-    ctx.fillStyle = UI.textDim;
-    ctx.fillText(`ROUND ${state.round}  ·  FIRST TO ${target}`, w / 2, 34);
-    ctx.letterSpacing = '0px';
-    // The clock: bare steel-white digits wrapped in neon — amber, then red
-    // and hot as the round runs out.
+    // The clock, and only the clock: bare steel-white digits wrapped in
+    // neon — amber, then red and hot as the round runs out. (The round
+    // number and the format used to sit above it; the pips already say
+    // both, and the plaque reads better as one thing.)
     const neon = hot ? UI.danger : warn ? UI.amber : 'rgba(255,176,0,0.9)';
     ctx.font = stencilFont(100);
     ctx.shadowColor = neon;
@@ -567,7 +604,6 @@ export function createScoreboard(scene: Scene): Scoreboard {
       ctx.shadowBlur = 0;
     }
     ctx.restore();
-    if (dim) outStamp(ctx);
     tex.needsUpdate = true;
   };
 
@@ -709,7 +745,7 @@ export function createScoreboard(scene: Scene): Scoreboard {
         lastReset = state.resetCount;
         motion.clear();
       }
-      drawPlaque(state, target, now);
+      drawPlaque(state, now);
       const you = fighters[0];
       const allies = fighters.filter((f, i) => i > 0 && f.team === 0);
       const enemies = fighters.filter((f) => f.team !== 0);
@@ -719,6 +755,10 @@ export function createScoreboard(scene: Scene): Scoreboard {
         const mine = fighters.filter((f) => f.team === team);
         return `TEAM ${Math.max(0, Math.round(mine.reduce((s, f) => s + f.hp, 0)))}`;
       };
+
+      // A column of two is what crowds the board: 2v2, or anything that
+      // stacks. FFA never stacks — its flankers wear their own pad cards.
+      setHang(!ffa && (!!allies[0] || !!enemies[1]));
 
       if (ffa) {
         // The north pad's fighter (across the gap, straight ahead) keeps the
@@ -772,7 +812,9 @@ export function createScoreboard(scene: Scene): Scoreboard {
     },
 
     updateTraining(hp, hpMax) {
-      // Aim Training uses just the two classic boards.
+      // Aim Training uses just the two classic boards — at full size, on
+      // the classic hang, whatever format the last bout left behind.
+      setHang(false);
       const now = performance.now();
       left.mesh.visible = true;
       right.mesh.visible = true;

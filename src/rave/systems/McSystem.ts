@@ -79,7 +79,10 @@ const DECK_SPOT = { x: 0, y: CLUB_LAYOUT.stage.h, z: CLUB_LAYOUT.stage.z + 0.5, 
 
 /** What the headliner is wearing right now — the probe reads it to prove
  *  he changes between the map and the record, and never wears red/yellow. */
-export const mcView = { hue: MC.hue, color: 0, screen: '', track: '', visit: 0 };
+/** `want` is the hue he is easing toward — the probe reads it so a record
+ *  whose colour happens to sit beside the map's is not mistaken for a
+ *  wardrobe that never turned. */
+export const mcView = { hue: MC.hue, want: MC.hue, color: 0, screen: '', track: '', visit: 0 };
 
 export class McSystem extends createSystem({}) {
   private rig: DancerRig | null = null;
@@ -140,6 +143,7 @@ export class McSystem extends createSystem({}) {
   update(delta: number): void {
     this.lastDelta = delta;
     mcView.hue = this.hue;
+    mcView.want = mcHueFor(match.screen, match.trackId);
     mcView.color = this.baseColor;
     mcView.screen = match.screen;
     mcView.track = match.trackId;

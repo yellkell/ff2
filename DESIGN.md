@@ -139,7 +139,7 @@ console; it has TWO TABS:
 - **RAVE** — the record shelf: RAVE RAID's charted songs and the
   difficulty chips.
 
-Either way the CTA is the same verb: **CALL THE BALL.** A mirror ball is
+Either way the CTA is the same verb: **HOST.** A mirror ball is
 winched down out of the ceiling on its cable (the under-damped spring
 drop, the 60 s relay-owned countdown plate — the game or the song, the
 caller, one orbiting pip per person touched in). The ball is
@@ -355,13 +355,16 @@ set banks the same flat `CURRENCY.perGame`) buy **attachments**: shoulder
 pads, hats, jewelry, plates, antennae — models that bolt to the rig and
 **never affect the hitbox** (purely visual, parented to bones, excluded
 from collision). Everything in the shop is sold *uncoloured* — the same
-primer grey as the body. FF1's wallet/shop/locker plumbing
+primer grey as the body, plus one TRIM finish per piece (gunmetal on the
+white blank, pale steel on the onyx) for a visor's glass, a collar's
+chain, a gauntlet's ridges: the trim is not a paint surface, so it keeps
+its contrast under whatever the plate is painted. FF1's wallet/shop/locker plumbing
 (`wallet.ts`, `customization.ts`, owned-lists, try-before-buy preview)
 carries over; the catalogue changes from skins to attachments.
 
-**SHIPPED — GEAR** (`src/avatar/gear.ts`): fifteen shapes in three SLOTS
+**SHIPPED — GEAR** (`src/avatar/gear.ts`): fourteen shapes in three SLOTS
 — head (CREST, ANTENNAE, HORNS, HALO, MOHAWK, VISOR BAND), body
-(PAULDRONS, CHESTPLATE, COLLAR, RIDGE, BELT, EPAULETTES) and hands
+(PAULDRONS, CHESTPLATE, COLLAR, RIDGE, BELT) and hands
 (CUFFS, KNUCKLES, GAUNTLETS) — one worn per slot, every piece primed in
 the body's own tone (white on a blank, black on an onyx) and immune to
 every recolour, exactly like the body. Purely visual: gear parents to the
@@ -688,11 +691,10 @@ Each phase is shippable; nothing waits on everything.
    *(Opened: WHO HEARS WHOM is one table (`net/voiceRules.ts`) read by
    every voice path — RANKED is silence, no mic and no ears; duels hear
    their fighters, brawls every fighter, the raid its squad, the club the
-   room, an audience everyone. THE CROWD BED ships synthesised
-   (`audio/crowd.ts`): distant murmur under every bout, a rumble that
-   swells with the landings, roar stings on hits, cores, rounds and the
-   win, and the HANDS-UP channel (`systems/CrowdSystem.ts`) — both hands
-   over the head swell the roar — ready for the relay's aggregate.
+   room, an audience everyone. THE CROWD BED was built synthesised
+   (`audio/crowd.ts`) and is now SWITCHED OFF (`CROWD_BED = false`) —
+   the murmur read as noise in the headset; the stings and the HANDS-UP
+   channel (`systems/CrowdSystem.ts`) stay wired for a sourced bed later.
    AUDIENCE GROUND stands on the flanks of the flats and the boneyard
    (`arena/desert/audience.ts`): two-tier terraces outside the cage line,
    rails capped hazard amber, dark, each offering a set of STANDS.

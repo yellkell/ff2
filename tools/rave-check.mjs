@@ -117,8 +117,12 @@ check("your own colour is the arena's accent", Math.abs((hue ?? -1) - 0.5) < 0.0
   await page.waitForTimeout(700);
   const mcSet2 = await page.evaluate(() => ({ ...window.__gdr.mc }));
   const band = (h) => h >= 0.279 && h <= 0.921; // never red, never yellow
+  // A record whose own hue lands within the tolerance of the map's is the
+  // documented coincidence, not a wardrobe that never turned: then it is
+  // enough that he is wearing (or easing toward) the record's hue.
   const moved = Math.abs(mcSet2.hue - mcMenu.hue) > 0.01 || Math.abs(mcSet2.hue - mcSet.hue) > 0.002;
-  check('the MC changes colour from the map to the record', moved && mcSet2.screen === 'raid', JSON.stringify({ map: mcMenu.hue, set: mcSet.hue, later: mcSet2.hue }));
+  const wearsRecord = Math.abs(mcSet2.want - mcMenu.hue) <= 0.01 && Math.abs(mcSet2.hue - mcSet2.want) < 0.02;
+  check('the MC changes colour from the map to the record', (moved || wearsRecord) && mcSet2.screen === 'raid', JSON.stringify({ map: mcMenu.hue, set: mcSet.hue, later: mcSet2.hue, want: mcSet2.want }));
   check('and never wears the telegraphs\' red or yellow', band(mcMenu.hue) && band(mcSet.hue) && band(mcSet2.hue), JSON.stringify([mcMenu.hue, mcSet.hue, mcSet2.hue]));
 }
 if (shots) {

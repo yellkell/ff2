@@ -368,6 +368,7 @@ function handle(msg: Record<string, unknown>): void {
           role: msg.role === 'watcher' ? 'watcher' : 'fighter',
           callerIdx: Number(msg.callerIdx),
           mine: Number(msg.callerIdx) === net.myIdx,
+          solo: msg.solo === true,
           fighters: people(msg.fighters),
           watchers: people(msg.watchers),
           seed: Number(msg.seed ?? 1),
@@ -695,6 +696,10 @@ function soloProp(msg: Record<string, unknown>): void {
 /** Send the ball up at `pos` — my song pick and ring-size preference ride
  *  along. The relay owns the 60-second clock from here. */
 export function callBall(pos: [number, number, number], call?: { mode: BellMode; code: string }): void {
+  if (net.solo) {
+    soloCall(pos, call?.mode ?? 'rave');
+    return;
+  }
   if (net.phase !== 'hosting' && net.phase !== 'joined') return;
   if (call && call.mode !== 'rave') {
     // THE BELL: a fight rides the ball with the arena room it deals into.
@@ -712,12 +717,89 @@ export function callBall(pos: [number, number, number], call?: { mode: BellMode;
 
 /** Touch in (or step back out) of the hanging ball. */
 export function joinBall(wantIn: boolean): void {
+  if (net.solo) return; // a room of one has nobody else to touch in
   send({ t: 'ball-join', in: wantIn });
 }
 
 /** The caller waving their own ball away. */
 export function cancelBall(): void {
+  if (net.solo) {
+    window.clearTimeout(soloBallTimer);
+    soloBallTimer = 0;
+    net.ball = null;
+    net.dirty++;
+    return;
+  }
   send({ t: 'ball-off' });
+}
+
+/* ── THE BALL IN A ROOM OF ONE ─────────────────────────────────────── */
+
+/** A solo ball hangs for this long before it deals you — long enough for
+ *  the drop, the plate and the touch to read, short enough that nobody
+ *  is watching a clock with nobody else to wait for. START skips it. */
+const SOLO_BALL_MS = 15_000;
+let soloBallTimer = 0;
+
+/**
+ * The relay's ball, at home. The floor opened without a relay and the
+ * desk still says HOST — and it must mean it: the ball drops,
+ * the plate counts, your touch calls it off, START (or the clock) deals
+ * you exactly as the relay would have. A record deals a ring of one plus
+ * groupies; a fight deals you into the arena against its own bots.
+ */
+function soloCall(pos: [number, number, number], mode: BellMode): void {
+  if (net.ball) return;
+  window.clearTimeout(soloBallTimer);
+  const me = net.members[0];
+  net.ball = {
+    callerIdx: 0,
+    callerName: me?.name ?? '',
+    mode,
+    code: '',
+    track: match.preferredTrack,
+    diff: match.difficulty,
+    pos,
+    firesAt: performance.now() + SOLO_BALL_MS,
+    joins: new Set(),
+  };
+  net.dirty++;
+  soloBallTimer = window.setTimeout(fireSoloBall, SOLO_BALL_MS);
+}
+
+/** The solo ball's clock ran out (or START cut it): deal myself, through
+ *  the same 'start' the relay would have sent. */
+function fireSoloBall(): void {
+  soloBallTimer = 0;
+  const ball = net.ball;
+  if (!net.solo || !ball) return;
+  const me = net.members[0];
+  if (ball.mode === 'rave') {
+    // The relay's ringFor(1): a full four-ring, the empty seats groupies.
+    handle({
+      t: 'start',
+      seed: (Math.random() * 0xffffffff) >>> 0,
+      seats: 4,
+      track: ball.track,
+      diff: ball.diff,
+      startInMs: 5500,
+      players: [{ seat: 0, name: me?.name ?? '', idx: 0, you: true }],
+    });
+    return;
+  }
+  handle({
+    t: 'start',
+    mode: ball.mode,
+    code: '',
+    role: 'fighter',
+    callerIdx: 0,
+    solo: true,
+    fighters: [{ idx: 0, name: me?.name ?? '' }],
+    watchers: [],
+    seed: (Math.random() * 0xffffffff) >>> 0,
+    startInMs: 5500,
+    you: 0,
+  });
 }
 
 /** The caller dropping the needle NOW rather than riding the clock down —
@@ -726,6 +808,11 @@ export function cancelBall(): void {
  *  runs the same deal the timeout would have. Caller-only, and the relay
  *  enforces that rather than trusting the button. */
 export function startBall(): void {
+  if (net.solo) {
+    window.clearTimeout(soloBallTimer);
+    fireSoloBall();
+    return;
+  }
   send({ t: 'ball-go' });
 }
 
@@ -743,7 +830,7 @@ export function startBall(): void {
  */
 export function backToClub(winnerIdx?: number | null): void {
   if (net.phase !== 'live') return;
-  net.phase = net.isHost ? 'hosting' : 'joined';
+  net.phase = net.solo ? 'off' : net.isHost ? 'hosting' : 'joined';
   net.dealtAway = false;
   net.dirty++;
   // THE HOUSE PAYS on the way back in: the bell's bonus on top of whatever

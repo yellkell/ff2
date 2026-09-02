@@ -99,6 +99,13 @@ function loadBuffer(url: string): Promise<LoadedTrack | null> {
   if (!pending) {
     pending = decodeTrack(url);
     bufferCache.set(url, pending);
+    // A FAILED decode is forgotten, not cached: the boot preload runs on a
+    // young context over a headset's first fetches, and one dropped fetch
+    // used to poison the cache for the whole session — every later play()
+    // took the null and stayed silent. Now the next play() fetches again.
+    void pending.then((loaded) => {
+      if (loaded === null && bufferCache.get(url) === pending) bufferCache.delete(url);
+    });
   }
   return pending;
 }
@@ -128,6 +135,14 @@ export class MusicTrack {
    *  uncached: the shared cache must stay one-shape-per-URL. */
   private _lofi = false;
   private _uncached: { url: string; pending: Promise<LoadedTrack | null> } | null = null;
+  /** Where playback stands, for the settings readout. */
+  private _status: 'idle' | 'loading' | 'failed' | 'suspended' | 'ready' = 'idle';
+
+  get status(): string {
+    const ctx = audioContext();
+    if (ctx && ctx.state !== 'running' && this._playing) return 'suspended';
+    return this._status;
+  }
 
   constructor(src?: string, opts?: { cache?: boolean; lofi?: boolean }) {
     this._cache = opts?.cache !== false;
@@ -217,13 +232,16 @@ export class MusicTrack {
     if (!ctx || !this._src) return Promise.reject(new Error('MusicTrack: no source/context'));
     if (ctx.state === 'suspended') void ctx.resume();
     this._playing = true;
+    this._status = 'loading';
     const seq = ++this._playSeq;
     return this.load(this._src).then((loaded) => {
       if (seq !== this._playSeq) return; // paused or re-pointed mid-decode
       if (!loaded) {
         this._playing = false;
+        this._status = 'failed';
         throw new Error('MusicTrack: decode failed');
       }
+      this._status = 'ready';
       const { buffer, head } = loaded;
       this._buffer = buffer;
       if (!this._gain) {

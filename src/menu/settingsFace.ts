@@ -10,7 +10,7 @@ import { KIT, type PanelButton } from '../ui/kit/panel.js';
 import { font } from '../ui/kit/fonts.js';
 import { sfxVolume } from '../audio/sfx.js';
 import { musicVolume } from '../audio/musicVolume.js';
-import { isMusicMuted } from '../audio/menuMusic.js';
+import { isMusicMuted, menuMusicStatus } from '../audio/menuMusic.js';
 import { voiceEnabled } from '../audio/voicePref.js';
 import { paintHiddenAll } from '../avatar/paint.js';
 
@@ -150,6 +150,15 @@ export function settingsFace(): SettingsFace {
     body: (g, hover) => {
       drawTrack(g, 'SOUND FX', sfxVolume(), SFX.label, hover === 'sfx-vol');
       drawTrack(g, 'MUSIC', musicVolume(), MUSIC.label, hover === 'music-vol');
+      // The readout: one word on why the music is or isn't sounding —
+      // MUTED, VOLUME AT ZERO, DECODE FAILED, AUDIO SUSPENDED, PLAYING —
+      // so a silent headset can say which gate it is stuck behind.
+      g.textAlign = 'left';
+      g.font = font(600, 18);
+      g.letterSpacing = '2px';
+      g.fillStyle = KIT.faint;
+      g.fillText(`LOBBY MUSIC · ${menuMusicStatus()}`, M + 20, MUSIC.track + 62);
+      g.letterSpacing = '0px';
       g.textAlign = 'center';
       g.font = font(500, 24);
       g.fillStyle = KIT.faint;

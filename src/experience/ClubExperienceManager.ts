@@ -392,17 +392,41 @@ export function installTownExperienceManager(
     app.privateCode = deal.code;
     app.netStatus = deal.role === 'watcher' ? 'dealt to the rail' : 'dealt to the platforms';
     app.quickDuel = false; // a called duel is the long format, like a private one
-    app.lobbyMode = deal.mode;
-    app.lobbyView = 'lobby';
-    app.state = 'menu';
-    app.duelView = 'root';
+    if (deal.solo) {
+      // A ROOM OF ONE dealt me: no arena room, no lobby — straight into a
+      // bout of that shape against the arena's own bots (the menu's ONLY
+      // BOTS path, and its solo raid), the way the floor promised.
+      mesh.cancel();
+      app.lobbyMode = null;
+      app.lobbyRooms = [];
+      app.duelView = 'root';
+      app.spectating = false;
+      app.mySlot = 0;
+      app.arcade = deal.mode;
+      if (deal.mode === 'raid') {
+        app.mode = 'campaign';
+        app.campaignMode = 'raid';
+        app.raidHardcore = false;
+        app.raidGoopliath = false;
+        app.raidSize = 1;
+        app.campaignStage = 0;
+      } else {
+        app.mode = 'bot';
+      }
+      app.state = 'playing';
+    } else {
+      app.lobbyMode = deal.mode;
+      app.lobbyView = 'lobby';
+      app.state = 'menu';
+      app.duelView = 'root';
+    }
     await leaveRave();
     // (Narrowing: the crossing above changes the place under the await.)
     if ((townView.place as TownPlace) !== 'arena') {
       bellDeal = null;
       return; // the crossing failed and the rave kept me
     }
-    if (!paperRooms()) {
+    if (!paperRooms() && !deal.solo) {
       if (!deal.mine) {
         const joined = await withTimeout(
           mesh.joinPrivate(

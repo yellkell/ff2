@@ -35,6 +35,7 @@ import {
   BufferGeometry,
   ConeGeometry,
   CylinderGeometry,
+  DoubleSide,
   ExtrudeGeometry,
   Group,
   Mesh,
@@ -308,21 +309,47 @@ function telegraphLine(n: number): Group {
 }
 
 /** The hooded lamp over the GASKET sign — the one lit thing at the
- *  trailhead besides the fire. Its light is the sign's, so it's real. */
+ *  trailhead besides the fire. Its light is the sign's, so it's real.
+ *
+ *  The shade is a proper SHADE: a wide mouth facing down over the bulb,
+ *  double-sided so you see the lit inside of it from below, capped at the
+ *  crown and hung off a gooseneck that reaches out over the board. (It
+ *  used to be an open cone flipped apex-down — a spike with the bulb
+ *  hanging out the bottom of it, and see-through from every angle but
+ *  one.) */
 function signLamp(): { group: Group; light: PointLight; bulb: Mesh } {
   const g = new Group();
   const steel = rustMat(0x4c4440, { roughness: 0.75 });
-  const arm = new Mesh(new CylinderGeometry(0.025, 0.025, 0.9, 10), steel);
-  arm.rotation.z = Math.PI / 2 - 0.35;
-  arm.position.set(0.3, 2.45, -0.02);
-  const hood = new Mesh(new ConeGeometry(0.22, 0.16, 20, 1, true), steel);
-  hood.position.set(0.75, 2.6, 0);
-  hood.rotation.x = Math.PI; // mouth down
-  const bulb = new Mesh(new SphereGeometry(0.05, 12, 9), makePaperDouble('#ffd9a0', 3.2));
-  bulb.position.set(0.75, 2.52, 0);
-  const light = new PointLight(0xffc27a, 4.5, 5.5, 2);
-  light.position.set(0.75, 2.45, 0);
-  g.add(arm, hood, bulb, light);
+  const X = 0.62; // out over the board, not past its end
+  const Y = 2.66; // clear of the sign's top edge, under the post's cap
+  // THE GOOSENECK: a stub off the post, an elbow, and the drop the shade
+  // hangs from — one bent arm rather than a rod floating in the air.
+  const stub = new Mesh(new CylinderGeometry(0.022, 0.022, 0.42, 10), steel);
+  stub.rotation.z = Math.PI / 2;
+  stub.position.set(0.16, Y + 0.2, -0.03);
+  const elbow = new Mesh(new SphereGeometry(0.032, 10, 8), steel);
+  elbow.position.set(0.37, Y + 0.2, -0.03);
+  const reach = new Mesh(new CylinderGeometry(0.02, 0.02, 0.34, 10), steel);
+  reach.rotation.set(0, 0, Math.PI / 2 - 0.5);
+  reach.position.set(0.52, Y + 0.13, -0.02);
+  // THE SHADE: a tall cone, mouth down over the bulb — steel outside, and
+  // a warm liner just inside it so from underneath you read a lit
+  // reflector with the bulb hanging in it, not a flat disc.
+  const shade = new Mesh(new ConeGeometry(0.17, 0.24, 24, 1, true), steel.clone());
+  (shade.material as MeshStandardMaterial).side = DoubleSide;
+  shade.position.set(X, Y, 0);
+  const liner = new Mesh(new ConeGeometry(0.158, 0.222, 24, 1, true), makePaperDouble('#ffcf96', 0.5));
+  liner.position.set(X, Y - 0.004, 0);
+  const cap = new Mesh(new SphereGeometry(0.04, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), steel);
+  cap.position.set(X, Y + 0.1, 0);
+  // The bulb, tucked up INSIDE the mouth so the glow spills, not glares.
+  const bulb = new Mesh(new SphereGeometry(0.042, 12, 9), makePaperDouble('#ffd9a0', 1.8));
+  bulb.position.set(X, Y - 0.05, 0);
+  // The light sits at the mouth, throwing down the board — short reach so
+  // it lights the sign and the sand under it, not half the trailhead.
+  const light = new PointLight(0xffc27a, 3.2, 4.2, 2);
+  light.position.set(X, Y - 0.14, 0.02);
+  g.add(stub, elbow, reach, shade, liner, cap, bulb, light);
   return { group: g, light, bulb };
 }
 
@@ -340,6 +367,7 @@ function buildTrailhead(yaw: number): SiteSet {
 
   // The sign, now with its lamp, clear of the raid arc as before.
   const sign = signpost();
+  sign.name = 'gasket-sign'; // named so headless probes can look at it
   const lamp = signLamp();
   sign.add(lamp.group);
   place(sign, 8.2, -2.0, -0.85, root); // the lamp flickers: keep it live

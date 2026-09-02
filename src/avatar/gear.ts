@@ -56,7 +56,6 @@ export const GEAR: GearDef[] = [
   { id: 'collar', name: 'COLLAR', slot: 'body', price: 80, blurb: 'a ruff ring under the head' },
   { id: 'ridge', name: 'RIDGE', slot: 'body', price: 140, blurb: 'a dorsal ridge down the spine' },
   { id: 'belt', name: 'BELT', slot: 'body', price: 60, blurb: 'a band round the waist, buckled' },
-  { id: 'epaulettes', name: 'EPAULETTES', slot: 'body', price: 200, blurb: 'shoulder boards with a boss' },
   // ── hands ─────────────────────────────────────────────────────────────
   { id: 'cuffs', name: 'CUFFS', slot: 'hands', price: 60, blurb: 'a ring at each wrist' },
   { id: 'knuckles', name: 'KNUCKLES', slot: 'hands', price: 120, blurb: 'four spikes over the fist' },
@@ -106,9 +105,26 @@ function primer(tone: BlankTone): MeshStandardMaterial {
     : new MeshStandardMaterial({ color: 0x1c1c20, roughness: 0.22, metalness: 0.45, envMapIntensity: 1.3 });
 }
 
+/** THE TRIM — the one other finish a piece may carry: gunmetal on the
+ *  white blank, pale steel on the onyx, for a visor's glass, a collar's
+ *  chain, a gauntlet's ridges. Not a paint surface: the bake leaves it
+ *  its own colour, so a dark slit stays dark across a primer plate
+ *  instead of vanishing into it. */
+function trim(tone: BlankTone): MeshStandardMaterial {
+  return tone === 'white'
+    ? new MeshStandardMaterial({ color: 0x24262c, roughness: 0.28, metalness: 0.75, envMapIntensity: 1.2 })
+    : new MeshStandardMaterial({ color: 0xc8c4bc, roughness: 0.3, metalness: 0.6, envMapIntensity: 1.2 });
+}
+
+/** Mark a mesh as trim: it keeps its own material through the paint bake. */
+function asTrim<T extends Mesh>(m: T): T {
+  m.userData.trim = true;
+  return m;
+}
+
 const R = BODY_IK.headRadius;
 
-type Builder = (mat: MeshStandardMaterial, side: 1 | -1) => Group;
+type Builder = (mat: MeshStandardMaterial, side: 1 | -1, trim: MeshStandardMaterial) => Group;
 
 const BUILDERS: Record<string, Builder> = {
   /* head — origin at the head centre, front −z, skull ~R×(0.84, 1.08, 0.93) */
@@ -201,13 +217,39 @@ const BUILDERS: Record<string, Builder> = {
     }
     return g;
   },
-  visorband: (mat) => {
+  visorband: (mat, _side, trimMat) => {
+    // A VISOR, not a hoop: a wraparound plate across the eyes — a thin
+    // open cylinder segment hugging the skull, taller than it is thick,
+    // with a dark slit and a brow bar along its top. The old torus wore
+    // like a bent wire and read as a headband slipping off.
     const g = new Group();
-    const band = new Mesh(new TorusGeometry(R * 0.86, R * 0.07, 8, 40, Math.PI * 1.3), mat);
-    band.rotation.set(Math.PI / 2, 0, Math.PI * 0.35);
-    band.scale.set(1, 1.02, 1);
-    band.position.set(0, R * 0.12, 0);
-    g.add(band);
+    const arc = Math.PI * 1.15;
+    const plate = new Mesh(
+      new CylinderGeometry(R * 0.98, R * 1.0, R * 0.34, 40, 1, true, Math.PI - arc / 2, arc),
+      mat,
+    );
+    plate.material = mat.clone();
+    (plate.material as MeshStandardMaterial).side = DoubleSide;
+    plate.position.set(0, R * 0.1, -R * 0.02);
+    plate.scale.set(0.9, 1, 1.02);
+    g.add(plate);
+    // The slit: the visor's glass, a dark band across the middle — trim,
+    // so it stays dark whatever the plate is painted.
+    const slitMat = trimMat.clone();
+    slitMat.side = DoubleSide;
+    const slit = asTrim(new Mesh(
+      new CylinderGeometry(R * 1.01, R * 1.01, R * 0.12, 40, 1, true, Math.PI - arc * 0.42, arc * 0.84),
+      slitMat,
+    ));
+    slit.position.copy(plate.position);
+    slit.scale.copy(plate.scale);
+    g.add(slit);
+    // The brow bar over the top edge, a hair proud, in the trim too.
+    const brow = asTrim(new Mesh(new TorusGeometry(R * 0.93, R * 0.03, 8, 40, arc), trimMat));
+    brow.rotation.set(Math.PI / 2, 0, Math.PI / 2 - arc / 2 + Math.PI);
+    brow.position.set(0, R * 0.28, -R * 0.02);
+    brow.scale.set(0.9, 1.02, 1);
+    g.add(brow);
     return g;
   },
 
@@ -294,13 +336,46 @@ const BUILDERS: Record<string, Builder> = {
     g.add(new Mesh(slab, slabMat));
     return g;
   },
-  collar: (mat) => {
+  collar: (mat, _side, trimMat) => {
+    // A collar that SITS: a flat-section ring lying on the shoulder slope
+    // at the neck's root, a raised rim along its outer edge, and a pendant
+    // plate hanging off the front. The old ruff hovered under the head
+    // like a ring tossed over it.
     const g = new Group();
-    const ruff = new Mesh(new TorusGeometry(0.082, 0.03, 10, 36), mat);
-    ruff.rotation.x = Math.PI / 2;
-    ruff.position.set(0, 0.45, -0.028);
-    ruff.scale.set(1.2, 1, 0.95);
-    g.add(ruff);
+    const ring = new Mesh(new CylinderGeometry(0.105, 0.115, 0.018, 40, 1, false), mat);
+    ring.position.set(0, 0.425, -0.012);
+    ring.scale.set(1.15, 1, 0.9);
+    ring.rotation.x = 0.16; // follows the shoulder slope, front dipping
+    g.add(ring);
+    const rim = asTrim(new Mesh(new TorusGeometry(0.113, 0.011, 10, 40), trimMat));
+    rim.rotation.x = Math.PI / 2 + 0.16;
+    rim.position.set(0, 0.434, -0.012);
+    rim.scale.set(1.15, 1, 0.9);
+    g.add(rim);
+    // The hole the neck rises through, cut by a dark inner ring.
+    const throatMat = trimMat.clone();
+    throatMat.side = DoubleSide;
+    const throat = asTrim(new Mesh(new CylinderGeometry(0.068, 0.07, 0.024, 32, 1, true), throatMat));
+    throat.position.copy(ring.position);
+    throat.rotation.copy(ring.rotation);
+    g.add(throat);
+    // The chain: a run of dark links down from the front rim to the
+    // pendant, so the piece reads as a NECKLACE from across the room.
+    for (let i = 0; i < 3; i++) {
+      const link = asTrim(new Mesh(new TorusGeometry(0.008, 0.0025, 6, 12), trimMat));
+      link.position.set(0, 0.424 - i * 0.013, -0.108 - i * 0.004);
+      link.rotation.y = (i % 2) * (Math.PI / 2);
+      g.add(link);
+    }
+    // The pendant: a chamfered plate, dark, with a primer stud on it.
+    const pendant = asTrim(new Mesh(new BoxGeometry(0.038, 0.046, 0.008), trimMat));
+    pendant.position.set(0, 0.36, -0.118);
+    pendant.rotation.x = 0.2;
+    g.add(pendant);
+    const stud = new Mesh(new CylinderGeometry(0.009, 0.009, 0.004, 12), mat);
+    stud.rotation.x = Math.PI / 2 + 0.2;
+    stud.position.set(0, 0.36, -0.1235);
+    g.add(stud);
     return g;
   },
   ridge: (mat) => {
@@ -331,21 +406,6 @@ const BUILDERS: Record<string, Builder> = {
     g.add(buckle);
     return g;
   },
-  epaulettes: (mat) => {
-    const g = new Group();
-    for (const s of [-1, 1]) {
-      // A board that reaches PAST the shoulder line, and a boss at its tip.
-      const board = new Mesh(new BoxGeometry(0.13, 0.022, 0.09), mat);
-      board.position.set(s * 0.19, 0.41, 0);
-      board.rotation.z = -s * 0.3;
-      g.add(board);
-      const boss = new Mesh(new SphereGeometry(0.032, 14, 10), mat);
-      boss.position.set(s * 0.245, 0.4, 0);
-      g.add(boss);
-    }
-    return g;
-  },
-
   /* hands — palm at the origin, fingers −z, cuff +z (hands.ts) */
   cuffs: (mat) => {
     const g = new Group();
@@ -366,11 +426,28 @@ const BUILDERS: Record<string, Builder> = {
     }
     return g;
   },
-  gauntlets: (mat) => {
+  gauntlets: (mat, _side, trimMat) => {
+    // A GAUNTLET, not a tile balanced on the hand: a back plate hugging
+    // the top of the palm (palm block is 0.078 × 0.024 × 0.09, top face
+    // at y = 0.012), three knuckle ridges across its leading edge, and a
+    // flared cuff round the wrist behind it.
     const g = new Group();
-    const plate = new Mesh(new BoxGeometry(0.084, 0.012, 0.1), mat);
-    plate.position.set(0, 0.02, 0.01);
+    const plate = new Mesh(new BoxGeometry(0.086, 0.01, 0.084), mat);
+    plate.position.set(0, 0.017, 0.006);
     g.add(plate);
+    for (let i = 0; i < 3; i++) {
+      const ridge = asTrim(new Mesh(new BoxGeometry(0.088, 0.008, 0.009), trimMat));
+      ridge.position.set(0, 0.024, -0.022 + i * 0.02);
+      g.add(ridge);
+    }
+    // The cuff: a short frustum open at both ends, wider toward the arm.
+    const cuff = asTrim(new Mesh(new CylinderGeometry(0.052, 0.06, 0.05, 24, 1, true), trimMat));
+    cuff.material = trimMat.clone();
+    (cuff.material as MeshStandardMaterial).side = DoubleSide;
+    cuff.rotation.x = Math.PI / 2;
+    cuff.position.set(0, 0.0, 0.066);
+    cuff.scale.set(1, 0.72, 1);
+    g.add(cuff);
     return g;
   },
 };
@@ -417,7 +494,7 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     const build = BUILDERS[id];
     if (!build) return;
     const side: 1 | -1 = o.name === 'opponent-glove-right' ? -1 : 1;
-    const g = build(primer(tone), side);
+    const g = build(primer(tone), side, trim(tone));
     g.name = 'gear';
     g.userData.gear = id;
     // A PAINT SURFACE (avatar/paint.ts): every mesh of the piece wears its
@@ -430,6 +507,8 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
       const mesh = m as Mesh;
       if (!mesh.isMesh) return;
       mesh.material = (mesh.material as MeshStandardMaterial).clone();
+      // Trim keeps its own finish: no part tag, so the bake walks past it.
+      if (mesh.userData.trim) return;
       mesh.userData.paintPart = part;
       mesh.userData.paintTone = tone;
     });

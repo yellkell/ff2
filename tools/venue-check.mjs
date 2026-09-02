@@ -132,6 +132,23 @@ await page.waitForTimeout(1600); // his wardrobe eases at 0.5 hue/s
 const mcFirst = await page.evaluate(() => ({ visit: window.__gdr.mc.visit, hue: window.__gdr.mc.hue }));
 check('the MC is dressed for this visit, inside his safe band', mcFirst.visit > 0 && mcFirst.hue >= 0.28 && mcFirst.hue <= 0.92, JSON.stringify(mcFirst));
 
+console.log('\n=== THE BALL IN A ROOM OF ONE: it calls, it deals, it comes home ===');
+// No relay answered, and the desk still says HOST. It must mean it.
+await page.evaluate(() => window.__gdr.club.call([1.6, 1.5, -1.5]));
+await page.waitForTimeout(400);
+const soloBall = await page.evaluate(() => { const b = window.__gdr.net.state.ball; return b ? { mode: b.mode, caller: b.callerName, hanging: !!window.__gdr.scene().getObjectByName('raid-ball') } : null; });
+check('a solo ball drops on the floor of one', !!soloBall && soloBall.mode === 'rave', JSON.stringify(soloBall));
+// The caller cannot wait on anyone: START deals them now.
+await page.evaluate(() => window.__gdr.club.go());
+await page.waitForFunction(() => window.__gdr.match.screen === 'countdown' || window.__gdr.match.screen === 'raid', { timeout: 6000 }).catch(() => {});
+const soloDeal = await page.evaluate(() => ({ screen: window.__gdr.match.screen, seats: window.__gdr.match.seats, online: window.__gdr.match.online, ball: window.__gdr.net.state.ball, phase: window.__gdr.net.state.phase }));
+check('and deals a ring of one — four seats, groupies in the rest', (soloDeal.screen === 'countdown' || soloDeal.screen === 'raid') && soloDeal.seats === 4 && soloDeal.ball === null && soloDeal.phase === 'live', JSON.stringify(soloDeal));
+// Home: the set is abandoned back to the floor, still a room of one.
+await page.evaluate(() => window.__gdr.toLobby());
+await page.waitForTimeout(600);
+const soloHome = await page.evaluate(() => ({ screen: window.__gdr.match.screen, solo: window.__gdr.net.state.solo, phase: window.__gdr.net.state.phase }));
+check('the floor of one is still there when the set ends', soloHome.screen === 'lobby' && soloHome.solo && soloHome.phase === 'off', JSON.stringify(soloHome));
+
 console.log('\n=== the dumbwaiter serves without a relay ===');
 const served = await page
   .waitForFunction(() => window.__gdr.props?.glasses?.().some((g) => g.mode === 'pedestal'), { timeout: 6000 })
@@ -354,9 +371,10 @@ const openHeadset = async (name) => {
   return p;
 };
 // The first headset has done its walking: it goes, so the two that follow
-// don't share headless Chromium's one GPU three ways (the floor gives a
-// relay 3.5 s to answer before opening as a room of one, and three pages
-// rendering at once can miss that on this machine).
+// don't share headless Chromium's one GPU three ways. (The floor gives a
+// relay five seconds of RESPONSIVE time to answer before opening as a room
+// of one — counted in poll ticks, so a page busy building the hall doesn't
+// burn the grace it hasn't used.)
 await page.close();
 const caller = await openHeadset('CALLER');
 const toucher = await openHeadset('TOUCHER');

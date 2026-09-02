@@ -35,10 +35,12 @@ fights, raids and rave sets all feed it):
   you own the materials. (The brief's law: place AND remove, from your
   locker, minutely.)
 - Pricing sketch (tune in `config.ts` `PAINT` block): basic hue stripe
-  ≈ 20 coins (two games), splotch ≈ 30, neon tier ×2, top shelf ×10.
-  A first paint job (5–8 units) lands around a session of play — the
-  wardrobe grows over weeks, which is the point ("lasting through
-  games and added to over time").
+  ≈ 8 coins, splotch ≈ 10, dot 5, square 7 — every unit under a game's
+  pay. Neon tier ×2, top shelf ×4.
+  A first paint job (5–8 units) costs a handful of bouts, not a
+  savings drive — the wardrobe still grows over weeks, which is the
+  point ("lasting through games and added to over time"), but nobody
+  waits to make their first mark.
 - The tutorial's graduation gift gains one free stripe in the contrast
   tone (black stripe on a white body, white on onyx) so every player
   has touched the paint bay once.
