@@ -12,7 +12,7 @@
  *      door ▸ z = +3.6 ───────────── (south wall) ───────────────
  */
 
-import { PALETTE } from '../config.js';
+import { PALETTE, ROOM_SERVER, roomServerHost } from '../config.js';
 
 // Room shell extents (also used inside PUB below — object literals can't
 // self-reference). Stretched from 4.5×3.0 to fit more seating and a longer
@@ -368,9 +368,9 @@ export const ACCENTS = [
   0xff8c5a, // copper
 ];
 
-/** The hosted pub relay (Render). Override per-session with ?server=… or by
- *  setting localStorage 'ibb-pub-server'. */
-export const PUB_SERVER = 'wss://iron-balls-pub.onrender.com';
+/** The hosted pub relay: THE ROOM SERVER's /pub mount (server/room.mjs).
+ *  Override per-session with ?server=… or localStorage 'ibb-pub-server'. */
+export const PUB_SERVER = `${ROOM_SERVER}/pub`;
 
 export interface PubRegion {
   id: string;
@@ -380,11 +380,17 @@ export interface PubRegion {
 }
 
 /** The pub regions a player can pick between at the door. Each is an
- *  independent room (its own punters + voice); picking one stores its URL in
- *  `ibb-pub-server`, which `pubServerUrl()` then resolves. First = default. */
+ *  independent room server (its own punters + voice); picking one stores its
+ *  URL in `ibb-pub-server`, which `pubServerUrl()` then resolves. First =
+ *  default.
+ *
+ *  A region is a whole ROOM SERVER now, not a pub-only host: point the EU
+ *  entry at a second deploy of server/room.mjs and that region gets its own
+ *  pub, rave and duel relay together, which is what you want — a punter who
+ *  walks from the EU pub into a rave should not be thrown back to the US. */
 export const PUB_REGIONS: PubRegion[] = [
   { id: 'usa', label: 'USA', url: PUB_SERVER },
-  { id: 'eu', label: 'EU', url: 'wss://iron-balls-boxing-eu.onrender.com' },
+  { id: 'eu', label: 'EU', url: 'wss://iron-balls-boxing-eu.onrender.com/pub' },
 ];
 
 /** Resolve the pub server URL: ?server= param > localStorage > local dev
@@ -394,11 +400,9 @@ export function pubServerUrl(): string {
   if (param) return param;
   const stored = localStorage.getItem('ibb-pub-server');
   if (stored) return stored;
-  // On your own machine, talk to a pub server running locally; anywhere
-  // else (Firebase Hosting, yellkell.com/ff) use the hosted relay.
-  const host = location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') return `ws://${host}:8787/pub`; // THE ROOM SERVER (server/room.mjs)
-  return PUB_SERVER;
+  // On your own machine, talk to a room server running locally; anywhere
+  // else (ff2.web.app) use the hosted one.
+  return `${roomServerHost()}/pub`;
 }
 
 /** The pub server's HTTP origin (same host as the WS relay) + the LiveKit voice

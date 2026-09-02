@@ -183,7 +183,7 @@ export const CLUB = {
  * FIGHT (DESIGN §3.3): the fight-club language, gunmetal, hazard amber and
  * riveted steel, fused with the supper-club craft level, every edge with
  * thickness, saturated colour reserved for LIGHT. So `brass` is galvanised
- * steel now, `bronze` is gunmetal, `velvet` is black quilted vinyl, `oak`
+ * steel now, `bronze` is gunmetal, `velvet` is deep red quilted velvet, `oak`
  * is painted plate, `plaster` is board-formed concrete — and the coves, the
  * signage and the rings burn neon. */
 export const DECOR = {
@@ -194,8 +194,15 @@ export const DECOR = {
   brass: 0x9aa4ac, // galvanised steel (was champagne brass)
   brassDeep: 0x5e666d,
   bronze: 0x3b4048, // gunmetal (was oxidised bronze)
-  velvet: 0x17181c, // black quilted vinyl (was oxblood)
-  velvetDeep: 0x0e0f12,
+  /** RED VELVET, worn dark. The booths went from oxblood to a flat black
+   *  vinyl when the venue came over to FIRE FIGHT, and the horseshoes lost
+   *  something for it — a black seat in a black room is a silhouette, not a
+   *  piece of furniture. This is the middle: unmistakably red under the
+   *  club's neon, still dark enough that the coves and the rings stay the
+   *  brightest things in the hall. The quilting's crowns and buttons do the
+   *  rest; a velvet that reads as fabric needs a hue to catch light WITH. */
+  velvet: 0x3a161c,
+  velvetDeep: 0x1d0a0e,
   stone: 0x2e3035, // sealed concrete (was dark veined stone)
   candle: 0xffc678, // 2400 K practical — the one warmth kept
   gold: 0xffc23a, // THE SUN's own light: the stage burst's golden centre

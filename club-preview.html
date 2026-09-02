@@ -50,25 +50,11 @@
         scene.add(ball.group);
       }
 
-      // ?console=1&ctab=rave — the A-button console standing in space.
-      let consolePanel = null;
-      if (params.get('console') === '1') {
-        const { Panel } = await import('/src/ui/kit/panel.ts');
-        const { consoleFace, consoleState, consoleClick } = await import('/src/club/console.ts');
-        if (params.get('ctab') === 'rave') consoleClick('club:tab-rave');
-        if (params.get('song')) consoleClick(`club:song-${params.get('song')}`);
-        consolePanel = new Panel(0.62, 0.98, 768, 1216);
-        const f = consoleFace();
-        consolePanel.paint(f.title, f.body, f.buttons, null);
-        // Stand it 0.85 m along the camera's heading, facing back at it.
-        const dx = -Math.sin(yaw), dz = -Math.cos(yaw);
-        consolePanel.mesh.position.set(x + dx * 0.85, y - 0.12, z + dz * 0.85);
-        consolePanel.mesh.rotation.order = 'YXZ';
-        consolePanel.mesh.rotation.y = yaw;
-        consolePanel.mesh.rotation.x = -0.18;
-        scene.add(consolePanel.mesh);
-        void consoleState;
-      }
+      // (?console=1 used to stand the A-button console in space here. The
+      //  module it imported, src/club/console.ts, no longer exists — the
+      //  console moved into the club's own systems — and a dead import in a
+      //  dev harness is not a dormant bug: Vite analyses the whole module on
+      //  load, so it broke EVERY club screenshot, console or not.)
 
       const camera = new PerspectiveCamera(74, window.innerWidth / window.innerHeight, 0.05, 200);
       camera.position.set(x, y, z);
@@ -86,7 +72,6 @@
           ball.twinkle(1 / 60);
           ball.plate.rotation.y = yaw;
         }
-        if (consolePanel) consolePanel.tick(1 / 60, 0.5 + 0.5 * Math.sin(t * 2));
         renderer.render(scene, camera);
       });
     </script>

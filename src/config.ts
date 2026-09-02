@@ -1031,14 +1031,55 @@ export const NET = {
   defaultPort: 8787,
 };
 
-/** Resolve the relay server URL: ?server= param > localStorage > same host. */
+/**
+ * THE ROOM SERVER — one hosted process for the whole town.
+ *
+ * FIRE FIGHT 2 runs THREE relays (server/room.mjs): the duel relay at /ff,
+ * the Iron Balls pub at /pub, and the rave's room relay at /rave. They used
+ * to be three separate hosts, which meant three cold starts, three free-tier
+ * services to keep warm, and three URLs to keep in step. They are one process
+ * on one port, told apart by path — so one host serves all of it.
+ *
+ * A free-tier host SLEEPS when idle and takes a while to wake. That is the
+ * strongest practical argument for one service rather than three: everyone
+ * arriving anywhere in the town wakes the same one, so the pub warms the rave
+ * and the rave warms the duel relay.
+ *
+ * Override per-session with ?server=wss://host (no path — the path is added
+ * per relay) or by setting `ibb-room-server` in localStorage.
+ */
+export const ROOM_SERVER = 'wss://rave-raid-relay.onrender.com';
+
+/** Where the room server lives, without a relay path. */
+export function roomServerHost(): string {
+  const param = new URLSearchParams(location.search).get('server');
+  if (param) return param.replace(/\/(ff|pub|rave)$/, '');
+  try {
+    const stored = localStorage.getItem('ibb-room-server');
+    if (stored) return stored;
+  } catch {
+    /* storage may be unavailable */
+  }
+  // A plain-http page is a dev serve (vite on this machine, or its LAN IP as
+  // reached from a headset) — talk to the room server running beside it.
+  if (location.protocol !== 'https:') return `ws://${location.hostname}:${NET.defaultPort}`;
+  return ROOM_SERVER;
+}
+
+/** Resolve the DUEL relay's URL (server/index.mjs, mounted at /ff). */
 export function serverUrl(): string {
+  // A `?server=` or a saved `ibb-server` that already names a full URL wins
+  // outright — that is the escape hatch for pointing one client at a relay on
+  // a laptop, and it must not have a path bolted onto it.
   const param = new URLSearchParams(location.search).get('server');
   if (param) return param;
-  const stored = localStorage.getItem('ibb-server');
-  if (stored) return stored;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.hostname}:${NET.defaultPort}`;
+  try {
+    const stored = localStorage.getItem('ibb-server');
+    if (stored) return stored;
+  } catch {
+    /* storage may be unavailable */
+  }
+  return `${roomServerHost()}/ff`;
 }
 
 /**
