@@ -428,33 +428,130 @@ export const BODY_IK = {
   pelvisRadius: 0.17,
 };
 
-/** The practice bot: an iron boxer that bobs, weaves and throws fireballs. */
+/**
+ * The practice bot: an iron boxer that bobs, weaves and throws fireballs.
+ * These are the FIXED numbers — body geometry, the guard, the beats every
+ * rank shares. Everything that gets sharper with rank (cadence, speed, aim,
+ * reactions, footwork) lives on BOT_LADDER below, one row per rank.
+ */
 export const BOT = {
   headY: 1.45, // relaxed head height
   headYMin: 1.0, // deepest duck
   headYMax: 1.62, // tallest stand
-  padHalfWidth: 0.7, // lateral roaming range on its pad
-  moveSpeed: 1.5, // m/s strafe
-  duckSpeed: 2.0, // m/s vertical bob
-  reactDistance: 1.6, // reacts to your ball inside this range (dodge OR block)
-  throwInterval: 2.05, // seconds between throws (alternates hands)
-  windup: 0.7, // orbit/wind-up time before the ball leaves
-  throwSpeed: 4.65, // a touch slower than yours → readable and dodgeable
-  damage: 20, // every landed hit is 20, theirs included
-  aimError: 0.13, // metres of aim slop at the target
-  recallDelay: 1.4, // seconds after a throw before it recalls the ball
+  padHalfWidth: 0.7, // lateral roaming range on its pad (a row's `roam` scales it)
   headPitchMax: 0.32, // radians the head tilts up/down to track you — no owl-necking
   headTurnSpeed: 8, // how fast the head eases toward facing you
 
   // --- defence: an incoming ball triggers ONE decision per approach ---
-  blockChance: 0.35, // odds it raises a guard instead of dodging
   blockHold: 0.55, // seconds the guard hand stays up
   blockReach: 0.5, // how far ahead of the head the guard hand plants
   decideEvery: 0.7, // seconds between threat decisions (one per approach)
 
-  // --- offence: throws mix up their target ---
-  lowAimChance: 0.45, // odds a throw hunts the LOWER BODY instead of the head
+  // --- offence: a low throw's target ---
   lowAimDrop: 0.62, // metres below the head a low throw aims (the pelvis line)
+
+  // --- the brain's fixed beats (the per-rank numbers live in BOT_LADDER) ---
+  dodgeBurst: 0.4, // seconds a dodge moves at burst speed
+  dodgeBurstGain: 1.6, // × moveSpeed / duckSpeed while a dodge is fresh
+  feintHold: 0.5, // extra seconds a FEINT holds the wind-up past its beat
+  doubleTapGap: 0.3, // seconds between the fists of a DOUBLE TAP
+  punishFuse: 0.12, // how fast a PUNISH throw comes once your fists are empty
+  headLagWindow: 0.6, // seconds of your head's trail the bot remembers (aimLag)
+};
+
+/**
+ * THE BOT LADDER — one brain per Bronze→Overlord rank. A bot bout reads the
+ * player's cumulative XP (the same number that sets their badge), finds their
+ * tier, and blends the rows either side of it by how far through the tier
+ * they are, so the sparring partner gets steadily sharper as they climb —
+ * no cliff at a promotion. Beginners face a ROOKIE that throws slow, aims
+ * where you WERE, notices fire late and often just watches it land; the
+ * OVERLORD leads your head, punishes empty fists, feints, double-taps and
+ * dodges before the ball has left your hand. The tutorial always spars the
+ * ROOKIE. See combat/botBrain.ts (the blend) and systems/BotSystem.ts (the
+ * behaviour each number drives).
+ *
+ *  label         : the bot's title on the bout panel ("contender · gold grade").
+ *  throwInterval : seconds between throws.
+ *  windup        : seconds the ball orbits (the tell) before it leaves.
+ *  throwSpeed    : m/s; your own throws run 4.2–8.5.
+ *  aimError      : metres of slop at the target.
+ *  aimLag        : seconds behind your head it aims — rookies throw at your ghost.
+ *  lead          : 0..1 how much it aims where your head is GOING (flight-time lead).
+ *  lowAimChance  : base odds a throw hunts the lower body.
+ *  readsHabits   : 0..1 how much lowAimChance bends toward where you actually sit
+ *                  (a ducker starts eating pelvis-line balls).
+ *  reactDistance : metres out it notices an incoming ball.
+ *  reactDelay    : seconds it hesitates before acting on one.
+ *  defendChance  : odds it does anything at all about a noticed ball.
+ *  blockChance   : of those, odds it raises a GUARD rather than dodging.
+ *  wrongWayChance: odds a dodge goes INTO the ball (rookie footwork).
+ *  moveSpeed / duckSpeed : m/s strafe and bob.
+ *  restless      : × how often it re-picks a spot on its pad.
+ *  roam          : 0..1 of the pad's width it actually uses.
+ *  preDodge      : odds it steps as soon as you SPIN UP, before the ball leaves.
+ *  punish        : odds it fires the instant BOTH your fists are empty.
+ *  feint         : odds a wind-up holds past its beat before releasing.
+ *  doubleTap     : odds the other fist follows a throw within a beat.
+ *  recallDelay   : seconds after a throw before it recalls the ball.
+ */
+export interface BotLadderRow {
+  label: string;
+  throwInterval: number;
+  windup: number;
+  throwSpeed: number;
+  aimError: number;
+  aimLag: number;
+  lead: number;
+  lowAimChance: number;
+  readsHabits: number;
+  reactDistance: number;
+  reactDelay: number;
+  defendChance: number;
+  blockChance: number;
+  wrongWayChance: number;
+  moveSpeed: number;
+  duckSpeed: number;
+  restless: number;
+  roam: number;
+  preDodge: number;
+  punish: number;
+  feint: number;
+  doubleTap: number;
+  recallDelay: number;
+}
+
+/** Index-aligned with PROGRESSION.tiers (row 0 = BRONZE … row 7 = OVERLORD). */
+export const BOT_LADDER: BotLadderRow[] = [
+  // BRONZE — the ROOKIE: slow, sloppy, throws at where you were, watches most fire land.
+  { label: 'ROOKIE', throwInterval: 3.4, windup: 1.1, throwSpeed: 3.4, aimError: 0.36, aimLag: 0.4, lead: 0, lowAimChance: 0.2, readsHabits: 0, reactDistance: 1.0, reactDelay: 0.45, defendChance: 0.4, blockChance: 0.05, wrongWayChance: 0.3, moveSpeed: 0.9, duckSpeed: 1.4, restless: 0.5, roam: 0.35, preDodge: 0, punish: 0, feint: 0, doubleTap: 0, recallDelay: 2.0 },
+  // SILVER — the SPARRER: a little quicker, starts to sidestep on purpose.
+  { label: 'SPARRER', throwInterval: 3.0, windup: 0.95, throwSpeed: 3.8, aimError: 0.3, aimLag: 0.3, lead: 0.1, lowAimChance: 0.25, readsHabits: 0.1, reactDistance: 1.2, reactDelay: 0.35, defendChance: 0.55, blockChance: 0.1, wrongWayChance: 0.22, moveSpeed: 1.1, duckSpeed: 1.7, restless: 0.7, roam: 0.45, preDodge: 0.1, punish: 0, feint: 0, doubleTap: 0, recallDelay: 1.8 },
+  // GOLD — the CONTENDER: aims true more often, first hints of a punish.
+  { label: 'CONTENDER', throwInterval: 2.5, windup: 0.8, throwSpeed: 4.2, aimError: 0.22, aimLag: 0.2, lead: 0.25, lowAimChance: 0.3, readsHabits: 0.25, reactDistance: 1.5, reactDelay: 0.25, defendChance: 0.7, blockChance: 0.2, wrongWayChance: 0.14, moveSpeed: 1.4, duckSpeed: 2.0, restless: 0.9, roam: 0.6, preDodge: 0.25, punish: 0.15, feint: 0, doubleTap: 0.05, recallDelay: 1.6 },
+  // PLATINUM — the BRUISER: FIRE FIGHT 1's original practice bot, near enough.
+  { label: 'BRUISER', throwInterval: 2.1, windup: 0.7, throwSpeed: 4.65, aimError: 0.15, aimLag: 0.12, lead: 0.4, lowAimChance: 0.38, readsHabits: 0.4, reactDistance: 1.7, reactDelay: 0.16, defendChance: 0.8, blockChance: 0.3, wrongWayChance: 0.08, moveSpeed: 1.6, duckSpeed: 2.3, restless: 1.0, roam: 0.75, preDodge: 0.4, punish: 0.3, feint: 0.08, doubleTap: 0.12, recallDelay: 1.4 },
+  // DIAMOND — the VETERAN: leads your head, reads your ducking, feints.
+  { label: 'VETERAN', throwInterval: 1.85, windup: 0.62, throwSpeed: 4.9, aimError: 0.1, aimLag: 0.06, lead: 0.55, lowAimChance: 0.42, readsHabits: 0.55, reactDistance: 1.95, reactDelay: 0.1, defendChance: 0.88, blockChance: 0.36, wrongWayChance: 0.04, moveSpeed: 1.8, duckSpeed: 2.5, restless: 1.15, roam: 0.85, preDodge: 0.55, punish: 0.5, feint: 0.15, doubleTap: 0.22, recallDelay: 1.25 },
+  // MASTER — the ACE: fast hands, a wall of a guard, double-taps.
+  { label: 'ACE', throwInterval: 1.65, windup: 0.55, throwSpeed: 5.15, aimError: 0.07, aimLag: 0.03, lead: 0.7, lowAimChance: 0.45, readsHabits: 0.7, reactDistance: 2.2, reactDelay: 0.06, defendChance: 0.93, blockChance: 0.42, wrongWayChance: 0.02, moveSpeed: 2.0, duckSpeed: 2.7, restless: 1.3, roam: 0.92, preDodge: 0.68, punish: 0.65, feint: 0.22, doubleTap: 0.32, recallDelay: 1.1 },
+  // LEGENDARY — the CHAMPION: moves before you throw, punishes every empty fist.
+  { label: 'CHAMPION', throwInterval: 1.5, windup: 0.48, throwSpeed: 5.45, aimError: 0.05, aimLag: 0.01, lead: 0.82, lowAimChance: 0.45, readsHabits: 0.85, reactDistance: 2.45, reactDelay: 0.03, defendChance: 0.96, blockChance: 0.47, wrongWayChance: 0.01, moveSpeed: 2.15, duckSpeed: 2.85, restless: 1.45, roam: 0.97, preDodge: 0.78, punish: 0.8, feint: 0.3, doubleTap: 0.45, recallDelay: 1.0 },
+  // OVERLORD — the OVERLORD: the ceiling. Still slower than your hardest haymaker.
+  { label: 'OVERLORD', throwInterval: 1.35, windup: 0.42, throwSpeed: 5.8, aimError: 0.03, aimLag: 0, lead: 0.92, lowAimChance: 0.45, readsHabits: 1.0, reactDistance: 2.7, reactDelay: 0.02, defendChance: 0.98, blockChance: 0.5, wrongWayChance: 0, moveSpeed: 2.3, duckSpeed: 3.0, restless: 1.6, roam: 1.0, preDodge: 0.85, punish: 0.9, feint: 0.35, doubleTap: 0.55, recallDelay: 0.9 },
+];
+
+/**
+ * MERCY — the in-bout comeback ease for the lower ranks. Every round the
+ * player is BEHIND by (rounds lost minus rounds won) softens the bot's skill
+ * by `perRound`, capped at `max`; win a round back and it firms up again.
+ * Only below tier `belowTier` (DIAMOND and up get the bot they earned), never
+ * in the tutorial, never under a dev override.
+ */
+export const BOT_MERCY = {
+  perRound: 0.07,
+  max: 0.2,
+  belowTier: 4,
 };
 
 /**

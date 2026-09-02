@@ -61,6 +61,7 @@ import { currentVoiceContext, VOICE_RULES, voiceAllowed, hearAllowed } from '../
 import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
 import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
+import { botGradeLine, botLive, installBotBrainDevHook } from '../combat/botBrain.js';
 import { KitMenuPanel } from '../menu/wrap.js';
 import type { PanelButton } from '../ui/kit/panel.js';
 import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey } from '../menu/paintbay.js';
@@ -310,6 +311,9 @@ export class MenuSystem extends createSystem({}) {
         return (p.kit.ctx().canvas as HTMLCanvasElement).toDataURL('image/png');
       },
       up: (id: string): boolean => this.menu.panels.find((x) => x.id === id)?.mesh.visible === true,
+      /** The action panel's status line right now (the bot's grade, a
+       *  forfeit prompt, a rematch call) — '' when no panel applies. */
+      status: (): string => this.panelContent()?.status ?? '',
     };
     installPaintDevHook(); // __ff2.paint — THE PAINT's dev/probe verbs
     // THE AUDIENCE (DESIGN §3.2), drivable headlessly: take a place on the
@@ -360,6 +364,7 @@ export class MenuSystem extends createSystem({}) {
       },
     };
     installGrammarDevHook(); // __ff2.grammar — THE ENCORE's pure move grammar
+    installBotBrainDevHook(); // __ff2.bot — THE BOT LADDER, and the live bout's brain
     // Probe-only: drive the bay panel's own click path (wallet included).
     (window.__ff2 as unknown as Record<string, unknown>).bayClick = (id: string): void => {
       if (!bayClick(id)) this.run(id as MenuAction);
@@ -1734,7 +1739,7 @@ export class MenuSystem extends createSystem({}) {
       return {
         title: 'ROUND BREAK',
         buttons: app.mode === 'bot' ? this.forfeitButtons('FORFEIT') : [],
-        status: this.confirmForfeit && app.mode === 'bot' ? 'give up the bout?' : '',
+        status: this.confirmForfeit && app.mode === 'bot' ? 'give up the bout?' : this.botLine(),
         loadout: true,
       };
     }
@@ -1745,11 +1750,19 @@ export class MenuSystem extends createSystem({}) {
       return {
         title: 'BOT BOUT',
         buttons: this.forfeitButtons('FORFEIT'),
-        status: this.confirmForfeit ? 'give up the bout?' : '',
+        status: this.confirmForfeit ? 'give up the bout?' : this.botLine(),
         loadout: false,
       };
     }
     return null;
+  }
+
+  /** The sparring partner's grade under a bot bout's panel title — which row
+   *  of THE BOT LADDER the player's rank is serving them ("contender · gold
+   *  grade"). Blank outside bot bouts and in the tutorial. */
+  private botLine(): string {
+    if (app.mode !== 'bot' || app.tutorial || !botLive.brain) return '';
+    return botGradeLine(botLive.brain);
   }
 
   /** A toggles the panel; point + trigger clicks its buttons. */

@@ -80,6 +80,21 @@ carried over verbatim: everything in it still applies to this code.
   the skin wire). Honest to the hitboxes, immune to every recolour; the
   rest of your colour is paint. Preview:
   `/skin-preview.html?skins=blank,onyx`.
+- **THE BOT LADDER** — the sparring bots scale with your rank. Every bot
+  bout (QUICK MATCH, VS BOTS 2v2 / FFA) reads your cumulative XP, finds your
+  Bronze→Overlord tier and blends one brain from the rows either side of it
+  (`config.BOT_LADDER`, one row per rank; `src/combat/botBrain.ts` does the
+  blend, `systems/BotSystem.ts` drives it). A fresh Bronze account spars the
+  ROOKIE: slow, sloppy, throws at where your head WAS, notices fire late and
+  often just watches it land. Every rank up is a ramp, not a cliff — by
+  PLATINUM the BRUISER is FIRE FIGHT 1's old practice bot; the OVERLORD
+  leads your head off its velocity, punishes the instant both your fists
+  are empty, feints past its beat, double-taps, keeps a wall of a guard and
+  steps the moment you spin up. Below DIAMOND a bout you're losing on rounds
+  eases the bot a notch per round (`config.BOT_MERCY`); the tutorial always
+  spars the ROOKIE. The bout panel names the grade you're facing
+  ("contender · gold grade"). Dev: `?bot=gold` pins a rank's row,
+  `?botskill=0.6` a raw skill. Headless probe: `npm run check:bot`.
 - **THE MOVE GRAMMAR** (DESIGN.md §4, first pass) — the five titans
   learned RAVE RAID's dance: gates, crossfire rails + THE TRAP, THE X,
   the donut's one-two, marching waves that always turn, and GOLIATH's
