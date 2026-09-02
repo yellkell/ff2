@@ -12,21 +12,22 @@
  * owns the match state. That keeps this server tiny, stateless per message,
  * and trivially hostable anywhere Node runs.
  *
- *   npm run server          # listens on :8787 (or PORT=...)
+ *   npm run server:ff       # alone, on :8787 (or PORT=...)
+ *   npm run server          # inside THE ROOM SERVER (room.mjs), at /ff
  *
  * Point clients at it with  ?server=wss://your-host:8787  (or ws:// in dev).
  */
 
-import { createServer } from 'node:http';
 import { WebSocketServer } from 'ws';
+import { isMain, serve } from './mount.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 
-const http = createServer((req, res) => {
-  // A friendly health/status endpoint for load balancers and curiosity.
+/** A friendly health/status endpoint for load balancers and curiosity. */
+export function handleHttp(req, res) {
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ game: 'fire-fight', queue: queue.length, rooms: rooms.size }));
-});
+}
 
 /**
  * Frames are small JSON envelopes (a pose is ~150 bytes). `ws` defaults to a
@@ -42,14 +43,13 @@ const MAX_PAYLOAD = 64 * 1024;
  */
 const MAX_BUFFERED = 512 * 1024;
 
-const wss = new WebSocketServer({ server: http, maxPayload: MAX_PAYLOAD });
+export const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
 
 // An 'error' event on a socket with no listener is re-thrown as an uncaught
 // exception — a single ECONNRESET (a headset dropping off Wi-Fi mid-bout) took
 // the whole relay down with it, and every live match with it. Same for the
 // server itself.
 wss.on('error', (err) => console.error('[fire-fight] server error', err));
-http.on('clientError', (_err, socket) => socket.destroy());
 
 /** Sockets waiting for an opponent, oldest first. */
 let queue = [];
@@ -159,6 +159,6 @@ setInterval(() => {
   }
 }, 10_000);
 
-http.listen(PORT, () => {
-  console.log(`[fire-fight] relay listening on :${PORT}`);
-});
+if (isMain(import.meta.url)) {
+  serve({ port: PORT, http: handleHttp, wss, onListen: () => console.log(`[fire-fight] relay listening on :${PORT}`) });
+}

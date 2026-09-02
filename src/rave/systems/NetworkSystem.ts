@@ -48,7 +48,10 @@ export class NetworkSystem extends createSystem({}) {
     // fold the session back to the room, not out of it. A direct raid →
     // menu jump is a mid-set BAIL: report myself down first so my dancer
     // folds on every other ring (a podium exit is a clean set end).
-    if (net.phase === 'live' && menuRoom) {
+    // (Not while THE BELL has me dealt away to a fight: that is 'live' on
+    // the club floor for the two frames the curtain takes to fall, and it
+    // is the arena's set, not this wire's — backToClub comes with me.)
+    if (net.phase === 'live' && menuRoom && !net.dealtAway) {
       const d = me();
       if ((this.prevScreen === 'raid' || this.prevScreen === 'countdown') && d?.alive) {
         sendScore({

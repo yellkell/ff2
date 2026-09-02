@@ -146,11 +146,22 @@ caller, one orbiting pip per person touched in). The ball is
 mode-agnostic: it carries `{ mode, params, caller, seats[] }` and the
 relay deals seats + seed + a shared start clock, whether that's a duel,
 a titan gauntlet or a rave set.
-*(Shipped so far: THE BALL's visual ported whole (`src/club/ball.ts` +
-the mirror-ball glint in materials/glow), the record shelf as data
-(`src/club/records.ts`, 24 RR masters' measured metadata), and the
-tabbed console face + local state (`src/club/console.ts`) — the relay
-drop/deal wiring lands with presence.)*
+*(Shipped: THE BELL rings. The floor's desk has the two tabs
+(`rave/systems/ClubSocialSystem.ts`) and one verb; a fight ball carries
+`{ mode, code }` — the arena opens a private room for the caller at the
+call (`rave/bridge.ts` openFightRoom, implemented by the town in
+`experience/ClubExperienceManager.ts`: the duel stack for 1V1, the mesh
+for 2V2/FFA/RAID) and the ball rises only once the room exists. The
+relay (`server/rave.mjs`) owns the clock and DEALS: the caller and the
+touched-in in touch order, the first `capacity` as fighters and the rest
+as watchers, one `start` to each with the roster and their role
+(`rave/club/bell.ts`). Every dealt headset crosses under the curtain
+with its arena lobby state already set, joins the room by code (a
+watcher on the rail), the host launches once the squad is seated or
+after a grace, and when the bout is over everyone folds home to the
+floor — still members of the room the whole time (`net.dealtAway`),
+the floor seeing them OUT. Not yet: watchers on a 1V1 (the duel stack
+seats two and no rail), and a fight's winner claiming THE CROWN.)*
 
 Joining is physical (walk up, touch, trigger), leaving is touching again,
 the caller can START early or cancel, and at zero the squad is dealt into
@@ -214,8 +225,11 @@ place it happens is elsewhere.
 
 Both games' clubs keep their servers' good bones: RAVE RAID's relay owns
 the bell clock and deals seats; FF1's pub server contributes the voice
-bubble, prop ownership brokering and ban tooling. Target one merged FF2
-room server (`server/`), 24 heads, region-picked like `PUB_REGIONS`.
+bubble, prop ownership brokering and ban tooling. *(Shipped: THE ROOM
+SERVER, `server/room.mjs` — one process, one port, three relays told
+apart by path: `/rave` the club and the bell, `/pub` the pub, `/ff` the
+duel relay (and `/` for old clients); each still runs alone under its
+own script. Region-picking like `PUB_REGIONS` is still to come.)*
 
 ---
 
@@ -643,8 +657,13 @@ Each phase is shippable; nothing waits on everything.
    live rigs (twins driven by world matrices through a reflection, unlit,
    no recess light, one solve — yours). TWELVE GLASSES with two-sphere
    contact, bowl-radius walls, bounce tumble, tipping, rolling in an arc,
-   per-surface friction. `tools/venue-check.mjs` walks all of it; still
-   to land: THE BELL's relay drop/deal, and the merged room server.)*
+   per-surface friction. THE BELL RINGS: the desk's FIGHT tab calls a
+   1V1/2V2/FFA/RAID, the relay deals fighters and watchers into an arena
+   room the caller opened, the squad crosses under the curtain and folds
+   home when it's over (§3.1); and THE ROOM SERVER (`server/room.mjs`)
+   is one process for all three relays (§3.3). `tools/venue-check.mjs`
+   walks all of it, the bell on a room server of its own with two
+   headsets.)*
 6. **Audience ground + the crowd** — watchers travel with the squad,
    audience terraces in the arenas, voice bubble, hands-up roar wire,
    sourced crowd beds.

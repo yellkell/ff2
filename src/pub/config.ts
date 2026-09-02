@@ -397,7 +397,7 @@ export function pubServerUrl(): string {
   // On your own machine, talk to a pub server running locally; anywhere
   // else (Firebase Hosting, yellkell.com/ff) use the hosted relay.
   const host = location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') return `ws://${host}:8788`;
+  if (host === 'localhost' || host === '127.0.0.1') return `ws://${host}:8787/pub`; // THE ROOM SERVER (server/room.mjs)
   return PUB_SERVER;
 }
 

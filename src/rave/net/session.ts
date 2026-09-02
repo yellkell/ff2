@@ -25,6 +25,8 @@
  */
 
 import { NET, seatHue, serverUrl } from '../config.js';
+import { raveBridge } from '../bridge.js';
+import { isFightMode, type BellMode, type DealtMember, type FightDeal } from '../club/bell.js';
 import { audioContext, ensureAudio } from '../audio/sfx.js';
 import { clearVoiceSpeakers, removeVoiceSpeaker, stopVoiceCapture } from '../club/voice.js';
 import { startRaid } from '../game/flow.js';
@@ -60,6 +62,10 @@ export interface LobbyMember {
 export interface BallState {
   callerIdx: number;
   callerName: string;
+  /** What the ball calls: the record, or one of the arena's fights. */
+  mode: BellMode;
+  /** A fight's arena room code (empty for a rave). */
+  code: string;
   track: string;
   /** The caller's difficulty — the whole ring dances one chart. */
   diff: number;
@@ -87,6 +93,11 @@ export const net = {
   myIdx: -1,
   /** The raid-summoning ball currently in the air, or null. */
   ball: null as BallState | null,
+  /** THE BELL dealt me to the arena: I am away on a fight, still a member
+   *  of this room, and the floor is where I come home to. Walking out of
+   *  the venue under the curtain must NOT leave the room while this is
+   *  set, and walking back in must not join it again. */
+  dealtAway: false,
   /** Members currently away playing a set (the floor sees them out). */
   gamePlayers: new Set<number>(),
   /** THE CROWN: member idx of the last club raid's winner, worn on their
@@ -190,6 +201,7 @@ function stopPing(): void {
 function teardown(reason: string): void {
   stopPing();
   net.solo = false;
+  net.dealtAway = false;
   window.clearTimeout(soloServeTimer);
   soloServeTimer = 0;
   if (ws) {
@@ -291,6 +303,8 @@ function handle(msg: Record<string, unknown>): void {
       net.ball = {
         callerIdx: Number(msg.idx),
         callerName: String(msg.name ?? ''),
+        mode: typeof msg.mode === 'string' && isFightMode(msg.mode) ? msg.mode : 'rave',
+        code: typeof msg.code === 'string' ? msg.code : '',
         track: typeof msg.track === 'string' ? msg.track : '',
         diff: Number.isFinite(Number(msg.diff)) ? Number(msg.diff) : 1,
         pos:
@@ -331,9 +345,37 @@ function handle(msg: Record<string, unknown>): void {
       break;
     }
     case 'start': {
+      net.ball = null;
+      if (typeof msg.mode === 'string' && isFightMode(msg.mode)) {
+        // THE BELL rang for a FIGHT with me on it. The relay has dealt the
+        // roster; the arena room it names is where the fight happens, and
+        // the host carries me there. I stay a member here, away, until I
+        // come home through backToClub().
+        const people = (list: unknown): DealtMember[] =>
+          Array.isArray(list)
+            ? list
+                .filter((p) => p && Number.isFinite(Number((p as { idx: unknown }).idx)))
+                .map((p) => ({ idx: Number((p as { idx: unknown }).idx), name: String((p as { name?: unknown }).name ?? '') }))
+            : [];
+        const deal: FightDeal = {
+          mode: msg.mode,
+          code: typeof msg.code === 'string' ? msg.code : '',
+          role: msg.role === 'watcher' ? 'watcher' : 'fighter',
+          callerIdx: Number(msg.callerIdx),
+          mine: Number(msg.callerIdx) === net.myIdx,
+          fighters: people(msg.fighters),
+          watchers: people(msg.watchers),
+          seed: Number(msg.seed ?? 1),
+        };
+        net.phase = 'live';
+        net.dealtAway = true;
+        net.dirty++;
+        if (raveBridge.dealToFight) raveBridge.dealToFight(deal);
+        else backToClub(); // nowhere to cross to — the floor keeps me
+        break;
+      }
       // The ball fired with ME on it: seed + seats + my ring seat + the
       // player seat map + a shared "beat 0 in N ms" (RTT-compensated).
-      net.ball = null;
       const players =
         (msg.players as { seat: number; name: string; idx?: number; you?: boolean; lk?: string; gr?: string; tn?: string }[]) ?? [];
       const humans = new Map<number, { name: string; netId?: number; look?: string; gear?: string; tone?: string }>();
@@ -647,8 +689,13 @@ function soloProp(msg: Record<string, unknown>): void {
 
 /** Send the ball up at `pos` — my song pick and ring-size preference ride
  *  along. The relay owns the 60-second clock from here. */
-export function callBall(pos: [number, number, number]): void {
+export function callBall(pos: [number, number, number], call?: { mode: BellMode; code: string }): void {
   if (net.phase !== 'hosting' && net.phase !== 'joined') return;
+  if (call && call.mode !== 'rave') {
+    // THE BELL: a fight rides the ball with the arena room it deals into.
+    send({ t: 'ball-up', mode: call.mode, code: call.code, track: match.preferredTrack, diff: match.difficulty, pos });
+    return;
+  }
   // No seat count rides the ball. A club raid is sized by WHO TURNS UP —
   // the relay deals everyone who touched onto the smallest ring that fits
   // them and fills the rest with groupies. It used to carry `match.seats`,
@@ -692,6 +739,7 @@ export function startBall(): void {
 export function backToClub(winnerIdx?: number | null): void {
   if (net.phase !== 'live') return;
   net.phase = net.isHost ? 'hosting' : 'joined';
+  net.dealtAway = false;
   net.dirty++;
   send(winnerIdx === undefined ? { t: 'game-out' } : { t: 'game-out', winner: winnerIdx });
   remotePoses.clear();

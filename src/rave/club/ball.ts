@@ -3,8 +3,9 @@
  *
  * Someone calls it (from the SOCIAL panel or the board) and a mirror ball
  * is winched down out of the ceiling to hang in front of them for sixty
- * seconds, turning slowly, wearing a countdown plate: the song, who called
- * it, the seconds left, and who has touched in — one orbiting pip per
+ * seconds, turning slowly, wearing a countdown plate: the song (or the
+ * fight — THE BELL, club/bell.ts), who called it, the seconds left, and
+ * who has touched in — one orbiting pip per
  * dancer, in their colour. TOUCH the
  * ball (hand close + trigger) to join the set; touch again to step back
  * out; the caller's touch waves it away. When the relay's clock runs out,
@@ -36,6 +37,7 @@ import { PALETTE, hueToColor } from '../config.js';
 import { glintTexture, glowSprite } from '../materials/glow.js';
 import { trackById } from '../audio/tracks.js';
 import { CLUB } from './config.js';
+import { FIGHTS, type BellMode } from './bell.js';
 import { font } from '../ui/fonts.js';
 
 export const BALL_TOUCH_RADIUS = 0.42;
@@ -104,6 +106,8 @@ export interface BallVisual {
   /** Repaint the plate. */
   paint(opts: {
     seconds: number;
+    /** What the ball calls: 'rave' reads the record; a fight reads its name. */
+    mode: BellMode;
     trackId: string;
     callerName: string;
     joinNames: string[];
@@ -250,7 +254,7 @@ export function buildBallVisual(): BallVisual {
     pips.push(pip);
   }
 
-  const paint: BallVisual['paint'] = ({ seconds, trackId, callerName, joinNames, mine, joined, inReach }) => {
+  const paint: BallVisual['paint'] = ({ seconds, mode, trackId, callerName, joinNames, mine, joined, inReach }) => {
     const g = canvas.getContext('2d')!;
     g.clearRect(0, 0, 512, 300);
     g.fillStyle = 'rgba(7,5,14,0.82)';
@@ -273,10 +277,18 @@ export function buildBallVisual(): BallVisual {
     g.fillText(String(Math.max(0, seconds)), 256, 74);
     g.shadowBlur = 0;
 
-    const track = trackById(trackId);
     g.font = font(700, 30);
-    g.fillStyle = '#4fb7ff';
-    g.fillText(`♪ ${track ? track.title : 'SHUFFLE'}`, 256, 140);
+    if (mode === 'rave') {
+      const track = trackById(trackId);
+      g.fillStyle = '#4fb7ff';
+      g.fillText(`♪ ${track ? track.title : 'SHUFFLE'}`, 256, 140);
+    } else {
+      // THE BELL: a fight on the ball wears hazard amber, the arena's own
+      // colour for something about to happen.
+      const fight = FIGHTS.find((f) => f.id === mode);
+      g.fillStyle = '#ffb03a';
+      g.fillText(`⚔ ${fight ? `${fight.label} · ${fight.sub}` : mode.toUpperCase()}`, 256, 140);
+    }
     g.font = font(600, 24);
     g.fillStyle = 'rgba(232,236,242,0.75)';
     // "hosts", not "calls": whoever sends the ball up is running that set,
@@ -294,7 +306,7 @@ export function buildBallVisual(): BallVisual {
       g.fillText('ON — touch to step out', 256, 218);
     } else {
       g.fillStyle = '#ffd24a';
-      g.fillText('touch to dance', 256, 218);
+      g.fillText(mode === 'rave' ? 'touch to dance' : 'touch to ride along', 256, 218);
     }
 
     if (joinNames.length) {

@@ -192,6 +192,7 @@ export class ClubBallSystem extends createSystem({}) {
       const nameOf = (idx: number): string => net.members.find((m) => m.idx === idx)?.name ?? `#${idx}`;
       v.paint({
         seconds,
+        mode: state.mode,
         trackId: state.track,
         callerName: state.callerName || nameOf(state.callerIdx),
         joinNames: joinIdxs.map(nameOf),

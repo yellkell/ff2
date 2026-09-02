@@ -1062,7 +1062,10 @@ export const NET = {
   poseRateHz: 10,
   scoreRateHz: 3,
   smoothing: 14,
-  defaultPort: 8788,
+  /** THE ROOM SERVER's port (server/room.mjs) — the rave's relay answers
+   *  at /rave on it. A relay run alone (server:rave) is on 8788, bare. */
+  defaultPort: 8787,
+  path: '/rave',
 };
 
 /** The hosted room relay (deploy server/index.mjs here — same Render-style
@@ -1086,7 +1089,7 @@ export function serverUrl(): string {
   // reached from a headset) — talk to the relay running beside it. Https
   // means a real deploy (raveraid.web.app), which needs the hosted relay.
   if (location.protocol !== 'https:') {
-    return `ws://${location.hostname}:${NET.defaultPort}`;
+    return `ws://${location.hostname}:${NET.defaultPort}${NET.path}`;
   }
   return DEFAULT_RELAY;
 }

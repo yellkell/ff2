@@ -33,7 +33,7 @@ import { conductor } from './course/conductor.js';
 import { course } from './course/state.js';
 import { installRaveDevHook } from './devHook.js';
 import { toLobby, toTour } from './game/flow.js';
-import { enterPublicRoom, enterSoloFloor, inRoom, leaveRoom, net } from './net/session.js';
+import { backToClub, enterPublicRoom, enterSoloFloor, inRoom, leaveRoom, net } from './net/session.js';
 import { ArcadeSystem } from './systems/ArcadeSystem.js';
 import { ArenaSystem } from './systems/ArenaSystem.js';
 import { AvatarSystem } from './systems/AvatarSystem.js';
@@ -74,7 +74,7 @@ const mounted = new WeakMap<World, RaveExperience>();
 const VOID = new Color(VOID_BG);
 
 /** How long the floor waits for a relay before opening as a room of one. */
-const RELAY_PATIENCE_MS = 3500;
+const RELAY_PATIENCE_MS = 5000;
 
 interface Pausable {
   play(): void;
@@ -166,7 +166,11 @@ export function mountRaveExperience(world: World, onLeaveToArena: () => void): R
       for (const s of systems) s.play();
       if (where === 'club') {
         toLobby();
-        openFloor();
+        // THE BELL brought me home: I never left the room — the relay has
+        // me down as away on a fight — so this is a homecoming, not a
+        // join. Anything else is an arrival, and the floor opens for it.
+        if (net.dealtAway) backToClub();
+        else openFloor();
       } else {
         toTour();
         leaveRoom();
@@ -181,7 +185,10 @@ export function mountRaveExperience(world: World, onLeaveToArena: () => void): R
       // Whatever was mid-flight goes quiet without a tail cut short: the
       // course's ride, the floor's record, a set on the decks.
       if (course.active) courseView.leave?.();
-      leaveRoom();
+      // Dealt away by THE BELL, I stay a member of the room while I fight
+      // (the floor sees me OUT, and I come home to it); otherwise walking
+      // out of the venue is walking out of the room.
+      if (!net.dealtAway) leaveRoom();
       stopAmbient(0.25);
       stopSet(0.25);
       conductor.stop();

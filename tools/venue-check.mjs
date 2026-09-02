@@ -14,6 +14,7 @@
  * errors fell out. --shots saves each place beside this script.
  */
 
+import { spawn } from 'node:child_process';
 import { chromium } from 'playwright';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -306,6 +307,112 @@ const mcSecond = await page.evaluate(() => ({ visit: window.__gdr.mc.visit, hue:
 check('the MC changed colour between visits', mcSecond.visit > mcFirst.visit && Math.abs(mcSecond.hue - mcFirst.hue) > 0.05 && mcSecond.hue >= 0.28 && mcSecond.hue <= 0.92, JSON.stringify({ first: mcFirst, second: mcSecond }));
 await page.evaluate(() => window.__town.leave());
 await settle();
+
+console.log('\n=== THE BELL: a fight called from the floor, dealt by THE ROOM SERVER ===');
+// A room server of our own, on a port nobody else has, with a short clock,
+// and two headsets on its floor. Their arena rooms are PAPER (no
+// signalling on this machine): the deal and the crossing are what's walked.
+const RELAY_PORT = 18797;
+const relay = spawn(process.execPath, ['server/room.mjs'], {
+  env: { ...process.env, PORT: String(RELAY_PORT), BALL_MS: '12000' },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+const relayLog = [];
+relay.stdout.on('data', (d) => relayLog.push(String(d).trim()));
+relay.stderr.on('data', (d) => relayLog.push(String(d).trim()));
+let health = null;
+for (let i = 0; i < 50 && !health; i++) {
+  health = await fetch(`http://127.0.0.1:${RELAY_PORT}/`).then((r) => r.json()).catch(() => null);
+  if (!health) await new Promise((r) => setTimeout(r, 200));
+}
+const relayPaths = (health?.relays ?? []).map((r) => r.path);
+check('THE ROOM SERVER answers for all three relays at one port', ['/rave', '/pub', '/ff'].every((p) => relayPaths.includes(p)), JSON.stringify(health));
+const raveHealth = await fetch(`http://127.0.0.1:${RELAY_PORT}/rave`).then((r) => r.json()).catch(() => null);
+check("and the rave's relay answers at /rave", raveHealth?.game === 'goopliath-dance-raid', JSON.stringify(raveHealth));
+
+const openHeadset = async (name) => {
+  // A small viewport: two of these render side by side on one headless GPU.
+  const p = await browser.newPage({ viewport: { width: 480, height: 300 } });
+  p.on('pageerror', (e) => {
+    errors.push(e.message);
+    console.log(`[pageerror:${name}] ${e.message}`);
+  });
+  await p.addInitScript((who) => {
+    localStorage.setItem('ff-tutorial-done', '1');
+    localStorage.setItem('ff-player-name', who);
+    localStorage.setItem('gdr-server', `ws://127.0.0.1:${18797}/rave`);
+    localStorage.setItem('ff-paper-rooms', '1');
+  }, name);
+  await p.goto(base, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => p.goto(base));
+  await p.waitForTimeout(1200);
+  await p.click('#enter-vr');
+  await p.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 30000 });
+  await p.waitForTimeout(2500);
+  await p.evaluate(() => window.__town.enterVenue());
+  await p.waitForFunction(() => window.__town && !window.__town.busy, { timeout: 30000 });
+  await p.waitForFunction(() => window.__gdr?.net?.state && (window.__gdr.net.state.phase === 'hosting' || window.__gdr.net.state.phase === 'joined'), { timeout: 15000 }).catch(() => {});
+  return p;
+};
+// The first headset has done its walking: it goes, so the two that follow
+// don't share headless Chromium's one GPU three ways (the floor gives a
+// relay 3.5 s to answer before opening as a room of one, and three pages
+// rendering at once can miss that on this machine).
+await page.close();
+const caller = await openHeadset('CALLER');
+const toucher = await openHeadset('TOUCHER');
+const floorOf = (p) => p.evaluate(() => ({ phase: window.__gdr.net.state.phase, solo: window.__gdr.net.state.solo, members: window.__gdr.net.state.members.map((m) => m.name), myIdx: window.__gdr.net.state.myIdx, code: window.__gdr.net.state.code }));
+await toucher.waitForFunction(() => window.__gdr.net.state.members.length >= 2, { timeout: 10000 }).catch(() => {});
+let fa = await floorOf(caller);
+let fb = await floorOf(toucher);
+check('two headsets share the public floor through the room server', !fa.solo && !fb.solo && fa.code === fb.code && fa.members.length === 2 && fb.members.length === 2, JSON.stringify({ caller: fa, toucher: fb }));
+
+// The caller opens the desk's FIGHT tab, picks 2V2 and CALLS THE BALL.
+await caller.evaluate(() => {
+  window.__gdr.menu.press('tab-fight');
+  window.__gdr.menu.press('fight-2v2');
+  window.__gdr.menu.press('call');
+});
+const ballUp = await toucher.waitForFunction(() => window.__gdr.net.state.ball !== null, { timeout: 8000 }).then(() => true).catch(() => false);
+const ballOf = (p) => p.evaluate(() => { const b = window.__gdr.net.state.ball; return b ? { mode: b.mode, code: b.code, caller: b.callerName, joins: [...b.joins] } : null; });
+let ba = await ballOf(caller);
+let bb = await ballOf(toucher);
+check('the ball rises carrying the fight and its arena room', ballUp && ba?.mode === '2v2' && /^P\d{4}$/.test(ba.code) && bb?.mode === '2v2' && bb.code === ba.code && ba.caller === 'CALLER', JSON.stringify({ caller: ba, toucher: bb }));
+const plate = await toucher.evaluate(() => !!window.__gdr.scene().getObjectByName('raid-ball'));
+check("the mirror ball hangs on the toucher's floor too", plate);
+// The toucher touches in.
+await toucher.evaluate(() => window.__gdr.club.touch(true));
+await caller.waitForFunction(() => window.__gdr.net.state.ball?.joins.size === 1, { timeout: 5000 }).catch(() => {});
+ba = await ballOf(caller);
+check('a touch puts a pip on the ball', ba?.joins.length === 1, JSON.stringify(ba));
+
+// The caller sees everyone is in and presses START rather than riding the
+// clock down: the relay deals whoever is on the ball, and both cross.
+await caller.evaluate(() => window.__gdr.club.go());
+const crossed = await Promise.all([caller, toucher].map((p) => p.waitForFunction(() => window.__town.place === 'arena' && !window.__town.busy, { timeout: 20000 }).then(() => true).catch(() => false)));
+const bellOf = (p) => p.evaluate(() => { const b = window.__town.bell(); return { role: b.deal?.role, mine: b.deal?.mine, mode: b.deal?.mode, code: b.deal?.code, fighters: b.deal?.fighters.map((f) => f.name), state: b.state, lobbyMode: b.lobbyMode, privateCode: b.privateCode, phase: window.__gdr.net.state.phase, away: window.__gdr.net.state.dealtAway }; });
+let da = await bellOf(caller);
+let db = await bellOf(toucher);
+check('the bell deals both to the arena under the curtain', crossed[0] && crossed[1] && da.mode === '2v2' && db.mode === '2v2', JSON.stringify({ caller: da, toucher: db }));
+check('the caller hosts, the toucher fights, and both stand in the 2V2 lobby', da.mine === true && db.mine === false && da.role === 'fighter' && db.role === 'fighter' && da.lobbyMode === '2v2' && db.lobbyMode === '2v2' && da.privateCode === ba.code && db.privateCode === ba.code && da.state === 'menu', JSON.stringify({ caller: da, toucher: db }));
+check('both keep their place in the room while away', da.phase === 'live' && db.phase === 'live' && da.away && db.away, JSON.stringify({ a: da.phase, b: db.phase }));
+const inSessionBoth = await Promise.all([caller, toucher].map((p) => p.evaluate(() => document.body.classList.contains('app-entered'))));
+check('the XR sessions never ended', inSessionBoth[0] && inSessionBoth[1]);
+
+// The fight is over: everyone folds back to the floor, and the relay
+// hears them come home.
+await Promise.all([caller, toucher].map((p) => p.evaluate(() => window.__town.foldHome())));
+await Promise.all([caller, toucher].map((p) => p.waitForFunction(() => window.__town.place === 'venue' && !window.__town.busy, { timeout: 20000 }).catch(() => {})));
+await caller.waitForFunction(() => window.__gdr.net.state.gamePlayers.size === 0, { timeout: 5000 }).catch(() => {});
+fa = await floorOf(caller);
+fb = await floorOf(toucher);
+const homeA = await bellOf(caller);
+const homeB = await bellOf(toucher);
+check('and fold home to the same floor, in the same room, nobody OUT', fa.phase === 'hosting' && fb.phase === 'joined' && fa.code === fb.code && fa.members.length === 2 && !homeA.away && !homeB.away && homeA.lobbyMode === null, JSON.stringify({ caller: fa, toucher: fb, a: homeA, b: homeB }));
+const dealt = relayLog.find((l) => l.includes('the bell'));
+check("the relay's log names the deal", !!dealt, dealt);
+await caller.close();
+await toucher.close();
+relay.kill();
 
 check('no page errors along the way', errors.length === 0, errors.slice(0, 3).join(' | '));
 
