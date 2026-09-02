@@ -8,6 +8,17 @@
  *
  * Knuckles point down local -Z, matching the old glove convention — the
  * grip/ray alignment and fireball anchors all carry over unchanged.
+ *
+ * THEY TAKE PAINT (avatar/paint.ts, part 'hand') on the PALM BLOCK — the
+ * back of the hand, which is the piece of you you look at all match, and
+ * the piece the bay's ray hits on the mirror. It has a material of its
+ * own: these boxes have no UV islands, so every face samples the whole
+ * canvas, and a mark on the shared material would land on all eleven
+ * pieces of the hand at once. Both hands bake the same canvas — paint one
+ * and the pair wears it. The material's rest colour is the canvas fill
+ * (`paintFill`, kept in step by applyAvatarSkin), so an unpainted hand
+ * comes out of the bake exactly as it was built, and the white bloom
+ * rides the emissive channel, untouched by any of it.
  */
 
 import { BoxGeometry, Color, Group, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
@@ -38,21 +49,34 @@ export function buildHand(side: 1 | -1): Group {
   const hand = new Group();
   hand.scale.setScalar(HAND_VISUAL_SCALE);
 
-  const mat = new MeshStandardMaterial({
-    color: 0x15171c, // near-black steel at rest
-    emissive: 0xffffff,
-    emissiveIntensity: 0,
-    metalness: 0.85,
-    roughness: 0.35,
-  });
-  mat.userData.role = 'hand';
-  mat.userData.baseIntensity = 0;
-  mat.userData.litIntensity = 1.9; // white-hot when active
-  mat.userData.baseColor = new Color(0x000000);
-  mat.userData.litColor = new Color(PALETTE.white);
-  hand.userData.leds = [mat]; // setGloveLit drives the white bloom
+  const steel = (): MeshStandardMaterial => {
+    const m = new MeshStandardMaterial({
+      color: 0x15171c, // near-black steel at rest
+      emissive: 0xffffff,
+      emissiveIntensity: 0,
+      metalness: 0.85,
+      roughness: 0.35,
+    });
+    m.userData.role = 'hand';
+    m.userData.paintFill = '#15171c'; // the rest steel — THE PAINT's canvas fill
+    m.userData.baseIntensity = 0;
+    m.userData.litIntensity = 1.9; // white-hot when active
+    m.userData.baseColor = new Color(0x000000);
+    m.userData.litColor = new Color(PALETTE.white);
+    return m;
+  };
+  // Two materials, one look: the FINGERS and cuff on one, the PALM BLOCK on
+  // its own so it can carry paint without the fingers wearing a copy of it
+  // (every box face here samples the whole canvas, so a mark on a shared
+  // material lands twenty times over). Both bloom, both take the skin.
+  const mat = steel();
+  const palmMat = steel();
+  hand.userData.leds = [mat, palmMat]; // setGloveLit drives the white bloom
 
-  const palm = new Mesh(new BoxGeometry(0.078, 0.024, 0.09), mat);
+  // THE PAINT SURFACE: the back of the hand — the piece you actually look
+  // at all match, and the one the bay's ray can hit on the mirror.
+  const palm = new Mesh(new BoxGeometry(0.078, 0.024, 0.09), palmMat);
+  palm.userData.paintPart = 'hand';
   hand.add(palm);
   const cuff = new Mesh(new BoxGeometry(0.07, 0.032, 0.038), mat);
   cuff.position.z = 0.062;

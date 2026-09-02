@@ -33,13 +33,16 @@ import { BODY_V_SPLIT } from './mannequin.js';
 
 export type PaintKind = 'stripe' | 'splotch' | 'dot' | 'square';
 export const PAINT_KINDS: readonly PaintKind[] = ['stripe', 'splotch', 'dot', 'square'];
-/** The paint surfaces: THE BLANK's head and its one body loft, plus the
- *  three GEAR slots (avatar/gear.ts) — every mesh of a worn piece shares
- *  its slot's canvas, so painting one pauldron paints its twin. Legacy
- *  'chest'/'pelvis' units fold into the body's v range on read, so paint
- *  made before the merge survives it. */
-export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands';
-export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands'];
+/** The paint surfaces: THE BLANK's head and its one body loft, the three
+ *  GEAR slots (avatar/gear.ts), and YOUR HANDS (avatar/hands.ts) — the
+ *  ones you punch with, which are the only part of you you look at all
+ *  match. Every mesh of a worn piece shares its slot's canvas, so
+ *  painting one pauldron paints its twin, and a hand's palm, fingers and
+ *  cuff share one material, so a stripe lands on the whole hand — both of
+ *  them. Legacy 'chest'/'pelvis' units fold into the body's v range on
+ *  read, so paint made before the merge survives it. */
+export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand';
+export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand'];
 
 export interface PlacedPaint {
   kind: PaintKind;
@@ -161,7 +164,7 @@ export function clearLook(): void {
  */
 const WIRE_FORMAT = 3;
 /** Part order ON THE WIRE — append-only. */
-const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands'];
+const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand'];
 /** Format 2's part order (the merged body, before gear was paintable). */
 const WIRE_PARTS_V2: PaintPart[] = ['head', 'body'];
 /** Format 1's part order, kept only to read looks packed before the merge. */
@@ -429,6 +432,12 @@ export function grantGraduationStripe(onyxBase: boolean): void {
 
 /* ── the bake ─────────────────────────────────────────────────────────── */
 
+/** What a bare canvas is filled with before the units land: the BLANK's
+ *  two primer tones. A surface whose rest colour is not a primer — the
+ *  HANDS, which are dark steel and re-tint with the skin — carries its own
+ *  fill on the material (`userData.paintFill`, avatar/hands.ts +
+ *  avatar/skins.ts) so an unpainted one bakes out exactly as it was
+ *  built. */
 const TONE_FILL: Record<string, string> = { white: '#f4f2ee', onyx: '#17171a' };
 
 const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
@@ -537,11 +546,23 @@ export function applyLook(root: Object3D, look: Look): void {
     }
     const g = store.canvas.getContext('2d')!;
     const tone = (mesh.userData.paintTone as string) ?? 'white';
-    g.fillStyle = TONE_FILL[tone] ?? TONE_FILL.white;
+    g.fillStyle = (mat.userData?.paintFill as string) ?? TONE_FILL[tone] ?? TONE_FILL.white;
     g.fillRect(0, 0, size, size);
+    let painted = false;
     for (const p of look.paint) {
-      if (p.part === part) drawUnit(g, p, size, size);
+      if (p.part !== part) continue;
+      drawUnit(g, p, size, size);
+      painted = true;
     }
+    // PAINT ON METAL. A near-mirror surface has almost no diffuse, so a
+    // stripe laid on a hand's steel would read as a faint tint of a
+    // reflection and nothing more. Where paint actually lands, the finish
+    // steps toward one that can carry it — never past the surface's own
+    // metalness, so a matte primer body is untouched — and steps back the
+    // moment the last unit is lifted.
+    const metal0 = (mesh.userData.paintMetal0 as number | undefined) ?? mat.metalness;
+    mesh.userData.paintMetal0 = metal0;
+    mat.metalness = painted ? Math.min(metal0, PAINT.metalness) : metal0;
     store.tex.needsUpdate = true;
     // The map carries ALL the colour now (base tone included), so the
     // material tint steps aside — sheen/roughness stay the tone's own.
