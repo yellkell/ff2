@@ -81,7 +81,7 @@ interface PlacedPaint {
   kind: 'stripe' | 'splotch';
   colour: number;   // index into the sold palette (not a free RGB)
   variant: number;  // splotch silhouette roll; stripes: end-cap style
-  part: 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands';  // P5: the gear slots are surfaces
+  part: 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand';  // P5: the gear slots; P6: your hands
   u: number; v: number;   // anchor in that part's unwrap, quantized /255
   angle: number;          // /255 over 2π
   len: number; wid: number; // /255 over that part's allowed range
@@ -243,3 +243,21 @@ Free placement can draw things we don't want in a room:
    never a whole-body fill — and the stick's x twists / y sizes every
    kind (grip → width for the stripe only). Probed: roundtrip of dot,
    square and a gear-surface unit; the format-2 legacy read.
+6. **P6 — the hands.** **SHIPPED**: the pair you punch with
+   (avatar/hands.ts) is a paint surface, `hand` — the one part of you
+   that is in front of your face all match, and until now the one part
+   you could not touch. The PALM BLOCK carries it, on a material of its
+   own: these boxes have no UV islands, so every face samples the whole
+   canvas, and a mark on the hand's shared material landed on all eleven
+   pieces at once. Both hands bake the same canvas — paint one, the pair
+   wears it — and the steel they rest at is the canvas FILL
+   (`userData.paintFill`, kept in step by `applyAvatarSkin`), so an
+   unpainted hand bakes out exactly as it was built and the white
+   squeeze-bloom rides the emissive channel, untouched. PAINT ON METAL:
+   a near-mirror surface has no diffuse to carry a stripe, so a surface
+   that actually holds units comes down to `PAINT.metalness` — never
+   above its own finish, so a matte body is unaffected, and it steps
+   back the moment the last unit is lifted. The wire is still format 3
+   (part index 5, append-only). Probed: the bay places onto the hands,
+   the pair roundtrips the wire, and the MIRROR's hand — the thing the
+   bay's ray paints — bakes it.

@@ -151,6 +151,36 @@ console.log('=== the wire: pack / unpack ===');
     if (url) writeFileSync(join(here, `paint-${name}.png`), Buffer.from(url.split(',')[1], 'base64'));
   }
 
+  // THE HANDS (P6): the pair you punch with is a paint surface of its own.
+  // The bay places onto it, the wire carries it, and the MIRROR — the thing
+  // the bay's ray actually paints — bakes it onto the hand it is holding up.
+  console.log('\n=== the hands: the surface you look at all match ===');
+  await page.evaluate(() => window.__ff2.wrap.act('open-custom'));
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.__ff2.wrap.act('open-paintbay'));
+  await page.waitForTimeout(500);
+  const hands = await page.evaluate(() => {
+    const p = window.__ff2.paint;
+    p.clear();
+    p.grant('stripe', 9);
+    p.grant('dot', 5);
+    const placed = [p.take('stripe', 9) && p.place('hand', 0.5, 0.42), p.take('dot', 5) && p.place('hand', 0.32, 0.62)];
+    const back = p.unpack(p.pack()).paint;
+    return { placed, back: back.map((u) => `${u.kind}@${u.part}`), u: back[0]?.u ?? -1 };
+  });
+  check('the bay places onto the HANDS', hands.placed.every(Boolean), JSON.stringify(hands.placed));
+  check('a hand stripe + dot roundtrip the wire as themselves', hands.back.join(',') === 'stripe@hand,dot@hand', hands.back.join(','));
+  check('the placement survives quantization (u≈0.5)', Math.abs(hands.u - 0.5) < 0.01, String(hands.u));
+  await page.waitForTimeout(700); // the repaint key moves, then the bake follows
+  const handSnap = await page.evaluate(() => window.__ff2.paintSnap('mirror-avatar', 'hand'));
+  check("the MIRROR's hand bakes the paint", handSnap.startsWith('data:image/png'), handSnap.slice(0, 22));
+  if (handSnap) writeFileSync(join(here, 'paint-hand.png'), Buffer.from(handSnap.split(',')[1], 'base64'));
+  await page.evaluate(() => {
+    window.__ff2.paint.clear();
+    window.__ff2.wrap.act('paintbay-close');
+    window.__ff2.wrap.act('custom-close');
+  });
+
   check('no page errors (stage 1)', errors.length === 0, errors.join(' | '));
   await page.close();
 }

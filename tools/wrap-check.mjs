@@ -238,7 +238,11 @@ console.log('\n=== THE MODALS: locker, store, line-up, lobby, loadout ===');
   await wrap(`act('tab-colour')`);
   await page.waitForTimeout(300);
   ids = await m(`buttons('custom')`);
-  check('COLOUR: the two base tones and the neon tracks', has(ids, 'base-white', 'base-black', 'accent-color', 'accent-light', 'accent-default'), ids.filter((b) => !b.startsWith('tab-')).join(','));
+  check(
+    'COLOUR: the two base tones, and no neon tracks left',
+    has(ids, 'base-white', 'base-black') && !has(ids, 'accent-color') && !has(ids, 'accent-light') && !has(ids, 'accent-default'),
+    ids.filter((b) => !b.startsWith('tab-')).join(','),
+  );
   await shot('custom', 'locker-colour');
 
   await wrap(`act('tab-platforms')`);

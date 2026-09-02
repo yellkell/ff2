@@ -203,12 +203,19 @@ export function applyAvatarSkin(root: Object3D, skin: AvatarSkin): void {
       case 'trim':
         m.color.setHex(skin.trim);
         break;
-      case 'hand':
+      case 'hand': {
         // The hands tint to the skin's steel but stay DARK at rest, capped
         // by handTone — the white active bloom is owned by setGloveLit and
         // needs somewhere to bloom from.
-        m.color.setHex(handTone(skin.chassis), SRGBColorSpace);
+        const tone = handTone(skin.chassis);
+        m.color.setHex(tone, SRGBColorSpace);
+        // THE PAINT bakes this tone as the hand's canvas fill, and takes
+        // the material's tint over while it does (avatar/paint.ts) — so
+        // the skin has to hand the new steel on rather than only setting
+        // a colour the map may already have replaced.
+        m.userData.paintFill = `#${tone.toString(16).padStart(6, '0')}`;
         break;
+      }
       case 'glow':
         if (m.userData.litIntensity !== undefined) break; // team LED — leave it
         m.color.setHex(skin.accent);

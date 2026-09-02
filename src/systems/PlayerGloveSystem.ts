@@ -1,6 +1,7 @@
 /**
- * Your boxing gloves: an ember-orange glove locked to each controller grip
- * whenever you're in the arena (bout or training). The fists are aimed along
+ * Your boxing gloves: an articulated steel hand locked to each controller
+ * grip whenever you're in the arena (bout or training), wearing your skin
+ * and YOUR PAINT (avatar/paint.ts, part 'hand'). The fists are aimed along
  * the controller's POINTING ray (not the tilted grip pose, which left the
  * knuckles facing the ceiling), their LEDs flare while you squeeze trigger or
  * grip, and they squash slightly under the squeeze. Hidden in the lobby so
@@ -11,6 +12,7 @@ import { createSystem, InputComponent } from '@iwsdk/core';
 import { Quaternion, type Group } from 'three';
 import { setGloveLit } from '../avatar/boxer.js';
 import { buildHand, HAND_ADDUCTION, setHandCurl } from '../avatar/hands.js';
+import { applyLook, myLook } from '../avatar/paint.js';
 import { applyAvatarSkin } from '../avatar/skins.js';
 import { BallState, Fireball } from '../components/Fireball.js';
 import { app } from '../menu/appState.js';
@@ -52,6 +54,11 @@ export class PlayerGloveSystem extends createSystem({
         glove = buildHand(hand === 'left' ? 1 : -1);
         glove.name = `player-glove-${hand}`;
         applyAvatarSkin(glove, myAvatarSkin());
+        // Dressed the moment it exists: a hand is built at the bell, long
+        // after the locker last repainted anything, so it bakes its own
+        // look here. (MenuSystem keeps it in step from then on — it finds
+        // both hands by name whenever the look or the skin moves.)
+        applyLook(glove, myLook());
         grip.add(glove);
         this.gloves[hand] = glove;
       }

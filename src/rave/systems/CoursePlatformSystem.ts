@@ -14,9 +14,13 @@
  * angle you happen to be standing at:
  *
  *   1. CORNER POSTS, one extinguished per beat — vertical, so they read
- *      edge-on, from below, and over the fences;
- *   2. RIMS that WRAP the deck edge rather than sitting on top of it, so
- *      the warning survives being looked at from the side;
+ *      edge-on, from below, and over the fences. They belong to the
+ *      warning: a deck that is simply yours to stand on has none, so the
+ *      ground you walk is a clean square and a post going UP is itself
+ *      the first beat of the news;
+ *   2. RIMS that WRAP the deck edge rather than sitting on top of it —
+ *      INLAID, their top under the face, so the warning survives being
+ *      looked at from the side without a kerb to step over;
  *   3. the DECK FACE washing amber — the instruction on the surface you are
  *      already looking at, which is where the club puts its telegraphs too
  *      (research/01 §3).
@@ -520,6 +524,10 @@ export class CoursePlatformSystem extends createSystem({}) {
       }
 
       // Rims wrap the deck edge — visible from the side and from below.
+      // They are INLAID: their top sits 2 mm under the face rather than
+      // standing proud of it, so a deck is a flat thing to walk on and a
+      // multi-tile platform has no kerb across its middle. The wrap still
+      // hangs down the edge, which is where it is read from.
       for (let e = 0; e < FILL_ORDER.length; e++) {
         const edge = FILL_ORDER[e];
         const [cx, cz, sx, sz] = EDGE_OFF[edge];
@@ -528,7 +536,7 @@ export class CoursePlatformSystem extends createSystem({}) {
         this.rims.set(
           idx,
           x + cx * half,
-          y - 0.01,
+          y - 0.052,
           z + cz * half,
           sx === 1 ? GRID.tile + 0.06 : 0.055,
           0.1,
@@ -551,20 +559,26 @@ export class CoursePlatformSystem extends createSystem({}) {
       }
 
       // Corner posts — the beat countdown no angle can hide. One dies per
-      // beat of the final bar; departure is four dead posts.
+      // beat of the final bar; departure is four dead posts. They belong to
+      // the WARNING and to nothing else: ground that is simply yours to
+      // stand on carries none of them, so a docked deck is a clean square
+      // instead of four raised nubs you step around. They stand UP OUT of
+      // the face (base flush with it) the moment the deck counts out,
+      // drives, or burns.
       const beatsLeft = warn ? Math.max(1, Math.ceil(st.departIn * 4)) : 0;
+      const up = warn || st.moving || burn > 0;
       for (let k = 0; k < 4; k++) {
         const [pcx, pcz] = POST_CORNERS[k];
         const inset = GRID.tile / 2 - 0.04;
-        const h = warn ? COUNTDOWN.postWarn : st.moving ? 0.1 : COUNTDOWN.postIdle;
+        const h = warn ? COUNTDOWN.postWarn : up ? COUNTDOWN.postIdle : 0;
         this.posts.set(
           t.posts[k],
           x + pcx * inset,
-          y + h / 2 + 0.03,
+          y + h / 2,
           z + pcz * inset,
-          COUNTDOWN.postSize,
+          up ? COUNTDOWN.postSize : 0,
           h,
-          COUNTDOWN.postSize,
+          up ? COUNTDOWN.postSize : 0,
         );
         if (burn > 0) {
           this.posts.color(t.posts[k], COLOR.rimDanger, 0.5 + burn);

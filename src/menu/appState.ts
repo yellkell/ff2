@@ -43,22 +43,14 @@ export interface LifetimeStats {
   hitsLanded: number;
 }
 
-/** Default glove-accent hue (≈0.07 → the classic ember orange). */
+/**
+ * The glove accent is the HOUSE EMBER for everyone — ≈0.07 at neutral
+ * lightness. It was a pair of locker sliders once; the tracks are gone, so
+ * these are the only values the accent ever takes (they still ride the wire
+ * in every pose packet, so rivals paint your hands the same as you do).
+ */
 export const DEFAULT_ACCENT_HUE = 0.07;
-
-function loadAccentHue(): number {
-  const raw = localStorage.getItem('ff-accent');
-  const n = raw == null ? NaN : parseFloat(raw);
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : DEFAULT_ACCENT_HUE;
-}
-
 export const DEFAULT_ACCENT_LIGHT = 0.5;
-
-function loadAccentLight(): number {
-  const raw = localStorage.getItem('ff-accent-light');
-  const n = raw == null ? NaN : parseFloat(raw);
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : DEFAULT_ACCENT_LIGHT;
-}
 
 /** Per-fist ball attachment: [left, right], each 0 none / 1 split / 2 grow / 3 shrink. */
 function loadBallAttach(): [number, number] {
@@ -208,9 +200,11 @@ export const app: {
   difficulty: Difficulty;
   /** Which backdrop the arena renders — held across every mode. */
   environment: AppEnvironment;
-  /** Player's chosen avatar-accent hue (0..1 around the colour wheel). */
+  /** Avatar-accent hue (0..1 around the colour wheel) — the house ember for
+   *  everyone now that the locker's tracks are gone; still wired so pose
+   *  packets keep carrying it. */
   accentHue: number;
-  /** Player's chosen avatar-accent lightness (0..1, 0.5 = neutral). */
+  /** Avatar-accent lightness (0..1, 0.5 = neutral) — see accentHue. */
   accentLight: number;
   /** Ball attachment per fist: [left, right] (0 none/1 split/2 grow/3 shrink). */
   ballAttach: [number, number];
@@ -300,8 +294,8 @@ export const app: {
     if (e === 'desert' || e === 'saltflats' || e === 'ar') return e;
     return 'desert';
   })(),
-  accentHue: loadAccentHue(),
-  accentLight: loadAccentLight(),
+  accentHue: DEFAULT_ACCENT_HUE,
+  accentLight: DEFAULT_ACCENT_LIGHT,
   ballAttach: loadBallAttach(),
   ballArc: loadBallArc(),
   curveStrength: loadCurveStrength(),
@@ -379,22 +373,6 @@ export function saveTutorialDone(): void {
 export function saveEnvironment(): void {
   try {
     localStorage.setItem('ff-env', app.environment);
-  } catch {
-    /* ignore */
-  }
-}
-
-export function saveAccentHue(): void {
-  try {
-    localStorage.setItem('ff-accent', app.accentHue.toFixed(4));
-  } catch {
-    /* ignore */
-  }
-}
-
-export function saveAccentLight(): void {
-  try {
-    localStorage.setItem('ff-accent-light', app.accentLight.toFixed(4));
   } catch {
     /* ignore */
   }

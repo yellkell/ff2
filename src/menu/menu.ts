@@ -150,12 +150,6 @@ export type MenuAction =
   | 'av-light'
   /** Reset the armour colour to the skin's default palette. */
   | 'av-uncolor'
-  /** Dragging the avatar-accent (neon) hue bar in the locker's COLOUR tab. */
-  | 'accent-color'
-  /** Dragging the avatar-accent (neon) lightness bar. */
-  | 'accent-light'
-  /** Reset the avatar-accent (neon) hue to the house ember default. */
-  | 'accent-default'
   /** The body's ONE choice: start all white, or all black. */
   | 'base-white'
   | 'base-black'
@@ -1502,17 +1496,15 @@ export function coinDisplayValue(): number {
 // fills; a short-handed FFA host can START early. Matchmaking works like
 // RANKED's server browser: hosting makes a VISIBLE room others can find.
 
-// only what you own, to equip — plus a COLOUR tab carrying the armour + accent
-// hue sliders. Each tile shows a PICTURE of the skin: an animal silhouette (a
-// shield for the knight) for avatars, a little coloured pad for platforms.
+// only what you own, to equip — plus a COLOUR tab carrying the base tone.
+// Each tile shows a PICTURE of the skin: an animal silhouette (a shield for
+// the knight) for avatars, a little coloured pad for platforms.
 
 const PAN_W = 560;
-// COLOUR-tab tracks (locker only): armour repaints the suit, accent the neon,
-// each with a hue track and a lightness track beneath it.
+// COLOUR-tab tracks (locker only): the armour hue track and the lightness
+// track beneath it. (The hands' neon has no tracks — it is the house ember.)
 const ARMOUR_BAR = { x: 40, y: 168, w: PAN_W - 210, h: 38 };
 const ARMOUR_LIGHT_BAR = { x: 40, y: 250, w: PAN_W - 80, h: 38 };
-const ACCENT_BAR = { x: 40, y: 348, w: PAN_W - 210, h: 38 };
-const ACCENT_LIGHT_BAR = { x: 40, y: 430, w: PAN_W - 80, h: 38 };
 
 /** A CSS hex colour ('#rrggbb') at the given alpha — breaker fill washes. */
 function hexToRgba(css: string, a: number): string {
@@ -1524,17 +1516,9 @@ function hexToRgba(css: string, a: number): string {
 export function colorBarHue(u: number): number {
   return Math.max(0, Math.min(1, (u * PAN_W - ARMOUR_BAR.x) / ARMOUR_BAR.w));
 }
-/** u → hue for the accent track. */
-export function accentBarHue(u: number): number {
-  return Math.max(0, Math.min(1, (u * PAN_W - ACCENT_BAR.x) / ACCENT_BAR.w));
-}
 /** u → lightness (0..1) for the armour lightness track. */
 export function colorBarLight(u: number): number {
   return Math.max(0, Math.min(1, (u * PAN_W - ARMOUR_LIGHT_BAR.x) / ARMOUR_LIGHT_BAR.w));
-}
-/** u → lightness (0..1) for the accent lightness track. */
-export function accentBarLight(u: number): number {
-  return Math.max(0, Math.min(1, (u * PAN_W - ACCENT_LIGHT_BAR.x) / ACCENT_LIGHT_BAR.w));
 }
 
 export function createMenu(scene: Scene): Menu {
