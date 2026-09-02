@@ -1682,7 +1682,7 @@ export function renderNewsPage(): HTMLCanvasElement {
 }
 
 // --- THE COIN WALLET + PLATFORM STORE ---------------------------------------
-// A small readout sits beside the paper button: the bolt-dollar symbol and your
+// A small readout sits beside the paper button: the iron-dollar symbol and your
 // balance. Spend it in the STORE (the LOCKER's header tab) on new platforms —
 // three launch pads are free, a couple of recolours cost 100, the gold pad 1000.
 

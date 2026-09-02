@@ -171,7 +171,7 @@ export type PubEvent =
       combo: number;
       dead: boolean;
     }
-  /* --- Coin trading (the bolt-dollar currency on your wrist) ---------------
+  /* --- Coin trading (the iron-dollar currency on your wrist) ---------------
    * Pure relayed events — the pub server forwards anything it doesn't
    * recognise verbatim (handleEvent's default case), so coins need NO server
    * state. A coin is a bearer token: debited from your wallet when you pull it

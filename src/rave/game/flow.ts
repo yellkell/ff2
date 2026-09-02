@@ -113,7 +113,7 @@ export function finishRaid(): void {
   match.coinsPaid = 0;
   if (me) {
     const grade = gradeOf(me);
-    // THE ONE WALLET: every finished record pays bolt-dollars into FIRE
+    // THE ONE WALLET: every finished record pays iron-dollars into FIRE
     // FIGHT's wallet — solo, tour night or club ring alike — the flat
     // bout rate plus a little for a clean night (config.songCoins).
     match.coinsPaid = songCoins(grade);

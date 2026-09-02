@@ -9,9 +9,8 @@
  *
  * The tab grammar the wrap wears (MENUS 2) comes to the modals: LOCKER ·
  * STORE across the top, and under it the row of sub-boards each face
- * offers — PLATFORMS · GEAR · COLOUR · ARENA in the locker, PLATFORMS ·
- * GEAR in the store (there is nothing to buy about your own base tone or
- * which desert you fight in).
+ * offers — PLATFORMS · GEAR · COLOUR in the locker, PLATFORMS · GEAR in
+ * the store (there is nothing to buy about your own base tone).
  *
  * The TILES are ghost buttons the body paints: the kit owns the plate, the
  * hover ease and the hit-test, while the artwork stays the bespoke icon
@@ -27,7 +26,7 @@
 
 import { KIT, type PanelButton } from '../ui/kit/panel.js';
 import { font } from '../ui/kit/fonts.js';
-import { app, DEFAULT_ACCENT_HUE, type AppEnvironment } from './appState.js';
+import { app, DEFAULT_ACCENT_HUE } from './appState.js';
 import { customization, platformOwned, gearOwned } from './customization.js';
 import { canAfford, coins } from './wallet.js';
 import { hueToColor } from '../config.js';
@@ -81,13 +80,13 @@ export interface LockerFace {
 
 /* ── which board is showing ───────────────────────────────────────────── */
 
-type Board = 'platforms' | 'gear' | 'colour' | 'arena';
+type Board = 'platforms' | 'gear' | 'colour';
 
-/** COLOUR and ARENA are the locker's alone; the store falls back to pads. */
+/** COLOUR is the locker's alone; the store falls back to pads. */
 function board(locker: boolean): Board {
   const t = customization.tab;
-  if (!locker && (t === 'colour' || t === 'arena')) return 'platforms';
-  if (t === 'gear' || t === 'colour' || t === 'arena') return t;
+  if (!locker && t === 'colour') return 'platforms';
+  if (t === 'gear' || t === 'colour') return t;
   return 'platforms';
 }
 
@@ -145,13 +144,6 @@ const buyRect = (t: Tile): { x: number; y: number; w: number; h: number } => ({
 
 /* ── the faces ────────────────────────────────────────────────────────── */
 
-const ARENA: Array<{ env: AppEnvironment | null; label: string; sub: string; id: string | null }> = [
-  { env: 'desert', label: 'THE DESERT', sub: 'dusk over the flats', id: 'env-desert' },
-  { env: 'ar', label: 'YOUR ROOM', sub: 'passthrough — fight where you stand', id: 'env-ar' },
-  { env: 'saltflats', label: 'THE SALT FLATS', sub: 'coming soon', id: null },
-  { env: 'factory', label: 'THE FACTORY', sub: 'coming soon', id: null },
-];
-
 export function lockerFace(locker: boolean): LockerFace {
   const b = board(locker);
   const buttons: PanelButton[] = [
@@ -165,7 +157,6 @@ export function lockerFace(locker: boolean): LockerFace {
         ['platforms', 'PLATFORMS', 'tab-platforms'],
         ['gear', 'GEAR', 'tab-gear'],
         ['colour', 'COLOUR', 'tab-colour'],
-        ['arena', 'ARENA', 'tab-arena'],
       ]
     : [
         ['platforms', 'PLATFORMS', 'tab-platforms'],
@@ -181,7 +172,7 @@ export function lockerFace(locker: boolean): LockerFace {
     buttons.push({
       id: 'store-wallet',
       label: `$ ${coins.balance}`,
-      sub: 'bolt-dollars',
+      sub: 'iron-dollars',
       x: M, y: FOOT_Y + 24, w: 280, h: 84,
       display: true,
       small: true,
@@ -190,7 +181,6 @@ export function lockerFace(locker: boolean): LockerFace {
   }
 
   if (b === 'colour') return { title: TITLE, buttons: [...buttons, ...colourButtons()], body: colourBody };
-  if (b === 'arena') return { title: TITLE, buttons: [...buttons, ...arenaButtons()], body: () => {} };
 
   const shown = tiles(locker);
   for (const t of shown) {
@@ -375,18 +365,3 @@ function colourBody(g: CanvasRenderingContext2D): void {
   g.letterSpacing = '0px';
 }
 
-/* ── ARENA: where the bouts happen ────────────────────────────────────── */
-
-function arenaButtons(): PanelButton[] {
-  return ARENA.map((opt, i) => ({
-    id: opt.id ?? `arena-soon-${i}`,
-    label: opt.label,
-    sub: opt.sub,
-    x: M,
-    y: 248 + i * 150,
-    w: INNER,
-    h: 128,
-    selected: opt.id !== null && app.environment === opt.env,
-    disabled: opt.id === null,
-  }));
-}

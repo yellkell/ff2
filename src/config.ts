@@ -63,7 +63,7 @@ export const PROGRESSION = {
 };
 
 /**
- * The bolt-dollar currency — a riveted "$" earned at the SAME moments as XP
+ * The iron-dollar currency — a riveted "$" earned at the SAME moments as XP
  * (every match, bot bout, arcade brawl and training run; see net/leaderboard).
  * A flat amount per completed game, win or loss, so the shop prices read as
  * round "games of play": a platform recolour or the GOLD RUSH premium pad
