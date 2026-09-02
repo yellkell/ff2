@@ -14,7 +14,7 @@
 import { isMusicMuted } from './menuMusic.js';
 import { MusicTrack } from './musicTrack.js';
 import { musicVolume } from './musicVolume.js';
-import breakcoreUrl from '../assets/music/battle/breakcore-drums.m4a?url';
+import breakcoreUrl from '../assets/music/battle/breakcore-drums.mp3?url';
 
 const VOLUME = 0.12; // matched to the battle-music floor — music is the floor, SFX the foreground
 

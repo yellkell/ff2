@@ -11,7 +11,7 @@
 import { isMusicMuted } from './menuMusic.js';
 import { MusicTrack } from './musicTrack.js';
 import { musicVolume } from './musicVolume.js';
-import aimUrl from '../assets/music/aim.m4a?url';
+import aimUrl from '../assets/music/aim.mp3?url';
 
 const VOLUME = 0.12; // matched to the battle-music floor — music is the floor, SFX the foreground
 
