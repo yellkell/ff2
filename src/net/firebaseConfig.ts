@@ -1,42 +1,17 @@
 /**
- * The repurposed Firebase project (from the ARFI/curveball era) — used ONLY
- * for matchmaking + WebRTC signaling. Game traffic never touches Firebase;
- * it flows peer-to-peer over RTCDataChannels (see webrtcTransport.ts).
+ * Kept as the old import path — the config itself moved to `net/firebase.ts`,
+ * which now owns the connection, the anonymous sign-in and the uid as well as
+ * the keys.
  *
- * A Firebase web API key is a public identifier, not a secret — access is
- * governed by Firestore security rules. For the `lobbies` collection used
- * here, rules along these lines are enough to ship:
+ * WHAT CHANGED. FF2 used to talk to `arfi-b68f9`, a project inherited from the
+ * ARFI/curveball era that is ALSO FIRE FIGHT 1's live hosting — which is why
+ * .github/workflows/firebase-deploy.yml was parked on manual dispatch with a
+ * note saying an automatic deploy from this repo would overwrite the live FF1
+ * site. FF2 now has its own home, the project behind ff2.web.app, shared with
+ * RAVE RAID and the social club instead of each reaching for a project of its
+ * own. See net/firebase.ts for the full story.
  *
- *   match /lobbies/{lobby} {
- *     allow read, create, update, delete: if true;   // hackathon-grade
- *     match /{candidates}/{doc} { allow read, write: if true; }
- *   }
- *
- * The arcade 2v2/FFA mesh (net/meshImpl.ts) adds one more collection —
- * `arcadeRooms` — with per-pair signalling + ICE candidate subcollections:
- *
- *   match /arcadeRooms/{room} {
- *     allow read, create, update, delete: if true;
- *     match /{document=**} { allow read, write: if true; }   // sig + c{seat}
- *   }
- *
- * The pub server (server/pub.mjs) also persists the OCTA HUNT all-time board
- * here (Render's disk is ephemeral), in a single doc `pub/octaHunt`:
- *
- *   match /pub/{doc} { allow read, write: if true; }
- *
- * (Tighten with App Check / auth before a big public release.)
- *
- * Set `FIREBASE_ENABLED = false` to force the WebSocket relay everywhere.
+ * New code should import from './firebase.js' directly.
  */
 
-export const FIREBASE_ENABLED = true;
-
-export const firebaseConfig = {
-  apiKey: 'AIzaSyA0NYO_w6uU0Fcc6nuVPitRQaGW3B6518E',
-  authDomain: 'arfi-b68f9.firebaseapp.com',
-  projectId: 'arfi-b68f9',
-  storageBucket: 'arfi-b68f9.firebasestorage.app',
-  messagingSenderId: '188374608574',
-  appId: '1:188374608574:web:108250406138b5a5988cef',
-};
+export { FIREBASE_ENABLED, firebaseConfig } from './firebase.js';
