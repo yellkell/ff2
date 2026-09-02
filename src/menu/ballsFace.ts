@@ -232,21 +232,41 @@ function drawAttachIcon(g: CanvasRenderingContext2D, type: number, cx: number, c
     }
     return;
   }
-  // GROW / SHRINK: a small ball and a big one, with the arrow between them
+  // GROW / SHRINK: a small ball and a big one, with a chevron between them
   // pointing the way the ball travels.
-  const small = r * 0.3;
-  const big = r * 0.62;
+  //
+  // The two balls are spaced so there is REAL GAP between them, and the
+  // chevron is drawn floating in that gap. The old version ran a stub of
+  // line out of the circle's own centre, which the big circle swallowed
+  // all but a few pixels of — so what you saw was a teat on the disc
+  // rather than an arrow between two of them.
+  const small = r * 0.26;
+  const big = r * 0.56;
   const grow = type === 1;
+  const lead = grow ? small : big; // the ball on the left
+  const trail = grow ? big : small;
   g.beginPath();
-  g.arc(cx - r * 0.6, cy, grow ? small : big, 0, Math.PI * 2);
+  g.arc(cx - r * 0.82, cy, lead, 0, Math.PI * 2);
   g.stroke();
   g.beginPath();
-  g.arc(cx + r * 0.62, cy, grow ? big : small, 0, Math.PI * 2);
+  g.arc(cx + r * 0.82, cy, trail, 0, Math.PI * 2);
   g.fill();
+
+  // Dead centre of the gap: past the left ball's rim, short of the right's.
+  const gapL = cx - r * 0.82 + lead;
+  const gapR = cx + r * 0.82 - trail;
+  const ax = (gapL + gapR) / 2;
+  const h = r * 0.2;
+  g.save();
+  g.lineWidth = 2.5;
+  g.lineCap = 'round';
+  g.lineJoin = 'round';
   g.beginPath();
-  g.moveTo(cx - r * 0.06, cy);
-  g.lineTo(cx + r * 0.12, cy);
+  g.moveTo(ax - h * 0.5, cy - h);
+  g.lineTo(ax + h * 0.5, cy);
+  g.lineTo(ax - h * 0.5, cy + h);
   g.stroke();
+  g.restore();
 }
 
 /* ── the panel, off screen ────────────────────────────────────────────── */
