@@ -120,7 +120,7 @@ function mintCode() {
 function roster(room) {
   return [...room.members.values()]
     .sort((a, b) => a.idx - b.idx)
-    .map((m) => ({ name: m.name, idx: m.idx, hue: m.hue ?? null }));
+    .map((m) => ({ name: m.name, idx: m.idx, hue: m.hue ?? null, lk: m.lk, gr: m.gr, tn: m.tn }));
 }
 
 function broadcast(room, obj, except = null) {
@@ -155,7 +155,7 @@ function openRoom(ws, msg, isPublic) {
     lastSet: new Set(),
     crownSettled: true, // no set yet — nothing to claim
   };
-  room.members.set(ws, { name: sanitizeName(msg.name), hue: sanitizeHue(msg.hue), idx: 0, seat: 0 });
+  room.members.set(ws, { name: sanitizeName(msg.name), hue: sanitizeHue(msg.hue), ...look(msg), idx: 0, seat: 0 });
   rooms.set(code, room);
   ws.room = code;
   send(ws, { t: 'room', code, host: true, idx: 0, open: isPublic });
@@ -177,7 +177,7 @@ function joinRoomByCode(ws, msg, code) {
   // The floor is ALWAYS open — a set being away on the ring doesn't bar
   // the door. Latecomers land in the club.
   const idx = Math.max(-1, ...[...room.members.values()].map((m) => m.idx)) + 1;
-  room.members.set(ws, { name: sanitizeName(msg.name), hue: sanitizeHue(msg.hue), idx, seat: idx });
+  room.members.set(ws, { name: sanitizeName(msg.name), hue: sanitizeHue(msg.hue), ...look(msg), idx, seat: idx });
   ws.room = code;
   send(ws, { t: 'room', code, host: false, idx, open: Boolean(room.isPublic) });
   broadcast(room, { t: 'roster', players: roster(room) });
@@ -315,7 +315,17 @@ function fireBall(code) {
       track: ball.track,
       diff: ball.diff,
       startInMs: START_IN_MS,
-      players: players.map(([m, h]) => ({ seat: h.seat, name: h.name, idx: h.idx, you: m === ws })),
+      players: players.map(([m, h]) => ({
+        seat: h.seat,
+        name: h.name,
+        idx: h.idx,
+        you: m === ws,
+        // The body rides the deal, so a ring dresses on arrival rather
+        // than waiting for the floor's next roster.
+        lk: h.lk,
+        gr: h.gr,
+        tn: h.tn,
+      })),
     });
   }
   room.playing = new Set(players.map(([, info]) => info.idx));
@@ -470,6 +480,24 @@ wss.on('connection', (ws) => {
         const hue = sanitizeHue(msg.hue);
         if (hue === info.hue) break;
         info.hue = hue;
+        broadcast(room, { t: 'roster', players: roster(room) });
+        break;
+      }
+
+      // THE BODY. FIRE FIGHT 2 shares one mannequin across both games: a
+      // dancer's PAINT, their GEAR and their base TONE ride the roster so
+      // the figure on this floor is the fighter you met in the arena. It
+      // travels like the colour does — with the greeting, and again on any
+      // change while a room is standing. The relay never reads it: it is
+      // opaque wire text, length-capped here and re-validated by every
+      // client that unpacks it.
+      case 'look': {
+        const room = rooms.get(ws.room);
+        const info = room?.members.get(ws);
+        if (!room || !info) break;
+        const next = look(msg);
+        if (next.lk === info.lk && next.gr === info.gr && next.tn === info.tn) break;
+        Object.assign(info, next);
         broadcast(room, { t: 'roster', players: roster(room) });
         break;
       }
@@ -691,6 +719,19 @@ wss.on('connection', (ws) => {
 
 function sanitizeName(name) {
   return String(name ?? 'DANCER').replace(/[^\w !?'-]/g, '').slice(0, 12).toUpperCase() || 'DANCER';
+}
+
+/** A dancer's BODY off the wire: packed paint, packed gear, base tone.
+ *  Opaque to the relay — capped and passed through, never parsed. The caps
+ *  match the arena's own wire limits (paint ~8 bytes a unit in base64;
+ *  gear is a short id list; the tone is one word). */
+function look(msg) {
+  const text = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+  return {
+    lk: text(msg.lk, 512),
+    gr: text(msg.gr, 64),
+    tn: msg.tn === 'onyx' ? 'onyx' : 'white',
+  };
 }
 
 // A dancer's chosen colour, as a hue in [0,1). null means "no choice" — the

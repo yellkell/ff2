@@ -62,7 +62,9 @@ import {
   updateVoiceListener,
   voiceEnabled,
 } from '../club/voice.js';
-import { buildDancer, type DancerPose, type DancerRig } from '../game/blankDancer.js';
+import { buildDancer, type BlankDress, type DancerPose, type DancerRig } from '../game/blankDancer.js';
+import { unpackLook } from '../../avatar/paint.js';
+import { cleanGear } from '../../avatar/gear.js';
 import { PoseMotion, type MotionTuning } from '../game/poseMotion.js';
 import { match } from '../game/state.js';
 import { course } from '../course/state.js';
@@ -399,18 +401,28 @@ export class ClubSocialSystem extends createSystem({}) {
   /* ── roster → puppets ─────────────────────────────────────────────────── */
 
   private syncRoster(connected: boolean): void {
+    // The body is part of the key: a dancer who repaints between rooms
+    // gets a fresh rig, exactly like a rename or a recolour does.
     const key = connected
-      ? net.members.map((m) => `${m.idx}:${m.name}:${memberHue(m).toFixed(4)}`).join('|') + `#${net.myIdx}`
+      ? net.members
+          .map((m) => `${m.idx}:${m.name}:${memberHue(m).toFixed(4)}:${m.tn ?? ''}:${m.gr ?? ''}:${m.lk ?? ''}`)
+          .join('|') + `#${net.myIdx}`
       : '';
     if (key === this.lastRosterKey) return;
     this.lastRosterKey = key;
 
     // Everyone but me, in the colour they dance in — their own pick if they
     // made one back in the foyer, otherwise the neon their slot handed out.
-    const want = new Map<number, { name: string; hue: number }>();
+    const want = new Map<number, { name: string; hue: number; body: BlankDress }>();
     if (connected) {
       for (const m of net.members) {
-        if (m.idx !== net.myIdx) want.set(m.idx, { name: m.name, hue: memberHue(m) });
+        if (m.idx === net.myIdx) continue;
+        // THE BODY off the roster — the mannequin they wear in the arena.
+        want.set(m.idx, {
+          name: m.name,
+          hue: memberHue(m),
+          body: { tone: m.tn === 'onyx' ? 'onyx' : 'white', gear: cleanGear(m.gr ?? ''), look: unpackLook(m.lk ?? '') },
+        });
       }
     }
     // Despawn the departed — and anyone whose name or colour changed under
@@ -427,10 +439,10 @@ export class ClubSocialSystem extends createSystem({}) {
       }
     }
     // Spawn the new (parked invisible until their first pose arrives).
-    for (const [idx, { name, hue }] of want) {
+    for (const [idx, { name, hue, body }] of want) {
       const existing = this.puppets.get(idx);
       if (existing) continue;
-      const rig = buildDancer(hue, { tone: idx % 2 === 1 ? 'onyx' : 'white' });
+      const rig = buildDancer(hue, body);
       rig.root.visible = false;
       this.crowd.add(rig.root);
       const tagMat = new MeshBasicMaterial({

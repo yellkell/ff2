@@ -133,6 +133,38 @@ if (shots) {
   console.log(`  wrote ${file}`);
 }
 
+console.log('\n=== the wire dresses a real person ===');
+{
+  // A remote human dealt onto the ring with a body on the wire: the blank,
+  // in onyx, wearing the gear they fight in. (Bots and the MC stay the
+  // house's own figures beside them.)
+  await page.evaluate(() => {
+    const humans = new Map([[1, { name: 'RIVAL', netId: 9, look: '', gear: 'crest,pauldrons', tone: 'onyx' }]]);
+    window.__gdr.startRaid({ seats: 4, humans, mySeat: 0 });
+  });
+  await page.waitForFunction(() => window.__gdr.match.screen === 'raid', { timeout: 40000 }).catch(() => {});
+  await page.waitForTimeout(1200);
+  const dressed = await page.evaluate(() => {
+    const scene = window.__gdr.scene();
+    let blanks = 0;
+    let geared = 0;
+    scene?.traverse((o) => {
+      if (o.name !== 'blank-dancer') return;
+      blanks++;
+      let has = false;
+      o.traverse((c) => {
+        if (c.name === 'gear') has = true;
+      });
+      if (has) geared++;
+    });
+    const d = window.__gdr.match.players.find((p) => p.kind === 'remote');
+    return { blanks, geared, wire: d ? { gear: d.gear, tone: d.tone } : null };
+  });
+  check('a remote human wears THE BLANK, dressed off the wire', dressed.blanks === 1 && dressed.geared === 1 && dressed.wire?.gear === 'crest,pauldrons' && dressed.wire?.tone === 'onyx', JSON.stringify(dressed));
+  await page.evaluate(() => window.__gdr.toLobby());
+  await page.waitForTimeout(400);
+}
+
 console.log('\n=== the door back ===');
 await page.evaluate(() => window.__gdr.toLobby());
 await page.waitForTimeout(300);

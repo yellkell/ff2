@@ -44,6 +44,12 @@ export interface Dancer {
   invulnUntilBeat: number;
   /** Remote only: connection id on the relay. */
   netId?: number;
+  /** A REAL PERSON's body (FF2's mannequin): their packed paint, packed
+   *  gear and base tone off the wire. Empty for bots — the house's own
+   *  couture figures are not painted. */
+  look: string;
+  gear: string;
+  tone: string;
 }
 
 /** A one-shot the boss performs when a move starts telegraphing. */
@@ -228,7 +234,12 @@ export const setEndBeat = (): number => match.phrases * phraseBeats();
 
 /** Build the dancer roster for a raid. `humans` maps seat → name for online
  *  play; every unlisted seat becomes a seeded goo-groupie. */
-export function buildRoster(seats: number, seed: number, mySeat: number, humans?: Map<number, { name: string; netId?: number }>): void {
+export function buildRoster(
+  seats: number,
+  seed: number,
+  mySeat: number,
+  humans?: Map<number, { name: string; netId?: number; look?: string; gear?: string; tone?: string }>,
+): void {
   const rng = mulberry32(mix(seed, 0xb07));
   const players: Dancer[] = [];
   let bots = 0;
@@ -254,6 +265,9 @@ export function buildRoster(seats: number, seed: number, mySeat: number, humans?
       rank: seat + 1,
       invulnUntilBeat: -Infinity,
       netId: human && 'netId' in human ? human.netId : undefined,
+      look: (human && 'look' in human ? human.look : '') ?? '',
+      gear: (human && 'gear' in human ? human.gear : '') ?? '',
+      tone: (human && 'tone' in human ? human.tone : '') ?? 'white',
     });
   }
   // Local player first in the array = convenient; seat order via .seat.

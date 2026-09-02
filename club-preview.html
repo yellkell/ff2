@@ -7,7 +7,7 @@
     <script type="module">
       import { ACESFilmicToneMapping, Color, FogExp2, PerspectiveCamera, PMREMGenerator, Scene, WebGLRenderer } from 'three';
       import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-      import { buildClub } from '/src/club/build.ts';
+      import { buildClub } from '/src/rave/club/build.ts';
 
       const params = new URLSearchParams(location.search);
       const x = Number(params.get('x') ?? 0);
@@ -39,7 +39,7 @@
       // ?ball=1 — THE BALL down over the dance floor, plate painted.
       let ball = null;
       if (params.get('ball') === '1') {
-        const { buildBallVisual, ballAnchor } = await import('/src/club/ball.ts');
+        const { buildBallVisual, ballAnchor } = await import('/src/rave/club/ball.ts');
         ball = buildBallVisual();
         const bx = 0, bz = -3.2;
         const anchor = ballAnchor(bx, bz);

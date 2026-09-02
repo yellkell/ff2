@@ -1143,19 +1143,20 @@ function buildMirror(root: Group): void {
   // dies into it from either side.
   box(root, brass, M.w + 0.56, 0.07, 0.22, M.x, 0.155, wallZ + 0.1);
   box(root, bronze, M.w + 0.44, 0.16, 0.1, M.x, 0.08, wallZ + 0.05);
-  // The crown fan.
+  // The crown: a stepped Deco crest over the frame (the sunray fan is
+  // retired everywhere — the ziggurat is the house motif now).
   const crownY = yTop + 0.24;
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 6) * Math.PI - Math.PI / 2;
-    const len = 0.3 + (i % 2) * 0.12;
-    const rib = new Mesh(new BoxGeometry(0.035, len, 0.025), brass);
-    rib.position.set(M.x + Math.sin(a) * (len / 2 + 0.12), crownY + Math.cos(a) * (len / 2 + 0.12), wallZ + 0.05);
-    rib.rotation.z = -a;
-    root.add(rib);
+  const crest: Array<[number, number]> = [
+    [M.w * 0.62, 0.07],
+    [M.w * 0.4, 0.06],
+    [M.w * 0.2, 0.05],
+  ];
+  let crestY = crownY;
+  for (const [w, h] of crest) {
+    box(root, brass, w, h, 0.05, M.x, crestY, wallZ + 0.05);
+    crestY += h + 0.06;
   }
-  const hub = new Mesh(new CircleGeometry(0.12, 18, 0, Math.PI), brassGlowMat(0.7));
-  hub.position.set(M.x, crownY, wallZ + 0.06);
-  root.add(hub);
+  box(root, blackSteelMat(), 0.16, 0.05, 0.055, M.x, crestY, wallZ + 0.05);
 
   /* Tied-back velvet flanks — the drape line parts FOR the mirror. */
   const drape = new MeshStandardMaterial({ map: velvetTexture([2, 1], 6), roughness: 0.96, metalness: 0 });
@@ -1380,34 +1381,30 @@ function buildVestibule(root: Group): void {
     box(root, brassMat(0.3), 0.05, 0.34, 0.02, side * 0.16, 1.12, SZ - 0.14);
     box(root, brassMat(0.4), doorW / 2 - 0.1, 0.16, 0.02, (side * doorW) / 4, 0.12, SZ - 0.14);
   }
-  // THE FANLIGHT: a half-sunburst window over the doors, softly lit — a fan
-  // springing from the door head, ringed by its own arch bar so it reads as
-  // a window rather than a handful of loose spokes.
-  //
-  // It sits INSIDE the tympanum now: springing line just over the leaves,
-  // outer radius stopping short of the innermost frame's head. Nothing
-  // crosses it any more — the crossbar that used to bisect it has been
-  // lifted clear above, and the south wall's picture rail (which ran the
-  // full width of the hall, straight through the fan behind it) now dies
-  // into the portal on both sides like a moulding should.
-  const fanMat = brassGlowMat(0.7);
+  // THE TRANSOM: the sunburst fanlight is gone (no sun symbols over the
+  // doors in this house). In its place, a stepped Deco ziggurat: three
+  // brass tiers narrowing upward over a soft backlit glass strip — the
+  // same tympanum, a different god.
   const fanY = doorH + 0.06;
-  const rIn = 0.08;
-  const rOut = 0.33;
   const fanZ = SZ - 0.13;
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 6) * Math.PI - Math.PI / 2;
-    const mid = (rIn + rOut) / 2;
-    const spoke = new Mesh(new BoxGeometry(0.028, rOut - rIn, 0.02), fanMat);
-    spoke.position.set(Math.sin(a) * mid, fanY + Math.cos(a) * mid, fanZ);
-    spoke.rotation.z = -a;
-    root.add(spoke);
+  const glass = new Mesh(
+    new PlaneGeometry(1.5, 0.34),
+    new MeshStandardMaterial({ color: 0xf3e3c2, emissive: 0xffdba0, emissiveIntensity: 0.5, roughness: 0.6 }),
+  );
+  glass.position.set(0, fanY + 0.2, fanZ - 0.015);
+  glass.rotation.y = Math.PI;
+  root.add(glass);
+  const tiers: Array<[number, number]> = [
+    [1.6, 0.07],
+    [1.14, 0.06],
+    [0.7, 0.05],
+  ];
+  let tierY = fanY + 0.03;
+  for (const [w, h] of tiers) {
+    box(root, brassMat(0.3), w, h, 0.05, 0, tierY, fanZ);
+    tierY += h + 0.075;
   }
-  // The arch over the fan, and the sill it springs from.
-  const arch = new Mesh(new TorusGeometry(rOut, 0.022, 8, 28, Math.PI), fanMat);
-  arch.position.set(0, fanY, fanZ);
-  root.add(arch);
-  box(root, brassMat(0.3), rOut * 2 + 0.06, 0.035, 0.025, 0, fanY, fanZ);
+  box(root, blackSteelMat(), 0.34, 0.05, 0.055, 0, tierY, fanZ); // the keystone cap
 
   // The velvet rope and the members-&-dancers plaque used to stand here.
   // The way in is a doorway, not a queue: nothing to sidestep, nothing to

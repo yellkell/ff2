@@ -25,6 +25,8 @@ import { choreoView } from './ChoreoSystem.js';
 import type { Zone } from '../choreo/setlist.js';
 import { accentHex, buildDancer, type DancerPose, type DancerRig } from '../game/avatars.js';
 import { buildDancer as buildBlank } from '../game/blankDancer.js';
+import { unpackLook } from '../../avatar/paint.js';
+import { cleanGear } from '../../avatar/gear.js';
 import { PoseMotion, type MotionTuning } from '../game/poseMotion.js';
 import { roll } from '../game/rng.js';
 import { seatBearing, seatIsNear } from '../game/ring.js';
@@ -82,7 +84,14 @@ export class AvatarSystem extends createSystem({}) {
       // A REAL PERSON wears THE BLANK (game/blankDancer.ts): one town, one
       // body, so the fighter you met in the arena is the dancer beside you
       // here. Their look rides the wire and bakes on arrival.
-      const rig = d.kind === 'remote' ? buildBlank(d.hue) : buildDancer(d.hue);
+      const rig =
+        d.kind === 'remote'
+          ? buildBlank(d.hue, {
+              tone: d.tone === 'onyx' ? 'onyx' : 'white',
+              gear: cleanGear(d.gear),
+              look: unpackLook(d.look),
+            })
+          : buildDancer(d.hue);
       // DETAIL, decided once — see seatIsNear(). The choreography asks the
       // same question of the same seat, so a far deck loses its dancer's
       // jewellery, its falling blocks and its strike sparks together.

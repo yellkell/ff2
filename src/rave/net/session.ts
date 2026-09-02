@@ -43,6 +43,12 @@ export interface LobbyMember {
   name: string;
   /** Stable relay member index — club poses and voice are keyed by it. */
   idx: number;
+  /** THE BODY (FF2): their packed paint, packed gear and base tone — the
+   *  mannequin they wear in the arena, worn here too. Absent from an older
+   *  relay, or from a dancer who has never touched the bay. */
+  lk?: string;
+  gr?: string;
+  tn?: string;
   /** The colour they picked (hue 0..1), or null for "whatever my slot says".
    *  It rides the wire so a choice made in the foyer follows its dancer onto
    *  the club floor; an older relay simply never sends it. */
@@ -95,6 +101,9 @@ let ws: WebSocket | null = null;
 let pingTimer: number | null = null;
 let myHue: number | null = null;
 let myName = 'DANCER';
+/** THE BODY this headset dances in — packed paint, packed gear, base tone
+ *  (see setDancerBody). Sent with every greeting and on every change. */
+let myBody: { lk: string; gr: string; tn: string } = { lk: '', gr: '', tn: 'white' };
 
 function send(obj: unknown): void {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
@@ -303,14 +312,16 @@ function handle(msg: Record<string, unknown>): void {
       // The ball fired with ME on it: seed + seats + my ring seat + the
       // player seat map + a shared "beat 0 in N ms" (RTT-compensated).
       net.ball = null;
-      const players = (msg.players as { seat: number; name: string; idx?: number; you?: boolean }[]) ?? [];
-      const humans = new Map<number, { name: string; netId?: number }>();
+      const players =
+        (msg.players as { seat: number; name: string; idx?: number; you?: boolean; lk?: string; gr?: string; tn?: string }[]) ?? [];
+      const humans = new Map<number, { name: string; netId?: number; look?: string; gear?: string; tone?: string }>();
       seatByIdx.clear();
       let mySeat = 0;
       for (const p of players) {
         if (Number.isFinite(Number(p.idx))) seatByIdx.set(Number(p.idx), p.seat);
         if (p.you) mySeat = p.seat;
-        else humans.set(p.seat, { name: p.name, netId: p.idx });
+        // The deal carries their body, so the ring is dressed on arrival.
+        else humans.set(p.seat, { name: p.name, netId: p.idx, look: p.lk, gear: p.gr, tone: p.tn });
       }
       const startInMs = Number(msg.startInMs ?? 5000) - net.rttMs / 2;
       ensureAudio();
@@ -454,6 +465,29 @@ export function dancerName(): string {
   return myName;
 }
 
+/**
+ * Hand the session the BODY this headset wears — FIRE FIGHT's mannequin:
+ * the packed paint, the packed gear and the base tone.
+ *
+ * ONE TOWN: the fighter you met in the arena is the dancer beside you here,
+ * so the body travels the way the colour does — with the greeting that
+ * opens or joins a room, and again down the wire the moment it changes,
+ * since the bay is reachable with a room already standing.
+ */
+export function setDancerBody(lk: string, gr: string, tn: string): void {
+  const next = { lk: lk.slice(0, 512), gr: gr.slice(0, 64), tn: tn === 'onyx' ? 'onyx' : 'white' };
+  if (next.lk === myBody.lk && next.gr === myBody.gr && next.tn === myBody.tn) return;
+  myBody = next;
+  if (net.phase === 'hosting' || net.phase === 'joined' || net.phase === 'live') {
+    send({ t: 'look', ...myBody });
+  }
+}
+
+/** What this headset is currently wearing on the wire. */
+export function dancerBody(): { lk: string; gr: string; tn: string } {
+  return myBody;
+}
+
 /** The hue a room-mate wears on the club floor: the colour they chose, or
  *  their slot's if they never picked one (or the relay is too old to say). */
 export function memberHue(m: LobbyMember): number {
@@ -462,7 +496,7 @@ export function memberHue(m: LobbyMember): number {
 }
 
 export function hostRoom(): void {
-  connect(() => send({ t: 'host', name: myName, hue: myHue }));
+  connect(() => send({ t: 'host', name: myName, hue: myHue, ...myBody }));
 }
 
 /** THE PUBLIC FLOOR: no code, no arranging — the relay drops you into
@@ -470,11 +504,11 @@ export function hostRoom(): void {
  *  a fresh one if none does. The other door (host/join with a 4-digit
  *  code) is for a room you want to keep to your friends. */
 export function enterPublicRoom(): void {
-  connect(() => send({ t: 'public', name: myName, hue: myHue }));
+  connect(() => send({ t: 'public', name: myName, hue: myHue, ...myBody }));
 }
 
 export function joinRoom(code: string): void {
-  connect(() => send({ t: 'join', code: code.toUpperCase(), name: myName, hue: myHue }));
+  connect(() => send({ t: 'join', code: code.toUpperCase(), name: myName, hue: myHue, ...myBody }));
 }
 
 export function leaveRoom(): void {

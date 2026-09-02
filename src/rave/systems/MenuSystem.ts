@@ -51,6 +51,8 @@ import {
   setProfileHue,
   setProfileName,
 } from '../game/profile.js';
+import { myPackedLook } from '../../avatar/paint.js';
+import { myPackedGear, myTone } from '../../menu/customization.js';
 import {
   bestTourGrade,
   campaignComplete,
@@ -68,6 +70,7 @@ import {
   joinRoom,
   leaveRoom,
   net,
+  setDancerBody,
   setDancerHue,
   setDancerName,
 } from '../net/session.js';
@@ -315,6 +318,10 @@ export class MenuSystem extends createSystem({}) {
     // carries them. A ?name= share link may still override the session below.
     setDancerName(profileName());
     setDancerHue(profileHue());
+    // ONE TOWN: the body the arena dressed rides into every room this
+    // headset opens or joins, so a stranger on the floor is wearing the
+    // paint and the gear they fight in.
+    setDancerBody(myPackedLook(), myPackedGear(), myTone());
 
     menuView.setMode = (m) => {
       this.mode = m === 'join' ? 'multi' : m;
