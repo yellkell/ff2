@@ -142,6 +142,18 @@ let cs = await page.evaluate(() => window.__gdr.course.state());
 check('the ride starts on the home pad', riding && cs.active && cs.tracked === 'home', JSON.stringify({ active: cs.active, tracked: cs.tracked, phase: cs.phase }));
 read = await sceneRead();
 check('the hall packs away behind the void', read.course === true && read.club === false, JSON.stringify(read));
+const gate = await page.evaluate(() => {
+  const scene = window.__gdr.scene();
+  const g = scene.getObjectByName('the-gate');
+  let pane = null;
+  g?.traverse((o) => {
+    if (o.material?.transparent && o.material.map) pane = o.material.opacity;
+  });
+  return { built: !!g, pane, homeward: window.__gdr.course.state().homeward, platforms: window.__gdr.course.state().tracked };
+});
+check('THE GATE stands on the home pad, dark on the way out', gate.built && gate.pane !== null && gate.pane < 0.1 && gate.homeward === 0, JSON.stringify(gate));
+await page.evaluate(() => window.__gdr.course.head(0, 0.2, 1.6));
+await page.waitForTimeout(300);
 await shot('course');
 await page.evaluate(() => window.__gdr.course.leave());
 await page.waitForTimeout(900);

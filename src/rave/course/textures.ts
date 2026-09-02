@@ -56,6 +56,89 @@ export function patternTexture(): CanvasTexture {
   return tex;
 }
 
+/**
+ * THE DECK PLATE — what a platform's top wears. The decks were flat colour
+ * with a lit rim; the surface you are asked to trust your feet to should
+ * look like it was made by someone. Checker-plate hatching (the industrial
+ * floor everyone has stood on), an inset border, a rivet at each corner:
+ * drawn once, tinted per instance by the bank's colour, so the amber wash
+ * and the red burn ride over it rather than replacing it.
+ */
+export function plateTexture(): CanvasTexture {
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 0, size, size);
+  // Checker plate: two families of short diagonal bars on a staggered grid.
+  g.strokeStyle = 'rgba(0,0,0,0.34)';
+  g.lineCap = 'round';
+  g.lineWidth = size * 0.02;
+  const cell = size / 8;
+  for (let r = 0; r < 8; r++) {
+    for (let col = 0; col < 8; col++) {
+      const cx = col * cell + cell / 2 + (r % 2 ? cell / 2 : 0);
+      const cy = r * cell + cell / 2;
+      const d = cell * 0.26;
+      g.beginPath();
+      if ((r + col) % 2) {
+        g.moveTo(cx - d, cy - d);
+        g.lineTo(cx + d, cy + d);
+      } else {
+        g.moveTo(cx - d, cy + d);
+        g.lineTo(cx + d, cy - d);
+      }
+      g.stroke();
+    }
+  }
+  // The highlight side of every bar, a hair up-left of it.
+  g.strokeStyle = 'rgba(255,255,255,0.16)';
+  g.lineWidth = size * 0.012;
+  for (let r = 0; r < 8; r++) {
+    for (let col = 0; col < 8; col++) {
+      const cx = col * cell + cell / 2 + (r % 2 ? cell / 2 : 0) - size * 0.012;
+      const cy = r * cell + cell / 2 - size * 0.012;
+      const d = cell * 0.26;
+      g.beginPath();
+      if ((r + col) % 2) {
+        g.moveTo(cx - d, cy - d);
+        g.lineTo(cx + d, cy + d);
+      } else {
+        g.moveTo(cx - d, cy + d);
+        g.lineTo(cx + d, cy - d);
+      }
+      g.stroke();
+    }
+  }
+  // Inset border, and a rivet in each corner.
+  g.strokeStyle = 'rgba(0,0,0,0.55)';
+  g.lineWidth = size * 0.028;
+  g.strokeRect(size * 0.06, size * 0.06, size * 0.88, size * 0.88);
+  g.strokeStyle = 'rgba(255,255,255,0.22)';
+  g.lineWidth = size * 0.01;
+  g.strokeRect(size * 0.085, size * 0.085, size * 0.83, size * 0.83);
+  for (const [x, y] of [
+    [0.13, 0.13],
+    [0.87, 0.13],
+    [0.13, 0.87],
+    [0.87, 0.87],
+  ]) {
+    g.fillStyle = 'rgba(0,0,0,0.6)';
+    g.beginPath();
+    g.arc(x * size, y * size, size * 0.028, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.beginPath();
+    g.arc(x * size - size * 0.006, y * size - size * 0.006, size * 0.014, 0, Math.PI * 2);
+    g.fill();
+  }
+  const tex = new CanvasTexture(c);
+  tex.minFilter = LinearMipmapLinearFilter;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 export interface PanelSpec {
   title?: string;
   lines: string[];

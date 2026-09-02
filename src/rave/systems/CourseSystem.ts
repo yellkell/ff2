@@ -205,6 +205,8 @@ export class CourseSystem extends createSystem({}) {
       slips: G.slips,
       handovers: G.handovers,
       bars: G.transport.bars,
+      /** How lit THE GATE is (0 out, 1 home). */
+      homeward: G.wayfind.homeward,
       ground: {
         moving: G.platforms[G.tracked]?.moving ?? false,
         departIn: G.platforms[G.tracked]?.departIn ?? Infinity,

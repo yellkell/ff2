@@ -1,8 +1,11 @@
 /**
  * THE CIRCUIT — a closed parkour lap through the void. Out to the east on a
- * runner, up the lift, across THE SKYWALK at height, down the drop, home on
- * the west runner. Ride it and it puts you back exactly where it picked you
- * up, which is the whole point of a course you reach through a door.
+ * runner, up a lift to the mezzanine, a shuttle across it with a turn in
+ * the ride, a second lift to the sky, across THE SKYWALK at height, down
+ * the elevator, home on the west runner — and THE GATE on the home pad
+ * lights the way back. Ride it and it puts you back exactly where it
+ * picked you up, which is the whole point of a course you reach through a
+ * door.
  *
  * The authoring discipline is the movement repo's, unchanged: each platform
  * claims squares of the 3×3 play-area grid (research/03 §2.2) and moves its
@@ -60,18 +63,41 @@ const EDGE_DIR: Record<Edge, Sq> = {
 };
 
 /* ── Anchors ──────────────────────────────────────────────────────────────
- * The lap circles the arena's centre and takes the free vertical dimension
- * (research/03 §3): east and up, across the void's north at height — the
- * skywalk rides among the arcs, the mirror floor far below — then west and
- * down, and the ledger closes at centre. */
+ * VOIDSTEP 2. The lap still circles the arena's centre and still takes the
+ * free vertical dimension (research/03 §3), but it takes it TWICE and it
+ * takes it faster: east on a runner, up a half storey, a shuttle across the
+ * mezzanine on the diagonal, up again to the sky, THE SKYWALK south across
+ * the void at height, an elevator straight down the west side, and the
+ * runner home. Every machine dwells two bars and rides two bars at 128 —
+ * a catch is a decision made in under four seconds, and a miss costs a
+ * loop (fifteen seconds), never a life.
+ *
+ * Every machine sits five bars behind the one before it: when yours docks
+ * at the far end, the next is docked for one more bar and gone the bar
+ * after — which is the snap. The ferry alone keeps three-bar dwells; it is
+ * the set piece, and you are allowed to look at the view. */
 
 const H = v3(0, 0, 0); // home, where the door puts you down
 const E1 = v3(2.6, 0, -1.2); // east landing
-const E2 = v3(2.6, 3.8, -4.4); // the lift's high berth
-const S3 = v3(-3.0, 3.8, -4.4); // the skywalk's west berth
-const W4 = v3(-3.0, 0, -1.2); // west landing, back on the floor
+const E2 = v3(2.6, 1.9, -4.4); // the first lift's berth: the mezzanine, east
+const N3 = v3(0.6, 1.9, -6.4); // the shuttle's berth: the mezzanine, north
+const N4 = v3(-2.4, 3.8, -7.0); // the second lift's berth: the sky, north-west
+const S5 = v3(-2.4, 3.8, -1.6); // the skywalk's south berth
+const W6 = v3(-2.4, 0, -1.6); // the elevator's foot, back on the floor
 
-export const ANCHORS = { H, E1, E2, S3, W4 };
+/* THE TURNS. A machine may only ever leave a seam, or arrive at one, moving
+ * along that seam's normal: a deck departing on the diagonal clips the
+ * corner of the tile it was moored against by a few centimetres — a
+ * collision the old stop-only check could never see and the sweep below
+ * refuses. So every machine whose berths aren't in line rides an L: out
+ * along one axis to a waypoint, then along the other. The corner is a
+ * beat in the ride, and the ride is better for it. */
+const A1 = v3(2.6, 0, 0); // runner-out: east along the floor, then north
+const M2 = v3(0.6, 1.9, -4.4); // shuttle: west across the mezzanine, then north
+const P3 = v3(0.6, 3.8, -7.0); // lift2: up and north first, then west along the sky
+const R4 = v3(-2.4, 0, 0); // runner-home: south off the elevator's foot, then east
+
+export const ANCHORS = { H, E1, E2, N3, N4, S5, W6 };
 
 const C: Sq = [0, 0];
 const E: Sq = [1, 0];
@@ -81,12 +107,42 @@ const NE: Sq = [1, -1];
 const NW: Sq = [-1, -1];
 const SC: Sq = [0, 1];
 const SE: Sq = [1, 1];
+const SW: Sq = [-1, 1];
+
+/** A machine's loop: docked `near` from bar t, two bars there, two bars
+ *  out, two bars at `far`, two bars back — eight in all. */
+const shuttleLoop = (t: number, near: V3, far: V3): Pick<PlatformSpec, 'keys' | 'loopBars'> => ({
+  keys: [
+    { bar: t, a: near },
+    { bar: t + 2, a: near },
+    { bar: t + 4, a: far },
+    { bar: t + 6, a: far },
+    { bar: t + 8, a: near },
+  ],
+  loopBars: 8,
+});
+
+/** The same eight bars with a TURN in each ride: a bar to the waypoint,
+ *  a bar on to the berth. */
+const cornerLoop = (t: number, near: V3, turn: V3, far: V3): Pick<PlatformSpec, 'keys' | 'loopBars'> => ({
+  keys: [
+    { bar: t, a: near },
+    { bar: t + 2, a: near },
+    { bar: t + 3, a: turn },
+    { bar: t + 4, a: far },
+    { bar: t + 6, a: far },
+    { bar: t + 7, a: turn },
+    { bar: t + 8, a: near },
+  ],
+  loopBars: 8,
+});
 
 export const PLATFORMS: PlatformSpec[] = [
   {
-    // The alpha and the omega: leave stepping east, return stepping east off
-    // the west runner. The lap's ledger closes here at centre, and the door
-    // home opens the moment it does.
+    // The alpha and the omega: leave stepping east, return stepping east
+    // off the west runner. The lap's ledger closes here at centre, and THE
+    // GATE on the pad's south edge is the door home, lit by how far round
+    // the route you are.
     id: 'home',
     claim: [C, SC],
     keys: [{ bar: 0, a: H }],
@@ -98,20 +154,12 @@ export const PLATFORMS: PlatformSpec[] = [
   {
     id: 'runner-out',
     claim: [E],
-    keys: [
-      { bar: 0, a: H },
-      { bar: 6, a: H },
-      { bar: 10, a: E1 },
-      { bar: 14, a: E1 },
-      { bar: 16, a: H },
-    ],
-    loopBars: 16,
+    ...cornerLoop(0, H, A1, E1),
     gaps: [{ sq: E, edge: 'W' }],
   },
   {
     // Two tiles: arrive on C, walk north, board the lift east off NC. The
-    // internal +N is repaid by the −N step off the lift at the top — the
-    // repayment spans the whole ride, the mill discipline.
+    // internal +N is repaid by the −N step off the lift at the top.
     id: 'east-step',
     claim: [C, NC],
     keys: [{ bar: 0, a: E1 }],
@@ -121,92 +169,122 @@ export const PLATFORMS: PlatformSpec[] = [
     ],
   },
   {
-    // The climb: four bars of rising ground with nothing to do but hold it.
+    // The first climb: north and up half a storey to the mezzanine.
     id: 'lift',
     claim: [NE],
-    keys: [
-      { bar: 10, a: E1 },
-      { bar: 16, a: E1 },
-      { bar: 20, a: E2 },
-      { bar: 24, a: E2 },
-      { bar: 26, a: E1 },
-    ],
-    loopBars: 16,
-    gaps: [
-      { sq: NE, edge: 'W' },
-      { sq: NE, edge: 'S' },
-    ],
+    ...shuttleLoop(5, E1, E2),
+    gaps: [{ sq: NE, edge: 'W' }],
   },
   {
-    id: 'sky-east',
-    claim: [E],
+    // The mezzanine, east: land on NC off the lift, walk south, board the
+    // shuttle moored south of C.
+    id: 'mezz',
+    claim: [NC, C],
     keys: [{ bar: 0, a: E2 }],
     gaps: [
-      { sq: E, edge: 'N' },
-      { sq: E, edge: 'W' },
+      { sq: NC, edge: 'E' },
+      { sq: C, edge: 'S' },
     ],
   },
   {
-    // THE SKYWALK — the set piece: a 2×2 deck riding the void's north at
-    // height, a twelve-bar crossing with the mirror floor a storey and a
-    // half below it. It cycles home empty, like a ferry.
+    // THE SHUTTLE — west across the mezzanine's gap, a turn, then north:
+    // the one ride on the lap that changes direction under you. Nothing
+    // else on this storey.
+    id: 'shuttle',
+    claim: [SC],
+    ...cornerLoop(10, E2, M2, N3),
+    gaps: [{ sq: SC, edge: 'N' }],
+  },
+  {
+    // The mezzanine, north: off the shuttle onto C, north to NC, and the
+    // second lift waits west of that.
+    id: 'north-step',
+    claim: [C, NC],
+    keys: [{ bar: 0, a: N3 }],
+    gaps: [
+      { sq: C, edge: 'S' },
+      { sq: NC, edge: 'W' },
+    ],
+  },
+  {
+    // The second climb: up and north to the sky, then west along it.
+    id: 'lift2',
+    claim: [NW],
+    ...cornerLoop(15, N3, P3, N4),
+    gaps: [
+      { sq: NW, edge: 'E' },
+      { sq: NW, edge: 'S' },
+    ],
+  },
+  {
+    // The sky, north-west: off the lift onto W, east to C, and the ferry is
+    // moored south of you.
+    id: 'sky',
+    claim: [W, C],
+    keys: [{ bar: 0, a: N4 }],
+    gaps: [
+      { sq: W, edge: 'N' },
+      { sq: C, edge: 'S' },
+    ],
+  },
+  {
+    // THE SKYWALK — the set piece: a two-tile ferry riding straight south
+    // across the void at height, the mirror floor a storey and a half
+    // below, the shuttle's storey passing under it. Three-bar dwells: the
+    // only place on the lap you are given time to look.
     id: 'skywalk',
-    claim: [W, C, NW, NC],
+    claim: [SC, SE],
     keys: [
-      { bar: 24, a: E2 },
-      { bar: 32, a: E2 },
-      { bar: 44, a: S3 },
-      { bar: 50, a: S3 },
-      { bar: 56, a: E2 },
+      { bar: 20, a: N4 },
+      { bar: 23, a: N4 },
+      { bar: 26, a: S5 },
+      { bar: 29, a: S5 },
+      { bar: 32, a: N4 },
     ],
-    loopBars: 32,
-    gaps: [{ sq: C, edge: 'E' }],
-  },
-  {
-    id: 'sky-west',
-    claim: [E],
-    keys: [{ bar: 0, a: S3 }],
+    loopBars: 12,
     gaps: [
-      { sq: E, edge: 'W' },
-      { sq: E, edge: 'S' },
+      { sq: SC, edge: 'N' },
+      { sq: SC, edge: 'W' },
     ],
   },
   {
+    // The sky, south: off the ferry WEST onto SW (its lane stays clear —
+    // it comes in from the north and would run straight through a tile
+    // ahead of it), north to W, and the elevator waits north of that.
+    id: 'sky-south',
+    claim: [SW, W],
+    keys: [{ bar: 0, a: S5 }],
+    gaps: [
+      { sq: SW, edge: 'E' },
+      { sq: W, edge: 'N' },
+    ],
+  },
+  {
+    // THE ELEVATOR — straight down, 3.8 m in two bars. The floor comes up
+    // to meet you.
     id: 'drop',
-    claim: [SE],
-    keys: [
-      { bar: 12, a: S3 },
-      { bar: 18, a: S3 },
-      { bar: 22, a: W4 },
-      { bar: 26, a: W4 },
-      { bar: 28, a: S3 },
-    ],
-    loopBars: 16,
+    claim: [NW],
+    ...shuttleLoop(26, S5, W6),
     gaps: [
-      { sq: SE, edge: 'N' },
-      { sq: SE, edge: 'W' },
+      { sq: NW, edge: 'S' },
+      { sq: NW, edge: 'E' },
     ],
   },
   {
+    // The floor, west: off the elevator onto NC, south to C, and the runner
+    // home is moored west of that.
     id: 'west-step',
-    claim: [SC, C],
-    keys: [{ bar: 0, a: W4 }],
+    claim: [NC, C],
+    keys: [{ bar: 0, a: W6 }],
     gaps: [
-      { sq: SC, edge: 'E' },
+      { sq: NC, edge: 'W' },
       { sq: C, edge: 'W' },
     ],
   },
   {
     id: 'runner-home',
     claim: [W],
-    keys: [
-      { bar: 6, a: W4 },
-      { bar: 12, a: W4 },
-      { bar: 16, a: H },
-      { bar: 20, a: H },
-      { bar: 22, a: W4 },
-    ],
-    loopBars: 16,
+    ...cornerLoop(31, W6, R4, H),
     gaps: [{ sq: W, edge: 'E' }],
   },
 ];
@@ -222,14 +300,29 @@ export const ROUTE: string[] = [
   'runner-out',
   'east-step',
   'lift',
-  'sky-east',
+  'mezz',
+  'shuttle',
+  'north-step',
+  'lift2',
+  'sky',
   'skywalk',
-  'sky-west',
+  'sky-south',
   'drop',
   'west-step',
   'runner-home',
   'home',
 ];
+
+/** The turn: from this leg on, the route is heading HOME, and THE GATE on
+ *  the home pad lights by how much of the way back is done. */
+export const ROUTE_TURN = ROUTE.indexOf('skywalk');
+
+/** 0 on the way out … 1 stepping home: how lit the gate is for a body on
+ *  route index `at` (−1 = off the route). */
+export function homeward(at: number): number {
+  if (at < 0 || at <= ROUTE_TURN) return 0;
+  return Math.min(1, (at - ROUTE_TURN) / (ROUTE.length - 1 - ROUTE_TURN));
+}
 
 /* ── Evaluation ─────────────────────────────────────────────────────────── */
 
@@ -316,11 +409,18 @@ export function fencesOf(spec: PlatformSpec): FenceSeg[] {
   return out;
 }
 
-/** Distinct anchor poses of a platform's loop — the ghost/berth stops. */
+/** The BERTHS of a platform's loop — the anchors it dwells at (two
+ *  consecutive keys on one pose), which are the ghost/berth stops. A
+ *  waypoint the machine turns at without stopping is not a berth: nothing
+ *  docks there, so no brackets and no ghost are stamped on it. */
 export function endpointsOf(spec: PlatformSpec): V3[] {
   const seen: V3[] = [];
-  for (const k of spec.keys) {
-    if (!seen.some((a) => a.x === k.a.x && a.y === k.a.y && a.z === k.a.z)) seen.push(k.a);
+  const same = (a: V3, b: V3): boolean => a.x === b.x && a.y === b.y && a.z === b.z;
+  if (spec.keys.length === 1) return [spec.keys[0].a];
+  for (let i = 0; i + 1 < spec.keys.length; i++) {
+    const a = spec.keys[i].a;
+    if (!same(a, spec.keys[i + 1].a)) continue;
+    if (!seen.some((b) => same(a, b))) seen.push(a);
   }
   return seen;
 }
@@ -366,6 +466,57 @@ export function validateScore(): void {
       throw new Error(
         `course: no shared stop between ${ROUTE[i]} and ${ROUTE[i + 1]} — the patterns don't tile`,
       );
+    }
+  }
+  sweepScore();
+}
+
+/**
+ * THE SWEEP. The stop check above says no two decks ever PARK on the same
+ * spot; this says no two decks ever SHARE SPACE, parked or moving — the
+ * whole loop is stepped a sixteenth of a bar at a time and every tile of
+ * every platform is boxed against every other. A ferry that grazes an
+ * elevator on its way past would be a collision you could only find by
+ * riding into it, and the score should refuse to build long before that.
+ *
+ * Boxes are the tile's footprint (GRID.tile square) and its slab (0.1 m
+ * high, plus a little for the machine's keel underneath), so decks on
+ * different storeys are allowed to pass one over the other — that is the
+ * skywalk crossing the shuttle's storey, and it is the point.
+ */
+export function sweepScore(): void {
+  const lcm = (a: number, b: number): number => {
+    const g = (x: number, y: number): number => (y ? g(y, x % y) : x);
+    return (a * b) / g(a, b);
+  };
+  let span = 1;
+  for (const p of PLATFORMS) if (p.loopBars) span = lcm(span, p.loopBars);
+  const STEP = 1 / 16;
+  const half = GRID.tile / 2 - 1e-4; // a shared seam is not an overlap
+  const slab = 0.3; // deck slab + keel, vertically
+  const a = v3(0, 0, 0);
+  const b = v3(0, 0, 0);
+  for (let bar = 0; bar < span; bar += STEP) {
+    for (let i = 0; i < PLATFORMS.length; i++) {
+      anchorAt(PLATFORMS[i], bar, a);
+      for (let j = i + 1; j < PLATFORMS.length; j++) {
+        anchorAt(PLATFORMS[j], bar, b);
+        if (Math.abs(a.y - b.y) >= slab) continue;
+        for (const sa of PLATFORMS[i].claim) {
+          const oa = sqOffset(sa);
+          for (const sb of PLATFORMS[j].claim) {
+            const ob = sqOffset(sb);
+            const dx = Math.abs(a.x + oa.x - (b.x + ob.x));
+            const dz = Math.abs(a.z + oa.z - (b.z + ob.z));
+            if (dx < half * 2 && dz < half * 2) {
+              throw new Error(
+                `course: ${PLATFORMS[i].id} and ${PLATFORMS[j].id} share space at bar ${bar.toFixed(2)} ` +
+                  `(${(a.x + oa.x).toFixed(2)}, ${a.y.toFixed(2)}, ${(a.z + oa.z).toFixed(2)})`,
+              );
+            }
+          }
+        }
+      }
     }
   }
 }

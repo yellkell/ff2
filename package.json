@@ -18,7 +18,8 @@
     "check:pages": "node tools/pages-check.mjs",
     "check:desert": "node tools/desert-check.mjs",
     "check:rave": "node tools/rave-check.mjs",
-    "check:venue": "node tools/venue-check.mjs"
+    "check:venue": "node tools/venue-check.mjs",
+    "check:course": "node tools/course-check.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "0.4.2",

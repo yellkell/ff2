@@ -40,7 +40,7 @@ import { COLOR, COUNTDOWN, GRID, SLIP_FLASH } from '../course/config.js';
 import { conductor } from '../course/conductor.js';
 import { Bank, mirrorBank, shadedBoxGeometry } from '../course/banks.js';
 import { registerDim } from '../course/dimmer.js';
-import { patternTexture } from '../course/textures.js';
+import { patternTexture, plateTexture } from '../course/textures.js';
 import {
   anchorAt,
   dwellInfo,
@@ -75,9 +75,16 @@ interface TileSlot {
   ox: number;
   oz: number;
   deck: number;
+  /** The machine's body under the deck — dark steel at rest, an engine
+   *  when the deck is travelling. */
+  keel: number;
   rims: Record<string, number>;
   posts: number[];
 }
+
+/** The keel's colours: a machine at rest, one counting itself out, one
+ *  under way — the same three words the rims speak, from underneath. */
+const KEEL = { rest: 0x1a1826, warn: 0xffaa22, drive: 0xff2244 };
 
 interface FenceSlot {
   platform: number;
@@ -90,6 +97,7 @@ interface FenceSlot {
 
 export class CoursePlatformSystem extends createSystem({}) {
   private decks!: Bank;
+  private keels!: Bank;
   private rims!: Bank;
   private posts!: Bank;
   private fences!: Bank;
@@ -118,11 +126,15 @@ export class CoursePlatformSystem extends createSystem({}) {
     }));
 
     const box = shadedBoxGeometry();
-    const deckMat = new MeshBasicMaterial({ vertexColors: true });
+    // The plate is the deck's own picture; the instance colour tints it
+    // (the amber count-out, the red burn), so the checker survives both.
+    const deckMat = new MeshBasicMaterial({ vertexColors: true, map: plateTexture() });
+    const keelMat = new MeshBasicMaterial({ vertexColors: true });
     const rimMat = new MeshBasicMaterial({});
     const postMat = new MeshBasicMaterial({});
     const fenceMat = new MeshBasicMaterial({});
     registerDim(deckMat, 'scenery');
+    registerDim(keelMat, 'ground');
     registerDim(rimMat, 'ground');
     registerDim(postMat, 'ground');
     registerDim(fenceMat, 'ground');
@@ -131,6 +143,7 @@ export class CoursePlatformSystem extends createSystem({}) {
     for (const p of PLATFORMS) tileCount += p.claim.length;
 
     this.decks = new Bank(box, deckMat, tileCount);
+    this.keels = new Bank(box, keelMat, tileCount);
     this.rims = new Bank(box, rimMat, tileCount * 4);
     this.posts = new Bank(box, postMat, tileCount * 4);
 
@@ -147,6 +160,7 @@ export class CoursePlatformSystem extends createSystem({}) {
           ox: o.x,
           oz: o.z,
           deck: this.decks.add(0, 0, 0, GRID.tile, 0.1, GRID.tile, 0xffffff),
+          keel: this.keels.add(0, 0, 0, GRID.tile * 0.78, 0.16, GRID.tile * 0.78, KEEL.rest),
           rims: {},
           posts: [],
         };
@@ -176,8 +190,8 @@ export class CoursePlatformSystem extends createSystem({}) {
       }
     });
 
-    root.add(this.decks.mesh, this.rims.mesh, this.posts.mesh, this.fences.mesh);
-    root.add(mirrorBank(this.decks, FLOOR_Y), mirrorBank(this.rims, FLOOR_Y, 0.22));
+    root.add(this.decks.mesh, this.keels.mesh, this.rims.mesh, this.posts.mesh, this.fences.mesh);
+    root.add(mirrorBank(this.decks, FLOOR_Y), mirrorBank(this.keels, FLOOR_Y, 0.3), mirrorBank(this.rims, FLOOR_Y, 0.22));
 
     this.buildGhosts(root);
   }
@@ -305,6 +319,7 @@ export class CoursePlatformSystem extends createSystem({}) {
       const y = st.anchor.y;
       const z = st.anchor.z + t.oz;
       this.decks.set(t.deck, x, y - 0.05, z, GRID.tile, 0.1, GRID.tile);
+      this.keels.set(t.keel, x, y - 0.18, z, GRID.tile * 0.78, 0.16, GRID.tile * 0.78);
 
       const warn = st.departIn <= 1;
       const fill = warn ? 1 - st.departIn : 0;
@@ -321,6 +336,20 @@ export class CoursePlatformSystem extends createSystem({}) {
         this.decks.color(t.deck, COLOR.rimDanger, 0.16);
       } else {
         this.decks.color(t.deck, COLOR.deckTop);
+      }
+
+      // THE ENGINE. A deck under way is driven from below: its keel burns
+      // the same red the rims wear, pulsing with the beat, so a machine
+      // crossing the void reads as a machine and not as a tile sliding.
+      // Counting out, it warms amber with the deck; at rest it is steel.
+      if (burn > 0) {
+        this.keels.color(t.keel, KEEL.drive, 0.5 + burn);
+      } else if (warn) {
+        this.keels.color(t.keel, KEEL.warn, 0.25 + 0.4 * fill);
+      } else if (st.moving) {
+        this.keels.color(t.keel, KEEL.drive, 0.7 + 0.5 * beatPulse);
+      } else {
+        this.keels.color(t.keel, KEEL.rest);
       }
 
       // Rims wrap the deck edge — visible from the side and from below.

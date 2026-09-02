@@ -48,7 +48,12 @@ export const G = {
   slips: 0, // departures stood through — the miss that replaced the slide
   body: { x: 0, y: 1.7, z: 0 }, // head in play-area coordinates
   platforms: [] as PlatformState[],
-  wayfind: { targetIndex: -1, targetAligned: false }, // route-next platform
+  wayfind: {
+    targetIndex: -1,
+    targetAligned: false,
+    /** 0 on the way out … 1 stepping home: how lit THE GATE is. */
+    homeward: 0,
+  }, // route-next platform
   /** Clean steps in a row. It buys nothing but light — which is the point. */
   flow: 0,
   energy: 0.8,
@@ -77,4 +82,5 @@ export function resetRide(): void {
   G.slipFlash = 0;
   G.wayfind.targetIndex = -1;
   G.wayfind.targetAligned = false;
+  G.wayfind.homeward = 0;
 }

@@ -34,12 +34,12 @@ export const RIG = {
 };
 
 export const MUSIC = {
-  bpm: 122, // a rave tempo — the club's 110–117 shelf, pushed one notch up
+  bpm: 128, // VOIDSTEP 2: two-bar dwells and two-bar rides want a tempo with snap
   beatsPerBar: 4,
 };
 
 export const COLOR = {
-  deckTop: 0x14121e,
+  deckTop: 0x2a2838, // lifted a step so the checker plate reads as plate, not as black
   /** Docked ground you may step on. */
   rimSafe: 0x66d9ff,
   /** Ground counting itself out — the amber half of the club's own
