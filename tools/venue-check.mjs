@@ -133,7 +133,7 @@ const mcFirst = await page.evaluate(() => ({ visit: window.__gdr.mc.visit, hue: 
 check('the MC is dressed for this visit, inside his safe band', mcFirst.visit > 0 && mcFirst.hue >= 0.28 && mcFirst.hue <= 0.92, JSON.stringify(mcFirst));
 
 console.log('\n=== THE BALL IN A ROOM OF ONE: it calls, it deals, it comes home ===');
-// No relay answered, and the desk still says CALL THE BALL. It must mean it.
+// No relay answered, and the desk still says HOST. It must mean it.
 await page.evaluate(() => window.__gdr.club.call([1.6, 1.5, -1.5]));
 await page.waitForTimeout(400);
 const soloBall = await page.evaluate(() => { const b = window.__gdr.net.state.ball; return b ? { mode: b.mode, caller: b.callerName, hanging: !!window.__gdr.scene().getObjectByName('raid-ball') } : null; });
@@ -371,9 +371,10 @@ const openHeadset = async (name) => {
   return p;
 };
 // The first headset has done its walking: it goes, so the two that follow
-// don't share headless Chromium's one GPU three ways (the floor gives a
-// relay 3.5 s to answer before opening as a room of one, and three pages
-// rendering at once can miss that on this machine).
+// don't share headless Chromium's one GPU three ways. (The floor gives a
+// relay five seconds of RESPONSIVE time to answer before opening as a room
+// of one — counted in poll ticks, so a page busy building the hall doesn't
+// burn the grace it hasn't used.)
 await page.close();
 const caller = await openHeadset('CALLER');
 const toucher = await openHeadset('TOUCHER');

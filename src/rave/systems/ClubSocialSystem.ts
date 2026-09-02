@@ -841,8 +841,9 @@ export class ClubSocialSystem extends createSystem({}) {
 
     // ── THE BELL: two tabs, one verb ──────────────────────────────────────
     // FIGHT picks one of the arena's fights; RAVE picks the record and its
-    // chart. Either way the CTA is CALL THE BALL, and whoever touches the
-    // ball rides along when the relay's clock hits zero.
+    // chart. Either way the CTA is HOST — you are opening the room and the
+    // floor can see the ball you just put up — and whoever touches the ball
+    // rides along when the relay's clock hits zero.
     const fights = Boolean(raveBridge.openFightRoom);
     const tab = fights ? this.tab : 'rave';
     if (fights) {
@@ -949,7 +950,7 @@ export class ClubSocialSystem extends createSystem({}) {
       // can see the ball hanging in front of them.
       buttons.push({
         id: 'call',
-        label: ballUp ? 'BALL IS UP' : setOut ? 'SET IS OUT' : this.calling ? 'OPENING A ROOM…' : 'CALL THE BALL',
+        label: ballUp ? 'BALL IS UP' : setOut ? 'SET IS OUT' : this.calling ? 'OPENING A ROOM…' : 'HOST',
         // No explaining: the lit chip above says what is being called.
         sub: setOut ? `${net.gamePlayers.size} out` : this.callError || undefined,
         primary: true,

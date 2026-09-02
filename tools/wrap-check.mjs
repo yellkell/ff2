@@ -106,16 +106,22 @@ nav = await wrap(`nav()`);
 check('ARCADE tab: modes + the demoted SHOOT BACK', nav.center === 'arcade' && has(slab, 'start-tutorial', 'open-campaign', 'open-raid', 'start-training', 'toggle-shootback'), notTabs(slab).join(','));
 check('ARCADE tab: the door to RAVE RAID', slab.includes('open-rave'), String(slab.includes('open-rave')));
 save('arcade', await wrap(`snap('train')`));
-// CLUB is a DOOR now, not a picker: pressing it crosses to the venue's
-// floor in-session (tools/venue-check.mjs walks that place properly — here
-// we only prove the tab opens the door and the arena comes back whole).
+// CLUB is a TAB carrying one door: pressing the tab shows ENTER CLUB, and
+// that button crosses to the venue's floor in-session (tools/venue-check.mjs
+// walks that place properly — here we only prove the tab shows the door,
+// the door opens, and the arena comes back whole).
 await page.evaluate(() => localStorage.setItem('gdr-server', 'ws://127.0.0.1:1')); // no relay: the room of one
 await wrap(`act('wrap:tab-club')`);
+nav = await wrap(`nav()`);
+const clubFace = notTabs(await wrap(`buttons('train')`));
+check('CLUB tab: one door, and nothing else on the board', nav.club && clubFace.length === 1 && clubFace[0] === 'open-pub', JSON.stringify({ nav, face: clubFace }));
+save('club', await wrap(`snap('train')`));
+await wrap(`act('open-pub')`);
 const crossed = await page
   .waitForFunction(() => window.__town && window.__town.place === 'venue' && !window.__town.busy, { timeout: 40000 })
   .then(() => true)
   .catch(() => false);
-check('CLUB tab: the door onto the venue floor, in-session', crossed && (await page.evaluate(() => document.body.classList.contains('app-entered'))), JSON.stringify(await page.evaluate(() => ({ place: window.__town?.place }))));
+check('ENTER CLUB: the door onto the venue floor, in-session', crossed && (await page.evaluate(() => document.body.classList.contains('app-entered'))), JSON.stringify(await page.evaluate(() => ({ place: window.__town?.place }))));
 await page.evaluate(() => window.__town.leave());
 await page.waitForFunction(() => window.__town && window.__town.place === 'arena' && !window.__town.busy, { timeout: 40000 });
 await page.waitForTimeout(300);

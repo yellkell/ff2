@@ -139,7 +139,7 @@ console; it has TWO TABS:
 - **RAVE** — the record shelf: RAVE RAID's charted songs and the
   difficulty chips.
 
-Either way the CTA is the same verb: **CALL THE BALL.** A mirror ball is
+Either way the CTA is the same verb: **HOST.** A mirror ball is
 winched down out of the ceiling on its cable (the under-damped spring
 drop, the 60 s relay-owned countdown plate — the game or the song, the
 caller, one orbiting pip per person touched in). The ball is

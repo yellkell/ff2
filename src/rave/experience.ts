@@ -74,7 +74,18 @@ const mounted = new WeakMap<World, RaveExperience>();
 const VOID = new Color(VOID_BG);
 
 /** How long the floor waits for a relay before opening as a room of one. */
-const RELAY_PATIENCE_MS = 5000;
+/**
+ * How long the floor waits for a relay before opening as a room of one —
+ * counted in POLL TICKS, not wall clock. Building the hall blocks the main
+ * thread for seconds on a cold entry, and a wall-clock deadline burns
+ * through that block: the room of one would open before the socket ever
+ * got a turn, stranding a player with a perfectly good relay. Ticks only
+ * accrue while the page is answering, so this is five seconds of the app
+ * actually being alive. A relay that REFUSES is not waited on at all — the
+ * error phase short-circuits below.
+ */
+const RELAY_PATIENCE_TICKS = 25;
+const RELAY_POLL_MS = 200;
 
 interface Pausable {
   play(): void;
@@ -134,18 +145,18 @@ export function mountRaveExperience(world: World, onLeaveToArena: () => void): R
   const openFloor = (): void => {
     window.clearTimeout(relayPoll);
     enterPublicRoom();
-    const started = performance.now();
+    let ticks = 0;
     const poll = (): void => {
       relayPoll = 0;
       if (!active || place !== 'club') return;
       if (inRoom()) return;
-      if (net.phase === 'error' || performance.now() - started > RELAY_PATIENCE_MS) {
+      if (net.phase === 'error' || ++ticks > RELAY_PATIENCE_TICKS) {
         enterSoloFloor();
         return;
       }
-      relayPoll = window.setTimeout(poll, 200);
+      relayPoll = window.setTimeout(poll, RELAY_POLL_MS);
     };
-    relayPoll = window.setTimeout(poll, 200);
+    relayPoll = window.setTimeout(poll, RELAY_POLL_MS);
   };
 
   const experience: RaveExperience = {

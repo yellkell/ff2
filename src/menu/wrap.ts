@@ -37,7 +37,6 @@ import { app } from './appState.js';
 import { coins } from './wallet.js';
 import { leaderboard, setLeaderboardTab } from '../net/leaderboard.js';
 import { gazette } from '../net/gazette.js';
-import { PUB_REGIONS } from '../pub/config.js';
 import { ladderFace } from './ladder.js';
 import { settingsFace } from './settingsFace.js';
 import { CARD_H, CARD_W, CHIP_H, CHIP_W, profileCardFace, profileChipFace } from './profilePop.js';
@@ -99,12 +98,11 @@ export class KitMenuPanel implements MenuPanel {
 
 /* ── the wrap's tab state ─────────────────────────────────────────────── */
 
-export type CenterTab = 'fight' | 'arcade';
+export type CenterTab = 'fight' | 'arcade' | 'club';
 export type TownTab = 'town' | 'ladder' | 'news';
 export type YouTab = 'you' | 'settings';
 
-/** Which tab each panel is on. (The CLUB tab is derived: it's up while the
- *  region picker is — `app.infoView === 'pubpick'`.) */
+/** Which tab each panel is on. */
 export const wrapNav = {
   center: 'fight' as CenterTab,
   town: 'town' as TownTab,
@@ -155,14 +153,14 @@ const WIDE = CW - M * 2; // 1344
 const COL = 656; // half column
 const C2 = M + COL + 32; // right column x
 
-const clubUp = (): boolean => app.infoView === 'pubpick';
+const clubUp = (): boolean => wrapNav.center === 'club';
 
 function centerTabs(): PanelButton[] {
   const lock = sealed();
   const club = clubUp();
   return [
-    { id: 'wrap:tab-fight', label: 'FIGHT', tab: true, x: 400, y: TAB_Y, w: 220, h: TAB_H, selected: !club && wrapNav.center === 'fight' },
-    { id: 'wrap:tab-arcade', label: 'ARCADE', tab: true, x: 640, y: TAB_Y, w: 240, h: TAB_H, selected: !club && wrapNav.center === 'arcade', disabled: lock },
+    { id: 'wrap:tab-fight', label: 'FIGHT', tab: true, x: 400, y: TAB_Y, w: 220, h: TAB_H, selected: wrapNav.center === 'fight' },
+    { id: 'wrap:tab-arcade', label: 'ARCADE', tab: true, x: 640, y: TAB_Y, w: 240, h: TAB_H, selected: wrapNav.center === 'arcade', disabled: lock },
     {
       id: 'wrap:tab-club',
       label: 'CLUB',
@@ -387,30 +385,27 @@ function arcadeFace(): Face {
   };
 }
 
-function pubPickFace(): Face {
-  const buttons: PanelButton[] = PUB_REGIONS.map((region, i) => {
-    const count = app.pubRegionCounts[region.id] ?? -1;
-    return {
-      id: `pub-go-${region.id}` as MenuAction,
-      label: region.label,
-      sub: count >= 0 ? `${count} inside` : 'knock and see',
-      x: M, y: 200 + i * 200, w: WIDE, h: 170,
-      tone: count > 0 ? KIT.positive : undefined,
-    };
-  });
+/** THE CLUB TAB — one door, the size of the board. The tab used to walk
+ *  you straight through it, which meant the top bar had a button that
+ *  wasn't a tab; now CLUB shows you the way in and you take it. */
+function clubFace(): Face {
   return {
     title: 'FIRE FIGHT 2',
-    body: both(
-      crumb(app.pubCount > 0 ? `${app.pubCount} INSIDE RIGHT NOW` : 'THE SOCIAL SCENE', CW),
-      note('same club, different corner of the map — pick a door', 720, CW),
-    ),
-    buttons,
+    body: crumb(app.pubCount > 0 ? `${app.pubCount} INSIDE RIGHT NOW` : 'THE SOCIAL SCENE', CW),
+    buttons: [
+      {
+        id: 'open-pub',
+        label: 'ENTER CLUB',
+        x: M, y: 230, w: WIDE, h: 560,
+        primary: true,
+      },
+    ],
   };
 }
 
 function centerFace(): Face {
   let face: Face;
-  if (clubUp()) face = pubPickFace();
+  if (clubUp() && !sealed()) face = clubFace();
   else if (wrapNav.center === 'arcade' && !sealed()) face = arcadeFace();
   else {
     switch (app.duelView) {
@@ -571,11 +566,8 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
     switch (id) {
       case 'wrap:tab-fight':
       case 'wrap:tab-arcade':
-        if (clubUp()) act?.('pub-back');
-        wrapNav.center = id === 'wrap:tab-fight' ? 'fight' : 'arcade';
-        return;
       case 'wrap:tab-club':
-        act?.('open-pub');
+        wrapNav.center = id === 'wrap:tab-fight' ? 'fight' : id === 'wrap:tab-arcade' ? 'arcade' : 'club';
         return;
       case 'wrap:tab-town':
         wrapNav.town = 'town';

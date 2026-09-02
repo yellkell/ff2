@@ -2,7 +2,7 @@
  * THE BELL — what a ball can carry (DESIGN.md §3.1).
  *
  * RAVE RAID's ball called one thing: a record. In this house it is the
- * launcher for EVERYTHING — pick a fight or pick a record, CALL THE BALL,
+ * launcher for EVERYTHING — pick a fight or pick a record, press HOST,
  * and whoever touches in rides along when the relay's clock hits zero.
  * The ball is mode-agnostic: it carries `{ mode, code }` up and the relay
  * deals `{ mode, code, fighters, watchers, seed, startInMs }` down.

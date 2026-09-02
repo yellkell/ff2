@@ -8,7 +8,7 @@
  * applied to their rig/pad; bot bouts keep the team-blue default look.
  */
 
-import { Color, Mesh, MeshStandardMaterial, type Object3D } from 'three';
+import { Color, Mesh, MeshStandardMaterial, type Object3D, SRGBColorSpace } from 'three';
 import { PALETTE } from '../config.js';
 import { deckLook, type DeckStyle } from '../arena/decks.js';
 
@@ -156,6 +156,29 @@ export function resolveAvatarSkin(id: string, hue: number, light = 0.5): AvatarS
 }
 
 const _white = new Color(0xffffff);
+const _hand = new Color();
+
+/**
+ * THE HANDS' CEILING — the one colour the fashion does not get to choose
+ * freely. Your hands BLOOM WHITE when they're live (squeezed, or a ball
+ * mid-return), and that tell is the game's most-read signal; a pale hand
+ * has nowhere to bloom to. So a hand takes the skin's hue and saturation
+ * but never more than a dark steel's lightness — the wardrobe still reads
+ * on them, the squeeze still reads louder.
+ */
+// Measured in sRGB — the space a person's eye is in. The hands' resting
+// steel (avatar/hands.ts, 0x15171c) sits at L≈0.10 there; this is the most
+// a wardrobe may lift it — enough for a tinted steel to read as blue or
+// rust, nowhere near enough to compete with the white bloom. (Working in
+// three's linear space instead would make 0.14 land at a mid grey.)
+const HAND_MAX_L = 0.22;
+const _hsl = { h: 0, s: 0, l: 0 };
+function handTone(chassis: number): number {
+  _hand.setHex(chassis, SRGBColorSpace);
+  _hand.getHSL(_hsl, SRGBColorSpace);
+  if (_hsl.l <= HAND_MAX_L) return chassis;
+  return _hand.setHSL(_hsl.h, _hsl.s, HAND_MAX_L, SRGBColorSpace).getHex(SRGBColorSpace);
+}
 
 /**
  * Recolour an avatar (rig piece, whole torso, glove, the mirror…) to a skin.
@@ -181,9 +204,10 @@ export function applyAvatarSkin(root: Object3D, skin: AvatarSkin): void {
         m.color.setHex(skin.trim);
         break;
       case 'hand':
-        // The hands tint to the skin's steel but stay near-black at rest;
-        // the white active bloom is owned by setGloveLit.
-        m.color.setHex(skin.chassis);
+        // The hands tint to the skin's steel but stay DARK at rest, capped
+        // by handTone — the white active bloom is owned by setGloveLit and
+        // needs somewhere to bloom from.
+        m.color.setHex(handTone(skin.chassis), SRGBColorSpace);
         break;
       case 'glow':
         if (m.userData.litIntensity !== undefined) break; // team LED — leave it

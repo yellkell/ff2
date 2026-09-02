@@ -743,7 +743,7 @@ let soloBallTimer = 0;
 
 /**
  * The relay's ball, at home. The floor opened without a relay and the
- * desk still says CALL THE BALL — and it must mean it: the ball drops,
+ * desk still says HOST — and it must mean it: the ball drops,
  * the plate counts, your touch calls it off, START (or the clock) deals
  * you exactly as the relay would have. A record deals a ring of one plus
  * groupies; a fight deals you into the arena against its own bots.
