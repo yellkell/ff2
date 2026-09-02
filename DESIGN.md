@@ -642,15 +642,17 @@ Each phase is shippable; nothing waits on everything.
    matting, corrugated sheet) and the geometry swapped where the deco
    needed it (neon tube rails, riveted I-beams, cage lamps, cyan LED
    rings under a lattice truss, a magenta-footed corrugated backdrop);
-   no sun in the house — the stage's brass sunburst is a NEON ZIGGURAT,
-   the motif the transom and the mirror crown already step. THE VISIT:
+   THE SUN stays: the stage's deco sunburst is the thing the MC stands in
+   front of, its ribs in the new metal and its centre burning GOLD (the
+   fanlight over the doors is still a stepped transom). THE VISIT:
    the MC dresses differently for every arrival on the floor (a
    remembered notch through his safe band, `config.mcHueFor`).
    VOIDSTEP 2 (`course/score.ts`): thirteen platforms, two lifts, a
    shuttle with a turn, the skywalk, an elevator, at 128 with two-bar
    dwells; the score is SWEPT in time so no two decks ever share space,
    every deck is a MACHINE — gunmetal face under an ETCH of circuit
-   traces lit in the state colour, a two-step keel with vents that burn
+   traces lit in the state colour (a deep true blue, not the hall's
+   cyan), a two-step keel with vents that burn
    when it drives, an underglow on the void's glass, a scan line keeping
    the bar across every docked face — and THE GATE on the home pad lights
    the way back. THE MIRROR casts shadows of the

@@ -451,7 +451,7 @@ export class CoursePlatformSystem extends createSystem({}) {
       } else if (st.moving) {
         this.etches.color(t.etch, COLOR.rimDanger, 0.7 + 0.4 * beatPulse);
       } else if (st.aligned) {
-        this.etches.color(t.etch, COLOR.rimSafe, 1.1 + 0.4 * beatPulse);
+        this.etches.color(t.etch, COLOR.rimSafe, 0.95 + 0.3 * beatPulse);
       } else {
         this.etches.color(t.etch, COLOR.rimSafe, 0.6);
       }
@@ -477,7 +477,7 @@ export class CoursePlatformSystem extends createSystem({}) {
         } else if (st.moving) {
           this.vents.color(t.vents[k], COLOR.rimDanger, 1.1 + 0.7 * beatPulse);
         } else if (st.aligned) {
-          this.vents.color(t.vents[k], COLOR.rimSafe, 0.75 + 0.25 * beatPulse);
+          this.vents.color(t.vents[k], COLOR.rimSafe, 0.7 + 0.2 * beatPulse);
         } else {
           this.vents.color(t.vents[k], COLOR.rimSafe, 0.32);
         }
@@ -516,7 +516,7 @@ export class CoursePlatformSystem extends createSystem({}) {
       } else if (st.moving) {
         this.scans.color(t.scan, COLOR.rimDanger, 1.1);
       } else {
-        this.scans.color(t.scan, COLOR.rimSafe, st.aligned ? 1.4 : 0.7);
+        this.scans.color(t.scan, COLOR.rimSafe, st.aligned ? 1.15 : 0.65);
       }
 
       // Rims wrap the deck edge — visible from the side and from below.
@@ -544,7 +544,7 @@ export class CoursePlatformSystem extends createSystem({}) {
         } else if (st.moving) {
           this.rims.color(idx, COLOR.rimDanger, 0.9 + 0.5 * beatPulse);
         } else if (st.aligned) {
-          this.rims.color(idx, COLOR.rimSafe, 0.55 + 0.45 * beatPulse);
+          this.rims.color(idx, COLOR.rimSafe, 0.5 + 0.35 * beatPulse);
         } else {
           this.rims.color(idx, COLOR.rimSafe, 0.16);
         }

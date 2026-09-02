@@ -857,8 +857,7 @@ export class ClubSocialSystem extends createSystem({}) {
       });
     }
     if (tab === 'fight') {
-      // The four fights, names only — the CTA's subtitle says what the
-      // picked one is, so the chips stay chips.
+      // The four fights, names only.
       FIGHTS.forEach((f, i) => {
         buttons.push({
           id: `fight-${f.id}`,
@@ -937,17 +936,11 @@ export class ClubSocialSystem extends createSystem({}) {
       // The floor's one CTA. It says what it does and nothing else: the
       // subtitle used to explain the ball's whole ritual to a room that
       // can see the ball hanging in front of them.
-      const picked = FIGHTS.find((f) => f.id === this.fight);
       buttons.push({
         id: 'call',
         label: ballUp ? 'BALL IS UP' : setOut ? 'SET IS OUT' : this.calling ? 'OPENING A ROOM…' : 'CALL THE BALL',
-        sub: setOut
-          ? `${net.gamePlayers.size} out`
-          : this.callError
-            ? this.callError
-            : tab === 'fight' && picked
-              ? `${picked.label} — ${picked.sub}`
-              : undefined,
+        // No explaining: the lit chip above says what is being called.
+        sub: setOut ? `${net.gamePlayers.size} out` : this.callError || undefined,
         primary: true,
         disabled: ballUp || setOut || this.calling,
         x: 24,

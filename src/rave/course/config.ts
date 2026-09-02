@@ -40,8 +40,13 @@ export const MUSIC = {
 
 export const COLOR = {
   deckTop: 0x262433, // gunmetal under the etch — dark enough that the traces own the face
-  /** Docked ground you may step on. */
-  rimSafe: 0x66d9ff,
+  /** Docked ground you may step on. A TRUER BLUE than the club's cyan:
+   *  out here the ground is the only thing that speaks, and it should not
+   *  be saying it in the same voice as the hall's neon. Kept deep on
+   *  purpose — every layer that wears it is ADDITIVE, and additive light
+   *  clamps the blue channel first, so a paler blue turns back into cyan
+   *  the moment the beat brightens it. */
+  rimSafe: 0x2a62ff,
   /** Ground counting itself out — the amber half of the club's own
    *  amber→red telegraph language. */
   rimWarn: 0xffaa22,

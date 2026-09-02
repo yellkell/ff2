@@ -37,7 +37,7 @@ import { PALETTE, hueToColor } from '../config.js';
 import { glintTexture, glowSprite } from '../materials/glow.js';
 import { trackById } from '../audio/tracks.js';
 import { CLUB } from './config.js';
-import { FIGHTS, type BellMode } from './bell.js';
+import { fightLabel, type BellMode } from './bell.js';
 import { font } from '../ui/fonts.js';
 
 export const BALL_TOUCH_RADIUS = 0.42;
@@ -285,9 +285,8 @@ export function buildBallVisual(): BallVisual {
     } else {
       // THE BELL: a fight on the ball wears hazard amber, the arena's own
       // colour for something about to happen.
-      const fight = FIGHTS.find((f) => f.id === mode);
       g.fillStyle = '#ffb03a';
-      g.fillText(`⚔ ${fight ? `${fight.label} · ${fight.sub}` : mode.toUpperCase()}`, 256, 140);
+      g.fillText(`⚔ ${fightLabel(mode)}`, 256, 140);
     }
     g.font = font(600, 24);
     g.fillStyle = 'rgba(232,236,242,0.75)';

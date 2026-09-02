@@ -36,11 +36,13 @@ export const FIGHT_CAPACITY: Record<Exclude<BellMode, 'rave'>, number> = {
   raid: 5,
 };
 
-export const FIGHTS: Array<{ id: Exclude<BellMode, 'rave'>; label: string; sub: string }> = [
-  { id: '1v1', label: '1V1', sub: 'the duel' },
-  { id: '2v2', label: '2V2', sub: 'tag brawl' },
-  { id: 'ffa', label: 'FFA', sub: 'last one up' },
-  { id: 'raid', label: 'TITAN RAID', sub: 'the gauntlet, together' },
+/** The four fights, NAMES ONLY. Everyone on the floor already knows what
+ *  a 1V1 is, and the desk is a place to press a button, not to read. */
+export const FIGHTS: Array<{ id: Exclude<BellMode, 'rave'>; label: string }> = [
+  { id: '1v1', label: '1V1' },
+  { id: '2v2', label: '2V2' },
+  { id: 'ffa', label: 'FFA' },
+  { id: 'raid', label: 'TITAN RAID' },
 ];
 
 export function fightLabel(mode: string): string {
