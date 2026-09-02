@@ -109,10 +109,17 @@ const ring = await page.evaluate(() => {
 check('the groupies and the MC keep the house figure', ring.mc && !ring.mcBlank && ring.blanks === 0 && ring.bots === 7, JSON.stringify(ring));
 check("your own colour is the arena's accent", Math.abs((hue ?? -1) - 0.5) < 0.01 || Math.abs((ring.mine ?? -1) - 0.5) < 0.01, String(ring.mine));
 {
+  // His wardrobe is a function of the screen AND the record, eased toward
+  // at MC.changeRate — so a record whose hue happens to sit near the map's
+  // is not a failure. Two samples: he has moved off the map's hue, or he
+  // is still moving.
   const mcSet = await page.evaluate(() => ({ ...window.__gdr.mc }));
+  await page.waitForTimeout(700);
+  const mcSet2 = await page.evaluate(() => ({ ...window.__gdr.mc }));
   const band = (h) => h >= 0.279 && h <= 0.921; // never red, never yellow
-  check('the MC changes colour from the map to the record', Math.abs(mcSet.hue - mcMenu.hue) > 0.01, JSON.stringify({ map: mcMenu.hue, set: mcSet.hue }));
-  check('and never wears the telegraphs\' red or yellow', band(mcMenu.hue) && band(mcSet.hue), JSON.stringify([mcMenu.hue, mcSet.hue]));
+  const moved = Math.abs(mcSet2.hue - mcMenu.hue) > 0.01 || Math.abs(mcSet2.hue - mcSet.hue) > 0.002;
+  check('the MC changes colour from the map to the record', moved && mcSet2.screen === 'raid', JSON.stringify({ map: mcMenu.hue, set: mcSet.hue, later: mcSet2.hue }));
+  check('and never wears the telegraphs\' red or yellow', band(mcMenu.hue) && band(mcSet.hue) && band(mcSet2.hue), JSON.stringify([mcMenu.hue, mcSet.hue, mcSet2.hue]));
 }
 if (shots) {
   const file = join(here, 'rave-ring.png');

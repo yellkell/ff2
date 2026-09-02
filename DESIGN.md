@@ -203,7 +203,9 @@ architecture (`club/build.ts` + `merge.ts` + place-scoped fog/voice/music)
 brokering — but **re-skinned into FF2's world**: the industrial fight-club
 language (gunmetal, hazard amber, riveted steel) fused with the supper-club
 craft level (every edge carries thickness; saturated colour reserved for
-light). Rooms: the floor + bar, the locker room (paint + shop in person
+light). *(Shipped: NEON INDUSTRIAL, phase 5 — the venue is the rave's
+club, mounted in the arena's World and entered under a curtain from the
+CLUB tab.)* Rooms: the floor + bar, the locker room (paint + shop in person
 — your mannequin on a plinth), the arcade corner (cabinets carry over),
 and a dark door we keep for whatever the next experiment is — THE STEP
 taught us the value of an unexplained door. No pit, no ring, no
@@ -609,13 +611,33 @@ Each phase is shippable; nothing waits on everything.
    cosmetics sync. (The moment "lasting through games" works, ship it.)
 5. **The venue + THE BELL** — new club on RAVE RAID's club architecture,
    merged room server, bell-launch for 1v1/2v2/FFA first.
-   *(Opened: RAVE RAID's club VENUE is ported whole into `src/club/` —
-   build.ts, config, materials, merge, the arcade + step ref registries,
-   a palette shim carrying the disco magenta/cyan and per-guest hue
-   helper — compiling clean against FF2's kit fonts and glow, with the
-   foyer left behind (FF2 has its own lobby). `club-preview.html` walks
-   it for screenshots. Next: presence + teleport systems, then the
-   bell.)*
+   *(THE VENUE IS OVER, in-session: the rave — its club, the course
+   behind the west door, the foyer and the set — mounts inside the
+   arena's own World (`src/rave/experience.ts`, the pub's pattern), its
+   systems registered once and paused, its objects kept and hidden, and
+   every crossing is a curtain (`experience/Curtain.ts`): the black
+   falls, the outgoing place is paused and put away, the incoming one
+   shown and played, the black lifts — the XR session never ends. CLUB
+   lands on the venue floor, ARCADE → RAVE RAID lands in the foyer, the
+   rave board's FIRE FIGHT door comes home the same way. THE ROOM OF ONE:
+   the floor opens without a relay (`net/session.ts` enterSoloFloor), the
+   dumbwaiter served off a local clock speaking the wire's own words;
+   every club system reads one gate, `inRoom()`. NEON INDUSTRIAL: the
+   wardrobe repainted (board-formed concrete, checker plate, galvanised
+   steel, riveted plate, black quilted vinyl, brushed stainless, rubber
+   matting, corrugated sheet) and the geometry swapped where the deco
+   needed it (neon tube rails, riveted I-beams, cage lamps, cyan LED
+   rings under a lattice truss, a magenta-footed corrugated backdrop).
+   VOIDSTEP 2 (`course/score.ts`): thirteen platforms, two lifts, a
+   shuttle with a turn, the skywalk, an elevator, at 128 with two-bar
+   dwells; the score is SWEPT in time so no two decks ever share space,
+   decks wear checker plate and keels that burn as engines, and THE GATE
+   on the home pad lights the way back. THE MIRROR casts shadows of the
+   live rigs (twins driven by world matrices through a reflection, unlit,
+   no recess light, one solve — yours). TWELVE GLASSES with two-sphere
+   contact, bowl-radius walls, bounce tumble, tipping, rolling in an arc,
+   per-surface friction. `tools/venue-check.mjs` walks all of it; still
+   to land: THE BELL's relay drop/deal, and the merged room server.)*
 6. **Audience ground + the crowd** — watchers travel with the squad,
    audience terraces in the arenas, voice bubble, hands-up roar wire,
    sourced crowd beds.
@@ -650,10 +672,12 @@ Each phase is shippable; nothing waits on everything.
    audience from the club floor once presence ships.)*
 7. **RAVE mode** — port the set, decks, records; mannequin on the ring;
    coins per song; bell learns RAVE SET.
-   *(Shipped as a PAGE: `rave.html` boots `src/rave/` — the dance repo's
-   source ported whole, file identities intact, its own relay as
-   `server/rave.mjs`. The ARCADE tab's RAVE RAID button hops there; the
-   rave board's rail grew a FIRE FIGHT entry that hops back. ONE TOWN:
+   *(Shipped as a PAGE, then MOUNTED: `rave.html` still boots `src/rave/`
+   standalone — the dance repo's source ported whole, file identities
+   intact, its own relay as `server/rave.mjs` — and the same code now
+   mounts in-session inside the arena (phase 5): the ARCADE tab's RAVE
+   RAID button crosses under a curtain, and the rave board's FIRE FIGHT
+   entry comes back the same way, no page hop, no session end. ONE TOWN:
    the profile reads the arena's callsign and accent first and writes
    them back on a rename; a finished record pays `songCoins(grade)` into
    the one wallet and the grade card names it; every figure — groupies,
