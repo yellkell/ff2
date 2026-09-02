@@ -22,9 +22,9 @@ export interface MeshInbox {
 
 interface MeshImplApi {
   hostLobby(mode: ArcadeMode, name: string): Promise<void>;
-  joinLobby(mode: ArcadeMode, roomId: string, name: string): Promise<boolean>;
+  joinLobby(mode: ArcadeMode, roomId: string, name: string, watch?: boolean): Promise<boolean>;
   hostPrivate(mode: ArcadeMode, name: string): Promise<string>;
-  joinPrivate(code: string, name: string): Promise<ArcadeMode | null>;
+  joinPrivate(code: string, name: string, watch?: boolean): Promise<ArcadeMode | null>;
   setRaidHardcore(v: boolean): void;
   setRaidGoopliath(v: boolean): void;
   setRaidDifficulty(v: Difficulty): void;
@@ -39,8 +39,16 @@ class Mesh {
   inbox: MeshInbox[] = [];
   /** My canonical seat in the room (0 = host). */
   mySeat = 0;
-  /** Players this mode seats. */
+  /** FIGHTERS this mode seats. The room's `seats` array runs longer than
+   *  this — the tail is the AUDIENCE (config.AUDIENCE_SEATS). */
   capacity = 0;
+  /** I hold a WATCHER seat: dealt to the match with the squad, but onto
+   *  the audience ground rather than a platform (DESIGN §3.2). */
+  watching = false;
+  /** Seat → the watchers' live poses and hands-up (MeshSystem fills it;
+   *  AudienceSystem puts bodies on the terrace, the crowd bed reads the
+   *  roar). Fighters keep this too — the terrace is the show's other half. */
+  watchers = new Map<number, { x: number; y: number; z: number; qx: number; qy: number; qz: number; qw: number; roar: number; at: number }>();
   /** Seat → member id ('' = still empty); mirrors the room doc. */
   occupants: string[] = [];
   /** Seat → that player's callsign, learned from their `iam` message (empty
@@ -104,12 +112,12 @@ class Mesh {
   }
 
   /** Claim a seat in a listed lobby. False = it filled/closed first. */
-  async joinLobby(mode: ArcadeMode, roomId: string, name: string, onStatus?: (s: string) => void): Promise<boolean> {
+  async joinLobby(mode: ArcadeMode, roomId: string, name: string, onStatus?: (s: string) => void, watch = false): Promise<boolean> {
     this.close();
     if (onStatus) this.onStatus = onStatus;
     const { MeshImpl } = await import('./meshImpl.js');
     this.impl = new MeshImpl(this);
-    return this.impl.joinLobby(mode, roomId, name);
+    return this.impl.joinLobby(mode, roomId, name, watch);
   }
 
   /**
@@ -129,12 +137,12 @@ class Mesh {
    * (so the joiner lands in the right lobby without being told which format the
    * code was for), or null if the code is unknown, full or already launched.
    */
-  async joinPrivate(code: string, name: string, onStatus?: (s: string) => void): Promise<ArcadeMode | null> {
+  async joinPrivate(code: string, name: string, onStatus?: (s: string) => void, watch = false): Promise<ArcadeMode | null> {
     this.close();
     if (onStatus) this.onStatus = onStatus;
     const { MeshImpl } = await import('./meshImpl.js');
     this.impl = new MeshImpl(this);
-    return this.impl.joinPrivate(code, name);
+    return this.impl.joinPrivate(code, name, watch);
   }
 
   /** RAID host: flip the lobby's hardcore breaker (mirrored to everyone). */
@@ -187,6 +195,8 @@ class Mesh {
     this.names = [];
     this.cosmetics = [];
     this.voice.clear();
+    this.watchers.clear();
+    this.watching = false;
   }
 }
 

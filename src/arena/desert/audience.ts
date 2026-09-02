@@ -20,6 +20,33 @@ const PLATE = new MeshStandardMaterial({ color: 0x232228, roughness: 0.82, metal
 const RAIL = new MeshStandardMaterial({ color: 0x4a4d57, roughness: 0.38, metalness: 0.85 });
 const CAP = new MeshStandardMaterial({ color: 0xffb02e, emissive: 0xff9a1a, emissiveIntensity: 0.55, roughness: 0.5, metalness: 0.2 });
 
+/** A standing spot on a terrace: where a watcher's feet go, and the way
+ *  they are turned to face the fight. */
+export interface Stand {
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+}
+
+const STANDS = new Map<string, Stand[]>();
+let active: Stand[] = [];
+
+/** A site registers the spots its banks offer as they are built. */
+export function registerStands(site: string, stands: Stand[]): void {
+  STANDS.set(site, stands);
+}
+
+/** The desert points this at the site the fight is actually on. */
+export function useStands(site: string): void {
+  active = STANDS.get(site) ?? [];
+}
+
+/** The spots the current site's terraces offer, front row first. */
+export function audienceStands(): Stand[] {
+  return active;
+}
+
 export interface BankSpec {
   /** Arc centre (the thing the terrace looks at). */
   cx: number;
@@ -38,6 +65,32 @@ const TIER_RISE = 0.48;
 const TIER_DEPTH = 1.5;
 const SEG_ARC = 2.1; // metres of lip per riser segment
 const RAIL_H = 1.02;
+
+/** The standing spots one bank offers: a row per tier, spread along the
+ *  arc a stride back from its rail, each turned to face the centre. Front
+ *  tier first — the best seats are handed out first. */
+export function bankStands(spec: BankSpec): Stand[] {
+  const stands: Stand[] = [];
+  const span = spec.a1 - spec.a0;
+  for (let tier = 0; tier < TIERS; tier++) {
+    const r = spec.radius + tier * TIER_DEPTH;
+    const n = Math.max(2, Math.round((span * r) / (SEG_ARC * 1.4)));
+    const rise = TIER_RISE * (tier + 1);
+    for (let i = 0; i < n; i++) {
+      const a = spec.a0 + ((i + 0.5) / n) * span;
+      const sx = Math.sin(a);
+      const sz = Math.cos(a);
+      // A stride back from the rail so the rail is in front of you, and
+      // standing ON the plate (riser + its lip).
+      const stride = r + TIER_DEPTH * 0.62;
+      const x = spec.cx + sx * stride;
+      const z = spec.cz + sz * stride;
+      // Face the middle of the fight: the rig's forward is −z at yaw 0.
+      stands.push({ x, y: spec.ground(x, z) + rise + 0.05, z, yaw: Math.atan2(-sx, -sz) + Math.PI });
+    }
+  }
+  return stands;
+}
 
 /** One terrace bank: risers, floor plates, rails, amber caps. */
 export function buildBank(spec: BankSpec): Group {
@@ -98,10 +151,27 @@ export function buildBank(spec: BankSpec): Group {
  * either side (±x), each spanning `halfSpan` radians about the side's
  * bearing, their front lips `radius` from the centre.
  */
-export function buildFlankBanks(cx: number, cz: number, radius: number, halfSpan: number, ground: (x: number, z: number) => number): Object3D[] {
+export function buildFlankBanks(
+  cx: number,
+  cz: number,
+  radius: number,
+  halfSpan: number,
+  ground: (x: number, z: number) => number,
+): { banks: Object3D[]; stands: Stand[] } {
   const banks: Object3D[] = [];
+  const stands: Stand[] = [];
   for (const bearing of [Math.PI / 2, -Math.PI / 2]) {
-    banks.push(buildBank({ cx, cz, radius, a0: bearing - halfSpan, a1: bearing + halfSpan, ground }));
+    const spec: BankSpec = { cx, cz, radius, a0: bearing - halfSpan, a1: bearing + halfSpan, ground };
+    banks.push(buildBank(spec));
+    stands.push(...bankStands(spec));
   }
-  return banks;
+  // Alternate the two flanks so the first few watchers fill both sides
+  // rather than crowding one — a terrace with everyone at one end reads
+  // as a queue, not a crowd.
+  const half = stands.length / 2;
+  const woven: Stand[] = [];
+  for (let i = 0; i < half; i++) {
+    woven.push(stands[i], stands[half + i]);
+  }
+  return { banks, stands: woven.filter(Boolean) };
 }

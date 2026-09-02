@@ -629,9 +629,25 @@ Each phase is shippable; nothing waits on everything.
    over the head swell the roar — ready for the relay's aggregate.
    AUDIENCE GROUND stands on the flanks of the flats and the boneyard
    (`arena/desert/audience.ts`): two-tier terraces outside the cage line,
-   rails capped hazard amber, dark. Still to land with presence: the
-   watchers travelling with the squad, the spectator pose wire, the
-   room-wide roar aggregate, sourced recordings behind the same API.)*
+   rails capped hazard amber, dark, each offering a set of STANDS.
+   THE WATCHERS TRAVEL: every online room's seat array runs longer than
+   its fighter count (`config.AUDIENCE_SEATS`) and its tail is the
+   audience — a WATCH chip on any lobby row claims one, a full lobby
+   included, since turning up to a show is the point. A watcher rides the
+   same mesh at fighter fidelity, is dealt to the match's own place with
+   the squad, and lands on a stand rather than a platform: their slot is
+   a sentinel outside every layout (`config.WATCHER_SLOT`), which makes
+   every seat-relative transform resolve to the canonical frame, so the
+   whole ring renders where it actually is with no special case
+   downstream. They throw nothing and judge nothing (the input and
+   collision systems stand down), and each watcher's head rides a `watch`
+   frame so the terrace has BODIES on it — the crowd going up is a thing
+   the fighters can see. THE ROAR is aggregated per headset off those
+   same frames (no relay needed: everyone receives everyone), and the
+   voice split is enforced where it bites, in MeshSystem's speaker
+   attach: a fighter never opens a watcher's voice. Still to land:
+   sourced crowd recordings behind the same API, and the bell dealing the
+   audience from the club floor once presence ships.)*
 7. **RAVE mode** — port the set, decks, records; mannequin on the ring;
    coins per song; bell learns RAVE SET.
    *(Shipped as a PAGE: `rave.html` boots `src/rave/` — the dance repo's

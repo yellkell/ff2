@@ -41,6 +41,7 @@ export class PlayerGloveSystem extends createSystem({
   }
 
   update(delta: number): void {
+    if (app.spectating) return; // nothing to light up on the terrace
     const show = app.state === 'playing' || app.state === 'training';
     for (const hand of HANDS) {
       const grip = this.world.playerSpaceEntities.gripSpaces[hand]?.object3D;

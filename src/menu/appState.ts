@@ -157,6 +157,13 @@ export const app: {
   pubCount: number;
   /** Punter count per pub region id (for the EU/USA door picker). */
   pubRegionCounts: Record<string, number>;
+  /**
+   * I am in this bout as a WATCHER, not a fighter (DESIGN §3.2): dealt to
+   * the match's place with the squad, standing on the audience ground
+   * outside the cage line. No platform, no fireballs, nothing to hit — and
+   * the fighters never hear my words, only the crowd (audio/crowd.ts).
+   */
+  spectating: boolean;
   /** Which face the lobby info panel shows: its doors, or the pub-region picker. */
   infoView: 'root' | 'pubpick';
   /** THE PAINT BAY is open over the lobby (modal, like customisation —
@@ -271,6 +278,7 @@ export const app: {
   searching: -1,
   pubCount: -1,
   pubRegionCounts: {},
+  spectating: false,
   infoView: 'root',
   paintBayOpen: false,
   campaignOpen: false,

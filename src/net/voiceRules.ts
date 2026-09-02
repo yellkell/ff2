@@ -45,6 +45,10 @@ export const VOICE_RULES: Record<VoiceContext, VoiceRule> = {
  *  state at the moment a bout connects (ranked is flagged before the host
  *  or join call goes out; the arcade mode names the rest). */
 export function currentVoiceContext(): VoiceContext {
+  // A WATCHER hears everyone — fighters and the terrace alike. (The other
+  // half of the rule lives on the fighters' side: MeshSystem never opens a
+  // watcher's voice to them, whatever this says about the watcher's ears.)
+  if (app.spectating) return 'audience';
   if (app.fromRanked) return 'ranked';
   if (app.arcade === 'raid') return 'raid';
   if (app.arcade === '2v2' || app.arcade === 'ffa') return 'brawl';

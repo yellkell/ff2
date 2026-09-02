@@ -208,6 +208,46 @@ console.log('\n=== WHO HEARS WHOM (net/voiceRules.ts) ===');
   check('the table: club hears the room, the audience hears everyone, ranked nobody', v.table.club === 'mic/room' && v.table.audience === 'mic/everyone' && v.table.ranked === 'no mic/nobody', JSON.stringify(v.table));
 }
 
+console.log('\n=== THE AUDIENCE: the terrace, the bodies, the roar ===');
+{
+  const a = (expr) => page.evaluate(`window.__ff2.audience.${expr}`);
+  // A bout puts the desert on the FLATS, whose flanks grew terraces.
+  await a(`watch(true, 4)`);
+  await page.waitForTimeout(500);
+  const stands = await a(`stands()`);
+  const where = await a(`where()`);
+  const roster = await a(`roster()`);
+  const padHidden = !(await a(`pad()`));
+  check('the flats offer standing room', stands > 0, String(stands));
+  // Out on a flank, standing on a riser rather than on the sand (the front
+  // tier's plate sits ~0.5 m over whatever the dune under it is doing).
+  check('a watcher is planted on a stand, off the ground', !!where && Math.abs(where.x) > 5 && where.y > 0.25, JSON.stringify(where));
+  check('and every fighter is on show (me, then the whole ring)', roster[0] === -1 && roster.length === 3 && roster[1] === 0 && roster[2] === 1, JSON.stringify(roster));
+  check("the watcher's own platform is gone", padHidden === true, String(padHidden));
+
+  // Two more watchers on the wire: bodies at the rail, and their hands
+  // aggregate into the room's roar.
+  await a(`wire(5, ${where?.x ?? 0}, ${where?.y ?? 1}, ${(where?.z ?? 0) + 1}, 1)`);
+  await a(`wire(6, ${where?.x ?? 0}, ${where?.y ?? 1}, ${(where?.z ?? 0) + 2}, 0)`);
+  await page.waitForTimeout(400);
+  const bodies = await a(`bodies()`);
+  const roar = await a(`roar()`);
+  const inScene = await a(`inScene()`);
+  check('watchers on the wire grow bodies at the rail', bodies === 2 && inScene === 2, JSON.stringify({ bodies, inScene }));
+  check('half the terrace with its hands up is half a roar', roar.room > 0.2 && roar.room < 0.5, JSON.stringify(roar));
+
+  // The rule that makes the crowd a crowd.
+  const ctx = await page.evaluate(() => window.__ff2.voice.context());
+  check('a watcher is in the AUDIENCE, hearing everyone', ctx === 'audience', ctx);
+
+  await a(`clear()`);
+  await a(`watch(false)`);
+  await page.waitForTimeout(400);
+  const after = await a(`where()`);
+  const padBack = await a(`pad()`);
+  check('standing down hands the ground back', after === null && padBack, JSON.stringify({ after, padBack }));
+}
+
 console.log('\n=== THE PROFILE: the chip and its card ===');
 const chip = await wrap(`buttons('profile')`);
 check('the chip is one pressable ghost', chip.length === 1 && chip[0] === 'profile-toggle', chip.join(','));

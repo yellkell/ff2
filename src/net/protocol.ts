@@ -29,6 +29,14 @@ export type PeerMessage =
       acc?: number;
       acl?: number;
     }
+  /**
+   * A WATCHER's frame (DESIGN §3.2). Watchers ride the same mesh as the
+   * fighters but never the combat path: their pose is a head on a terrace,
+   * and `roar` is the one channel the audience has into a fighter's ears —
+   * how high their hands are, 0..1, aggregated room-wide into the crowd
+   * bed (audio/crowd.ts). Noise, never words.
+   */
+  | { k: 'watch'; head: PoseTuple; roar: number }
   /** I punched my `hand` ball: it left from `pos` with velocity `vel`. */
   | { k: 'throw'; hand: 0 | 1; pos: [number, number, number]; vel: [number, number, number]; curl?: [number, number, number] }
   /**

@@ -42,6 +42,7 @@ import { animateVultures, buildVultures } from './birds.js';
 import { DustField } from './dustdevil.js';
 import { animateTumbleweeds, buildTumbleweeds, type Tumbleweed } from './tumbleweed.js';
 import { buildSites, SITE_YAW, type DesertSite } from './sites.js';
+import { useStands } from './audience.js';
 
 export type { DesertSite } from './sites.js';
 
@@ -314,6 +315,7 @@ export function buildDesert(): Desert {
     site: 'trailhead',
     setSite(site) {
       desert.site = site;
+      useStands(site); // the terraces a watcher can stand on here
       far.rotation.y = SITE_YAW[site];
       for (const [k, s] of Object.entries(sites)) s.root.visible = k === site;
     },

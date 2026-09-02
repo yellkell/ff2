@@ -41,7 +41,11 @@ export interface OpponentPose {
 
 /** Most OTHER boxers in any mode: RAID seats five (4 squadmates); FFA has 3
  *  rivals and 2v2 has 1 ally + 2 rivals. Unused slots simply stay inactive. */
-export const MAX_OPPONENTS = 4;
+// Four other fighters is the most any FIGHTER faces (a five-seat raid, me
+// plus four). A WATCHER sees one more — every seat is somebody else's — so
+// the bus carries five. The spare slot is simply inactive in every normal
+// bout.
+export const MAX_OPPONENTS = 5;
 
 function makePose(): OpponentPose {
   return {

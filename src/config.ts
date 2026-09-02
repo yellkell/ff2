@@ -1032,6 +1032,23 @@ export interface FighterSlot {
  * so π faces +Z, +π/2 faces -X (east platform looks west into the cross) and
  * -π/2 faces +X (west platform looks east).
  */
+/**
+ * THE AUDIENCE (DESIGN §3.2). Every online room keeps seats for WATCHERS
+ * beyond its fighters: they claim them in the same room doc, ride the same
+ * mesh, and are dealt to the match's own place with the squad — onto the
+ * audience ground (arena/desert/audience.ts) rather than a platform.
+ */
+export const AUDIENCE_SEATS = 6;
+
+/**
+ * A watcher's `app.mySlot`. Deliberately OUTSIDE every MODE_LAYOUT: the
+ * seat-relative transforms (combat/layout.ts) fall back to the canonical
+ * origin for a slot they don't know, which is exactly the frame a watcher
+ * wants — the fighters land where the arena actually put them, and the
+ * watcher's own rig is moved to the terrace instead.
+ */
+export const WATCHER_SLOT = 90;
+
 export const MODE_LAYOUT: Record<ArcadeMode, FighterSlot[]> = {
   '1v1': [
     { pos: [0, 0, 0], yaw: 0, team: 0 }, // you

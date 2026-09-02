@@ -44,6 +44,12 @@ export const crowd = {
   active: false,
   /** 0..1 — how loud the crowd is right now (murmur → roar). */
   level: 0,
+  /** MY hands, 0..1 (CrowdSystem reads the controllers; MeshSystem puts it
+   *  on the wire when I am watching). */
+  myRoar: 0,
+  /** How much of the whole terrace is up, 0..1 — mine and every watcher's
+   *  off the wire. This is what the bed actually swells to. */
+  roomRoar: 0,
 };
 
 function noiseBuffer(ctx: AudioContext): AudioBuffer {

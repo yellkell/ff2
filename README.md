@@ -55,11 +55,19 @@ carried over verbatim: everything in it still applies to this code.
   never hear a watcher's words). THE CROWD: a synthesised bed under every
   bout (`src/audio/crowd.ts` — distant murmur, a rumble that swells with
   the landings, roar stings on hits, cores, rounds and the win) with the
-  HANDS-UP channel (`systems/CrowdSystem.ts`: both hands over the head
-  swell the roar — the audience's one way into a fighter's ears), and
-  AUDIENCE GROUND: standing terraces on the flanks of the flats and the
-  boneyard (`src/arena/desert/audience.ts`), outside the cage line, rails
-  capped hazard amber. The watchers' wire lands with presence.
+  HANDS-UP channel: both hands over the head swell the roar. THE
+  AUDIENCE travels — a WATCH chip on any lobby row takes a watcher seat
+  past the fighters' band in the same room (`config.AUDIENCE_SEATS`), and
+  when the room launches you are dealt to the match's own place with the
+  squad: onto the standing terraces (`src/arena/desert/audience.ts`) on
+  the flanks of the flats and the boneyard, outside the cage line, rails
+  capped hazard amber. A watcher sees every fighter where the arena
+  actually put them, throws nothing and judges nothing, and every other
+  watcher stands at the rail beside them
+  (`systems/AudienceSystem.ts`). Their hands ride the mesh and each
+  headset aggregates the same room-wide roar; their WORDS never reach a
+  fighter, only the crowd. Probed in `npm run check:wrap`'s terrace
+  section.
 - **THE BLANK** — the mannequin (DESIGN.md §5): `src/avatar/mannequin.ts`,
   the ONLY body. TWO pieces and no more — ONE continuous lofted surface
   from the neck through shoulders, waist and hips to a monotonic taper,

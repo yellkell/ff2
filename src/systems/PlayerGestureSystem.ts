@@ -60,6 +60,8 @@ export class PlayerGestureSystem extends createSystem({}) {
   private selfGgCooldown = 0;
 
   update(delta: number): void {
+    // A WATCHER has no fists in this bout: no ignite, no throw, no recall.
+    if (app.spectating) return;
     const active = app.state === 'playing' || app.state === 'training';
     if (!active) {
       this.hasPrev = false;

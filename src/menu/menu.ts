@@ -94,6 +94,9 @@ export type MenuAction =
   | 'lobby-start'
   | 'lobby-leave'
   | `lobby-join-${string}`
+  /** Take a WATCHER seat in a listed lobby — travel with the squad and
+   *  stand on the audience ground (DESIGN §3.2). */
+  | `lobby-watch-${string}`
   | 'toggle-shootback'
   | 'toggle-onlybots'
   | 'toggle-voice'
@@ -2092,6 +2095,8 @@ const RAID_H = 700;
 const RAID_ROW_Y0 = 150;
 const RAID_ROW_H = 58;
 const RAID_ROW_GAP = 10;
+/** The WATCH chip at the right end of a browser row. */
+const ROW_WATCH = { w: 104, h: 38 };
 // Browser bottom row: MAKE / VS BOTS side by side (raid uses the left half full
 // for HOST since it has no bot variant), then a centred CLOSE below.
 const LOBBY_MAKE_BTN = { x: 70, y: RAID_H - 152, w: (RAID_W - 140 - 16) / 2, h: 58 };
@@ -2197,16 +2202,33 @@ function drawRaid(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null)
     ctx.textAlign = 'right';
     ctx.font = '800 22px system-ui, sans-serif';
     ctx.fillStyle = room.count >= room.cap ? UI.danger : UI.coolBright;
-    ctx.fillText(`${room.count}/${room.cap}`, RAID_W - 92, ry + RAID_ROW_H / 2 + 2);
+    ctx.fillText(`${room.count}/${room.cap}`, RAID_W - 190, ry + RAID_ROW_H / 2 + 2);
+    // WATCH: the terrace is always open, even on a lobby with seats going
+    // spare — turning up to see it is a way to be in the room.
+    {
+      const w = ROW_WATCH;
+      const wHot = hoverAction === `lobby-watch-${room.id}`;
+      plate(ctx, RAID_W - 70 - w.w, ry + (RAID_ROW_H - w.h) / 2, w.w, w.h, {
+        cut: 8,
+        fill: wHot ? 'rgba(255,176,0,0.18)' : 'rgba(150,150,170,0.10)',
+        stroke: wHot ? UI.amber : UI.steelDim,
+        rivets: false,
+      });
+      ctx.textAlign = 'center';
+      ctx.font = '800 15px system-ui, sans-serif';
+      ctx.fillStyle = wHot ? UI.amber : UI.textDim;
+      ctx.fillText('WATCH', RAID_W - 70 - w.w / 2, ry + RAID_ROW_H / 2 + 2);
+    }
     // Stakes tags: one sits on the midline; both stack into two short lines.
     const tags: Array<[string, string]> = [];
     if (room.goopliath) tags.push(['GOOPLIATH', GOOP_GREEN]);
     if (room.hardcore) tags.push(['HARDCORE', UI.danger]);
     ctx.font = '800 15px system-ui, sans-serif';
+    ctx.textAlign = 'right';
     tags.forEach(([tag, colour], t) => {
       ctx.fillStyle = colour;
       const ty = tags.length > 1 ? ry + RAID_ROW_H / 2 - 8 + t * 20 : ry + RAID_ROW_H / 2 + 2;
-      ctx.fillText(tag, RAID_W - 150, ty);
+      ctx.fillText(tag, RAID_W - 250, ty);
     });
     ctx.textAlign = 'center';
   });
@@ -2381,9 +2403,11 @@ function hitRaid(u: number, v: number): MenuAction | null {
   const rooms = app.lobbyRooms.slice(0, 4);
   for (let i = 0; i < rooms.length; i++) {
     const ry = RAID_ROW_Y0 + i * (RAID_ROW_H + RAID_ROW_GAP);
-    if (y >= ry - 4 && y <= ry + RAID_ROW_H + 4 && x >= 70 && x <= RAID_W - 70 && rooms[i].count < rooms[i].cap) {
-      return `lobby-join-${rooms[i].id}` as MenuAction;
-    }
+    if (y < ry - 4 || y > ry + RAID_ROW_H + 4 || x < 70 || x > RAID_W - 70) continue;
+    // The WATCH chip owns the row's right end — a full lobby still has a
+    // terrace, so it answers whether or not there is a seat going.
+    if (x >= RAID_W - 70 - ROW_WATCH.w) return `lobby-watch-${rooms[i].id}` as MenuAction;
+    if (rooms[i].count < rooms[i].cap) return `lobby-join-${rooms[i].id}` as MenuAction;
   }
   return null;
 }

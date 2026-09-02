@@ -14,6 +14,7 @@
 import { createSystem } from '@iwsdk/core';
 import { Vector3 } from 'three';
 import { app } from '../menu/appState.js';
+import { mesh } from '../net/mesh.js';
 import { crowd, setCrowdRoar, startCrowd, stopCrowd, tickCrowd } from '../audio/crowd.js';
 
 const _head = new Vector3();
@@ -38,8 +39,35 @@ export class CrowdSystem extends createSystem({}) {
     }
     if (live) this.readHands(delta);
     else this.roar = 0;
-    setCrowdRoar(this.roar);
+    crowd.myRoar = this.roar;
+    crowd.roomRoar = this.roomRoar();
+    setCrowdRoar(crowd.roomRoar);
     tickCrowd(delta);
+  }
+
+  /**
+   * THE ROOM-WIDE ROAR. Every watcher's hands ride the mesh (MeshSystem's
+   * `watch` frames), so each headset can aggregate the same number without
+   * a relay in the middle: the SHARE of the terrace with its hands up.
+   *
+   * A fighter's own hands are not the crowd — they're a fighter's hands —
+   * so mine only count when I am one of the watchers. With nobody on the
+   * terrace at all (a bot bout, a private duel) the bed answers to my own,
+   * which is what makes the gesture worth having offline too.
+   */
+  private roomRoar(): number {
+    let sum = 0;
+    let n = 0;
+    for (const w of mesh.watchers.values()) {
+      sum += w.roar;
+      n++;
+    }
+    if (app.spectating) {
+      sum += this.roar;
+      n++;
+    }
+    if (n === 0) return this.roar;
+    return Math.min(1, sum / n);
   }
 
   private readHands(delta: number): void {

@@ -55,6 +55,9 @@ import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, wrapNav, type Wrap } from '../menu/wrap.js';
 import { clearReportSent, markReportSent, musicVolFromU, setCreditsOpen, sfxVolFromU } from '../menu/settingsFace.js';
 import { profilePop } from '../menu/profilePop.js';
+import { audienceStands } from '../arena/desert/audience.js';
+import { audienceView } from './AudienceSystem.js';
+import { crowd } from '../audio/crowd.js';
 import { currentVoiceContext, VOICE_RULES, voiceAllowed, hearAllowed } from '../net/voiceRules.js';
 import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
 import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
@@ -93,6 +96,7 @@ import {
 } from '../avatar/skins.js';
 import { match } from '../combat/matchState.js';
 import { applyArenaLayout, tintPlatform } from '../arena/arena.js';
+import { localLayout } from '../combat/layout.js';
 import { mesh } from '../net/mesh.js';
 import { UI } from '../ui/industrial.js';
 import { net } from '../net/client.js';
@@ -120,7 +124,7 @@ import {
   syncLookMirror,
 } from '../net/leaderboard.js';
 import { gazette, markGazetteRead, refreshGazette, type GazetteArticle } from '../net/gazette.js';
-import { hueToColor, pubUrl, raveUrl, teamColor } from '../config.js';
+import { hueToColor, pubUrl, raveUrl, teamColor, WATCHER_SLOT } from '../config.js';
 import * as sfx from '../audio/sfx.js';
 import { requestClubEntry, requestRaveEntry } from '../experience/clubNavigation.js';
 
@@ -275,6 +279,43 @@ export class MenuSystem extends createSystem({}) {
     this.menu.panels.push(this.bayPanel);
     this.menu.group.add(this.bayPanel.mesh);
     installPaintDevHook(); // __ff2.paint — THE PAINT's dev/probe verbs
+    // THE AUDIENCE (DESIGN §3.2), drivable headlessly: take a place on the
+    // terrace, put a watcher on the wire, read the room's roar.
+    (window.__ff2 as unknown as Record<string, unknown>).audience = {
+      stands: (): number => audienceStands().length,
+      where: () => audienceView.mine,
+      bodies: (): number => audienceView.bodies,
+      roar: () => ({ mine: crowd.myRoar, room: crowd.roomRoar, level: crowd.level }),
+      /** Enter the current bout as a watcher (or stand down again). */
+      watch: (on: boolean, seat = 4): void => {
+        mesh.watching = on;
+        if (on) {
+          mesh.capacity = 2;
+          mesh.mySeat = seat;
+        }
+        app.spectating = on;
+        app.mySlot = on ? WATCHER_SLOT : 0;
+        app.arcade = '1v1';
+        app.state = on ? 'playing' : 'menu';
+      },
+      /** Put a watcher on the wire, as the mesh would. */
+      wire: (seat: number, x: number, y: number, z: number, roar: number): void => {
+        mesh.watchers.set(seat, { x, y, z, qx: 0, qy: 0, qz: 0, qw: 1, roar, at: performance.now() });
+      },
+      clear: (): void => mesh.watchers.clear(),
+      /** Is my own pedestal still under me? (A watcher's is not.) */
+      pad: (): boolean => this.scene.getObjectByName('player-platform')?.visible !== false,
+      /** Bodies actually standing in the scene at the rail. */
+      inScene: (): number => {
+        let n = 0;
+        this.scene.traverse((o) => {
+          if (o.name === 'terrace-watcher') n++;
+        });
+        return n;
+      },
+      /** The whole local roster as a watcher sees it: me, then every fighter. */
+      roster: (): number[] => localLayout().map((s) => s.canonical),
+    };
     // WHO HEARS WHOM (net/voiceRules.ts), readable headlessly.
     (window.__ff2 as unknown as Record<string, unknown>).voice = {
       context: currentVoiceContext,
@@ -665,7 +706,8 @@ export class MenuSystem extends createSystem({}) {
         action.startsWith('ranked-join-') ||
         action === 'lobby-host' ||
         action === 'lobby-vsbots' ||
-        action.startsWith('lobby-join-')) &&
+        action.startsWith('lobby-join-') ||
+        action.startsWith('lobby-watch-')) &&
       !hasCustomName()
     ) {
       this.kbPending = action;
@@ -1192,6 +1234,35 @@ export class MenuSystem extends createSystem({}) {
           app.fromRanked = true;
           app.state = 'queueing';
           net.joinRanked(action.slice('ranked-join-'.length));
+        } else if (action.startsWith('lobby-watch-')) {
+          // THE TERRACE (DESIGN §3.2). A watcher takes a seat past the
+          // fighters' band: they travel with the squad when the room
+          // launches and are dealt onto the audience ground instead of a
+          // platform. A full lobby — even one already fighting — still
+          // answers, because turning up to watch is the point.
+          if (!app.onlyBots && app.lobbyMode) {
+            const roomId = action.slice('lobby-watch-'.length);
+            app.netStatus = 'taking a place on the terrace…';
+            const seq = ++this.lobbyJoinSeq;
+            const attempt = mesh.joinLobby(app.lobbyMode, roomId, myStats().name, (s) => (app.netStatus = s), true);
+            void Promise.race([attempt, new Promise<false>((r) => setTimeout(() => r(false), 15_000))])
+              .then((ok) => {
+                if (seq !== this.lobbyJoinSeq) return;
+                if (ok) {
+                  app.lobbyView = 'lobby';
+                } else {
+                  mesh.cancel();
+                  app.lobbyView = 'browser';
+                  app.netStatus = 'the terrace is full';
+                }
+              })
+              .catch(() => {
+                if (seq !== this.lobbyJoinSeq) return;
+                mesh.cancel();
+                app.lobbyView = 'browser';
+                app.netStatus = 'could not take a place, try again';
+              });
+          }
         } else if (action.startsWith('lobby-join-')) {
           // Claim a seat in a listed lobby; a race with a final joiner drops
           // you back on the (fresh) list. The lobby view opens ONLY once the
@@ -1757,15 +1828,22 @@ export class MenuSystem extends createSystem({}) {
     app.privateCode = ''; // the invite code has done its job
 
     app.arcade = mode;
-    app.mySlot = mesh.mySeat;
+    // A WATCHER travels with the squad but never onto a platform: their
+    // slot is the sentinel outside every layout (config.WATCHER_SLOT), so
+    // every fighter renders where the arena actually put them and
+    // AudienceSystem stands this headset on the terrace instead.
+    app.spectating = mesh.watching;
+    app.mySlot = mesh.watching ? WATCHER_SLOT : mesh.mySeat;
     if (mode === 'raid') {
       app.mode = 'campaign';
       app.campaignMode = 'raid';
       app.raidHardcore = mesh.raidHardcore;
       app.raidGoopliath = mesh.raidGoopliath;
-      // Squad size snapshot — the boss is built for THIS many fists (2–5)
-      // and stays that way even if someone drops mid-run.
-      app.raidSize = Math.min(5, Math.max(1, mesh.occupants.filter(Boolean).length));
+      // Squad size snapshot — the boss is built for THIS many FISTS (2–5)
+      // and stays that way even if someone drops mid-run. The terrace does
+      // not count: watchers fill the tail of the same seat array and would
+      // otherwise build a five-hand boss for a two-hand squad.
+      app.raidSize = Math.min(5, Math.max(1, mesh.occupants.slice(0, mesh.capacity).filter(Boolean).length));
       app.difficulty = mesh.raidDifficulty; // the host's pick, mirrored to all
       app.campaignStage = 0;
     } else {
@@ -1973,6 +2051,10 @@ export class MenuSystem extends createSystem({}) {
 
   private applyState(): void {
     const inLobby = app.state === 'menu' || app.state === 'queueing';
+    // The terrace is a place you go for ONE bout: coming home to the lobby
+    // makes you a fighter again (AudienceSystem hands the rig back to the
+    // origin off the same flag).
+    if (inLobby && app.spectating) app.spectating = false;
     this.menu.setVisible(inLobby);
     // Back in the lobby: hand the audio over — the victory sting rings out, then
     // (and only then) the lobby music fades up, so they never overlap. During a
