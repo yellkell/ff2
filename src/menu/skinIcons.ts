@@ -246,23 +246,6 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         ctx.stroke();
         ctx.fillRect(cx - r * 0.09, cy + r * 0.22, r * 0.18, r * 0.2);
         break;
-      default: // epaulettes: a board on each shoulder, a boss at the tip, fringe
-        for (const s of [-1, 1]) {
-          ctx.beginPath();
-          ctx.roundRect(cx + s * r * 0.64 - r * 0.24, cy - r * 0.7, r * 0.48, r * 0.16, r * 0.04);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(cx + s * r * 0.84, cy - r * 0.62, r * 0.09, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.lineWidth = Math.max(1.5, line * 0.5);
-          for (let i = 0; i < 3; i++) {
-            const x = cx + s * (r * 0.72 + i * r * 0.08);
-            ctx.beginPath();
-            ctx.moveTo(x, cy - r * 0.54);
-            ctx.lineTo(x, cy - r * 0.34);
-            ctx.stroke();
-          }
-        }
     }
   } else {
     // A fist from above: the palm block and four fingers.

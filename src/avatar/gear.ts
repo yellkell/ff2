@@ -56,7 +56,6 @@ export const GEAR: GearDef[] = [
   { id: 'collar', name: 'COLLAR', slot: 'body', price: 80, blurb: 'a ruff ring under the head' },
   { id: 'ridge', name: 'RIDGE', slot: 'body', price: 140, blurb: 'a dorsal ridge down the spine' },
   { id: 'belt', name: 'BELT', slot: 'body', price: 60, blurb: 'a band round the waist, buckled' },
-  { id: 'epaulettes', name: 'EPAULETTES', slot: 'body', price: 200, blurb: 'shoulder boards with a boss' },
   // ── hands ─────────────────────────────────────────────────────────────
   { id: 'cuffs', name: 'CUFFS', slot: 'hands', price: 60, blurb: 'a ring at each wrist' },
   { id: 'knuckles', name: 'KNUCKLES', slot: 'hands', price: 120, blurb: 'four spikes over the fist' },
@@ -407,42 +406,6 @@ const BUILDERS: Record<string, Builder> = {
     g.add(buckle);
     return g;
   },
-  epaulettes: (mat, _side, trimMat) => {
-    // EPAULETTES that sit on the shoulder rather than sticking out past
-    // it: a board laid along the shoulder slope from the neck's edge to
-    // the point of the shoulder, a raised strap down its middle, a boss
-    // (a low domed stud) at the outer tip, and a short fringe of bars
-    // hanging off the end. The old board reached past the shoulder line
-    // and its sphere floated beside the arm like a ball on a stick.
-    const g = new Group();
-    for (const s of [-1, 1]) {
-      const yaw = -s * 0.32; // the shoulder line falls away from the neck
-      // The board is the trim (dark on the white blank) and the strap
-      // the primer, so the piece stands off the shoulder instead of
-      // melting into it.
-      const board = asTrim(new Mesh(new BoxGeometry(0.15, 0.016, 0.085), trimMat));
-      board.position.set(s * 0.165, 0.418, -0.004);
-      board.rotation.z = yaw;
-      g.add(board);
-      const strap = new Mesh(new BoxGeometry(0.15, 0.01, 0.026), mat);
-      strap.position.set(s * 0.165, 0.43, -0.004);
-      strap.rotation.z = yaw;
-      g.add(strap);
-      const boss = asTrim(new Mesh(new CylinderGeometry(0.02, 0.026, 0.014, 18), trimMat));
-      boss.position.set(s * 0.226, 0.406, -0.004);
-      boss.rotation.z = yaw;
-      g.add(boss);
-      for (let i = 0; i < 4; i++) {
-        const bar = asTrim(new Mesh(new CylinderGeometry(0.004, 0.004, 0.05, 6), trimMat));
-        const along = -0.03 + i * 0.02;
-        bar.position.set(s * 0.245, 0.372, -0.004 + along);
-        bar.rotation.z = yaw * 0.5;
-        g.add(bar);
-      }
-    }
-    return g;
-  },
-
   /* hands — palm at the origin, fingers −z, cuff +z (hands.ts) */
   cuffs: (mat) => {
     const g = new Group();

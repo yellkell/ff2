@@ -81,7 +81,6 @@ const GEAR_WORDS = {
   collar: 'a COLLAR under the head',
   ridge: 'a RIDGE down the spine',
   belt: 'a BELT, buckled',
-  epaulettes: 'EPAULETTES with a boss',
   cuffs: 'CUFFS at the wrists',
   knuckles: 'KNUCKLE spikes',
   gauntlets: 'GAUNTLETS over the fists',

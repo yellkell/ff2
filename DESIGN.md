@@ -362,9 +362,9 @@ its contrast under whatever the plate is painted. FF1's wallet/shop/locker plumb
 (`wallet.ts`, `customization.ts`, owned-lists, try-before-buy preview)
 carries over; the catalogue changes from skins to attachments.
 
-**SHIPPED — GEAR** (`src/avatar/gear.ts`): fifteen shapes in three SLOTS
+**SHIPPED — GEAR** (`src/avatar/gear.ts`): fourteen shapes in three SLOTS
 — head (CREST, ANTENNAE, HORNS, HALO, MOHAWK, VISOR BAND), body
-(PAULDRONS, CHESTPLATE, COLLAR, RIDGE, BELT, EPAULETTES) and hands
+(PAULDRONS, CHESTPLATE, COLLAR, RIDGE, BELT) and hands
 (CUFFS, KNUCKLES, GAUNTLETS) — one worn per slot, every piece primed in
 the body's own tone (white on a blank, black on an onyx) and immune to
 every recolour, exactly like the body. Purely visual: gear parents to the
