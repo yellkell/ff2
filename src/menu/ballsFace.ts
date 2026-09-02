@@ -24,6 +24,9 @@ import { ATTACH } from '../config.js';
 
 export const BALLS_W = 768;
 export const BALLS_H = 768;
+/** Where the face's content actually ends — the frame runs to BALLS_H, but
+ *  a host blitting the bare face wants to crop the empty tail off. */
+export const BALLS_CONTENT_H = 700;
 
 const M = 56;
 const INNER = BALLS_W - M * 2;
@@ -279,20 +282,35 @@ function drawAttachIcon(g: CanvasRenderingContext2D, type: number, cx: number, c
  * TOWN wing's NEWS tab uses for the newspaper.
  */
 let offscreen: Panel | null = null;
-function panel(): Panel {
+let offscreenBare: Panel | null = null;
+/** The last one painted — the one a host's rays are actually pointing at.
+ *  Both wear the same face, so either answers a hit the same way. */
+let served: Panel | null = null;
+function panel(bare = false): Panel {
+  if (bare) {
+    if (!offscreenBare) offscreenBare = new Panel(1, 1, BALLS_W, BALLS_H, { bare: true });
+    return offscreenBare;
+  }
   if (!offscreen) offscreen = new Panel(1, 1, BALLS_W, BALLS_H);
   return offscreen;
 }
 
-/** Paint the loadout at its current state and hand back the canvas. */
-export function renderBallsPanel(hover: string | null): HTMLCanvasElement {
-  const p = panel();
+/**
+ * Paint the loadout at its current state and hand back the canvas.
+ *
+ * `bare` drops the frame and the title, leaving the tab strip and the tiles
+ * on transparent pixels — for a host that has a frame of its own and would
+ * otherwise show a panel inside a panel (the A-button action panel).
+ */
+export function renderBallsPanel(hover: string | null, bare = false): HTMLCanvasElement {
+  const p = panel(bare);
   const f = ballsFace();
   p.paint(f.title, f.body, f.buttons, hover);
+  served = p;
   return p.ctx().canvas as HTMLCanvasElement;
 }
 
 /** UV on that canvas → the button under it (for a host doing its own rays). */
 export function ballsHit(u: number, v: number): string | null {
-  return panel().buttonAt(u, v);
+  return (served ?? panel()).buttonAt(u, v);
 }

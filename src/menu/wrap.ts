@@ -391,12 +391,17 @@ function arcadeFace(): Face {
 function clubFace(): Face {
   return {
     title: 'FIRE FIGHT 2',
-    body: crumb(app.pubCount > 0 ? `${app.pubCount} INSIDE RIGHT NOW` : 'THE SOCIAL SCENE', CW),
+    // The headcount is the only thing worth saying here, and only when
+    // there IS one — a board with one button doesn't need a caption.
+    body: app.pubCount > 0 ? crumb(`${app.pubCount} INSIDE RIGHT NOW`, CW) : () => {},
     buttons: [
       {
         id: 'open-pub',
         label: 'ENTER CLUB',
-        x: M, y: 230, w: WIDE, h: 560,
+        // A button the size of the board reads as the board. This is a
+        // button: the same height as the ones on every other face, sitting
+        // in the same first-row slot, just wider because it's alone.
+        x: M + 220, y: 300, w: WIDE - 440, h: 200,
         primary: true,
       },
     ],

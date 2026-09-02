@@ -17,14 +17,18 @@ import {
   MeshBasicMaterial,
   PlaneGeometry,
   type Scene,
+  SRGBColorSpace,
 } from 'three';
-import { app, saveBallArc, saveBallAttach, saveCurveStrength, saveShowBody } from './appState.js';
+import { app } from './appState.js';
 import { coins } from './wallet.js';
-import { ATTACH, GAME_TITLE, type ArcadeMode } from '../config.js';
+import { GAME_TITLE, type ArcadeMode } from '../config.js';
 import { gazette, type GazetteArticle } from '../net/gazette.js';
 import { PUB_MAX_PLAYERS } from '../pub/protocol.js';
 import { PUB_REGIONS } from '../pub/config.js';
 import { UI, buttonPlate, hazardStrip, plate, stencilFont } from '../ui/industrial.js';
+import { KIT } from '../ui/kit/panel.js';
+import { font } from '../ui/kit/fonts.js';
+import { BALLS_CONTENT_H, BALLS_H, BALLS_W, renderBallsPanel } from './ballsFace.js';
 
 export type PanelId =
   | 'train'
@@ -897,17 +901,62 @@ export interface ActionPanel {
   ballsHit: (u: number, v: number) => { u: number; v: number } | null;
 }
 
-// Canvas matches the BALL LOADOUT's width so the loadout section maps 1:1;
-// tall enough for header + two buttons + the loadout. Content shorter than
-// the canvas just leaves transparent pixels below the plate.
-const FW = 560;
-const FH = 760;
+// The panel is as wide as the BALL LOADOUT's own canvas is square, so the
+// loadout blits in at a clean scale; tall enough for header + loadout +
+// two buttons. Content shorter than the canvas leaves transparent pixels
+// below the frame — the plate is drawn to fit what's on it.
+const FW = 640;
+const FH = 1180;
+const AM = 40; // side margin
+const LOAD_W = FW - AM * 2; // the loadout blits to this width…
+const LOAD_H = (LOAD_W * BALLS_CONTENT_H) / BALLS_W; // …at its own aspect
+const BTN_H = 96;
+const BTN_STEP = 112;
+
+/** A kit plate: the same face the wrap's and the keyboard's buttons wear. */
+function kitPlate(
+  g: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  label: string,
+  tone: string,
+  hot: boolean,
+): void {
+  g.beginPath();
+  g.roundRect(x, y, w, h, 16);
+  g.fillStyle = hot ? KIT.plateHover : KIT.plate;
+  g.fill();
+  g.lineWidth = 2;
+  g.strokeStyle = hot ? tone : KIT.line;
+  g.stroke();
+  if (hot) {
+    // The kit's edge tick on a hot plate.
+    g.beginPath();
+    g.roundRect(x + 8, y + 14, 4, h - 28, 2);
+    g.fillStyle = tone;
+    g.fill();
+  }
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = font(700, 30);
+  g.letterSpacing = '2px';
+  g.fillStyle = hot ? KIT.textHi : tone;
+  g.fillText(label, x + w / 2, y + h / 2 + 1);
+  g.letterSpacing = '0px';
+}
 
 /**
  * The waist-height panel summoned with the A button: FORFEIT/CONCEDE where
  * resigning is allowed, REMATCH / RETURN at the end of a bout, and the BALL
- * LOADOUT during round breaks (and any time in training / campaign). Starts
- * hidden; MenuSystem owns placement, toggling and what the buttons do.
+ * LOADOUT during round breaks (and any time in training / campaign).
+ *
+ * It wears the house kit, and the loadout is not a copy of the lobby's — it
+ * IS the lobby's, painted by menu/ballsFace.ts and blitted in, the same way
+ * the tutorial's console hosts it. One loadout, three places.
+ *
+ * Starts hidden; MenuSystem owns placement, toggling and what the buttons do.
  */
 export function createActionPanel(scene: Scene): ActionPanel {
   const canvas = document.createElement('canvas');
@@ -918,8 +967,9 @@ export function createActionPanel(scene: Scene): ActionPanel {
   ctx.textBaseline = 'middle';
   const texture = new CanvasTexture(canvas);
   texture.minFilter = LinearFilter;
+  texture.colorSpace = SRGBColorSpace;
   const mesh = new Mesh(
-    new PlaneGeometry(0.5, (0.5 * FH) / FW),
+    new PlaneGeometry(0.56, (0.56 * FH) / FW),
     new MeshBasicMaterial({ map: texture, transparent: true }),
   );
   mesh.name = 'action-panel';
@@ -932,53 +982,85 @@ export function createActionPanel(scene: Scene): ActionPanel {
   return {
     mesh,
     redraw: (title, buttons, hint, hoverId, status = '', loadout = false) => {
-      // Height-to-content: plate wraps exactly what's drawn, the rest of the
-      // canvas stays transparent. The loadout sits ABOVE the buttons — gear
-      // first, resign/return below where it can't be fat-fingered.
+      // Height-to-content: the frame wraps exactly what's drawn, the rest of
+      // the canvas stays transparent. The loadout sits ABOVE the buttons —
+      // gear first, resign/return below where it can't be fat-fingered.
       // An l+r half pair shares one row, so count ROWS, not buttons.
       const buttonRows = buttons.reduce(
         (n, b, i) => n + (b.half === 'r' && buttons[i - 1]?.half === 'l' ? 0 : 1),
         0,
       );
-      const buttonsH = buttonRows * 102;
-      const statusH = status ? 30 : 0;
-      ballsY = loadout ? 84 : null;
-      const buttonsY = loadout ? 84 + BALL_H + 14 : 84;
-      const contentH = buttonsY + buttonsH + statusH + 52;
+      const buttonsH = buttonRows * BTN_STEP;
+      const statusH = status ? 36 : 0;
+      ballsY = loadout ? 100 : null;
+      const buttonsY = loadout ? 100 + LOAD_H + 24 : 108;
+      const contentH = buttonsY + buttonsH + statusH + 62;
 
       ctx.clearRect(0, 0, FW, FH);
-      plate(ctx, 8, 8, FW - 16, contentH - 16, {
-        cut: 22,
-        fill: UI.ink,
-        stroke: hoverId ? UI.amberSoft : UI.steel,
-      });
-      hazardStrip(ctx, 36, 30, 48, 14, UI.amber);
+      // The frame: the kit's smoked glass and its amber corner brackets.
+      ctx.beginPath();
+      ctx.roundRect(6, 6, FW - 12, contentH - 12, 26);
+      ctx.fillStyle = KIT.panel;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = hoverId && !hoverId.startsWith('ball:') ? KIT.lineHover : KIT.line;
+      ctx.stroke();
+      ctx.strokeStyle = KIT.accent;
+      ctx.lineWidth = 3;
+      for (const [x, y, dx, dy] of [
+        [26, 26, 1, 1],
+        [FW - 26, 26, -1, 1],
+        [26, contentH - 26, 1, -1],
+        [FW - 26, contentH - 26, -1, -1],
+      ] as const) {
+        ctx.beginPath();
+        ctx.moveTo(x + dx * 24, y);
+        ctx.lineTo(x, y);
+        ctx.lineTo(x, y + dy * 24);
+        ctx.stroke();
+      }
+
+      // The title, in the house face with the kit's tracking and its tick.
+      ctx.fillStyle = KIT.accent;
+      ctx.beginPath();
+      ctx.roundRect(AM, 42, 5, 30, 2.5);
+      ctx.fill();
       ctx.textAlign = 'left';
-      ctx.font = stencilFont(30);
-      ctx.fillStyle = UI.amberSoft;
-      ctx.fillText(title, 98, 38);
-      ctx.strokeStyle = UI.steelDim;
+      ctx.textBaseline = 'middle';
+      ctx.font = font(700, 28);
+      ctx.letterSpacing = '3px';
+      ctx.fillStyle = KIT.accent;
+      ctx.fillText(title, AM + 18, 57);
+      ctx.letterSpacing = '0px';
+      ctx.strokeStyle = KIT.lineFaint;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(36, 64);
-      ctx.lineTo(FW - 36, 64);
+      ctx.moveTo(AM, 88);
+      ctx.lineTo(FW - AM, 88);
       ctx.stroke();
 
-      if (loadout && ballsY !== null) {
-        // The lobby's BALL LOADOUT face, hosted FRAMELESS (no nested plate or
-        // clear) so the section sits on this panel's one shared plate.
-        ctx.save();
-        ctx.translate(0, ballsY);
-        drawBalls(ctx, null, false);
-        ctx.restore();
-        ctx.textAlign = 'center';
+      if (ballsY !== null) {
+        // THE LOBBY'S OWN BALL LOADOUT, blitted: painted off screen by the
+        // kit (menu/ballsFace.ts) and scaled to this panel's width, so the
+        // thing you equip between rounds is the thing you equipped in the
+        // lobby — same tiles, same tabs, same face.
+        const ballHover = hoverId && hoverId.startsWith('ball:') ? hoverId : null;
+        // BARE: no frame of its own — this panel is already the frame — and
+        // cropped to where the face's content ends.
+        ctx.drawImage(
+          renderBallsPanel(ballHover, true),
+          0, 0, BALLS_W, BALLS_CONTENT_H,
+          AM, ballsY, LOAD_W, LOAD_H,
+        );
+        // The section's name, in the slot the face's own title vacates when
+        // it's blitted bare — so the tab strip has something to sit beside.
+        ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        // Divider under the section, echoing the one under the title.
-        ctx.strokeStyle = UI.steelDim;
-        ctx.beginPath();
-        ctx.moveTo(36, buttonsY - 8);
-        ctx.lineTo(FW - 36, buttonsY - 8);
-        ctx.stroke();
+        ctx.font = font(700, 22);
+        ctx.letterSpacing = '3px';
+        ctx.fillStyle = KIT.faint;
+        ctx.fillText('BALL LOADOUT', AM + 30, ballsY + (LOAD_W / BALLS_W) * 65);
+        ctx.letterSpacing = '0px';
       }
 
       zones = [];
@@ -988,28 +1070,29 @@ export function createActionPanel(scene: Scene): ActionPanel {
         const rb = buttons[i + 1];
         if (b.half === 'l' && rb?.half === 'r') {
           // The ✕ / ✓ confirm pair: two half-width plates on one row.
-          const bw = (FW - 128 - 16) / 2;
-          buttonPlate(ctx, 64, y, bw, 84, b.label, b.accent, hoverId === b.id);
-          buttonPlate(ctx, 64 + bw + 16, y, bw, 84, rb.label, rb.accent, hoverId === rb.id);
-          zones.push({ id: b.id, y0: y - 6, y1: y + 90, x0: 64, x1: 64 + bw });
-          zones.push({ id: rb.id, y0: y - 6, y1: y + 90, x0: 64 + bw + 16, x1: FW - 64 });
-          y += 102;
+          const bw = (FW - AM * 2 - 16) / 2;
+          kitPlate(ctx, AM, y, bw, BTN_H, b.label, b.accent, hoverId === b.id);
+          kitPlate(ctx, AM + bw + 16, y, bw, BTN_H, rb.label, rb.accent, hoverId === rb.id);
+          zones.push({ id: b.id, y0: y - 6, y1: y + BTN_H + 6, x0: AM, x1: AM + bw });
+          zones.push({ id: rb.id, y0: y - 6, y1: y + BTN_H + 6, x0: AM + bw + 16, x1: FW - AM });
+          y += BTN_STEP;
           i++;
           continue;
         }
-        buttonPlate(ctx, 64, y, FW - 128, 84, b.label, b.accent, hoverId === b.id);
-        zones.push({ id: b.id, y0: y - 6, y1: y + 90 });
-        y += 102;
+        kitPlate(ctx, AM, y, FW - AM * 2, BTN_H, b.label, b.accent, hoverId === b.id);
+        zones.push({ id: b.id, y0: y - 6, y1: y + BTN_H + 6 });
+        y += BTN_STEP;
       }
 
       ctx.textAlign = 'center';
-      ctx.font = '600 24px system-ui, sans-serif';
       if (status) {
-        ctx.fillStyle = UI.coolBright;
-        ctx.fillText(status, FW / 2, y + 12);
+        ctx.font = font(600, 24);
+        ctx.fillStyle = KIT.info;
+        ctx.fillText(status, FW / 2, y + 14);
       }
-      ctx.fillStyle = UI.textDim;
-      ctx.fillText(hint, FW / 2, contentH - 34);
+      ctx.font = font(500, 22);
+      ctx.fillStyle = KIT.faint;
+      ctx.fillText(hint, FW / 2, contentH - 38);
       texture.needsUpdate = true;
     },
     hitTest: (u, v) => {
@@ -1023,101 +1106,19 @@ export function createActionPanel(scene: Scene): ActionPanel {
       return null;
     },
     ballsHit: (u, v) => {
+      // Back into the loadout canvas's own UV — the section is a square blit
+      // of it, so the map is the inverse of the drawImage above.
       if (ballsY === null) return null;
+      const x = u * FW - AM;
       const y = (1 - v) * FH - ballsY;
-      if (y < 0 || y > BALL_H) return null;
-      return { u, v: 1 - y / BALL_H };
+      if (x < 0 || x > LOAD_W || y < 0 || y > LOAD_H) return null;
+      // …and back into the loadout canvas's own UV, cropped height included.
+      return { u: x / LOAD_W, v: 1 - ((y / LOAD_H) * BALLS_CONTENT_H) / BALLS_H };
     },
   };
 }
 
-
-// --- BALL LOADOUT: pick an attachment for each fist's ball -----------------
-
-interface AttachInfo {
-  name: string;
-  color: string;
-  desc: string;
-}
-const ATTACHMENTS: AttachInfo[] = [
-  { name: 'SPLIT', color: UI.cool, desc: 'Splits into three on return — each a third the damage.' },
-  { name: 'GROW', color: UI.emberBright, desc: 'Gets bigger on return with less damage.' },
-  { name: 'SHRINK', color: UI.amber, desc: 'Gets smaller on return for more damage.' },
-];
-const TYPES = [ATTACH.split, ATTACH.grow, ATTACH.shrink];
-
-// Exported: TutorialSystem re-hosts this exact panel on its in-arena console.
-export const BALL_W = 560;
-export const BALL_H = 480;
-const BMX = 36; // side margin
-const BGAP = 18; // gap between tiles
-const TILE_W = (BALL_W - 2 * BMX - 2 * BGAP) / 3;
-const TILE_H = 92;
-const ROW_L_Y = 120; // left-fist tile row top
-const ROW_R_Y = 262; // right-fist tile row top (clear of the left row's ARC box)
-const DESC_Y = 366;
-const tileX = (i: number): number => BMX + i * (TILE_W + BGAP);
-
-// --- the ADVANCED sub-face (gear cog, top-right) ---------------------------
-// One CURVE tick for both fists (the old per-fist boxes cluttered the rows),
-// a CURVE STRENGTH slider, and the SHOW MY BODY toggle.
-const GEAR = { x: BALL_W - 42, y: 46, r: 17, hit: 26 };
-const ADV_BS = 26; // checkbox size on the advanced face
-const ADV_CURVE_Y = 104; // curve checkbox top
-const ADV_SLIDER_Y = 228; // slider bar top
-const ADV_SLIDER_H = 16;
-const ADV_SLIDER_W = BALL_W - 2 * BMX - 88; // % readout rides to the right
-const ADV_BODY_Y = 312; // body checkbox top
-/** Is the loadout panel showing its ADVANCED face? */
-let ballAdvOpen = false;
-
-/** Last attachment whose description is shown in the box (−1 = none yet). */
-let ballDescIdx = -1;
-
-/** A small arrowhead triangle at (x,y) pointing along `ang`. */
-function arrowHead(ctx: CanvasRenderingContext2D, x: number, y: number, ang: number, size: number): void {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(ang);
-  ctx.beginPath();
-  ctx.moveTo(size, 0);
-  ctx.lineTo(-size * 0.6, size * 0.6);
-  ctx.lineTo(-size * 0.6, -size * 0.6);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-
-/** Draw the icon for an attachment type (ATTACH.*) centred at (cx,cy). */
-function drawAttachIcon(ctx: CanvasRenderingContext2D, type: number, cx: number, cy: number, r: number, color: string): void {
-  ctx.fillStyle = color;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 3;
-  if (type === ATTACH.split) {
-    for (let k = 0; k < 3; k++) {
-      const ang = -Math.PI / 2 + (k * Math.PI * 2) / 3;
-      ctx.beginPath();
-      ctx.arc(cx + Math.cos(ang) * r * 0.55, cy + Math.sin(ang) * r * 0.55, r * 0.3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    return;
-  }
-  const grow = type === ATTACH.grow;
-  // Outer ring for reference.
-  ctx.globalAlpha = 0.55;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.82, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  // Just four arrows — outward = grows, inward = shrinks. No centre ball: a
-  // ball sized to the BEFORE state read backwards (small grow / big shrink).
-  for (let k = 0; k < 4; k++) {
-    const ang = Math.PI / 4 + (k * Math.PI) / 2;
-    const rad = grow ? r * 0.42 : r * 0.78;
-    arrowHead(ctx, cx + Math.cos(ang) * rad, cy + Math.sin(ang) * rad, grow ? ang : ang + Math.PI, r * 0.26);
-  }
-}
-
+/* ── a shared text helper (the tutorial's captions use it too) ── */
 /** Word-wrap `text` into `maxW`, returning the count of lines drawn.
  *  Exported: the tutorial's caption plate wraps with the same algorithm. */
 export function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number): void {
@@ -1135,236 +1136,6 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number,
     }
   }
   if (line) ctx.fillText(line, x, cy);
-}
-
-/** A square steel checkbox with an amber tick when on. */
-function drawCheckbox(ctx: CanvasRenderingContext2D, x: number, y: number, on: boolean): void {
-  plate(ctx, x, y, ADV_BS, ADV_BS, {
-    cut: 6,
-    fill: on ? 'rgba(255,176,0,0.22)' : 'rgba(18,19,24,0.7)',
-    stroke: on ? UI.amber : UI.steelDim,
-    rivets: false,
-  });
-  if (on) {
-    ctx.strokeStyle = UI.amber;
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(x + 6, y + 13);
-    ctx.lineTo(x + 11, y + 19);
-    ctx.lineTo(x + 20, y + 7);
-    ctx.stroke();
-  }
-}
-
-/** The gear cog opening/closing the ADVANCED face — amber while open. */
-function drawGear(ctx: CanvasRenderingContext2D): void {
-  const { x, y, r } = GEAR;
-  const color = ballAdvOpen ? UI.amber : UI.steel;
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = color;
-  for (let i = 0; i < 8; i++) {
-    ctx.save();
-    ctx.rotate((i * Math.PI) / 4);
-    ctx.fillRect(-3.2, -r - 3, 6.4, 6);
-    ctx.restore();
-  }
-  ctx.beginPath();
-  ctx.arc(0, 0, r - 2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawBallRow(ctx: CanvasRenderingContext2D, side: 0 | 1, label: string, rowY: number): void {
-  const equipped = app.ballAttach[side] ?? 0;
-  ctx.textAlign = 'left';
-  ctx.font = '700 23px system-ui, sans-serif';
-  ctx.fillStyle = UI.text;
-  const eqName = equipped ? ATTACHMENTS[equipped - 1].name.toLowerCase() : 'none';
-  ctx.fillText(`${label}  ·  ${eqName}`, BMX, rowY - 16);
-
-  for (let i = 0; i < 3; i++) {
-    const type = TYPES[i];
-    const info = ATTACHMENTS[i];
-    const selected = equipped === type;
-    const x = tileX(i);
-    plate(ctx, x, rowY, TILE_W, TILE_H, {
-      cut: 10,
-      fill: selected ? 'rgba(255,255,255,0.10)' : 'rgba(18,19,24,0.6)',
-      stroke: selected ? info.color : UI.steelDim,
-      rivets: false,
-    });
-    drawAttachIcon(ctx, type, x + TILE_W / 2, rowY + 34, 24, selected ? info.color : UI.steel);
-    ctx.textAlign = 'center';
-    ctx.font = '700 18px system-ui, sans-serif';
-    ctx.fillStyle = selected ? info.color : UI.textDim;
-    ctx.fillText(info.name, x + TILE_W / 2, rowY + TILE_H - 16);
-  }
-}
-
-/** BALL LOADOUT: per-fist attachment picker with click-to-read descriptions,
- *  plus the gear-cog ADVANCED face (curve, curve strength, body visibility).
- *  Exported: the tutorial's console draws the same panel in-arena, and the
- *  A-button action panel hosts it with `framed=false` — no clear, no nested
- *  plate, just a section heading — so host + loadout read as ONE panel. */
-export function drawBalls(ctx: CanvasRenderingContext2D, hoverAction: MenuAction | null, framed = true): void {
-  const hover = hoverAction !== null;
-  if (framed) {
-    panelBg(ctx, hover, UI.emberBright, ballAdvOpen ? 'ADVANCED' : 'BALL LOADOUT', BALL_W, BALL_H);
-  } else {
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.font = stencilFont(26);
-    ctx.fillStyle = UI.amberSoft;
-    ctx.fillText(ballAdvOpen ? 'ADVANCED' : 'BALL LOADOUT', BMX, 44);
-  }
-  drawGear(ctx);
-  // Small pointer at the cog so the sub-face is discoverable ('BACK' once in).
-  ctx.textAlign = 'right';
-  ctx.font = '700 16px system-ui, sans-serif';
-  ctx.fillStyle = UI.textDim;
-  ctx.fillText(ballAdvOpen ? 'BACK' : 'ADVANCED', GEAR.x - GEAR.r - 16, GEAR.y + 6);
-  arrowHead(ctx, GEAR.x - GEAR.r - 9, GEAR.y, 0, 5);
-
-  if (ballAdvOpen) {
-    drawBallsAdvanced(ctx);
-    return;
-  }
-
-  drawBallRow(ctx, 0, 'LEFT FIST', ROW_L_Y);
-  drawBallRow(ctx, 1, 'RIGHT FIST', ROW_R_Y);
-
-  // Description box for the last-tapped attachment.
-  plate(ctx, BMX, DESC_Y, BALL_W - 2 * BMX, 104, {
-    cut: 10,
-    fill: 'rgba(10,11,14,0.55)',
-    stroke: UI.steelDim,
-    rivets: false,
-  });
-  ctx.textAlign = 'left';
-  if (ballDescIdx < 0) {
-    ctx.font = '600 22px system-ui, sans-serif';
-    ctx.fillStyle = UI.textDim;
-    ctx.fillText('tap an attachment to read what it does', BMX + 20, DESC_Y + 52);
-  } else {
-    const info = ATTACHMENTS[ballDescIdx];
-    ctx.font = '800 24px system-ui, sans-serif';
-    ctx.fillStyle = info.color;
-    ctx.fillText(info.name, BMX + 20, DESC_Y + 28);
-    ctx.font = '500 20px system-ui, sans-serif';
-    ctx.fillStyle = UI.text;
-    wrapText(ctx, info.desc, BMX + 20, DESC_Y + 58, BALL_W - 2 * BMX - 40, 26);
-  }
-}
-
-/** The ADVANCED face: one CURVE tick for both fists, its strength dial, and
- *  the SHOW MY BODY toggle. The gear (top-right) flips back. */
-function drawBallsAdvanced(ctx: CanvasRenderingContext2D): void {
-  const curveOn = app.ballArc[0] || app.ballArc[1];
-
-  // CURVE toggle.
-  drawCheckbox(ctx, BMX, ADV_CURVE_Y, curveOn);
-  ctx.textAlign = 'left';
-  ctx.font = '700 23px system-ui, sans-serif';
-  ctx.fillStyle = curveOn ? UI.emberBright : UI.text;
-  ctx.fillText('CURVE', BMX + ADV_BS + 16, ADV_CURVE_Y + 20);
-  ctx.font = '500 19px system-ui, sans-serif';
-  ctx.fillStyle = UI.textDim;
-  ctx.fillText('curve follows the arc of your punch', BMX, ADV_CURVE_Y + 52);
-
-  // CURVE STRENGTH slider (dimmed until curve is on).
-  ctx.globalAlpha = curveOn ? 1 : 0.38;
-  ctx.font = '700 20px system-ui, sans-serif';
-  ctx.fillStyle = UI.text;
-  ctx.fillText('CURVE STRENGTH', BMX, ADV_SLIDER_Y - 12);
-  plate(ctx, BMX, ADV_SLIDER_Y, ADV_SLIDER_W, ADV_SLIDER_H, {
-    cut: 5,
-    fill: 'rgba(18,19,24,0.7)',
-    stroke: UI.steelDim,
-    rivets: false,
-  });
-  const k = (app.curveStrength - 0.1) / 0.9;
-  if (k > 0.01) {
-    plate(ctx, BMX, ADV_SLIDER_Y, Math.max(10, ADV_SLIDER_W * k), ADV_SLIDER_H, {
-      cut: 5,
-      fill: 'rgba(255,176,0,0.45)',
-      stroke: UI.amber,
-      rivets: false,
-    });
-  }
-  ctx.textAlign = 'right';
-  ctx.font = '700 22px system-ui, sans-serif';
-  ctx.fillStyle = curveOn ? UI.amber : UI.textDim;
-  ctx.fillText(`${Math.round(app.curveStrength * 100)}%`, BALL_W - BMX, ADV_SLIDER_Y + 15);
-  ctx.globalAlpha = 1;
-
-  // SHOW MY BODY toggle.
-  drawCheckbox(ctx, BMX, ADV_BODY_Y, app.showBody);
-  ctx.textAlign = 'left';
-  ctx.font = '700 23px system-ui, sans-serif';
-  ctx.fillStyle = UI.text;
-  ctx.fillText('SHOW MY BODY', BMX + ADV_BS + 16, ADV_BODY_Y + 20);
-  ctx.font = '500 19px system-ui, sans-serif';
-  ctx.fillStyle = UI.textDim;
-  ctx.fillText('untick to hide your body, rivals still see you', BMX, ADV_BODY_Y + 52);
-}
-
-/** Tap a tile → equip/clear that attachment and show its description; the
- *  gear cog flips to the ADVANCED face and back.
- *  Exported: the tutorial's console shares this hit-test. */
-export function clickBalls(u: number, v: number): boolean {
-  const x = u * BALL_W;
-  const y = (1 - v) * BALL_H;
-
-  // The gear cog lives on BOTH faces.
-  if (Math.abs(x - GEAR.x) <= GEAR.hit && Math.abs(y - GEAR.y) <= GEAR.hit) {
-    ballAdvOpen = !ballAdvOpen;
-    return true;
-  }
-
-  if (ballAdvOpen) {
-    // CURVE tick — one switch, both fists (storage stays per-fist for the pub).
-    if (x >= BMX && x <= BMX + ADV_BS + 160 && y >= ADV_CURVE_Y - 4 && y <= ADV_CURVE_Y + ADV_BS + 4) {
-      const on = !(app.ballArc[0] || app.ballArc[1]);
-      app.ballArc[0] = on;
-      app.ballArc[1] = on;
-      saveBallArc();
-      return true;
-    }
-    // STRENGTH slider — click sets the level (10%..100%) from the tap point.
-    if (x >= BMX - 6 && x <= BMX + ADV_SLIDER_W + 6 && y >= ADV_SLIDER_Y - 18 && y <= ADV_SLIDER_Y + ADV_SLIDER_H + 14) {
-      const k = Math.max(0, Math.min(1, (x - BMX) / ADV_SLIDER_W));
-      app.curveStrength = Math.round((0.1 + 0.9 * k) * 20) / 20; // 5% steps
-      saveCurveStrength();
-      return true;
-    }
-    // SHOW MY BODY tick.
-    if (x >= BMX && x <= BMX + ADV_BS + 260 && y >= ADV_BODY_Y - 4 && y <= ADV_BODY_Y + ADV_BS + 4) {
-      app.showBody = !app.showBody;
-      saveShowBody();
-      return true;
-    }
-    return false;
-  }
-
-  for (const [side, rowY] of [[0, ROW_L_Y], [1, ROW_R_Y]] as const) {
-    if (y < rowY || y > rowY + TILE_H) continue;
-    const i = Math.floor((x - BMX) / (TILE_W + BGAP));
-    if (i < 0 || i > 2) return false;
-    const tx = tileX(i);
-    if (x < tx || x > tx + TILE_W) return false;
-    const type = TYPES[i];
-    ballDescIdx = i;
-    app.ballAttach[side] = app.ballAttach[side] === type ? 0 : type;
-    saveBallAttach();
-    return true;
-  }
-  return false;
 }
 
 // --- THE GASKET GAZETTE -----------------------------------------------------

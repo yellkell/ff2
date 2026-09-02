@@ -1796,11 +1796,15 @@ export class MenuSystem extends createSystem({}) {
         }
         continue;
       }
-      // The loadout section: taps equip/clear attachments between rounds.
-      if (down && content.loadout) {
+      // The loadout section: taps equip/clear attachments between rounds,
+      // and the tile under the ray lights the same way it does in the lobby
+      // (the panel forwards a `ball:*` hover straight to the loadout's own
+      // painter — no action button ever carries that id).
+      if (content.loadout) {
         const bh = this.panel.ballsHit(hit.uv.x, hit.uv.y);
         const bid = bh ? ballsHit(bh.u, bh.v) : null;
-        if (bid && ballsClick(bid)) {
+        if (bid) hover = bid;
+        if (down && bid && ballsClick(bid)) {
           sfx.uiClick();
           this.panelKey = ''; // repaint with the new equip state
         }
