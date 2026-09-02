@@ -26,7 +26,7 @@ import {
   SphereGeometry,
   Vector3,
   type Intersection, CanvasTexture } from 'three';
-import { app, DEFAULT_ACCENT_HUE, DEFAULT_ACCENT_LIGHT, saveAccentHue, saveAccentLight, saveDifficulty, saveEnvironment, saveOnlyBots, saveShootBack, type AppState, type ArcadeMode } from '../menu/appState.js';
+import { app, saveDifficulty, saveEnvironment, saveOnlyBots, saveShootBack, type AppState, type ArcadeMode } from '../menu/appState.js';
 import { bootIntroActive } from '../experience/introGate.js';
 import { DIFFICULTY_ORDER, type Difficulty, PAINT } from '../config.js';
 import { difficultyUnlocked } from '../campaign/campaignState.js';
@@ -49,7 +49,7 @@ import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, wrapNav, type Wrap } from '../menu/wrap.js';
 import { clearReportSent, markReportSent, musicVolFromU, setCreditsOpen, sfxVolFromU } from '../menu/settingsFace.js';
 // MENUS 3: the modals are kit faces now, each in its own module.
-import { accentBarHue, accentBarLight, lockerFace, LOCKER_H, LOCKER_W } from '../menu/lockerFace.js';
+import { lockerFace, LOCKER_H, LOCKER_W } from '../menu/lockerFace.js';
 import { campaignFace, campaignModal, CAMP_H, CAMP_W } from '../menu/campaignFace.js';
 import { lobbyFace, LOBBY_H, LOBBY_W } from '../menu/lobbyFace.js';
 import { ballsClick, ballsFace, ballsFaceKey, ballsHit, BALLS_H, BALLS_W } from '../menu/ballsFace.js';
@@ -249,8 +249,6 @@ export class MenuSystem extends createSystem({}) {
       mesh.names.join('|'),
       coins.balance,
       profileHintActive(), // flips false when the hint expires — one repaint clears it
-      app.accentHue, // sliders repaint partially while scrubbed; this settles the rest
-      app.accentLight,
     ];
     const last = this.lastLive;
     let dirty = last.length !== cur.length;
@@ -561,14 +559,6 @@ export class MenuSystem extends createSystem({}) {
       if (hit.uv && panel.drag && (down || owns) && panel.drag(hit.uv.x, hit.uv.y)) {
         if (down) this.sliderGrab = { hand, panel: panel.id };
         dragged = true;
-      } else if (hit.uv && action === 'accent-color' && (down || owns)) {
-        if (down) this.sliderGrab = { hand, panel: panel.id };
-        app.accentHue = accentBarHue(hit.uv.x); // scrub the neon accent live
-        saveAccentHue();
-      } else if (hit.uv && action === 'accent-light' && (down || owns)) {
-        if (down) this.sliderGrab = { hand, panel: panel.id };
-        app.accentLight = accentBarLight(hit.uv.x);
-        saveAccentLight();
       } else if (hit.uv && action === 'sfx-vol' && (down || owns)) {
         if (down) {
           this.sliderGrab = { hand, panel: panel.id };
@@ -642,7 +632,6 @@ export class MenuSystem extends createSystem({}) {
       }
     } else if (this.draggingHue) {
       this.draggingHue = false;
-      saveAccentHue();
     }
 
     // THE PAINT BAY's own freshness + hand upkeep.
@@ -1184,12 +1173,6 @@ export class MenuSystem extends createSystem({}) {
         break;
       case 'av-uncolor':
         setAvatarColor(-1); // back to the skin's own palette
-        break;
-      case 'accent-default':
-        app.accentHue = DEFAULT_ACCENT_HUE; // neon back to the house ember
-        app.accentLight = DEFAULT_ACCENT_LIGHT;
-        saveAccentHue();
-        saveAccentLight();
         break;
       default:
         // diff-<tier>: the campaign difficulty picker sets the run difficulty

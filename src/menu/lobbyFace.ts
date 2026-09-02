@@ -163,21 +163,61 @@ function browser(mode: ArcadeMode): LobbyFace {
 
 /* ── THE SQUAD ROOM ───────────────────────────────────────────────────── */
 
-const SEAT_Y0 = 156;
-const DIFF_Y = 470;
-const BREAKER_Y = 560;
-const BREAKER_H = 76;
+const SEAT_Y0 = 150;
+const DIFF_H = 58;
+const BREAKER_H = 72;
+const FOOT_H = 88;
+
+/**
+ * The squad room lays out TOP-DOWN — the seats set where everything under
+ * them lands. A raid seats five, so a fixed DIFFICULTY band (and the
+ * breakers under it) used to be painted straight through the last seat, and
+ * the invite code straight through the breakers. Every row below the seats
+ * is measured from the one above it now, and the footer is pushed to the
+ * bottom only when the stack leaves room for it there.
+ */
+function squadLayout(cap: number, raid: boolean, hasCode: boolean): {
+  seatH: number;
+  seatGap: number;
+  diffLabelY: number;
+  diffY: number;
+  breakerY: number;
+  codeY: number;
+  statusY: number;
+  footY: number;
+} {
+  const seatH = cap > 4 ? 52 : 64;
+  const seatGap = 10;
+  const seatsBottom = SEAT_Y0 + cap * (seatH + seatGap) - seatGap;
+  const diffLabelY = seatsBottom + 34;
+  const diffY = seatsBottom + 50;
+  const breakerY = diffY + DIFF_H + 22;
+  const stackBottom = raid ? breakerY + BREAKER_H : seatsBottom;
+  // The footer sits at the bottom of the panel when the stack clears it, and
+  // slides down under the stack when it doesn't.
+  const footY = Math.max(stackBottom + (hasCode ? 104 : 68), LOBBY_H - 196);
+  return {
+    seatH,
+    seatGap,
+    diffLabelY,
+    diffY,
+    breakerY,
+    codeY: footY - 76,
+    statusY: footY - 34,
+    footY,
+  };
+}
 
 function squadRoom(mode: ArcadeMode): LobbyFace {
   const host = mesh.isHost();
   const cap = mesh.capacity || 4;
   const raid = mode === 'raid';
-  const seatH = cap > 4 ? 58 : 66;
-  const seatGap = 10;
   const count = mesh.occupants.slice(0, cap).filter(Boolean).length;
   const full = count >= cap;
   const shortStart = mode === 'ffa' || raid;
   const shortReady = shortStart && count >= 2 && !full;
+  const code = app.privateCode;
+  const L = squadLayout(cap, raid, !!code);
 
   const buttons: PanelButton[] = [];
   if (raid) {
@@ -188,9 +228,9 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
         id: `raiddiff-${tier}`,
         label: DIFFICULTY[tier].label,
         x: M + i * (chipW + 12),
-        y: DIFF_Y,
+        y: L.diffY,
         w: chipW,
-        h: 62,
+        h: DIFF_H,
         small: true,
         px: 20,
         selected: mesh.raidDifficulty === tier,
@@ -203,7 +243,7 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
         id: 'lobby-hardcore',
         label: 'HARDCORE',
         sub: 'no healing between titans',
-        x: M, y: BREAKER_Y, w: (INNER - 20) / 2, h: BREAKER_H,
+        x: M, y: L.breakerY, w: (INNER - 20) / 2, h: BREAKER_H,
         small: true,
         selected: mesh.raidHardcore,
         tone: mesh.raidHardcore ? KIT.danger : undefined,
@@ -213,7 +253,7 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
         id: 'lobby-goopliath',
         label: 'FIGHT GOOPLIATH',
         sub: 'the tide, not the titans',
-        x: M + (INNER - 20) / 2 + 20, y: BREAKER_Y, w: (INNER - 20) / 2, h: BREAKER_H,
+        x: M + (INNER - 20) / 2 + 20, y: L.breakerY, w: (INNER - 20) / 2, h: BREAKER_H,
         small: true,
         selected: mesh.raidGoopliath,
         tone: mesh.raidGoopliath ? GOOP_GREEN : undefined,
@@ -224,11 +264,11 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
 
   if (shortReady && host) {
     buttons.push(
-      { id: 'lobby-start', label: 'START NOW', x: M, y: LOBBY_H - 200, w: (INNER - 20) / 2, h: 92, primary: true },
-      { id: 'lobby-leave', label: 'LEAVE', x: M + (INNER - 20) / 2 + 20, y: LOBBY_H - 200, w: (INNER - 20) / 2, h: 92, small: true, tone: KIT.danger },
+      { id: 'lobby-start', label: 'START NOW', x: M, y: L.footY, w: (INNER - 20) / 2, h: FOOT_H, primary: true },
+      { id: 'lobby-leave', label: 'LEAVE', x: M + (INNER - 20) / 2 + 20, y: L.footY, w: (INNER - 20) / 2, h: FOOT_H, small: true, tone: KIT.danger },
     );
   } else {
-    buttons.push({ id: 'lobby-leave', label: 'LEAVE', x: LOBBY_W / 2 - 150, y: LOBBY_H - 200, w: 300, h: 92, small: true, tone: KIT.danger });
+    buttons.push({ id: 'lobby-leave', label: 'LEAVE', x: LOBBY_W / 2 - 150, y: L.footY, w: 300, h: FOOT_H, small: true, tone: KIT.danger });
   }
 
   return {
@@ -238,11 +278,11 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
       crumb(mesh.watching ? 'ON THE TERRACE' : 'YOUR SQUAD')(g);
       // The seats.
       for (let seat = 0; seat < cap; seat++) {
-        const y = SEAT_Y0 + seat * (seatH + seatGap);
+        const y = SEAT_Y0 + seat * (L.seatH + L.seatGap);
         const taken = !!mesh.occupants[seat];
         const isMe = mesh.joined && seat === mesh.mySeat;
         g.beginPath();
-        g.roundRect(M, y, INNER, seatH, 14);
+        g.roundRect(M, y, INNER, L.seatH, 14);
         g.fillStyle = isMe ? KIT.accentFaint : taken ? KIT.plate : 'rgba(255,255,255,0.02)';
         g.fill();
         g.lineWidth = 2;
@@ -252,39 +292,51 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
         g.textBaseline = 'middle';
         g.font = font(700, 27);
         g.fillStyle = taken ? KIT.textHi : KIT.disabled;
-        g.fillText(taken ? mesh.names[seat] || `PLAYER ${seat + 1}` : 'open seat…', M + 26, y + seatH / 2);
+        g.fillText(taken ? mesh.names[seat] || `PLAYER ${seat + 1}` : 'open seat…', M + 26, y + L.seatH / 2, INNER - 200);
         g.textAlign = 'right';
         g.font = font(700, 19);
         const tag = mode === '2v2' ? (seat < 2 ? 'TEAM A' : 'TEAM B') : null;
         if (seat === 0 && taken) {
           g.fillStyle = KIT.accent;
-          g.fillText(tag ? `HOST · ${tag}` : 'HOST', M + INNER - 26, y + seatH / 2);
+          g.fillText(tag ? `HOST · ${tag}` : 'HOST', M + INNER - 26, y + L.seatH / 2);
         } else if (tag) {
           g.fillStyle = seat < 2 ? KIT.info : KIT.warn;
-          g.fillText(tag, M + INNER - 26, y + seatH / 2);
+          g.fillText(tag, M + INNER - 26, y + L.seatH / 2);
         }
       }
 
       if (raid) {
         g.textAlign = 'left';
+        g.textBaseline = 'middle';
         g.font = font(700, 20);
         g.letterSpacing = '3px';
         g.fillStyle = KIT.faint;
-        g.fillText('DIFFICULTY', M, DIFF_Y - 26);
+        g.fillText('DIFFICULTY', M, L.diffLabelY);
         g.letterSpacing = '0px';
       }
 
-      // The invite code, kept up for the whole lobby so a host can read it out.
+      // The invite code, kept up for the whole lobby so a host can read it
+      // out — one line, so it never needs a band of its own.
       g.textAlign = 'center';
-      if (app.privateCode) {
+      g.textBaseline = 'middle';
+      if (code) {
+        const digits = code.split('').join(' ');
+        g.font = font(700, 34);
+        g.letterSpacing = '4px';
+        const dw = g.measureText(digits).width;
         g.font = font(600, 20);
         g.letterSpacing = '3px';
+        const lw = g.measureText('INVITE CODE').width;
+        const x0 = LOBBY_W / 2 - (lw + 22 + dw) / 2;
+        g.textAlign = 'left';
         g.fillStyle = KIT.faint;
-        g.fillText('INVITE CODE', LOBBY_W / 2, LOBBY_H - 300);
-        g.font = font(700, 46);
+        g.fillText('INVITE CODE', x0, L.codeY);
+        g.font = font(700, 34);
+        g.letterSpacing = '4px';
         g.fillStyle = KIT.info;
-        g.fillText(app.privateCode.split('').join(' '), LOBBY_W / 2, LOBBY_H - 254);
+        g.fillText(digits, x0 + lw + 22, L.codeY);
         g.letterSpacing = '0px';
+        g.textAlign = 'center';
       }
 
       // What everyone is waiting for.
@@ -299,7 +351,7 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
             ? `${count} / ${cap} ${noun} — start at 2, a full room ${launch}`
             : `${count} / ${cap} ${noun} — a full room ${launch}`,
         LOBBY_W / 2,
-        LOBBY_H - 232,
+        L.statusY,
       );
     },
   };

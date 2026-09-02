@@ -18,18 +18,16 @@
  * gear piece's silhouette). A tile in the store that is being TRIED ON
  * grows a real BUY button; the rest of its chrome is drawn.
  *
- * The COLOUR face keeps its two live tracks (the hands' neon hue and
- * lightness). They are scrubbed by the trigger — MenuSystem reads the hit
- * UV every frame — so their geometry and the `accentBarHue` /
- * `accentBarLight` mappers below must agree; that is why both live here.
+ * The COLOUR face is the BASE TONE and nothing else: all white or all
+ * black. The hands' neon hue and lightness tracks that used to live under
+ * it are gone — the glove accent is the house ember for everyone, and
+ * everything past the base tone is PAINT (the bay, on the YOU wing).
  */
 
 import { KIT, type PanelButton } from '../ui/kit/panel.js';
 import { font } from '../ui/kit/fonts.js';
-import { app, DEFAULT_ACCENT_HUE } from './appState.js';
 import { customization, platformOwned, gearOwned } from './customization.js';
 import { canAfford, coins } from './wallet.js';
-import { hueToColor } from '../config.js';
 import { PLATFORM_SKINS, type PlatformSkin } from '../avatar/skins.js';
 import { GEAR as GEAR_CATALOGUE, type GearDef } from '../avatar/gear.js';
 import { drawGearIcon, drawPlatformIcon } from './skinIcons.js';
@@ -54,21 +52,9 @@ const GAP = 20;
 const TILE_W = (INNER - (COLS - 1) * GAP) / COLS;
 const FOOT_Y = LOCKER_H - 140;
 
-/** The hand-neon tracks — ghost rects the body paints and the trigger
- *  scrubs. (See the note at the top: the mappers below read these.) */
-const BASE_Y = 248;
+/** THE BASE: the one pair of buttons this board carries. */
+const BASE_Y = 268;
 const BASE_H = 108;
-const HUE_BAR = { x: M, y: 440, w: INNER - 260, h: 64 };
-const LIGHT_BAR = { x: M, y: 560, w: INNER, h: 64 };
-
-/** UV.x on this panel → hue (0..1) along the neon track. */
-export function accentBarHue(u: number): number {
-  return Math.max(0, Math.min(1, (u * LOCKER_W - HUE_BAR.x) / HUE_BAR.w));
-}
-/** UV.x → lightness (0..1) along the neon lightness track. */
-export function accentBarLight(u: number): number {
-  return Math.max(0, Math.min(1, (u * LOCKER_W - LIGHT_BAR.x) / LIGHT_BAR.w));
-}
 
 /** The brand mark in the tab strip. The TABS say which face is up, so the
  *  mark says what the plate is FOR — repeating "LOCKER" beside the lit
@@ -302,7 +288,7 @@ function drawTile(g: CanvasRenderingContext2D, t: Tile, locker: boolean, hover: 
   }
 }
 
-/* ── COLOUR: the base tone, and the hands' neon ───────────────────────── */
+/* ── COLOUR: the base tone ────────────────────────────────────────────── */
 
 function colourButtons(): PanelButton[] {
   const onyx = customization.avatar === 'onyx';
@@ -310,84 +296,18 @@ function colourButtons(): PanelButton[] {
   return [
     { id: 'base-white', label: 'ALL WHITE', sub: onyx ? 'you, bare' : 'worn', x: M, y: BASE_Y, w: half, h: BASE_H, selected: !onyx },
     { id: 'base-black', label: 'ALL BLACK', sub: onyx ? 'worn' : 'you, in onyx', x: M + half + 24, y: BASE_Y, w: half, h: BASE_H, selected: onyx },
-    { id: 'accent-color', label: '', ghost: true, x: HUE_BAR.x, y: HUE_BAR.y, w: HUE_BAR.w, h: HUE_BAR.h },
-    { id: 'accent-light', label: '', ghost: true, x: LIGHT_BAR.x, y: LIGHT_BAR.y, w: LIGHT_BAR.w, h: LIGHT_BAR.h },
-    {
-      id: 'accent-default',
-      label: 'DEFAULT',
-      x: HUE_BAR.x + HUE_BAR.w + 24, y: HUE_BAR.y, w: 236, h: HUE_BAR.h,
-      small: true,
-      disabled: Math.abs(app.accentHue - DEFAULT_ACCENT_HUE) < 0.005,
-    },
   ];
 }
 
-/** A track: the gradient, its groove, and the knob at the current value. */
-function drawTrack(g: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, at: number, paint: (i: number, x: number, w: number) => void): void {
-  g.save();
-  g.beginPath();
-  g.roundRect(r.x, r.y, r.w, r.h, 16);
-  g.clip();
-  const steps = 96;
-  for (let i = 0; i < steps; i++) paint(i / steps, r.x + (i / steps) * r.w, r.w / steps + 1);
-  g.restore();
-  g.lineWidth = 2;
-  g.strokeStyle = KIT.line;
-  g.beginPath();
-  g.roundRect(r.x, r.y, r.w, r.h, 16);
-  g.stroke();
-  const kx = r.x + Math.max(0, Math.min(1, at)) * r.w;
-  g.beginPath();
-  g.arc(kx, r.y + r.h / 2, r.h * 0.42, 0, Math.PI * 2);
-  g.fillStyle = '#ffffff';
-  g.fill();
-  g.lineWidth = 3;
-  g.strokeStyle = KIT.accent;
-  g.stroke();
-}
-
 function colourBody(g: CanvasRenderingContext2D): void {
-  const label = (text: string, y: number): void => {
-    g.textAlign = 'left';
-    g.textBaseline = 'middle';
-    g.font = font(700, 22);
-    g.letterSpacing = '3px';
-    g.fillStyle = KIT.faint;
-    g.fillText(text, M, y);
-    g.letterSpacing = '0px';
-  };
-  label('THE BASE', BASE_Y - 26);
   g.textAlign = 'left';
+  g.textBaseline = 'middle';
+  g.font = font(700, 22);
+  g.letterSpacing = '3px';
+  g.fillStyle = KIT.faint;
+  g.fillText('THE BASE', M, BASE_Y - 26);
+  g.letterSpacing = '0px';
   g.font = font(500, 22);
   g.fillStyle = KIT.dim;
   g.fillText('everything past the base tone is PAINT — the bay is on the YOU wing', M, BASE_Y + BASE_H + 26);
-
-  label('HAND NEON', HUE_BAR.y - 28);
-  drawTrack(g, HUE_BAR, app.accentHue, (i, x, w) => {
-    g.fillStyle = css(hueToColor(i, 0.55));
-    g.fillRect(x, HUE_BAR.y, w, HUE_BAR.h);
-  });
-  label('LIGHTNESS', LIGHT_BAR.y - 28);
-  drawTrack(g, LIGHT_BAR, app.accentLight, (i, x, w) => {
-    g.fillStyle = css(hueToColor(app.accentHue, 0.12 + i * 0.78));
-    g.fillRect(x, LIGHT_BAR.y, w, LIGHT_BAR.h);
-  });
-
-  // The colour itself, big, beside the tracks — the thing you are choosing.
-  const swatch = css(hueToColor(app.accentHue, app.accentLight));
-  g.save();
-  g.shadowColor = swatch;
-  g.shadowBlur = 40;
-  g.fillStyle = swatch;
-  g.beginPath();
-  g.roundRect(M, 674, INNER, 120, 20);
-  g.fill();
-  g.restore();
-  g.textAlign = 'center';
-  g.font = font(700, 24);
-  g.letterSpacing = '4px';
-  g.fillStyle = 'rgba(10,8,6,0.72)';
-  g.fillText('YOUR HANDS', LOCKER_W / 2, 734);
-  g.letterSpacing = '0px';
 }
-
