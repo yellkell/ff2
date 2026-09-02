@@ -64,6 +64,21 @@ export interface PanelButton {
   display?: boolean;
   /** Explicit label px when the two standard sizes don't fit (code slots). */
   px?: number;
+  /** A TAB in the strip across the panel's top (the Overwatch / Fortnite
+   *  menu grammar): no plate — an uppercase label riding a shared
+   *  baseline, the active one (`selected`) underlined in the accent, the
+   *  hovered one growing its own underline in. Every face of a panel
+   *  shows the same strip, so where you are is always one glance away. */
+  tab?: boolean;
+  /** A red pip on the label's shoulder — the unread mark (a fresh paper). */
+  badge?: boolean;
+}
+
+/** Panel construction options. */
+export interface PanelOpts {
+  /** No glass, sheen, frame or brackets — the body paints its own
+   *  chrome (a chip, a pop-out card). */
+  bare?: boolean;
 }
 
 export const KIT = {
@@ -139,8 +154,9 @@ export class Panel {
 
   /* Stored paint args, so transitions can repaint without the caller. */
   private title = '';
-  private body: ((g: CanvasRenderingContext2D) => void) | null = null;
+  private body: ((g: CanvasRenderingContext2D, hover: string | null) => void) | null = null;
   private hover: string | null = null;
+  private bare: boolean;
 
   /* Transition state. */
   private hoverAmt = new Map<string, number>();
@@ -150,9 +166,10 @@ export class Panel {
   private showP = 1;
   private animating = false;
 
-  constructor(widthM: number, heightM: number, pxW = 1024, pxH = 1024) {
+  constructor(widthM: number, heightM: number, pxW = 1024, pxH = 1024, opts: PanelOpts = {}) {
     this.pxW = pxW;
     this.pxH = pxH;
+    this.bare = !!opts.bare;
     this.canvas.width = pxW;
     this.canvas.height = pxH;
     this.tex = new CanvasTexture(this.canvas);
@@ -183,6 +200,7 @@ export class Panel {
     const glow = new Mesh(new PlaneGeometry(widthM * 1.42, heightM * 1.56), this.glowMat);
     glow.renderOrder = 29;
     glow.position.z = -0.005;
+    glow.visible = !this.bare;
     this.mesh.add(glow);
 
     // First paint may land before the woff2s do — repaint on arrival.
@@ -202,10 +220,12 @@ export class Panel {
   }
 
   /** Repaint: frame + title, then the caller's body, then the button set.
-   *  Also the hover hand-off: eased highlights start/retarget here. */
+   *  Also the hover hand-off: eased highlights start/retarget here. The
+   *  body is handed the hovered id so custom-drawn widgets (ladder rows,
+   *  trophy chips) can answer the pointer too. */
   paint(
     title: string,
-    body: (g: CanvasRenderingContext2D) => void,
+    body: (g: CanvasRenderingContext2D, hover: string | null) => void,
     buttons: PanelButton[],
     hover: string | null,
   ): void {
@@ -299,6 +319,16 @@ export class Panel {
     const H = this.pxH;
     g.clearRect(0, 0, W, H);
 
+    if (this.bare) {
+      this.body?.(g, this.hover);
+      for (const b of this.buttons) {
+        if (b.ghost) continue;
+        this.drawButton(g, b);
+      }
+      this.tex.needsUpdate = true;
+      return;
+    }
+
     // Base glass.
     g.beginPath();
     g.roundRect(6, 6, W - 12, H - 12, 30);
@@ -333,7 +363,25 @@ export class Panel {
     g.lineTo(W - 18, H - 18 - arm);
     g.stroke();
 
-    if (this.title) {
+    // THE TAB STRIP: when a face carries tabs they own the title band — a
+    // faint baseline the whole width, the brand (title) left-aligned as a
+    // mark beside them, and the active tab's accent underline riding the
+    // baseline. No tabs → the classic centred title.
+    const tabs = this.buttons.filter((b) => b.tab);
+    if (tabs.length) {
+      const base = tabs[0].y + tabs[0].h - 4;
+      g.fillStyle = KIT.lineFaint;
+      g.fillRect(40, base, W - 80, 2);
+      if (this.title) {
+        g.textAlign = 'left';
+        g.textBaseline = 'middle';
+        g.font = font(700, 34);
+        g.letterSpacing = '4px';
+        g.fillStyle = KIT.accent;
+        g.fillText(this.title, 52, tabs[0].y + tabs[0].h / 2 - 2);
+        g.letterSpacing = '0px';
+      }
+    } else if (this.title) {
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.font = font(700, 46);
@@ -343,7 +391,7 @@ export class Panel {
       g.letterSpacing = '0px';
     }
 
-    this.body?.(g);
+    this.body?.(g, this.hover);
 
     for (const b of this.buttons) {
       if (b.ghost) continue;
@@ -365,6 +413,44 @@ export class Panel {
     const labelPx = b.px ?? (b.primary ? 40 : b.small ? 27 : 36);
     const labelY = b.y + b.h / 2 - (b.sub ? 16 : 0);
     const subY = b.y + b.h / 2 + 26;
+
+    if (b.tab) {
+      // A tab: label on the shared baseline, underline for the active one,
+      // a growing underline for the hovered one, a press flash as a wash.
+      const active = !!b.selected && !b.disabled;
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2 - 2;
+      if (flash > 0) {
+        g.fillStyle = `rgba(255,176,46,${(0.16 * flash).toFixed(3)})`;
+        g.beginPath();
+        g.roundRect(b.x, b.y, b.w, b.h, 12);
+        g.fill();
+      }
+      g.font = font(700, b.px ?? 30);
+      g.letterSpacing = '3px';
+      g.fillStyle = b.disabled
+        ? KIT.disabled
+        : active
+          ? KIT.textHi
+          : `rgba(250,246,238,${(0.6 + 0.35 * hov).toFixed(3)})`;
+      g.fillText(b.label, cx, cy, b.w - 16);
+      const tw = Math.min(b.w - 16, g.measureText(b.label).width);
+      g.letterSpacing = '0px';
+      const uw = active ? tw + 8 : b.disabled ? 0 : (tw + 8) * hov;
+      if (uw > 1) {
+        g.fillStyle = active ? KIT.accent : KIT.accentDim;
+        g.beginPath();
+        g.roundRect(cx - uw / 2, b.y + b.h - 8, uw, 5, 2.5);
+        g.fill();
+      }
+      if (b.badge) {
+        g.beginPath();
+        g.arc(cx + tw / 2 + 14, cy - 16, 7, 0, Math.PI * 2);
+        g.fillStyle = KIT.danger;
+        g.fill();
+      }
+      return;
+    }
 
     if (b.display) {
       // A value chip: quiet plate, live text, no chrome.
@@ -458,6 +544,12 @@ export class Panel {
       g.font = font(500, 21);
       g.fillStyle = b.disabled ? 'rgba(250,246,238,0.2)' : KIT.dim;
       g.fillText(b.sub, b.x + b.w / 2, subY, b.w - 28);
+    }
+    if (b.badge) {
+      g.beginPath();
+      g.arc(b.x + b.w - 16, b.y + 16, 7, 0, Math.PI * 2);
+      g.fillStyle = KIT.danger;
+      g.fill();
     }
   }
 

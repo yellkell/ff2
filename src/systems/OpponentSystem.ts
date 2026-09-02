@@ -27,6 +27,7 @@ import {
 } from '../avatar/skins.js';
 import { platformName } from '../arena/arena.js';
 import { applyLook, paintHiddenAll, paintPrefs, unpackLook } from '../avatar/paint.js';
+import { applyGear, cleanGear } from '../avatar/gear.js';
 import { socialPaintHidden, socialState } from '../pub/social.js';
 import { Combatant } from '../components/Combatant.js';
 import { BallState, Fireball } from '../components/Fireball.js';
@@ -278,10 +279,14 @@ export class OpponentSystem extends createSystem({
     const wire = duel ? rival.look : (peer?.lk ?? '');
     const name = duel ? rival.name : seat >= 0 ? (mesh.names[seat] ?? '') : '';
     const hidden = paintHiddenAll() || (!!name && socialPaintHidden(name));
-    const key = `${av.id}|${peer?.avc ?? ''}|${peer?.avl ?? ''}|${duel ? pf.id : 'tint'}|${hidden ? '' : wire}|${paintPrefs.version}|${socialState.version}`;
+    const gr = duel ? rival.gear : (peer?.gr ?? '');
+    const key = `${av.id}|${peer?.avc ?? ''}|${peer?.avl ?? ''}|${duel ? pf.id : 'tint'}|${hidden ? '' : wire}|${gr}|${paintPrefs.version}|${socialState.version}`;
     if (key === r.appliedSkins) return;
     r.appliedSkins = key;
     for (const piece of r.rig.all) applyAvatarSkin(piece, av);
+    // Their GEAR first (off the same channels; bots wear none — nobody's
+    // home), THEN the look: gear is a paint surface, so the bake must see it.
+    for (const piece of r.rig.all) applyGear(piece, cleanGear(gr), av.id === 'onyx' ? 'onyx' : 'white');
     const look = hidden ? { paint: [] } : unpackLook(wire);
     for (const piece of r.rig.all) applyLook(piece, look);
     if (duel) {

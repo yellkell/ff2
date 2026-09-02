@@ -57,13 +57,11 @@ import {
   type Object3D,
   type Scene,
 } from 'three';
-import { PALETTE } from './palette.js';
+import { PALETTE, hueToColor } from '../config.js';
 import { glowTexture } from '../materials/glow.js';
+import { FoyerEnvironment } from '../arena/environment.js';
+import { VOID_BG } from '../arena/voidkit.js';
 import { CLUB, DECOR } from './config.js';
-
-/** RAVE RAID's void-black — what the club's dark openings look out into
- *  (carried as a constant; FF2 doesn't ship the void kit... yet). */
-const VOID_BG = 0x040309;
 import {
   blackSteelMat,
   brassGlowMat,
@@ -81,7 +79,7 @@ import {
 import { collapseStatic } from './merge.js';
 import { registerArcade } from './arcade.js';
 import { registerStep } from './step.js';
-import { font, onFontsReady } from '../ui/kit/fonts.js';
+import { font, onFontsReady } from '../ui/fonts.js';
 
 export interface ChandelierRing {
   pivot: Group;
@@ -89,6 +87,15 @@ export interface ChandelierRing {
   speed: number;
 }
 
+/** The FOYER — the menu place. Not an antechamber of the club anymore but
+ *  a piece of THE VOID (the set's own space, see arena/voidkit.ts): a
+ *  floating platform in reactive darkness. The club's door is a button on
+ *  the board, not a thing in the room. */
+export interface FoyerRefs {
+  root: Group;
+  /** The world around the platform — ClubSystem idles it on the loop. */
+  env: FoyerEnvironment;
+}
 
 /** Everything the systems animate or query — kept out of the static bake. */
 export interface ClubRefs {
@@ -2049,39 +2056,174 @@ function voidPaneTexture(): CanvasTexture {
   return tex;
 }
 
+/* ═════════════════════════════ THE FOYER ═════════════════════════════════
+ * The menu place — and a piece of THE VOID, not of the club. You arrive on
+ * a floating platform in the set's own abstract space (arena/voidkit.ts):
+ * darkness shaped by light — a neon-edged deck, monolith pylons breathing
+ * in the distance, two great hexes turning slowly overhead, shards adrift,
+ * a horizon band with no land under it, and a grid far below where ground
+ * would be. The board floats at the platform's heart, the MC poses beside
+ * it, and the PORTAL stands at the north edge: a moon-gate of light,
+ * closed to a shimmer until a room of yours is open on the other side —
+ * host or join, and the warm room takes you. Solo sets launch from here
+ * and the platform gives way to the raid's void.
+ */
+
+export function buildFoyer(scene: Scene): FoyerRefs {
+  const root = new Group();
+  root.name = 'club-foyer';
+
+  const R = 4.0; // platform radius (hex)
+
+  // ── the platform: a dark gloss hex deck with a neon rim ───────────────
+  const deck = new Mesh(
+    new CylinderGeometry(R, R * 0.94, 0.3, 6),
+    new MeshStandardMaterial({ color: 0x0b0a12, metalness: 0.85, roughness: 0.3 }),
+  );
+  deck.position.y = -0.15;
+  root.add(deck);
+  const rim = new Mesh(new TorusGeometry(R - 0.03, 0.035, 4, 6), new MeshStandardMaterial({
+    color: 0x0c0b12,
+    emissive: hueToColor(0.55, 0.55),
+    emissiveIntensity: 1.2,
+    metalness: 0.3,
+    roughness: 0.4,
+  }));
+  rim.rotation.x = Math.PI / 2;
+  rim.rotation.z = Math.PI / 6; // flats align with the deck's
+  rim.position.y = 0.012;
+  root.add(rim);
+
+  // The platform is FLOATING, so its underside is half of what anyone sees
+  // of it — give it a build: six radial ribs under the deck and a tapered
+  // keel hanging below, lit along their lower edges.
+  const structMat = new MeshStandardMaterial({ color: 0x090810, metalness: 0.8, roughness: 0.4 });
+  const ribGlow = new MeshStandardMaterial({
+    color: 0x0b0a12,
+    emissive: hueToColor(0.75, 0.5),
+    emissiveIntensity: 0.7,
+    metalness: 0.3,
+    roughness: 0.5,
+  });
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const rib = new Mesh(new BoxGeometry(0.2, 0.62, R * 1.68), structMat);
+    rib.position.set(0, -0.52, 0);
+    rib.rotation.y = a;
+    root.add(rib);
+    const lip = new Mesh(new BoxGeometry(0.07, 0.05, R * 1.62), ribGlow);
+    lip.position.set(0, -0.83, 0);
+    lip.rotation.y = a;
+    root.add(lip);
+  }
+  const keel = new Mesh(new CylinderGeometry(R * 0.52, 0.18, 2.6, 6), structMat);
+  keel.position.y = -2.0;
+  root.add(keel);
+  const keelTip = new Mesh(new CylinderGeometry(0.2, 0.02, 0.5, 6), ribGlow);
+  keelTip.position.y = -3.4;
+  root.add(keelTip);
+
+  // Deck inlay: two hairline rings and a crown of radial ticks near the
+  // rim. Near-field detail is what the eye actually audits — you stand on
+  // this thing for the whole menu.
+  for (const [ir, op] of [
+    [R * 0.55, 0.4],
+    [R * 0.82, 0.28],
+  ] as const) {
+    const ring = new Mesh(
+      new RingGeometry(ir - 0.02, ir + 0.02, 72),
+      new MeshBasicMaterial({
+        color: hueToColor(0.55, 0.5),
+        transparent: true,
+        opacity: op,
+        blending: AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.006;
+    root.add(ring);
+  }
+  const tickMat = new MeshBasicMaterial({
+    color: hueToColor(0.75, 0.5),
+    transparent: true,
+    opacity: 0.35,
+    blending: AdditiveBlending,
+    depthWrite: false,
+  });
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const tick = new Mesh(new PlaneGeometry(0.045, i % 4 === 0 ? 0.34 : 0.17), tickMat);
+    tick.rotation.set(-Math.PI / 2, 0, -a);
+    tick.position.set(Math.sin(a) * (R * 0.9), 0.006, Math.cos(a) * (R * 0.9));
+    root.add(tick);
+  }
+
+  // Two step-slabs trailing off behind the spawn — the way you "came in".
+  for (const [sx, sy, sz, sr] of [
+    [0.5, -0.5, 5.1, 0.9],
+    [-0.4, -1.1, 6.3, 0.7],
+  ] as const) {
+    const slab = new Mesh(
+      new CylinderGeometry(sr, sr * 0.9, 0.16, 6),
+      new MeshStandardMaterial({ color: 0x0b0a12, metalness: 0.8, roughness: 0.35 }),
+    );
+    slab.position.set(sx, sy, sz);
+    root.add(slab);
+  }
+
+  // ── the void around: a lit plain far below with a world standing on it
+  const env = new FoyerEnvironment(-7);
+  env.root.name = 'live-foyer-void';
+  root.add(env.root);
+
+  // ── THE PORTAL: the moon-gate to the club floor ───────────────────────
+  // A ring of light standing on the deck's north edge; its inner shimmer
+  // breathes while the way is shut, flares while the relay is being rung,
+  // and the room swap IS the passage.
+  // (The TONIGHT bill that used to float off the east edge is gone — the
+  // tour map on the board already tells that story, better.)
+
+  // ── light: a cool wash + one soft key — the board does the reading ────
+  root.add(new HemisphereLight(0x8a90c8, 0x05040a, 0.6));
+  const key = new PointLight(0xc8d4ff, 1.2, 10, 1.6);
+  key.position.set(0, 3.1, -1.4);
+  root.add(key);
+
+  scene.add(root);
+  collapseStatic(root, (o) => {
+    for (let n: Object3D | null = o; n; n = n.parent) {
+      if (n.name.startsWith('live-')) return true;
+      if (n === root) break;
+    }
+    return false;
+  });
+
+  return { root, env };
+}
+
+/* ── real lights: four points + a hemisphere, and not one more ──────────── */
+
 function buildLights(root: Group): void {
-  // Relit for FIRE FIGHT 2's pipeline (ACES + a soft PMREM environment):
-  // the RAVE RAID intensities were tuned for a linear no-env renderer and
-  // read near-black here. Calibrated against the Iron Balls pub, which
-  // lives under the same pipeline (its room pools run intensity ~8 at
-  // distance ~8.5). Six pools, everything else emissive.
-  root.add(new HemisphereLight(0x9a8fc0, 0x14101c, 0.5));
+  // The base wash: cool sky, near-black ground — the plaster stays charcoal.
+  root.add(new HemisphereLight(0x8f88b0, 0x0e0a12, 0.62));
 
   const F = CLUB.floor;
   // The chandelier's warmth over the dance floor — the room's key.
-  const key = new PointLight(0xffd9ac, 11, 17, 1.55);
+  const key = new PointLight(0xffd9ac, 1.9, 16, 1.55);
   key.position.set(F.x, CLUB.chandelier.y - 0.4, F.z);
   root.add(key);
   // The bar's own pool — hung out OVER the counter so the marble and the
   // drinkers catch it, not just the glass wall behind them.
-  const barLight = new PointLight(0xffc48a, 7.5, 12, 1.55);
+  const barLight = new PointLight(0xffc48a, 1.5, 11, 1.55);
   barLight.position.set(CLUB.bar.x - 0.5, 2.2, (CLUB.bar.z0 + CLUB.bar.z1) / 2);
   root.add(barLight);
   // The lounge's softer amber, warm enough to read a face in a booth.
-  const lounge = new PointLight(0xffb87e, 6.5, 11, 1.55);
+  const lounge = new PointLight(0xffb87e, 1.35, 10, 1.55);
   lounge.position.set(CLUB.boothX + 1.3, 2.2, -3.4);
   root.add(lounge);
   // The still room's ember — small, low, warm.
-  const still = new PointLight(0xffa868, 4, 7.5, 1.6);
+  const still = new PointLight(0xffa868, 0.9, 7, 1.6);
   still.position.set((CLUB.quiet.minX + CLUB.quiet.maxX) / 2, 1.6, (CLUB.quiet.minZ + CLUB.quiet.maxZ) / 2);
   root.add(still);
-  // The entrance pool: the doors, the transom and the terrace steps catch
-  // their own warmth, so walking in reads as an arrival, not a fumble.
-  const entry = new PointLight(0xffd0a0, 6, 10, 1.55);
-  entry.position.set(0, 2.6, CLUB.maxZ - 1.6);
-  root.add(entry);
-  // The stage wash — a cooler lift so the crescent reads from the floor.
-  const stage = new PointLight(0xcfc4ff, 4.5, 10, 1.6);
-  stage.position.set(0, 3.2, CLUB.minZ + 2.0);
-  root.add(stage);
 }

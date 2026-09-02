@@ -19,6 +19,8 @@ export interface RemotePunter {
   pf: string;
   /** Their packed paint look, as it arrived (re-validated at bake time). */
   lk: string;
+  /** Their worn gear, packed (re-validated at bake time). */
+  gr: string;
   rig: BoxerRig;
   nameTag: Panel;
   /** Latest network pose; rigs ease toward these each frame. */

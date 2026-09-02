@@ -13,6 +13,8 @@ import {
   platformSkin,
   resolveAvatarSkin,
 } from '../avatar/skins.js';
+import { cleanGear, gearDef, type GearSlot, packGear } from '../avatar/gear.js';
+import type { BlankTone } from '../avatar/mannequin.js';
 
 function load(key: string, fallback: string): string {
   try {
@@ -110,6 +112,43 @@ export function ownAvatar(id: string): void {
   }
 }
 
+/** GEAR the player has bought ('ff-owned-gear', a JSON id array). Nothing
+ *  is owned from the start — the blank is born bare. */
+function loadOwnedGear(): Set<string> {
+  const owned = new Set<string>();
+  try {
+    const raw = localStorage.getItem('ff-owned-gear');
+    if (raw) for (const id of JSON.parse(raw) as string[]) if (gearDef(id)) owned.add(id);
+  } catch {
+    /* fresh locker — bare */
+  }
+  return owned;
+}
+
+const ownedGear = loadOwnedGear();
+
+/** Has the player bought this piece of gear? */
+export function gearOwned(id: string): boolean {
+  return ownedGear.has(id);
+}
+
+/** Record a gear purchase (the coin debit is the caller's job). */
+export function ownGear(id: string): void {
+  if (!gearDef(id) || ownedGear.has(id)) return;
+  ownedGear.add(id);
+  try {
+    localStorage.setItem('ff-owned-gear', JSON.stringify([...ownedGear]));
+  } catch {
+    /* session-only ownership */
+  }
+}
+
+/** The worn set ('ff-gear', the packed wire form) — anything not owned any
+ *  more (or unknown) simply falls off. */
+function loadGear(): string[] {
+  return cleanGear(load('ff-gear', '')).filter((id) => ownedGear.has(id));
+}
+
 /** The saved equipped avatar, or the panther if the saved one isn't owned. */
 function loadEquippedAvatar(): string {
   // Born blank: FF2's factory body is the default; a saved FF1 pick stays.
@@ -133,15 +172,18 @@ export const customization = {
   /** The STORE face is up (a sub-modal of the locker); false = the LOCKER. */
   shopOpen: false,
   /** Which tab the shop / locker shows. 'colour' and 'arena' are locker-only. */
-  tab: 'platforms' as 'avatars' | 'platforms' | 'colour' | 'arena',
+  tab: 'platforms' as 'avatars' | 'platforms' | 'gear' | 'colour' | 'arena',
   /** STORE try-on: the unowned skin the mirror (avatar) or your pad (platform)
    *  is modelling right now; its tile grows a BUY button. Nothing is owned or
    *  equipped until the buy — cleared on purchase and when the store closes. */
-  preview: null as { kind: 'avatar' | 'platform'; id: string } | null,
+  preview: null as { kind: 'avatar' | 'platform' | 'gear'; id: string } | null,
+  /** GEAR worn right now — at most one id per slot, slot-ordered
+   *  (avatar/gear.ts). Rides every cosmetics channel packed. */
+  gear: loadGear(),
 };
 
 /** Try an unowned skin on: the mirror models an avatar, your own pad a platform. */
-export function setShopPreview(kind: 'avatar' | 'platform', id: string): void {
+export function setShopPreview(kind: 'avatar' | 'platform' | 'gear', id: string): void {
   if (customization.preview?.kind === kind && customization.preview.id === id) return;
   customization.preview = { kind, id };
   customization.version += 1;
@@ -184,6 +226,53 @@ export function setAvatarSkin(id: string): void {
   customization.avatar = skin.id;
   save('ff-skin-avatar', skin.id);
   customization.version += 1;
+}
+
+/** The body's base tone as the mannequin names it — what gear is primed in. */
+export function myTone(): BlankTone {
+  return customization.avatar === 'onyx' ? 'onyx' : 'white';
+}
+
+/** The gear worn, slot-ordered (a copy). */
+export function myGear(): string[] {
+  return [...customization.gear];
+}
+
+/** The worn set in its wire form ('' = bare). */
+export function myPackedGear(): string {
+  return packGear(customization.gear);
+}
+
+/** What's worn in a slot ('' = nothing). */
+export function gearInSlot(slot: GearSlot): string {
+  return customization.gear.find((id) => gearDef(id)?.slot === slot) ?? '';
+}
+
+/** The worn set with one slot swapped — what a try-on shows (nothing is
+ *  equipped until the buy). */
+export function gearWith(id: string): string[] {
+  const d = gearDef(id);
+  if (!d) return [...customization.gear];
+  return cleanGear([id, ...customization.gear.filter((g) => gearDef(g)?.slot !== d.slot)]);
+}
+
+/** Wear a piece you own in its slot (replacing whatever's there); '' bares
+ *  the slot. Bumps the version so every rig that's YOURS redresses. */
+export function setGear(slot: GearSlot, id: string): void {
+  if (id && (!gearDef(id) || gearDef(id)!.slot !== slot || !ownedGear.has(id))) return;
+  const rest = customization.gear.filter((g) => gearDef(g)?.slot !== slot);
+  const next = cleanGear(id ? [id, ...rest] : rest);
+  if (next.join(',') === customization.gear.join(',')) return;
+  customization.gear = next;
+  save('ff-gear', packGear(next));
+  customization.version += 1;
+}
+
+/** A locker tap: wear it, or take it off if it's already on. */
+export function toggleGear(id: string): void {
+  const d = gearDef(id);
+  if (!d) return;
+  setGear(d.slot, customization.gear.includes(id) ? '' : id);
 }
 
 export function setPlatformSkin(id: string): void {

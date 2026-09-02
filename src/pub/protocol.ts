@@ -57,6 +57,8 @@ export interface PubPlayerNet {
   avl?: number;
   /** Packed paint look (avatar/paint.ts wire form) — validated on receive. */
   lk?: string;
+  /** Their worn gear, packed (avatar/gear.ts). */
+  gr?: string;
 }
 
 export interface BoardRow {
@@ -186,10 +188,10 @@ export type PubEvent =
   | { e: 'COIN_TAKE'; id: string }
   /** I repainted at the bay mid-visit — my packed look changed. The server
    *  also folds it into its player record so late joiners get it. */
-  | { e: 'LOOK'; lk: string };
+  | { e: 'LOOK'; lk: string; gr?: string };
 
 export type PubClientMsg =
-  | { t: 'hello'; name: string; av?: string; pf?: string; avc?: number; avl?: number; lk?: string; cid?: string }
+  | { t: 'hello'; name: string; av?: string; pf?: string; avc?: number; avl?: number; lk?: string; gr?: string; cid?: string }
   | { t: 'pose'; head: PoseTuple; left: PoseTuple; right: PoseTuple }
   /** I want to hold prop `id` (fresh grab or a mid-air catch). */
   | { t: 'grab'; id: number }

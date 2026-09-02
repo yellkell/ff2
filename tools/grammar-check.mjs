@@ -15,8 +15,10 @@
  *
  *   2. THE BOUT (live, via __ff2.titan): launch RUSTHOOK — the scrapyard
  *      titan that learned the gate — and FORCE each grammar move through
- *      the real buildAttack path, asserting the zones that land and
- *      (--shots) saving a screenshot of each telegraph on the deck.
+ *      the real buildAttack path, asserting the zones that land, the
+ *      GESTURE the body makes mid-read (each shape a different silhouette,
+ *      arms well off their rest pivots) and (--shots) saving a screenshot
+ *      of each telegraph + windup on the deck.
  */
 
 import { chromium } from 'playwright';
@@ -194,19 +196,61 @@ const EXPECT = {
   routine: ['quad'],
   duckdonut: ['sweep', 'ring'],
 };
+// The gesture each shape should make (campaign/gestures.ts), read off the
+// next pending landing — the duckdonut opens with its blade, the wave with
+// the march.
+const GESTURE = {
+  gate: 'press',
+  lanes: 'point',
+  donut: 'ring',
+  cross: 'scissor',
+  wave: 'march',
+  routine: 'teach',
+  duckdonut: 'blade',
+};
+const silhouettes = {};
 for (const [kind, wants] of Object.entries(EXPECT)) {
   await page.evaluate(() => window.__ff2.titan.heal());
   const forced = await page.evaluate((k) => window.__ff2.titan.force(k, 11), kind);
   const zones = await page.evaluate(() => window.__ff2.titan.zones());
   const ok = forced && zones.length > 0 && wants.some((w) => zones.includes(w));
   check(`${kind}: builds and marks the deck`, ok, zones.join(','));
+  // Mid-read: the telegraph is lit and the arms are up. Sampled well short
+  // of the shortest charge (RUSTHOOK reads in ~1.4 s) so a slow frame can't
+  // let the move land before the pose is read.
+  await page.waitForTimeout(700);
+  const pose = await page.evaluate(() => window.__ff2.titan.pose());
+  // Some shapes point ONE arm; the donut's opening lane is a point too, so
+  // only the shape family is asserted, not the exact zone.
+  const shapeOk = !!pose && (pose.shape === GESTURE[kind] || (kind === 'donut' && pose.shape === 'point'));
+  const reach = pose ? Math.max(...pose.arms.map(([x, z]) => Math.abs(x) + Math.abs(z))) : 0;
+  check(`${kind}: the body makes the ${GESTURE[kind]}`, shapeOk && reach > 0.35, `shape=${pose?.shape} fill=${pose?.fill?.toFixed(2)} reach=${reach.toFixed(2)}`);
+  if (pose) silhouettes[kind] = pose.arms.flat();
   if (shots) {
-    await page.waitForTimeout(1100); // mid-charge — the telegraph is lit
     const file = join(here, `grammar-${kind}.png`);
     writeFileSync(file, await page.screenshot());
     console.log(`  wrote ${file}`);
   }
   await page.waitForTimeout(shots ? 400 : 250);
+}
+// Every shape a DIFFERENT silhouette: no two windups within 0.4 rad (L1
+// over both arms' pitch + yaw) of each other — readable at a glance.
+{
+  const names = Object.keys(silhouettes);
+  let closest = Infinity;
+  let pair = '';
+  for (let i = 0; i < names.length; i++) {
+    for (let j = i + 1; j < names.length; j++) {
+      const a = silhouettes[names[i]];
+      const b = silhouettes[names[j]];
+      const d = a.reduce((acc, v, k) => acc + Math.abs(v - b[k]), 0);
+      if (d < closest) {
+        closest = d;
+        pair = `${names[i]}~${names[j]}`;
+      }
+    }
+  }
+  check('seven shapes, seven silhouettes', names.length === 7 && closest > 0.4, `closest ${pair} at ${closest.toFixed(2)}`);
 }
 
 check('no page errors along the way', errors.length === 0, errors.join(' | '));

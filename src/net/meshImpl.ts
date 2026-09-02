@@ -28,13 +28,41 @@ import {
 } from 'firebase/firestore';
 import { firebaseConfig } from './firebaseConfig.js';
 import { serverNow } from './serverClock.js';
-import { voiceEnabled } from '../audio/voicePref.js';
+import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
-import type { ArcadeMode } from '../config.js';
+import { AUDIENCE_SEATS, type ArcadeMode } from '../config.js';
 import type { PeerMessage } from './protocol.js';
 import type { MeshState } from './mesh.js';
 
 const CAPACITY: Record<ArcadeMode, number> = { '1v1': 2, '2v2': 4, ffa: 4, raid: 5 };
+
+/**
+ * THE AUDIENCE (DESIGN §3.2). Every room's `seats` array runs longer than
+ * its fighter count: the tail is WATCHER seats. They ride the same mesh —
+ * same signalling, same channels, same voice — so a watcher sees the bout
+ * at fighter fidelity and the terrace can be heard; they simply never
+ * occupy a platform, and filling one neither fills the lobby nor launches
+ * it. `state.capacity` stays the FIGHTER count everywhere downstream.
+ */
+function seatCount(mode: ArcadeMode): number {
+  return CAPACITY[mode] + AUDIENCE_SEATS;
+}
+
+/** Claim a free seat in the right band: fighters below `fighters`, watchers
+ *  at or above it. Returns -1 when that band is full. */
+function claimSeat(seats: string[], fighters: number, watch: boolean): number {
+  const from = watch ? fighters : 0;
+  const to = watch ? seats.length : Math.min(fighters, seats.length);
+  for (let i = from; i < to; i++) if (!seats[i]) return i;
+  return -1;
+}
+
+/** Is the FIGHTER band full? (A watcher arriving must not close the door
+ *  on the fighters, nor make a short-handed lobby look ready to launch.) */
+function fightersIn(seats: string[], fighters: number): boolean {
+  for (let i = 0; i < Math.min(fighters, seats.length); i++) if (!seats[i]) return false;
+  return seats.length > 0;
+}
 
 /** A member tombstoned (page hidden) for longer than this, with no live data
  *  channel, has their seat freed for a replacement. Long enough that a Quest
@@ -93,10 +121,11 @@ export class MeshImpl {
    *  room browser is the front door; hosts and joiners take different paths. */
   async hostLobby(mode: ArcadeMode, name: string): Promise<void> {
     this.state.capacity = CAPACITY[mode];
+    this.state.watching = false;
     this.state.onStatus('opening a lobby…');
     const rooms = collection(db(), 'arcadeRooms');
-    const seats = Array.from({ length: this.state.capacity }, (_, i) => (i === 0 ? this.clientId : ''));
-    const names = Array.from({ length: this.state.capacity }, (_, i) => (i === 0 ? name : ''));
+    const seats = Array.from({ length: seatCount(mode) }, (_, i) => (i === 0 ? this.clientId : ''));
+    const names = Array.from({ length: seatCount(mode) }, (_, i) => (i === 0 ? name : ''));
     this.roomRef = await addDoc(rooms, {
       mode,
       capacity: this.state.capacity,
@@ -130,10 +159,11 @@ export class MeshImpl {
    */
   async hostPrivate(mode: ArcadeMode, name: string): Promise<string> {
     this.state.capacity = CAPACITY[mode];
+    this.state.watching = false;
     this.state.onStatus('reserving a code…');
     const coll = collection(db(), 'privateRooms');
-    const seats = Array.from({ length: this.state.capacity }, (_, i) => (i === 0 ? this.clientId : ''));
-    const names = Array.from({ length: this.state.capacity }, (_, i) => (i === 0 ? name : ''));
+    const seats = Array.from({ length: seatCount(mode) }, (_, i) => (i === 0 ? this.clientId : ''));
+    const names = Array.from({ length: seatCount(mode) }, (_, i) => (i === 0 ? name : ''));
     for (let attempt = 0; attempt < 8 && !this.closed; attempt++) {
       const code = String(Math.floor(Math.random() * 100000)).padStart(5, '0');
       const ref = doc(coll, code);
@@ -176,8 +206,8 @@ export class MeshImpl {
    * five digits and land in the host's lobby. Null = unknown code, full, or
    * already launched.
    */
-  async joinPrivate(code: string, name: string): Promise<ArcadeMode | null> {
-    this.state.onStatus('looking up the code…');
+  async joinPrivate(code: string, name: string, watch = false): Promise<ArcadeMode | null> {
+    this.state.onStatus(watch ? 'looking up the code…' : 'looking up the code…');
     const ref = doc(collection(db(), 'privateRooms'), code);
     try {
       const claim = await runTransaction(db(), async (txn) => {
@@ -187,20 +217,23 @@ export class MeshImpl {
         if (data.open !== true || data.started === true) throw new Error('closed');
         const seats = (data.seats as string[]) ?? [];
         const names = (data.names as string[]) ?? seats.map(() => '');
-        const free = seats.findIndex((s) => !s);
+        const fighters = Number(data.capacity) || CAPACITY[data.mode as ArcadeMode] || seats.length;
+        const free = claimSeat(seats, fighters, watch);
         if (free < 0) throw new Error('full');
         seats[free] = this.clientId;
         names[free] = name;
-        txn.update(ref, { seats, names, open: !seats.every((s) => s) });
-        return { seat: free, mode: data.mode as ArcadeMode, capacity: seats.length };
+        // The door closes on the FIGHTERS being in, not on the terrace.
+        txn.update(ref, { seats, names, open: !fightersIn(seats, fighters) });
+        return { seat: free, mode: data.mode as ArcadeMode, capacity: fighters };
       });
       if (this.closed) return null;
       this.roomRef = ref;
       this.state.capacity = claim.capacity;
+      this.state.watching = claim.seat >= claim.capacity;
       this.state.mySeat = claim.seat;
       this.state.joined = true;
       this.state.names[claim.seat] = name;
-      this.state.onStatus(`joined (seat ${claim.seat})`);
+      this.state.onStatus(this.state.watching ? 'in as a watcher' : `joined (seat ${claim.seat})`);
       this.watchRoom();
       this.startBeat();
       return claim.mode;
@@ -210,23 +243,27 @@ export class MeshImpl {
   }
 
   /** Claim a seat in a SPECIFIC listed lobby of `mode`. False = filled/gone. */
-  async joinLobby(mode: ArcadeMode, roomId: string, name: string): Promise<boolean> {
+  async joinLobby(mode: ArcadeMode, roomId: string, name: string, watch = false): Promise<boolean> {
     this.state.capacity = CAPACITY[mode];
-    this.state.onStatus('joining the lobby…');
+    this.state.watching = watch;
+    this.state.onStatus(watch ? 'taking a place on the terrace…' : 'joining the lobby…');
     const ref = doc(collection(db(), 'arcadeRooms'), roomId);
     try {
       const seat = await runTransaction(db(), async (txn) => {
         const fresh = await txn.get(ref);
-        if (!fresh.exists() || fresh.data()?.open !== true || fresh.data()?.started === true) {
-          throw new Error('gone');
-        }
+        // A WATCHER may walk in on a lobby that is already full, and on one
+        // whose fight has already started: turning up late to a show is the
+        // whole point of a show. A FIGHTER still needs an open door.
+        if (!fresh.exists()) throw new Error('gone');
+        if (!watch && (fresh.data()?.open !== true || fresh.data()?.started === true)) throw new Error('gone');
         const seats = (fresh.data().seats as string[]) ?? [];
         const names = (fresh.data().names as string[]) ?? seats.map(() => '');
-        const free = seats.findIndex((s) => !s);
+        const fighters = Number(fresh.data().capacity) || CAPACITY[mode];
+        const free = claimSeat(seats, fighters, watch);
         if (free < 0) throw new Error('full');
         seats[free] = this.clientId;
         names[free] = name;
-        txn.update(ref, { seats, names, open: !seats.every((s) => s) });
+        txn.update(ref, { seats, names, open: !fightersIn(seats, fighters) });
         return free;
       });
       if (this.closed) return false;
@@ -234,7 +271,7 @@ export class MeshImpl {
       this.state.mySeat = seat;
       this.state.joined = true;
       this.state.names[seat] = name;
-      this.state.onStatus(`joined (seat ${seat})`);
+      this.state.onStatus(watch ? 'in as a watcher' : `joined (seat ${seat})`);
       this.watchRoom();
       this.startBeat(); // any live member keeps the lobby listed, not just the host
       return true;
@@ -434,7 +471,10 @@ export class MeshImpl {
           this.vacateSeatInDoc(seat, id);
         }
       }
+      // A room with its fighters in is locked to FIGHTERS; the terrace stays
+      // open (its own band is checked when a watcher claims a seat).
       this.state.locked = snap.data().open === false;
+      this.state.capacity = Number(snap.data().capacity) || this.state.capacity;
       // RAID lobby extras: seed the callsigns from the doc (the `iam` message
       // re-affirms them in the bout) and mirror the host's controls.
       const docNames = snap.data().names as string[] | undefined;
@@ -470,7 +510,9 @@ export class MeshImpl {
     this.state.occupants = this.rawSeats.map((s, i) =>
       s && (this.droppedIds.get(i) === s || (this.goneIds.has(s) && s !== this.clientId)) ? '' : s,
     );
-    this.state.full = this.state.occupants.length > 0 && this.state.occupants.every((s) => s);
+    // FULL means the FIGHTERS are in — the launch condition. Watchers fill
+    // the tail of the same array and must never trip it.
+    this.state.full = fightersIn(this.state.occupants, this.state.capacity);
   }
 
   /** Declare a seat dead (its peer died / went silent). Reachable from the pose
@@ -549,8 +591,8 @@ export class MeshImpl {
       .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
       .then((s) => {
         this.micStream = s;
-        // Honour the voice-chat preference: a disabled mic transmits nothing.
-        for (const t of s.getAudioTracks()) t.enabled = voiceEnabled();
+        // Honour the voice rules (net/voiceRules.ts): a disabled mic transmits nothing.
+        for (const t of s.getAudioTracks()) t.enabled = voiceAllowed();
         return s;
       })
       .catch(() => null);

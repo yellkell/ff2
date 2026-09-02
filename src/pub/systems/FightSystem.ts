@@ -59,8 +59,9 @@ import {
 } from '../../config.js';
 import { buildBoxer, solveTorso, type BoxerRig } from '../../avatar/boxer.js';
 import { applyLook, myLook } from '../../avatar/paint.js';
+import { applyGear } from '../../avatar/gear.js';
 import { applyAvatarSkin, applyPlatformSkin, platformSkin, type PlatformSkin } from '../../avatar/skins.js';
-import { customization, myAvatarSkin } from '../../menu/customization.js';
+import { customization, myAvatarSkin, myGear, myTone } from '../../menu/customization.js';
 import {
   createFireVisual,
   emberBurst,
@@ -448,7 +449,8 @@ export class FightSystem extends createSystem({}) {
     applyAvatarSkin(this.bodyRig.torso, mySkin);
     // Your painting fights with you — the crowd sees the body THEY see you in.
     // (PubPlayerSystem rebakes this by name if you repaint mid-visit.)
-    applyLook(this.bodyRig.torso, myLook());
+    applyGear(this.bodyRig.torso, myGear(), myTone()); // …in your gear
+    applyLook(this.bodyRig.torso, myLook()); // …painted, gear included
     pub.refs!.root.add(this.bodyRig.torso);
     for (const platform of pub.refs!.fightPlatforms) {
       platform.traverse((node) => {
@@ -608,7 +610,7 @@ export class FightSystem extends createSystem({}) {
       const pf = pfFor(side);
       const skin: PlatformSkin = pf
         ? platformSkin(pf)
-        : { id: '', name: '', neon: teamColor(side) };
+        : { id: '', name: '', deck: 'charred', neon: teamColor(side), trim: 0x4a4c52, blurb: '' };
       applyPlatformSkin(platforms[side], skin);
     });
   }

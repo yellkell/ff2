@@ -73,3 +73,6 @@ public/ui/
 # Persisted pub data (snake high score)
 server/pub-data.json
 Voice Lines/
+
+# headless probe screenshots (npm run check:* --shots)
+tools/*.png

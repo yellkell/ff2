@@ -136,10 +136,15 @@ export const PAINT = {
    * drop it to 512 if a full club's textures ever cost more than the
    * paint is worth.
    */
-  canvas: { head: 256, body: 768 } as Record<string, number>,
+  canvas: { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128 } as Record<string, number>,
   /** Unit prices in coins; racks multiply (see tierOf). A basic stripe is
-   *  two games' pay — a first paint job lands around a session of play. */
-  price: { stripe: 20, splotch: 30 },
+   *  two games' pay — a first paint job lands around a session of play.
+   *  DOTS and SQUARES are the cheap geometry — a dot is the paint's atom. */
+  price: { stripe: 20, splotch: 30, dot: 15, square: 20 },
+  /** The biggest a unit can be sized in the bay (fraction of its part's
+   *  canvas). Big enough for a sash across the chest, never a whole-body
+   *  fill — the blank's silhouette stays the picture. */
+  maxSize: 0.55,
   tierMult: [1, 2, 10], // base rack · neon rack · top shelf
   /** Rack boundaries by colour index: 0–7 base, 8–19 neon, 20+ top. */
   tierOf: (colour: number): number => (colour < 8 ? 0 : colour < 20 ? 1 : 2),
@@ -167,10 +172,28 @@ export const PAINT = {
 export const CURRENCY = {
   /** Coins banked per completed game (any mode, win or loss). */
   perGame: 10,
+  /** RAVE RAID: a finished record pays the same flat coins as a bout, and
+   *  a clean night pays a little on top — the one wallet, both games. */
+  song: 10,
+  songGrade: { S: 15, A: 10, B: 5 } as Record<string, number>,
   /** One-time graduation gift for finishing the tutorial — enough to feel
    *  the store's pull ('get yourself some drip') without skipping the grind. */
   tutorial: 50,
 };
+
+/** What a finished record pays, by the night's grade (menu/wallet.ts). */
+export function songCoins(grade: string): number {
+  return CURRENCY.song + (CURRENCY.songGrade[grade] ?? 0);
+}
+
+/**
+ * Where RAVE RAID lives: the third page (rave.html, src/rave/) — the
+ * ARCADE tab's RAVE RAID button hops there, and its rail's FIRE FIGHT
+ * entry hops back. Override with ?rave=<url>.
+ */
+export function raveUrl(): string {
+  return new URLSearchParams(location.search).get('rave') ?? 'rave.html';
+}
 
 /**
  * Where the IRON BALLS CLUB social area lives. It builds side by side with
@@ -1009,6 +1032,23 @@ export interface FighterSlot {
  * so π faces +Z, +π/2 faces -X (east platform looks west into the cross) and
  * -π/2 faces +X (west platform looks east).
  */
+/**
+ * THE AUDIENCE (DESIGN §3.2). Every online room keeps seats for WATCHERS
+ * beyond its fighters: they claim them in the same room doc, ride the same
+ * mesh, and are dealt to the match's own place with the squad — onto the
+ * audience ground (arena/desert/audience.ts) rather than a platform.
+ */
+export const AUDIENCE_SEATS = 6;
+
+/**
+ * A watcher's `app.mySlot`. Deliberately OUTSIDE every MODE_LAYOUT: the
+ * seat-relative transforms (combat/layout.ts) fall back to the canonical
+ * origin for a slot they don't know, which is exactly the frame a watcher
+ * wants — the fighters land where the arena actually put them, and the
+ * watcher's own rig is moved to the terrace instead.
+ */
+export const WATCHER_SLOT = 90;
+
 export const MODE_LAYOUT: Record<ArcadeMode, FighterSlot[]> = {
   '1v1': [
     { pos: [0, 0, 0], yaw: 0, team: 0 }, // you

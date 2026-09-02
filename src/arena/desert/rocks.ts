@@ -1,13 +1,18 @@
 /**
- * Rocks of the desert (ported from yellkell/vrenv): faceted boulders scattered
- * across the sand in one instanced draw, plus the big layered-cardstock mesas
- * that make the classic western horizon. (The grab-able paper rocks from the
- * original are dropped — the arena has no grab system.)
+ * Rocks of the desert (ported from yellkell/vrenv, mesas rebuilt for DESERT
+ * 2.0): faceted boulders scattered across the sand in one instanced draw,
+ * plus the big mesas that make the classic western horizon — no longer
+ * stacked cardstock drums but ONE wind-carved loft each, strata baked into
+ * vertex colour, ledges where a harder band held while the softer rock
+ * under it blew away. (The grab-able paper rocks from the original are
+ * dropped — the arena has no grab system.)
  */
 
 import {
+  type BufferGeometry,
   Color,
   CylinderGeometry,
+  Float32BufferAttribute,
   type Group as GroupT,
   Group,
   IcosahedronGeometry,
@@ -16,7 +21,8 @@ import {
   Object3D,
 } from 'three';
 import { CONFIG } from './config.js';
-import { makePaper, makeRng } from './paper.js';
+import { makeRng, valueNoise2D } from './paper.js';
+import { rockMat } from './textures.js';
 import { desertHeight } from './terrain.js';
 import { collapseStatic } from '../merge.js';
 
@@ -31,18 +37,44 @@ function trs(x: number, y: number, z: number, sx: number, sy: number, sz: number
   return dummy.matrix;
 }
 
-/** Faceted boulders strewn across the dunes. */
+/** A rounded, wind-worn boulder: a fine sphere pushed in and out by two
+ *  octaves of noise, smooth normals — no facet anywhere. One geometry
+ *  serves every instance; scale and spin hide the repeat. */
+function boulderGeometry(rng: () => number): BufferGeometry {
+  const geo = new IcosahedronGeometry(1, 3);
+  const noise = valueNoise2D(rng, 8);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const z = pos.getZ(i);
+    const u = Math.atan2(z, x) / (Math.PI * 2) + 0.5;
+    const v = y * 0.5 + 0.5;
+    const d = 1 + (noise(u * 4, v * 4) - 0.5) * 0.42 + (noise(u * 12, v * 12) - 0.5) * 0.1;
+    pos.setXYZ(i, x * d, y * d * 0.85, z * d);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Boulders strewn across the dunes, smooth and skinned in strata rock. */
 export function buildBoulders(parent: GroupT): void {
   const rng = makeRng(CONFIG.terrain.seed * 7 + 1);
   const n = CONFIG.rocks.boulders;
   const half = CONFIG.terrain.size / 2 - 6;
   const cols = P.boulder.map((c) => new Color(c));
-  const mesh = new InstancedMesh(new IcosahedronGeometry(1, 0), makePaper('#ffffff', 0.98), n);
+  const mesh = new InstancedMesh(boulderGeometry(rng), rockMat('#ffffff', { repeat: [1, 1], bumpScale: 0.04 }), n);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   for (let i = 0; i < n; i++) {
-    const x = (rng() * 2 - 1) * half;
-    const z = (rng() * 2 - 1) * half;
+    // Never inside the clearing: a boulder at your elbow reads as litter.
+    let x = 0;
+    let z = 0;
+    do {
+      x = (rng() * 2 - 1) * half;
+      z = (rng() * 2 - 1) * half;
+    } while (Math.hypot(x, z) < 18);
     const s = 0.4 + rng() * rng() * 2.2;
     const y = desertHeight(x, z) + s * 0.45;
     mesh.setMatrixAt(i, trs(x, y, z, s, s * (0.7 + rng() * 0.4), s, rng() * Math.PI));
@@ -53,26 +85,79 @@ export function buildBoulders(parent: GroupT): void {
   parent.add(mesh);
 }
 
-/** A single layered-strata mesa (stacked faceted slabs, flat top). */
-function makeMesa(rng: () => number, height: number): Group {
-  const g = new Group();
+/** One mesa material for the whole ring — the colour lives in the
+ *  vertices, so every mesa merges into a single draw. */
+const MESA_MAT = ((): ReturnType<typeof rockMat> => {
+  // Strata in the vertex colour, grain + bump from the rock skin on top.
+  const m = rockMat('#ffffff', { repeat: [5, 2], bumpScale: 0.45, roughness: 0.96 });
+  m.vertexColors = true;
+  return m;
+})();
+
+const smoothstep = (a: number, b: number, x: number): number => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * A single mesa: a tapered loft, radially carved by two octaves of noise
+ * (the long wind-scour down the face, then the fine grain), stepping in at
+ * each stratum with a soft shoulder so the bands read as LEDGES and not as
+ * paint. Strata colours come from the palette by height, cross-faded at
+ * the band edges, mottled a touch, the cap left a shade paler where the
+ * sky bleaches it. Smooth normals: the dusk light rolls over the face.
+ */
+function makeMesa(rng: () => number, height: number): Mesh {
   const layers = 4 + ((rng() * 3) | 0);
-  let y = 0;
-  let radius = height * (0.45 + rng() * 0.2);
-  for (let i = 0; i < layers; i++) {
-    const h = height / layers;
-    const slab = new Mesh(
-      new CylinderGeometry(radius * 0.92, radius, h, 6 + ((rng() * 2) | 0)),
-      makePaper(P.rockStrata[i % P.rockStrata.length], 0.98),
-    );
-    slab.position.y = y + h / 2;
-    slab.rotation.y = rng() * Math.PI;
-    slab.castShadow = true;
-    g.add(slab);
-    y += h;
-    radius *= 0.82 + rng() * 0.08;
+  const baseR = height * (0.48 + rng() * 0.2);
+  const step = 0.84 + rng() * 0.06; // per-layer inset
+  const radial = 30;
+  const geo = new CylinderGeometry(1, 1, 1, radial, layers * 5, false);
+  const pos = geo.attributes.position;
+  const noiseA = valueNoise2D(rng, 12);
+  const noiseB = valueNoise2D(rng, 16);
+  const cols: number[] = [];
+  const strata = P.rockStrata.map((c) => new Color(c));
+  const first = (rng() * strata.length) | 0;
+  const a = new Color();
+  const b = new Color();
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const y01 = pos.getY(i) + 0.5; // 0 foot → 1 cap
+    const rim = Math.hypot(x, z); // 1 on the wall/cap ring, 0 at the cap centre
+    const ang = Math.atan2(z, x);
+    // Strata: which band, and how far up it.
+    const band = Math.min(layers - 1, Math.floor(y01 * layers));
+    const local = y01 * layers - band;
+    const rBand = baseR * Math.pow(step, band);
+    // The shoulder: the top of each band pulls in toward the next.
+    let r = rBand * (1 - (1 - step) * smoothstep(0.7, 1, local));
+    // Wind carving — long scour, then grain — scaled with the band radius.
+    const u = ang / (Math.PI * 2) + 0.5;
+    const scour = noiseA(u * 6, y01 * 4 + band) - 0.5;
+    const grain = noiseB(u * 24, y01 * 26) - 0.5;
+    r += rBand * (scour * 0.22 + grain * 0.05);
+    // Cap and foot rings keep the carved profile; the cap centre stays put.
+    const rr = rim > 0.5 ? r : 0;
+    pos.setXYZ(i, Math.cos(ang) * rr, y01 * height, Math.sin(ang) * rr);
+    // Colour: this band's stratum, cross-faded into the next near the edge,
+    // mottled by the scour, a shade darker under each ledge, pale on top.
+    a.copy(strata[(first + band) % strata.length]);
+    b.copy(strata[(first + band + 1) % strata.length]);
+    a.lerp(b, smoothstep(0.85, 1, local));
+    const shade = 1 + scour * 0.35 + (local < 0.1 ? -0.12 : 0);
+    a.multiplyScalar(shade * 1.22); // the skin's map darkens by ~0.8; keep the palette
+    if (rim <= 0.5 || y01 > 0.985) a.lerp(new Color(P.sandLight), 0.35);
+    cols.push(a.r, a.g, a.b);
   }
-  return g;
+  pos.needsUpdate = true;
+  geo.setAttribute('color', new Float32BufferAttribute(cols, 3));
+  geo.computeVertexNormals();
+  const mesa = new Mesh(geo, MESA_MAT);
+  mesa.castShadow = true;
+  mesa.rotation.y = rng() * Math.PI * 2;
+  return mesa;
 }
 
 /** A ring of mesas out toward the horizon — the western silhouette. */

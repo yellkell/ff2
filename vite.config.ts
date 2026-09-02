@@ -23,7 +23,16 @@ export default defineConfig({
         // The arena (main game) and the pub social scene build side by side.
         main: 'index.html',
         pub: 'pub.html',
+        // RAVE RAID (src/rave/) — the rhythm game as a third page, reached
+        // from the ARCADE tab and returning to the arena from its rail.
+        rave: 'rave.html',
       },
     },
+    // Never inline a track — they must stay separate files so the browser
+    // can stream and cache them.
+    assetsInlineLimit: 4096,
   },
+  // The rave's music masters ride along as static assets; .m4a isn't in
+  // every Vite version's default asset list.
+  assetsInclude: ['**/*.m4a'],
 });

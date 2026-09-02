@@ -31,12 +31,15 @@ import { CanvasTexture, Mesh, MeshStandardMaterial, SRGBColorSpace, type Object3
 import { PAINT } from '../config.js';
 import { BODY_V_SPLIT } from './mannequin.js';
 
-export type PaintKind = 'stripe' | 'splotch';
-/** The two paint surfaces. THE BLANK's chest and pelvis became ONE body
- *  loft (avatar/mannequin.ts), so a look now lives on the head and the
- *  body — legacy 'chest'/'pelvis' units fold into the body's v range on
- *  read, so paint made before the merge survives it. */
-export type PaintPart = 'head' | 'body';
+export type PaintKind = 'stripe' | 'splotch' | 'dot' | 'square';
+export const PAINT_KINDS: readonly PaintKind[] = ['stripe', 'splotch', 'dot', 'square'];
+/** The paint surfaces: THE BLANK's head and its one body loft, plus the
+ *  three GEAR slots (avatar/gear.ts) — every mesh of a worn piece shares
+ *  its slot's canvas, so painting one pauldron paints its twin. Legacy
+ *  'chest'/'pelvis' units fold into the body's v range on read, so paint
+ *  made before the merge survives it. */
+export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands';
+export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands'];
 
 export interface PlacedPaint {
   kind: PaintKind;
@@ -85,11 +88,11 @@ function bandV(v: number, band: 'upper' | 'lower'): number {
 function cleanUnit(raw: unknown): PlacedPaint | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const r = raw as Record<string, unknown>;
-  const kind = r.kind === 'splotch' ? 'splotch' : r.kind === 'stripe' ? 'stripe' : null;
+  const kind = (PAINT_KINDS as readonly unknown[]).includes(r.kind) ? (r.kind as PaintKind) : null;
   // 'chest'/'pelvis' are the pre-merge parts: fold them onto the body,
   // upper band and lower band, so a saved look keeps its picture.
   const legacy = r.part === 'chest' ? 'upper' : r.part === 'pelvis' ? 'lower' : null;
-  const part = r.part === 'head' ? 'head' : r.part === 'body' || legacy ? 'body' : null;
+  const part = legacy ? 'body' : (PAINT_PARTS as readonly unknown[]).includes(r.part) ? (r.part as PaintPart) : null;
   const colour = typeof r.colour === 'number' ? Math.floor(r.colour) : -1;
   if (!kind || !part || colour < 0 || colour >= PAINT.colours.length) return null;
   return {
@@ -136,7 +139,7 @@ export function clearLook(): void {
 //
 // One unit is exactly 8 bytes, every field quantized by construction:
 //
-//   b0  kind (bit 0) | part index (bits 1..3 — see WIRE_PARTS)
+//   b0  kind (bits 0..1) | part index (bits 2..7 — see WIRE_PARTS)
 //   b1  colour index          b2  variant
 //   b3  u ·255   b4  v ·255   b5  angle ·255   b6  len ·255   b7  wid ·255
 //
@@ -148,18 +151,23 @@ export function clearLook(): void {
 // bare base tone — never to an error.
 
 /**
- * FORMAT 2 — the merged body. Format 1 packed three parts (head, chest,
- * pelvis) because the mannequin was three lofts; the torso is one surface
- * now, so the wire carries two. Old strings still read: v1 units come back
- * as 'chest'/'pelvis' and cleanUnit folds them onto the body's upper and
- * lower bands, so a look packed before the merge still paints the fighter
- * it was made for.
+ * FORMAT 3 — four kinds, five parts. b0 carries the kind in two bits and
+ * the part index above them. Every older string still reads:
+ *   v2 (the merged body): kind in bit 0, part in bits 1+ over head/body;
+ *   v1 (three lofts): the same layout over head/chest/pelvis — cleanUnit
+ *      folds chest/pelvis onto the body's upper and lower bands.
+ * So a look packed before any of this still paints the fighter it was
+ * made for.
  */
-const WIRE_FORMAT = 2;
-/** Part order ON THE WIRE — append-only (2+ reserved for the gloves). */
-const WIRE_PARTS: PaintPart[] = ['head', 'body'];
+const WIRE_FORMAT = 3;
+/** Part order ON THE WIRE — append-only. */
+const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands'];
+/** Format 2's part order (the merged body, before gear was paintable). */
+const WIRE_PARTS_V2: PaintPart[] = ['head', 'body'];
 /** Format 1's part order, kept only to read looks packed before the merge. */
 const WIRE_PARTS_V1 = ['head', 'chest', 'pelvis'];
+/** Kind order on the wire (v1/v2 knew only the first two, in bit 0). */
+const WIRE_KINDS: PaintKind[] = ['stripe', 'splotch', 'dot', 'square'];
 /** Longest base64 string unpackLook will even look at (a maxed look is ~700). */
 const WIRE_MAX_CHARS = 1024;
 
@@ -173,7 +181,7 @@ export function packLook(look: Look): string {
   bytes[0] = WIRE_FORMAT;
   units.forEach((p, i) => {
     const o = 1 + i * 8;
-    bytes[o] = (p.kind === 'splotch' ? 1 : 0) | (Math.max(0, WIRE_PARTS.indexOf(p.part)) << 1);
+    bytes[o] = Math.max(0, WIRE_KINDS.indexOf(p.kind)) | (Math.max(0, WIRE_PARTS.indexOf(p.part)) << 2);
     bytes[o + 1] = Math.min(255, p.colour);
     bytes[o + 2] = p.variant % 256;
     bytes[o + 3] = q255(p.u);
@@ -204,16 +212,18 @@ export function unpackLook(wire: unknown): Look {
   }
   if (bin.length < 1 + 8 || (bin.length - 1) % 8 !== 0) return bare;
   const format = bin.charCodeAt(0);
-  if (format !== WIRE_FORMAT && format !== 1) return bare;
-  const parts: readonly string[] = format === 1 ? WIRE_PARTS_V1 : WIRE_PARTS;
+  if (format !== WIRE_FORMAT && format !== 2 && format !== 1) return bare;
+  const parts: readonly string[] = format === 1 ? WIRE_PARTS_V1 : format === 2 ? WIRE_PARTS_V2 : WIRE_PARTS;
+  const kindBits = format === WIRE_FORMAT ? 3 : 1;
+  const partShift = format === WIRE_FORMAT ? 2 : 1;
   const count = Math.min((bin.length - 1) / 8, PAINT.maxUnits);
   const paint: PlacedPaint[] = [];
   for (let i = 0; i < count; i++) {
     const o = 1 + i * 8;
     const b0 = bin.charCodeAt(o);
     const unit = cleanUnit({
-      kind: (b0 & 1) === 1 ? 'splotch' : 'stripe',
-      part: parts[b0 >> 1], // out of range → undefined → dropped
+      kind: WIRE_KINDS[b0 & kindBits],
+      part: parts[b0 >> partShift], // out of range → undefined → dropped
       colour: bin.charCodeAt(o + 1),
       variant: bin.charCodeAt(o + 2),
       u: bin.charCodeAt(o + 3) / 255,
@@ -354,7 +364,8 @@ export function handTake(kind: PaintKind, colour: number): boolean {
     u: 0.75,
     v: 0.5,
     angle: 0,
-    len: kind === 'stripe' ? 0.3 : 0.35,
+    // Default sizes per kind — modest; the stick sizes them from here.
+    len: kind === 'stripe' ? 0.3 : kind === 'splotch' ? 0.35 : kind === 'dot' ? 0.16 : 0.2,
     wid: kind === 'stripe' ? 0.12 : 0.5,
   };
   bay.version += 1;
@@ -450,6 +461,18 @@ function drawUnit(g: CanvasRenderingContext2D, p: PlacedPaint, W: number, H: num
       const h = Math.max(3, p.wid * H * 0.35);
       g.beginPath();
       g.roundRect(-w / 2, -h / 2, w, h, h / 2);
+      g.fill();
+    } else if (p.kind === 'dot') {
+      // A disc: len is the diameter's share of the canvas. wid: unused.
+      g.beginPath();
+      g.arc(0, 0, Math.max(3, p.len * W * 0.5), 0, Math.PI * 2);
+      g.fill();
+    } else if (p.kind === 'square') {
+      // A square, spun by the angle — the corner radius is a hair, so it
+      // reads as cut, not sprayed. wid: unused.
+      const s = Math.max(4, p.len * W * 0.6);
+      g.beginPath();
+      g.roundRect(-s / 2, -s / 2, s, s, s * 0.06);
       g.fill();
     } else {
       const r = Math.max(4, p.len * W * 0.3);
@@ -568,9 +591,11 @@ export function paintBanner(wire: string, tone: string, w = 400, h = 120): HTMLC
   const look = unpackLook(wire);
   let out: HTMLCanvasElement | null = null;
   if (look.paint.length) {
-    const counts: Record<PaintPart, number> = { head: 0, body: 0 };
-    for (const p of look.paint) counts[p.part] += 1;
-    const part: PaintPart = counts.body > 0 ? 'body' : 'head';
+    // The body if it carries any paint, else the head, else whatever gear
+    // surface got painted — the banner shows the most-representative part.
+    const counts: Partial<Record<PaintPart, number>> = {};
+    for (const p of look.paint) counts[p.part] = (counts[p.part] ?? 0) + 1;
+    const part: PaintPart = (counts.body ?? 0) > 0 ? 'body' : (counts.head ?? 0) > 0 ? 'head' : look.paint[0].part;
     const size = PAINT.canvas[part] ?? 256;
     const flat = bakeFlat(look, part, tone === 'onyx' ? 'onyx' : 'white', size);
     out = document.createElement('canvas');
@@ -624,6 +649,12 @@ export function demoLook(): Look {
       b('body', 0.75, 0.141, 0.3, 9, 11), // ember, front low
       // A crown dot on the skull.
       b('head', 0.75, 0.88, 0.2, 20, 5),
+      // The new geometry: a signal-red DOT on the sternum, a black SQUARE
+      // spun 45° on the belly, and a gold dot on whatever's bolted to the
+      // head (so the gear surface is exercised too).
+      { kind: 'dot', part: 'body', u: 0.75, v: 0.86, angle: 0, len: 0.12, wid: 0.5, colour: 19, variant: 0 },
+      { kind: 'square', part: 'body', u: 0.75, v: 0.6, angle: 0.125, len: 0.16, wid: 0.5, colour: 1, variant: 0 },
+      { kind: 'dot', part: 'gearHead', u: 0.5, v: 0.5, angle: 0, len: 0.4, wid: 0.5, colour: 20, variant: 0 },
     ],
   };
 }

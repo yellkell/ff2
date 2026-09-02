@@ -77,6 +77,9 @@ export class CollisionSystem extends createSystem({
   private prevPos = new Map<Entity, Vector3>();
 
   update(): void {
+    // A WATCHER judges nothing — they own no ball and no hitbox worth the
+    // name, and every hit in this bout is somebody else's to rule on.
+    if (app.spectating) return;
     const inMatch = app.state === 'playing' && match.phase === 'playing';
     const inTraining = app.state === 'training';
     if (!inMatch && !inTraining) return;

@@ -28,9 +28,10 @@ import { syncNetRoster } from '../combat/setup.js';
 import { raidInbox } from '../campaign/campaignState.js';
 import { match } from '../combat/matchState.js';
 import { app, saveStats } from '../menu/appState.js';
+import { crowd } from '../audio/crowd.js';
 import { mesh } from '../net/mesh.js';
 import { myElo, myName } from '../net/leaderboard.js';
-import { customization } from '../menu/customization.js';
+import { customization, myPackedGear } from '../menu/customization.js';
 import { myPackedLook } from '../avatar/paint.js';
 import { packPose } from '../net/client.js';
 import { attachMeshVoice, detachAllMeshVoice, detachMeshVoice, setMeshSpeaker, updateListener } from '../net/voice.js';
@@ -142,6 +143,7 @@ export class MeshSystem extends createSystem({
       }
       this.receive();
       this.checkStalePeers();
+      this.pruneWatchers();
       syncNetRoster(); // dropped raiders eliminate; late-seen ones activate
       this.broadcastIam(delta);
       this.smooth(delta);
@@ -194,6 +196,7 @@ export class MeshSystem extends createSystem({
 
     this.receive();
     this.checkStalePeers();
+    this.pruneWatchers();
     this.checkHostAlive();
     this.broadcastIam(delta);
     this.smooth(delta);
@@ -203,18 +206,39 @@ export class MeshSystem extends createSystem({
     else this.guestTimers(delta);
   }
 
-  /** Spatial voice: listener on the camera, each peer pinned to their head. */
+  /**
+   * Spatial voice: listener on the camera, each peer pinned to their head.
+   *
+   * THE CROWD RULE (DESIGN §3.2): a FIGHTER never hears a watcher's words —
+   * only the crowd as a crowd. So a fighter attaches the fighter seats and
+   * nothing past them; a watcher attaches everyone, fighters and terrace
+   * alike. (net/voiceRules.ts states the law; this is where it bites.)
+   */
+  private mayHear(seat: number): boolean {
+    return mesh.watching || seat < mesh.capacity;
+  }
+
   private updateVoice(): void {
     this.world.camera.getWorldPosition(_p);
     this.world.camera.getWorldQuaternion(_q);
     updateListener(_p, _q);
     for (const [seat, stream] of mesh.voice) {
+      if (!this.mayHear(seat)) continue; // a fighter never hears the terrace
       if (!this.voiced.has(seat)) {
         attachMeshVoice(seat, stream);
         this.voiced.add(seat);
       }
       const li = localIndexOf(seat);
       if (li > 0) setMeshSpeaker(seat, opponents[li - 1].headPos);
+      else {
+        // A watcher I am allowed to hear (so I am watching too): their voice
+        // comes from their spot on the terrace.
+        const w = mesh.watchers.get(seat);
+        if (w) {
+          _v.set(w.x, w.y, w.z);
+          setMeshSpeaker(seat, _v);
+        }
+      }
     }
     for (const seat of [...this.voiced]) {
       if (!mesh.voice.has(seat)) {
@@ -238,6 +262,7 @@ export class MeshSystem extends createSystem({
     this.world.camera.getWorldQuaternion(_q);
     updateListener(_p, _q);
     for (const [seat, stream] of mesh.voice) {
+      if (!this.mayHear(seat)) continue; // the terrace is not in the huddle
       if (!this.voiced.has(seat)) {
         attachMeshVoice(seat, stream);
         this.voiced.add(seat);
@@ -286,7 +311,22 @@ export class MeshSystem extends createSystem({
         (gp?.getButtonPressed(InputComponent.Trigger) ?? false);
     }
 
+    // A WATCHER is not a fighter: no combat pose, no hp, no orbit flags —
+    // a head on a terrace and how high their hands are.
+    if (mesh.watching) {
+      mesh.send({ k: 'watch', head: headPose, roar: crowd.myRoar });
+      return;
+    }
     mesh.send({ k: 'pose', head: headPose, left: hands[0], right: hands[1], orbit, fist, hp: this.myHp(), acc: app.accentHue, acl: app.accentLight });
+  }
+
+  /** Drop watchers who have gone quiet — the terrace empties like the ring
+   *  does, on the same silence window. */
+  private pruneWatchers(): void {
+    const now = performance.now();
+    for (const [seat, w] of mesh.watchers) {
+      if (now - w.at > STALE_MS) mesh.watchers.delete(seat);
+    }
   }
 
   /**
@@ -309,6 +349,7 @@ export class MeshSystem extends createSystem({
       avc: customization.colorHue,
       avl: customization.colorLight,
       lk: myPackedLook(),
+      gr: myPackedGear(),
     });
   }
 
@@ -393,7 +434,25 @@ export class MeshSystem extends createSystem({
     // not by whether they map to one of my opponent slots).
     if (msg.k === 'iam') {
       mesh.names[seat] = msg.name;
-      mesh.cosmetics[seat] = { av: msg.av, pf: msg.pf, avc: msg.avc, avl: msg.avl, lk: msg.lk };
+      mesh.cosmetics[seat] = { av: msg.av, pf: msg.pf, avc: msg.avc, avl: msg.avl, lk: msg.lk, gr: msg.gr };
+      return;
+    }
+
+    // THE TERRACE. A watcher's seat sits past the fighter band, so it never
+    // maps to a combat slot — their frames land here instead, for the bodies
+    // on the audience ground and for the room's roar.
+    if (msg.k === 'watch') {
+      mesh.watchers.set(seat, {
+        x: msg.head[0],
+        y: msg.head[1],
+        z: msg.head[2],
+        qx: msg.head[3],
+        qy: msg.head[4],
+        qz: msg.head[5],
+        qw: msg.head[6],
+        roar: Math.max(0, Math.min(1, msg.roar)),
+        at: performance.now(),
+      });
       return;
     }
 

@@ -78,12 +78,32 @@ Panel roles:
 | **RIGHT — YOU** | The locker: your mannequin live-rendered, paint mode entry, the shop, wallet, rank, stats, settings. |
 
 **The few-doors law** (added when the first wrap proved too busy): the
-lobby never presents everything at once. The center slab's root offers
-exactly THREE doors — FIGHT, ARCADE, THE CLUB — and every other option
-is a sub-option behind its door, one BACK away. Preference breakers live
+lobby never presents everything at once. The center slab offers exactly
+THREE doors — FIGHT, ARCADE, THE CLUB — and every other option is a
+sub-option behind its door, one BACK away. Preference breakers live
 where they matter (ONLY BOTS inside FIGHT, SHOOT BACK inside ARCADE),
-never at top level. The left wing is THE TOWN, a buttonless live-status
-board; the right wing stays YOU.
+never at top level.
+
+**The tab grammar** (MENUS 2): the doors are TABS. Every panel wears a
+strip of horizontal tabs across its top — the Overwatch / Fortnite menu
+structure — so where you are is always one glance away and nothing hangs
+behind you any more. The kit's `tab` role draws them: an uppercase label
+on a shared baseline, the active one underlined in the accent, a red pip
+for the unread paper.
+
+| Panel | Tabs |
+| --- | --- |
+| **CENTER** | FIGHT · ARCADE · CLUB (FIGHT's flows still drill in and BACK out on the slab; CLUB is the region pick) |
+| **LEFT — THE TOWN** | TOWN (the live-status chips) · LADDER (the leaderboard, off the back wall: BATTLE / XP / ARCADE sub-boards, ten rows, stick-scrolled, tap a name for the profile) · NEWS (the Gasket Gazette, rendered on its own page canvas and blitted onto the wing, stick-scrolled) |
+| **RIGHT — YOU** | YOU (the paint bay, your blank, coins, record) · SETTINGS (volume tracks scrubbed by the trigger, mute / voice / hide-paint breakers, REPORT, CREDITS) |
+
+Above the right wing hangs **THE PROFILE pop-out** — what the floating
+coin readout became, on the RAVE RAID profile-card pattern: a bare chip
+(your accent mark, name, rank, `$` balance rolling up after a bout) that
+drops your card out over the wing — the painting behind the name, rank
+and XP bar, honours and achievements with tooltips, your note — with
+RENAME and WRITE NOTE. Rename lives there and nowhere else. Any other
+menu action folds the card.
 
 The wrap is the *foyer* menu (solo/spawn context). On the club floor the
 same three panels compress into the summonable console (the RAVE RAID
@@ -245,8 +265,24 @@ every client), the telegraph kit (gate/donut/X/rail/lane + THE ROUTINE's
 marks, quarter lines and falling blocks, octagon-masked), CampaignSystem's
 grammar path (windows so a cascade's later reads open as earlier steps
 fire; per-shape strikes; head-judged routine commitment), and the per-boss
-subsets above. Headless: `npm run check:grammar`. Boss-side ANIMATION
-language for the new moves (bespoke gestures per shape) is the next pass.
+subsets above. Headless: `npm run check:grammar`.
+**SHIPPED (second pass — THE GESTURE LANGUAGE)**: `campaign/gestures.ts`.
+The floor is the near tell; the titan's silhouette is the far one, and
+every grammar shape now has its own: the lane's POINT (one arm levelled
+down the strip, the other tucked), THE X's crossed arms, the rail's
+SCISSOR (wings out, snapping across), the gate's PRESS (arms spread, then
+closing either side of the gap that lives), the donut's RING (hands meeting
+overhead, up on the toes), THE ROUTINE's TEACH (the king points at each
+taught corner in turn), the wave's MARCH (the piston drumline pumping on
+the beat) and the duckdonut's blade (the sweep's own wind-out). Each is a
+pure function of the read's fill — the same seed animates the same pose on
+every client — with a body lean, a lift, a GAZE that turns the head from
+the player to the marked spot as the read fills, a follow-through on the
+landing (the point jabs, the press claps — `sfx.clap` — the ring slams
+down wide) that decays into the next step's windup so a cascade breathes
+like RAVE RAID's bosses did, and a temperament per chassis (the press
+snaps, the king reaches). `check:grammar` now asserts every forced move
+raises the arms and that no two shapes' silhouettes come within 0.4 rad.
 
 Raid escalation carries over unchanged for the classic kinds (solo-target
 → two marks → whole squad, DECREE-style shared bearings, the resurrection
@@ -291,6 +327,39 @@ from collision). Everything in the shop is sold *uncoloured* — the same
 primer grey as the body. FF1's wallet/shop/locker plumbing
 (`wallet.ts`, `customization.ts`, owned-lists, try-before-buy preview)
 carries over; the catalogue changes from skins to attachments.
+
+**SHIPPED — GEAR** (`src/avatar/gear.ts`): fifteen shapes in three SLOTS
+— head (CREST, ANTENNAE, HORNS, HALO, MOHAWK, VISOR BAND), body
+(PAULDRONS, CHESTPLATE, COLLAR, RIDGE, BELT, EPAULETTES) and hands
+(CUFFS, KNUCKLES, GAUNTLETS) — one worn per slot, every piece primed in
+the body's own tone (white on a blank, black on an onyx) and immune to
+every recolour, exactly like the body. Purely visual: gear parents to the
+rig's head / body / glove groups and the BODY_IK hitboxes never move.
+The STORE and LOCKER grew a GEAR tab (try-on dresses the mirror, a buy
+goes straight on, a locker tap wears or removes), and the worn set rides
+every cosmetics channel packed as a short comma list — the duel `iam`,
+the mesh `iam` (`mesh.cosmetics`), the club hello + the LOOK event, the
+raid pit body, and the player doc (`gear`, beside `pad`, the deck) — re-validated on arrival by
+`cleanGear` (unknown ids dropped, one per slot, hard length cap: the
+paint's fail-soft law). Probes: `check:wrap` dresses the podium through
+`__ff2.gear` and asserts the wire form; `check:paint`'s two-client room
+sees a punter's gear arrive on the hello. Not yet: gear as a PAINT
+surface (stripes stay on the body and head for now).
+
+**SHIPPED — THE PADS, rebuilt entire.** The platform shop no longer sells
+neon tints over one steel slab with a grin, a bolt and a grid on top. A
+platform skin is a MATERIAL (`arena/decks.ts`): thirteen procedural
+decks — charred oak, pale ash, redwood, walnut, slate flagstones, veined
+marble, black glass, river ice, jade, gold leaf, crimson lacquer, wet
+green stone — each a colour map and a bump map cut from one seeded noise,
+shared per style so swapping skins never uploads. The catalogue is the
+material ladder: SMOULDER / AZURE / INFERNO free; WALNUT, SLATE, MARBLE,
+FROST, OBSIDIAN, JADE, BULLION for coins; CHAMPION, TIDEBREAKER and
+BLAZING earned as before (their living FX — the burning rail, the pool —
+kept; everything decorative retired). Each skin also sets the neon tube's
+colour and the corner screws' metal (iron, brass, chrome, gold). Tiles
+show a swatch of the material. The player doc mirrors the worn deck as
+`pad` so the gazette can say what a champion stands on.
 
 ### 5.3 The paint — the important part
 
@@ -372,6 +441,45 @@ survives, rebuilt beautiful:
 
 The factory and salt flats get the same pass in later sessions; new venues
 (the club itself is an environment) follow the same layered recipe.
+
+**THE SITES** *(shipped)*: one desert, three places, and the game walks you
+between them by what you're doing (`arena/desert/sites.ts`, driven by
+DesertSystem off the app state). **THE TRAILHEAD** is the lobby — the edge
+of GASKET: the signpost under its own buzzing hooded lamp, the broken
+fence, a campfire burning low on the TOWN board's side, a windmill turning
+against the last light, telegraph poles marching off toward town. **THE
+FLATS** are every match and Aim Training — open ground: the skull (now
+glinting) and two dead trees throwing the longest shadows in the game.
+**THE BONEYARD** is every campaign fight and every raid — where titans
+are broken: a ring of standing bevelled wreck-plates around the pit, oil
+drums burning (two lit — the light budget), RUSTHOOK's own hook buried
+to the shank — all of it clear of the five-seat arc. No litter anywhere:
+the brief was beautiful, not busy, and the first cut's scrap heaps,
+loose bones and rib cages were pulled the moment they read as debris. Only one site is
+visible at a time and each collapses to a few static draws; the far layer
+(sky, sun, ground, mesas, weather) is shared and simply YAWED per site, so
+the skyline sits somewhere new too: the lobby's sun hangs to your left, a
+rival stands backlit against it, a titan is lit full in the face with the
+light at the squad's back. **Pass 2 of the look** landed with it: the
+mesas are no longer stacked drums but one wind-carved loft each (two
+octaves of radial noise, ledges where a stratum held, the bands baked into
+vertex colour and merged to one draw — the static merge learned to keep
+`color`), a heat-haze band swims along the horizon (one additive draw,
+no render target), dust motes hang in the arena's light cone, and bone
+catches the light. **Papercraft is OUT, as the brief demanded** — and not
+by adding polygons alone: `arena/desert/textures.ts` is the material
+kit, six procedural canvas skins (rippled sand, strata rock, oxidised
+iron, dead bark, cured plank, pored bone), each a tint-neutral colour map
+plus a bump map cut from the same seeded noise, so every surface carries
+grain the low light rakes across for one texture fetch and no extra
+draws. The ground wears the sand skin under its dune colour; boulders are
+noise-displaced spheres in rock, smooth-shaded; clouds are layered soft
+sprites instead of faceted blobs; the skull is domes, not an icosahedron;
+cacti and agave carry the segments to read as flesh; and the sky dome
+finally has a DIRECTION — the blood-orange band is tall and hot under the
+dying sun and thins to a dusty mauve behind you, so the night is already
+arriving on one side. Preview: `env-preview.html?env=desert&site=…`;
+headless: `npm run check:desert` (add `--shots`).
 
 ### 6.2 The bar
 
@@ -467,10 +575,14 @@ Each phase is shippable; nothing waits on everything.
    three-panel wrap. Old menu retires screen by screen.
    *(v1 shipped: the kit lives at `src/ui/kit/`, and `src/menu/wrap.ts`
    stands three kit panels on the arc as drop-in `MenuPanel`s — BATTLE
-   with all its faces, ARCADE, and the house panel. Still legacy: the
-   modals — campaign line-up, arcade lobby, locker, shop, settings,
-   gazette — the rear leaderboard, the name keyboard, and the pointer
-   visuals; `pointer.ts`/`safety.ts` port when those screens move.)*
+   with all its faces, ARCADE, and the house panel. MENUS 2 shipped the
+   tab grammar, moved the leaderboard, the paper and settings onto wing
+   tabs as kit faces (`src/menu/ladder.ts`, `settingsFace.ts`) and made
+   the coin readout THE PROFILE pop-out (`profilePop.ts`); the rear
+   board, the paper/gear discs, the settings modal and the coin HUD are
+   deleted. Still legacy: the modals — campaign line-up, arcade lobby,
+   locker, shop — the name keyboard, and the pointer visuals;
+   `pointer.ts`/`safety.ts` port when those screens move.)*
 3. **The mannequin** — new procedural blank over the existing rig +
    hitboxes; FF1 skins retired behind it; attachments shop v1.
    *(v2 shipped: THE BLANK is the ONLY body — the FF1 animal chassis
@@ -507,8 +619,50 @@ Each phase is shippable; nothing waits on everything.
 6. **Audience ground + the crowd** — watchers travel with the squad,
    audience terraces in the arenas, voice bubble, hands-up roar wire,
    sourced crowd beds.
+   *(Opened: WHO HEARS WHOM is one table (`net/voiceRules.ts`) read by
+   every voice path — RANKED is silence, no mic and no ears; duels hear
+   their fighters, brawls every fighter, the raid its squad, the club the
+   room, an audience everyone. THE CROWD BED ships synthesised
+   (`audio/crowd.ts`): distant murmur under every bout, a rumble that
+   swells with the landings, roar stings on hits, cores, rounds and the
+   win, and the HANDS-UP channel (`systems/CrowdSystem.ts`) — both hands
+   over the head swell the roar — ready for the relay's aggregate.
+   AUDIENCE GROUND stands on the flanks of the flats and the boneyard
+   (`arena/desert/audience.ts`): two-tier terraces outside the cage line,
+   rails capped hazard amber, dark, each offering a set of STANDS.
+   THE WATCHERS TRAVEL: every online room's seat array runs longer than
+   its fighter count (`config.AUDIENCE_SEATS`) and its tail is the
+   audience — a WATCH chip on any lobby row claims one, a full lobby
+   included, since turning up to a show is the point. A watcher rides the
+   same mesh at fighter fidelity, is dealt to the match's own place with
+   the squad, and lands on a stand rather than a platform: their slot is
+   a sentinel outside every layout (`config.WATCHER_SLOT`), which makes
+   every seat-relative transform resolve to the canonical frame, so the
+   whole ring renders where it actually is with no special case
+   downstream. They throw nothing and judge nothing (the input and
+   collision systems stand down), and each watcher's head rides a `watch`
+   frame so the terrace has BODIES on it — the crowd going up is a thing
+   the fighters can see. THE ROAR is aggregated per headset off those
+   same frames (no relay needed: everyone receives everyone), and the
+   voice split is enforced where it bites, in MeshSystem's speaker
+   attach: a fighter never opens a watcher's voice. Still to land:
+   sourced crowd recordings behind the same API, and the bell dealing the
+   audience from the club floor once presence ships.)*
 7. **RAVE mode** — port the set, decks, records; mannequin on the ring;
    coins per song; bell learns RAVE SET.
+   *(Shipped as a PAGE: `rave.html` boots `src/rave/` — the dance repo's
+   source ported whole, file identities intact, its own relay as
+   `server/rave.mjs`. The ARCADE tab's RAVE RAID button hops there; the
+   rave board's rail grew a FIRE FIGHT entry that hops back. ONE TOWN:
+   the profile reads the arena's callsign and accent first and writes
+   them back on a rename; a finished record pays `songCoins(grade)` into
+   the one wallet and the grade card names it; every figure — groupies,
+   the giant MC, the club's room-mates, your reflection — wears THE BLANK
+   through `rave/game/blankDancer.ts` (the arena's rig, `solveTorso`,
+   gear and paint bakes, glowsticks out of the fists). Still to land:
+   looks and gear on the rave's own wire (remote humans dance bare
+   today), the bell's RAVE SET, the two clubs folding into one, and
+   the goopliath/choreo copies deduplicated.)*
 8. **Campaign 2** — move-grammar port (telegraphs/setlist/floor manager),
    new titan line-up, the on-beat titan, raid cut.
 9. **Desert 2.0** — the dusk rebuild, then the venue exterior, then the
@@ -521,9 +675,11 @@ Each phase is shippable; nothing waits on everything.
    material is smooth matte clay, dunes at higher vertex density so the
    dusk light rolls instead of snapping facet to facet. Every landmark
    kept: the sign, the skull, the fence, the tumbleweeds, the mesas, the
-   vultures, the dust devils. Next passes: real material variation on
-   the mesas, the lit sign lamp, heat-haze at the horizon, and the same
-   treatment for the salt flats and factory.)*
+   vultures, the dust devils. Second pass shipped: THE SITES — the
+   trailhead / the flats / the boneyard, swapped by activity, the far layer
+   turned per site — plus wind-carved vertex-coloured mesas, the sign's
+   lamp, the horizon haze band, dust motes in the arena light and glinting
+   bone (§6.1). Next: the same treatment for the salt flats and factory.)*
 10. **Links & Discord** — `?join=` everywhere, QR on the lobby, bot write
     path.
 

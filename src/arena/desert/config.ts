@@ -24,6 +24,7 @@ export const CONFIG = {
   sky: {
     top: '#131b34', // deep violet-navy — night arriving overhead
     horizon: '#d95f2b', // the blood-orange band where the sun is dying
+    dusk: '#5b3648', // the horizon AWAY from the sun: dusty mauve, night's side
     bottom: '#3c2029', // dark earth glow below the horizon
     intensity: 1.0,
   },

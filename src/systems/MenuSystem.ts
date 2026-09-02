@@ -25,27 +25,15 @@ import {
   Raycaster,
   SphereGeometry,
   Vector3,
-  type Intersection,
-} from 'three';
+  type Intersection, CanvasTexture } from 'three';
 import { app, DEFAULT_ACCENT_HUE, DEFAULT_ACCENT_LIGHT, saveAccentHue, saveAccentLight, saveDifficulty, saveEnvironment, saveOnlyBots, saveShootBack, type AppState, type ArcadeMode } from '../menu/appState.js';
 import { bootIntroActive } from '../experience/introGate.js';
-import { DIFFICULTY_ORDER, type Difficulty } from '../config.js';
+import { DIFFICULTY_ORDER, type Difficulty, PAINT } from '../config.js';
 import { difficultyUnlocked } from '../campaign/campaignState.js';
 import {
-  accentBarHue,
-  accentBarLight,
   clearProfileKeyboardHint,
-  colorBarHue,
-  musicVolFromU,
-  sfxVolFromU,
-  clickBalls,
-  colorBarLight,
-  campaignModal,
-  clearReportSent,
-  setCreditsOpen,
   createActionPanel,
   createMenu,
-  markReportSent,
   flashProfileKeyboardHint,
   profileHintActive,
   resetNewsScroll,
@@ -58,10 +46,23 @@ import {
   type PanelId,
 } from '../menu/menu.js';
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
-import { installWrap, type Wrap } from '../menu/wrap.js';
+import { installWrap, wrapNav, type Wrap } from '../menu/wrap.js';
+import { clearReportSent, markReportSent, musicVolFromU, setCreditsOpen, sfxVolFromU } from '../menu/settingsFace.js';
+// MENUS 3: the modals are kit faces now, each in its own module.
+import { accentBarHue, accentBarLight, lockerFace, LOCKER_H, LOCKER_W } from '../menu/lockerFace.js';
+import { campaignFace, campaignModal, CAMP_H, CAMP_W } from '../menu/campaignFace.js';
+import { lobbyFace, LOBBY_H, LOBBY_W } from '../menu/lobbyFace.js';
+import { ballsClick, ballsFace, ballsFaceKey, ballsHit, BALLS_H, BALLS_W } from '../menu/ballsFace.js';
+import { profilePop } from '../menu/profilePop.js';
+import { audienceStands } from '../arena/desert/audience.js';
+import { audienceView } from './AudienceSystem.js';
+import { crowd } from '../audio/crowd.js';
+import { currentVoiceContext, VOICE_RULES, voiceAllowed, hearAllowed } from '../net/voiceRules.js';
 import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
+import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
 import { KitMenuPanel } from '../menu/wrap.js';
+import type { PanelButton } from '../ui/kit/panel.js';
 import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey } from '../menu/paintbay.js';
 import {
   avatarOwned,
@@ -72,11 +73,9 @@ import {
   ownPlatform,
   platformOwned,
   setAvatarColor,
-  setAvatarLight,
   setAvatarSkin,
   setPlatformSkin,
-  setShopPreview,
-} from '../menu/customization.js';
+  setShopPreview, gearOwned, gearWith, myGear, myPackedGear, ownGear, setGear, toggleGear } from '../menu/customization.js';
 import { canAfford, coins, spendCoins } from '../menu/wallet.js';
 import { playCash, preloadCash } from '../audio/cash.js';
 import { setMenuMusicActive, toggleMusicMuted } from '../audio/menuMusic.js';
@@ -96,6 +95,7 @@ import {
 } from '../avatar/skins.js';
 import { match } from '../combat/matchState.js';
 import { applyArenaLayout, tintPlatform } from '../arena/arena.js';
+import { localLayout } from '../combat/layout.js';
 import { mesh } from '../net/mesh.js';
 import { UI } from '../ui/industrial.js';
 import { net } from '../net/client.js';
@@ -119,12 +119,13 @@ import {
   setPlayerName,
   setPlayerNote,
   setProfileView,
+  type LeaderboardTab,
   syncLookMirror,
 } from '../net/leaderboard.js';
-import { gazette, markGazetteRead, refreshGazette } from '../net/gazette.js';
-import { hueToColor, pubUrl, teamColor } from '../config.js';
+import { gazette, markGazetteRead, refreshGazette, type GazetteArticle } from '../net/gazette.js';
+import { hueToColor, pubUrl, raveUrl, teamColor, WATCHER_SLOT } from '../config.js';
 import * as sfx from '../audio/sfx.js';
-import { requestClubEntry } from '../experience/clubNavigation.js';
+import { requestClubEntry, requestRaveEntry } from '../experience/clubNavigation.js';
 
 const _origin = new Vector3();
 const _dir = new Vector3();
@@ -141,7 +142,13 @@ const NEWS_SCROLL_STEP = 76;
  *  flip passthrough, tweak settings. Everything else — every fight, the
  *  loadout, the shop — clanks like sealed armour until the tutorial has been
  *  run once (app.tutorialDone; the tutorial button itself is always live). */
-const PRE_TUTORIAL_PANELS = new Set<string>(['gazette', 'news', 'gear', 'settings']);
+function preTutorialAllowed(action: MenuAction | null): boolean {
+  if (!action) return false;
+  if (action === 'start-tutorial' || action === 'rename' || action === 'edit-note') return true;
+  // Tabs, the paper, settings and the profile card all answer before the
+  // tutorial; the ladder, the fights, the bay and the shop clank.
+  return /^(wrap:tab-|open-gazette|gazette-close|open-settings|settings-|credits-back|sfx-|music-|toggle-mute|toggle-voice|toggle-hide-paint|profile-|badge-|lb-)/.test(action);
+}
 
 interface Pointer {
   line: Line;
@@ -153,6 +160,10 @@ export class MenuSystem extends createSystem({}) {
   private wrap!: Wrap;
   private paintVersionSeen = 0;
   private bayPanel!: KitMenuPanel;
+  /** The kit modals (MENUS 3) — ticked with the wrap so their hovers ease. */
+  private modals: KitMenuPanel[] = [];
+  /** Last loadout state the ball panel was drawn at (its own repaint key). */
+  private ballsKey = '';
   private bayKey = '';
   private bayMeshes: Object3D[] = [];
   private bayGhostAt = 0;
@@ -189,6 +200,8 @@ export class MenuSystem extends createSystem({}) {
   private boardScrollDir = 0;
   private newsScrollCooldown = 0;
   private newsScrollDir = 0;
+  /** The board a ladder profile was opened from — BACK returns there. */
+  private ladderFrom: LeaderboardTab = 'ranked';
   private draggingHue = false;
   private accentHue = Number.NaN;
   private accentLight = Number.NaN;
@@ -268,7 +281,84 @@ export class MenuSystem extends createSystem({}) {
     this.bayPanel.mesh.visible = false;
     this.menu.panels.push(this.bayPanel);
     this.menu.group.add(this.bayPanel.mesh);
+    // THE MODALS (MENUS 3), all on the kit: the locker and the store, the
+    // titan line-up, the arcade lobby and the ball loadout. Same panel ids
+    // as the plates they replace, so every bit of the visibility and
+    // routing machinery below is untouched — only the faces changed.
+    this.addModal('custom', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(true), [0.5, 1.53, -1.1], -0.3);
+    this.addModal('shop', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(false), [0.5, 1.5, -1.1], -0.3);
+    this.addModal('campaign', 1.5, 1.5 * (CAMP_H / CAMP_W), CAMP_W, CAMP_H, campaignFace, [0, 1.5, -1.2], 0);
+    this.addModal('lobby', 1.05, 1.05, LOBBY_W, LOBBY_H, lobbyFace, [0, 1.5, -1.18], 0);
+    // The loadout hangs out on the RIGHT, clear of the mirror on the left,
+    // and answers its own `ball:*` ids before anything global.
+    this.addModal('balls', 0.8, 0.8, BALLS_W, BALLS_H, ballsFace, [1.32, 1.18, -0.66], -0.6, (id) => ballsClick(id));
+    // THE MODALS, readable headlessly: what each one is offering, and its
+    // canvas, so a probe can walk every face without a headset.
+    (window.__ff2 as unknown as Record<string, unknown>).modals = {
+      buttons: (id: string): string[] => {
+        const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
+        return p?.kit?.buttonIds() ?? [];
+      },
+      live: (id: string): string[] => {
+        const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
+        return p?.kit?.liveButtons() ?? [];
+      },
+      snap: (id: string): string => {
+        const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
+        if (!p?.kit) return '';
+        p.redraw(null);
+        return (p.kit.ctx().canvas as HTMLCanvasElement).toDataURL('image/png');
+      },
+      up: (id: string): boolean => this.menu.panels.find((x) => x.id === id)?.mesh.visible === true,
+    };
     installPaintDevHook(); // __ff2.paint — THE PAINT's dev/probe verbs
+    // THE AUDIENCE (DESIGN §3.2), drivable headlessly: take a place on the
+    // terrace, put a watcher on the wire, read the room's roar.
+    (window.__ff2 as unknown as Record<string, unknown>).audience = {
+      stands: (): number => audienceStands().length,
+      where: () => audienceView.mine,
+      bodies: (): number => audienceView.bodies,
+      roar: () => ({ mine: crowd.myRoar, room: crowd.roomRoar, level: crowd.level }),
+      /** Enter the current bout as a watcher (or stand down again). */
+      watch: (on: boolean, seat = 4): void => {
+        mesh.watching = on;
+        if (on) {
+          mesh.capacity = 2;
+          mesh.mySeat = seat;
+        }
+        app.spectating = on;
+        app.mySlot = on ? WATCHER_SLOT : 0;
+        app.arcade = '1v1';
+        app.state = on ? 'playing' : 'menu';
+      },
+      /** Put a watcher on the wire, as the mesh would. */
+      wire: (seat: number, x: number, y: number, z: number, roar: number): void => {
+        mesh.watchers.set(seat, { x, y, z, qx: 0, qy: 0, qz: 0, qw: 1, roar, at: performance.now() });
+      },
+      clear: (): void => mesh.watchers.clear(),
+      /** Is my own pedestal still under me? (A watcher's is not.) */
+      pad: (): boolean => this.scene.getObjectByName('player-platform')?.visible !== false,
+      /** Bodies actually standing in the scene at the rail. */
+      inScene: (): number => {
+        let n = 0;
+        this.scene.traverse((o) => {
+          if (o.name === 'terrace-watcher') n++;
+        });
+        return n;
+      },
+      /** The whole local roster as a watcher sees it: me, then every fighter. */
+      roster: (): number[] => localLayout().map((s) => s.canonical),
+    };
+    // WHO HEARS WHOM (net/voiceRules.ts), readable headlessly.
+    (window.__ff2 as unknown as Record<string, unknown>).voice = {
+      context: currentVoiceContext,
+      rules: VOICE_RULES,
+      allowed: voiceAllowed,
+      hear: hearAllowed,
+      ranked: (on: boolean): void => {
+        app.fromRanked = on;
+      },
+    };
     installGrammarDevHook(); // __ff2.grammar — THE ENCORE's pure move grammar
     // Probe-only: drive the bay panel's own click path (wallet included).
     (window.__ff2 as unknown as Record<string, unknown>).bayClick = (id: string): void => {
@@ -302,6 +392,13 @@ export class MenuSystem extends createSystem({}) {
     // halo breath) every frame — a no-op while nothing moves.
     this.wrap.tick(delta);
     this.bayPanel?.tick(delta, 0);
+    for (const m of this.modals) if (m.mesh.visible) m.tick(delta, 0);
+    // The loadout answers its own clicks, so nothing else knows to repaint it.
+    const bk = ballsFaceKey();
+    if (bk !== this.ballsKey) {
+      this.ballsKey = bk;
+      this.redrawPanel('balls');
+    }
 
     // The BOOT INTRO owns the view: the lobby is live behind the black shade,
     // so without this the pointers sweep panels nobody can see — chirping the
@@ -344,22 +441,22 @@ export class MenuSystem extends createSystem({}) {
       return;
     }
 
-    // Customisation and the gazette are both modal: the lobby arc swaps out for
-    // the open panel. The leaderboard ('board') hangs behind you — always up.
-    // The shop is a sub-modal of customisation: while it's up the customise
-    // plate (and its mirror/loadout) step aside for the shop face.
+    // Customisation, the campaign line-up, the arcade lobby and the paint
+    // bay are modal: the lobby arc swaps out for the open panel. (The
+    // paper and settings are TABS on the wings now — MENUS 2.) The shop is
+    // a sub-modal of customisation: while it's up the customise plate (and
+    // its mirror/loadout) step aside for the shop face.
     const shopOpen = customization.open && customization.shopOpen;
     const modalCustom = customization.open && !shopOpen;
-    const modalNews = app.gazetteOpen;
     const modalCampaign = app.campaignOpen;
     const modalLobby = app.lobbyMode !== null;
-    const modalSettings = app.settingsOpen;
+    const arcUp = !customization.open && !modalCampaign && !modalLobby && !app.paintBayOpen;
     let visChanged = this.rayTargets.length === 0; // first frame: build the list
     for (const p of this.menu.panels) {
       let show: boolean;
       switch (p.id) {
-        case 'board':
-          show = p.mesh.visible; // always up, hanging behind you
+        case 'profilecard':
+          show = arcUp && profilePop.open; // dropped out of the chip
           break;
         case 'custom': // the LOCKER
         case 'balls':
@@ -368,25 +465,19 @@ export class MenuSystem extends createSystem({}) {
         case 'shop':
           show = shopOpen;
           break;
-        case 'news':
-          show = modalNews;
-          break;
         case 'campaign':
           show = modalCampaign;
           break;
         case 'lobby':
           show = modalLobby;
           break;
-        case 'settings':
-          show = modalSettings;
-          break;
         case 'paintbay':
           show = app.paintBayOpen;
           break;
         default:
-          // The arc (train/duel/info), the paper button AND the coin readout:
-          // the lobby's face, gone while any modal is open.
-          show = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings && !app.paintBayOpen;
+          // The arc (train/duel/info) and the profile chip: the lobby's
+          // face, gone while any modal is open.
+          show = arcUp;
           break;
       }
       if (p.mesh.visible !== show) {
@@ -405,7 +496,6 @@ export class MenuSystem extends createSystem({}) {
     // The podium shows with the lobby arc and steps aside for every modal
     // (the locker brings its own mirror); it turns like a display stand.
     if (this.podium) {
-      const arcUp = !customization.open && !modalNews && !modalCampaign && !modalLobby && !modalSettings && !app.paintBayOpen;
       this.podium.visible = arcUp;
       this.podium.userData.beat = (this.podium.userData.beat ?? 0) + 1;
       if (arcUp) this.podium.rotation.y += delta * 0.3;
@@ -434,12 +524,14 @@ export class MenuSystem extends createSystem({}) {
         if (app.paintBayOpen && hit.object.userData?.paintPart && hit.uv) this.bayBodyHit(hand, hit);
         continue;
       }
-      if (panel.id === 'board') {
+      // The TOWN wing scrolls with the thumbstick: ladder rows on LADDER,
+      // the article on NEWS.
+      if (panel.id === 'duel' && wrapNav.town === 'ladder') {
         boardPointed = true;
         const axis = this.input.xr.gamepads[hand]?.getAxesValues(InputComponent.Thumbstick)?.y ?? 0;
         if (Math.abs(axis) > Math.abs(boardScrollAxis)) boardScrollAxis = axis;
       }
-      if (panel.id === 'news') {
+      if (panel.id === 'duel' && wrapNav.town === 'news') {
         newsPointed = true;
         const axis = this.input.xr.gamepads[hand]?.getAxesValues(InputComponent.Thumbstick)?.y ?? 0;
         if (Math.abs(axis) > Math.abs(newsScrollAxis)) newsScrollAxis = axis;
@@ -464,13 +556,6 @@ export class MenuSystem extends createSystem({}) {
       if (hit.uv && panel.drag && (down || owns) && panel.drag(hit.uv.x, hit.uv.y)) {
         if (down) this.sliderGrab = { hand, panel: panel.id };
         dragged = true;
-      } else if (hit.uv && action === 'av-color' && (down || owns)) {
-        if (down) this.sliderGrab = { hand, panel: panel.id };
-        // The hue bar is continuous: scrub the armour colour live while held.
-        setAvatarColor(colorBarHue(hit.uv.x));
-      } else if (hit.uv && action === 'av-light' && (down || owns)) {
-        if (down) this.sliderGrab = { hand, panel: panel.id };
-        setAvatarLight(colorBarLight(hit.uv.x)); // scrub the armour lightness live
       } else if (hit.uv && action === 'accent-color' && (down || owns)) {
         if (down) this.sliderGrab = { hand, panel: panel.id };
         app.accentHue = accentBarHue(hit.uv.x); // scrub the neon accent live
@@ -491,7 +576,7 @@ export class MenuSystem extends createSystem({}) {
         setMusicVolume(musicVolFromU(hit.uv.x)); // scrub the music volume live
         dragged = true;
       } else if (hit.uv && down) {
-        if (!app.tutorialDone && action !== 'start-tutorial' && !PRE_TUTORIAL_PANELS.has(panel.id)) {
+        if (!app.tutorialDone && !preTutorialAllowed(action)) {
           sfx.armorClank(); // sealed until the tutorial has been run once
         } else if (panel.click) {
           if (panel.click(hit.uv.x, hit.uv.y)) clicked = true;
@@ -525,8 +610,7 @@ export class MenuSystem extends createSystem({}) {
       if (hover) sfx.uiHover(); // soft laser zap as the pointer lands
     }
     // A scroll repaints its own page, nothing else.
-    if (boardScrolled) this.redrawPanel('board');
-    if (newsScrolled) this.redrawPanel('news');
+    if (boardScrolled || newsScrolled) this.redrawPanel('duel');
     // A skin change can touch several faces (locker, shop, board avatar) —
     // it's a rare, single event, so the full repaint is fine. A slider scrub
     // bumps the version EVERY frame — the drag branch below repaints just the
@@ -587,15 +671,41 @@ export class MenuSystem extends createSystem({}) {
 
     // Coins banked during a bout roll up the moment you're back at the menu —
     // redraw just the readout each frame while the digits are still climbing.
-    if (tickCoinRollup(delta)) {
-      this.menu.panels.find((p) => p.id === 'coins')?.redraw(null);
-    }
+    if (tickCoinRollup(delta)) this.redrawPanel('profile');
 
     // (The old pre-tutorial "TUTORIAL plate breathes" per-frame repaint is
     // gone: on the wrap the sealed lobby's call to action is the kit's
     // primary CTA — its glow needs no canvas re-upload, and a full-frame
     // 1024² repaint every frame is exactly what the kit's repaint
     // discipline exists to avoid.)
+  }
+
+  /**
+   * Build one modal as a kit panel and hang it in the lobby group, hidden.
+   * `local` gets first refusal on a pressed id (the loadout settles its own);
+   * anything it declines goes to the global dispatcher.
+   */
+  private addModal(
+    id: PanelId,
+    wM: number,
+    hM: number,
+    pxW: number,
+    pxH: number,
+    face: () => { title: string; body: (g: CanvasRenderingContext2D, hover: string | null) => void; buttons: PanelButton[] },
+    pos: [number, number, number],
+    rotY: number,
+    local?: (id: string) => boolean,
+  ): void {
+    const panel = new KitMenuPanel(id, wM, hM, pxW, pxH, face, (pressed) => {
+      if (local?.(pressed)) return;
+      this.run(pressed as MenuAction);
+    });
+    panel.mesh.position.set(pos[0], pos[1], pos[2]);
+    panel.mesh.rotation.y = rotY;
+    panel.mesh.visible = false;
+    this.menu.panels.push(panel);
+    this.menu.group.add(panel.mesh);
+    this.modals.push(panel);
   }
 
   /** Repaint one panel by id, preserving its live hover highlight. */
@@ -642,6 +752,10 @@ export class MenuSystem extends createSystem({}) {
   private run(action: MenuAction): void {
     sfx.ensureAudio();
     sfx.uiClick();
+    // THE PROFILE card folds on any action that isn't its own.
+    if (!action.startsWith('profile-') && !action.startsWith('badge-') && action !== 'rename' && action !== 'edit-note') {
+      profilePop.open = false;
+    }
     // The first leaderboard-relevant act (a training run, a 1v1 queue, or a
     // bot bout — bot wins score now too) claims a callsign: the keyboard pops
     // once, prefilled with the auto name, and the pending action resumes after
@@ -653,7 +767,8 @@ export class MenuSystem extends createSystem({}) {
         action.startsWith('ranked-join-') ||
         action === 'lobby-host' ||
         action === 'lobby-vsbots' ||
-        action.startsWith('lobby-join-')) &&
+        action.startsWith('lobby-join-') ||
+        action.startsWith('lobby-watch-')) &&
       !hasCustomName()
     ) {
       this.kbPending = action;
@@ -768,9 +883,9 @@ export class MenuSystem extends createSystem({}) {
         saveOnlyBots();
         break;
       case 'toggle-voice':
-        // Lives in the settings modal now — flip it and repaint that breaker.
+        // Lives on the SETTINGS tab — flip it and repaint the wing.
         setVoiceEnabled(!voiceEnabled());
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'ranked-match':
         if (app.onlyBots) break; // disabled — no online play in only-bots mode
@@ -926,11 +1041,15 @@ export class MenuSystem extends createSystem({}) {
       case 'lb-ffa':
         setLeaderboardTab('ffa');
         break;
-      case 'lb-profile':
-        setProfileView(null); // your own profile
-        break;
       case 'profile-back':
-        setLeaderboardTab('ranked');
+        // Back to the board the name was tapped on.
+        setLeaderboardTab(this.ladderFrom);
+        break;
+      case 'profile-toggle':
+        profilePop.open = !profilePop.open;
+        break;
+      case 'profile-close':
+        profilePop.open = false;
         break;
       case 'edit-note':
         this.kbPending = null;
@@ -945,33 +1064,32 @@ export class MenuSystem extends createSystem({}) {
         this.keyboard.open(myStats().name);
         return;
       case 'open-gazette':
-        // Open the paper, and the moment you do the edition counts as read —
-        // the red dot clears.
-        app.gazetteOpen = true;
+        // The NEWS tab: open the paper, and the moment you do the edition
+        // counts as read — the red pip on the tab clears.
+        wrapNav.town = 'news';
         resetNewsScroll();
         markGazetteRead();
         void refreshGazette(true);
         break;
       case 'gazette-close':
-        app.gazetteOpen = false;
+        wrapNav.town = 'town';
         break;
       case 'open-settings':
-        app.settingsOpen = true;
+        wrapNav.you = 'settings';
         break;
       case 'settings-credits':
         setCreditsOpen(true);
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'credits-back':
         setCreditsOpen(false);
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'settings-close':
-        app.settingsOpen = false;
+        // Back to the YOU tab.
+        wrapNav.you = 'you';
         clearReportSent(); // next visit gets a fresh report button
         setCreditsOpen(false); // reopening lands on settings, not credits
-        // Repaint the gear disc so its muted-pip reflects any change made inside.
-        this.menu.panels.find((p) => p.id === 'gear')?.redraw(null);
         break;
       case 'settings-report':
         // The safety report: typed on the callsign keyboard, filed to the
@@ -981,16 +1099,16 @@ export class MenuSystem extends createSystem({}) {
         this.keyboard.open('', 'REPORT A PLAYER OR PROBLEM', 64);
         break;
       case 'toggle-mute':
-        // Flip the music mute (persisted) and repaint the settings breaker.
+        // Flip the music mute (persisted) and repaint the wing's breaker.
         toggleMusicMuted();
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'toggle-hide-paint':
         // HIDE PAINT, globally: every other body renders bare base tone.
         // Remote bake keys watch paintPrefs.version, so live rigs repaint on
         // the spot; your own paint stays yours.
         togglePaintHiddenAll();
-        this.menu.panels.find((p) => p.id === 'settings')?.redraw(null);
+        this.redrawPanel('info');
         break;
       case 'open-pub':
         // Don't navigate yet — open the EU/USA region picker first.
@@ -998,6 +1116,11 @@ export class MenuSystem extends createSystem({}) {
         break;
       case 'pub-back':
         app.infoView = 'root';
+        break;
+      case 'open-rave':
+        // RAVE RAID is its own page (src/rave/): same wallet, same name,
+        // same body — its rail's FIRE FIGHT entry brings you back here.
+        requestRaveEntry(this.world, raveUrl());
         break;
       case 'base-white':
         setAvatarSkin('blank'); // applyOwnSkins swaps every rig next frame
@@ -1008,10 +1131,7 @@ export class MenuSystem extends createSystem({}) {
       case 'open-paintbay':
         app.paintBayOpen = true;
         this.ensureMirror();
-        this.bayMeshes = [];
-        this.mirror?.group.traverse((o) => {
-          if (o.userData?.paintPart) this.bayMeshes.push(o);
-        });
+        this.collectBayMeshes();
         this.bayKey = '';
         break;
       case 'paintbay-close':
@@ -1048,6 +1168,9 @@ export class MenuSystem extends createSystem({}) {
       case 'tab-arena':
         customization.tab = 'arena';
         break;
+      case 'tab-gear':
+        customization.tab = 'gear';
+        break;
       case 'av-uncolor':
         setAvatarColor(-1); // back to the skin's own palette
         break;
@@ -1082,6 +1205,24 @@ export class MenuSystem extends createSystem({}) {
           app.campaignStage = Number(action.slice('campaign-'.length)) || 0;
           app.arcade = '1v1';
           app.state = 'playing';
+          break;
+        }
+        // shop-buy-gr-N: the BUY button on a previewed GEAR tile; shop-gr-N:
+        // a LOCKER tap wears/removes a piece you own, a STORE tap tries an
+        // unowned piece on the mirror.
+        if (action.startsWith('shop-buy-gr-')) {
+          const def = GEAR[Number(action.slice('shop-buy-gr-'.length))];
+          if (def && !gearOwned(def.id)) {
+            this.buyOrWearGear(def.id, def.price);
+            if (gearOwned(def.id)) clearShopPreview();
+          }
+          break;
+        }
+        if (action.startsWith('shop-gr-')) {
+          const def = GEAR[Number(action.slice('shop-gr-'.length))];
+          if (!def) break;
+          if (customization.shopOpen && !gearOwned(def.id)) setShopPreview('gear', def.id);
+          else this.buyOrWearGear(def.id, def.price);
           break;
         }
         // shop-buy-av-N / shop-buy-pf-N: the BUY button on a previewed STORE
@@ -1131,7 +1272,10 @@ export class MenuSystem extends createSystem({}) {
         } else if (action.startsWith('lb-row-')) {
           // Open the clicked player's profile.
           const row = leaderboardRows()[boardScroll() + Number(action.slice(7))];
-          if (row) setProfileView(row);
+          if (row) {
+            this.ladderFrom = leaderboard.tab;
+            setProfileView(row);
+          }
         } else if (action.startsWith('pub-go-')) {
           // Pick a pub region, remember it, then hop to the pub page.
           const id = action.slice(7);
@@ -1151,6 +1295,35 @@ export class MenuSystem extends createSystem({}) {
           app.fromRanked = true;
           app.state = 'queueing';
           net.joinRanked(action.slice('ranked-join-'.length));
+        } else if (action.startsWith('lobby-watch-')) {
+          // THE TERRACE (DESIGN §3.2). A watcher takes a seat past the
+          // fighters' band: they travel with the squad when the room
+          // launches and are dealt onto the audience ground instead of a
+          // platform. A full lobby — even one already fighting — still
+          // answers, because turning up to watch is the point.
+          if (!app.onlyBots && app.lobbyMode) {
+            const roomId = action.slice('lobby-watch-'.length);
+            app.netStatus = 'taking a place on the terrace…';
+            const seq = ++this.lobbyJoinSeq;
+            const attempt = mesh.joinLobby(app.lobbyMode, roomId, myStats().name, (s) => (app.netStatus = s), true);
+            void Promise.race([attempt, new Promise<false>((r) => setTimeout(() => r(false), 15_000))])
+              .then((ok) => {
+                if (seq !== this.lobbyJoinSeq) return;
+                if (ok) {
+                  app.lobbyView = 'lobby';
+                } else {
+                  mesh.cancel();
+                  app.lobbyView = 'browser';
+                  app.netStatus = 'the terrace is full';
+                }
+              })
+              .catch(() => {
+                if (seq !== this.lobbyJoinSeq) return;
+                mesh.cancel();
+                app.lobbyView = 'browser';
+                app.netStatus = 'could not take a place, try again';
+              });
+          }
         } else if (action.startsWith('lobby-join-')) {
           // Claim a seat in a listed lobby; a race with a final joiner drops
           // you back on the (fresh) list. The lobby view opens ONLY once the
@@ -1194,6 +1367,19 @@ export class MenuSystem extends createSystem({}) {
    * buy it (debit the wallet, mark it owned) and equip it. Can't afford it →
    * nothing changes (the wallet refuses the spend).
    */
+  /** A gear tap: own it → wear it (or take it off); else buy it and wear it. */
+  private buyOrWearGear(id: string, price: number): void {
+    if (!gearOwned(id)) {
+      if (!canAfford(price) || !spendCoins(price)) return;
+      ownGear(id);
+      playCash();
+      const def = gearDef(id);
+      if (def) setGear(def.slot, id); // a fresh buy goes straight on
+      return;
+    }
+    toggleGear(id);
+  }
+
   private buyOrEquipPlatform(id: string, price: number): void {
     if (!platformOwned(id)) {
       if (!canAfford(price) || !spendCoins(price)) return; // can't afford — no-op
@@ -1284,6 +1470,53 @@ export class MenuSystem extends createSystem({}) {
         raw: () => ({ pod: podium.visible, grp: this.menu.group.visible, custom: customization.open, beat: podium.userData.beat ?? 0 }),
         at: () => podium.position.toArray(),
         pieces: () => podium.children[0]?.children.length ?? 0,
+        /** The gear the podium's blank is wearing right now. */
+        gear: () => wornGear(podium),
+      };
+      // THE GAZETTE, drivable headlessly: inject an edition (the page never
+      // needs Firestore to be probed), open/close it, and snap the page.
+      (hook as unknown as { gazette?: unknown }).gazette = {
+        inject: (art: Partial<GazetteArticle>) => {
+          gazette.article = {
+            edition: 999,
+            dateline: 'PROBE DAY',
+            headline: '',
+            subhead: '',
+            body: '',
+            byline: 'Sheriff Cole Ironside',
+            mood: '',
+            wanted: null,
+            notice: '',
+            weather: '',
+            ...art,
+          };
+          gazette.status = '';
+        },
+        open: () => this.run('open-gazette'),
+        scroll: (px: number) => scrollNews(px),
+        close: () => this.run('gazette-close'),
+        snap: (): string => {
+          // The paper is a tab on the TOWN wing now — snap the wing.
+          const p = this.menu.panels.find((x) => x.id === 'duel');
+          if (!p) return '';
+          p.redraw(null);
+          const tex = (p.mesh.material as MeshBasicMaterial).map as CanvasTexture | null;
+          return (tex?.image as HTMLCanvasElement | undefined)?.toDataURL('image/png') ?? '';
+        },
+      };
+      // GEAR, drivable headlessly: a dev equip grants the piece (no coins)
+      // so probes can dress the podium and watch it change.
+      (hook as unknown as { gear?: unknown }).gear = {
+        catalogue: () => GEAR.map((g) => g.id),
+        worn: () => myGear(),
+        equip: (id: string) => {
+          ownGear(id);
+          const d = gearDef(id);
+          if (d) setGear(d.slot, id);
+        },
+        clear: (slot: 'head' | 'body' | 'hands') => setGear(slot, ''),
+        pack: () => myPackedGear(),
+        clean: (s: string) => cleanGear(s),
       };
     }
     this.skinVersion = -1; // dress the new rig on the next applyOwnSkins
@@ -1353,11 +1586,19 @@ export class MenuSystem extends createSystem({}) {
       // shows exactly what you'd get.
       const pv = customization.preview;
       const mirrorAv = pv?.kind === 'avatar' ? resolveAvatarSkin(pv.id, customization.colorHue, customization.colorLight) : av;
+      // GEAR: your worn set on every rig that's yours; a STORE try-on
+      // dresses the MIRROR alone in the previewed piece (its slot swapped).
+      const gear = myGear();
+      const mirrorGear = pv?.kind === 'gear' ? gearWith(pv.id) : gear;
       for (const name of names) {
         const obj = this.scene.getObjectByName(name);
         if (obj) applyAvatarSkin(obj, name === 'mirror-avatar' ? mirrorAv : av);
         // (the podium wears what you actually own, like your own body)
+        if (obj) applyGear(obj, name === 'mirror-avatar' ? mirrorGear : gear, (name === 'mirror-avatar' ? mirrorAv : av).id === 'onyx' ? 'onyx' : 'white');
+        // Fresh gear is a fresh paint surface: bake the look onto it now.
+        if (obj) applyLook(obj, myLook());
       }
+      if (app.paintBayOpen) this.collectBayMeshes();
       const pad = this.scene.getObjectByName('player-platform');
       if (pad) applyPlatformSkin(pad, platformSkin(customization.platform));
       // A platform try-on models on the OPPONENT's pad across the gap — the
@@ -1551,7 +1792,8 @@ export class MenuSystem extends createSystem({}) {
       // The loadout section: taps equip/clear attachments between rounds.
       if (down && content.loadout) {
         const bh = this.panel.ballsHit(hit.uv.x, hit.uv.y);
-        if (bh && clickBalls(bh.u, bh.v)) {
+        const bid = bh ? ballsHit(bh.u, bh.v) : null;
+        if (bid && ballsClick(bid)) {
           sfx.uiClick();
           this.panelKey = ''; // repaint with the new equip state
         }
@@ -1648,15 +1890,22 @@ export class MenuSystem extends createSystem({}) {
     app.privateCode = ''; // the invite code has done its job
 
     app.arcade = mode;
-    app.mySlot = mesh.mySeat;
+    // A WATCHER travels with the squad but never onto a platform: their
+    // slot is the sentinel outside every layout (config.WATCHER_SLOT), so
+    // every fighter renders where the arena actually put them and
+    // AudienceSystem stands this headset on the terrace instead.
+    app.spectating = mesh.watching;
+    app.mySlot = mesh.watching ? WATCHER_SLOT : mesh.mySeat;
     if (mode === 'raid') {
       app.mode = 'campaign';
       app.campaignMode = 'raid';
       app.raidHardcore = mesh.raidHardcore;
       app.raidGoopliath = mesh.raidGoopliath;
-      // Squad size snapshot — the boss is built for THIS many fists (2–5)
-      // and stays that way even if someone drops mid-run.
-      app.raidSize = Math.min(5, Math.max(1, mesh.occupants.filter(Boolean).length));
+      // Squad size snapshot — the boss is built for THIS many FISTS (2–5)
+      // and stays that way even if someone drops mid-run. The terrace does
+      // not count: watchers fill the tail of the same seat array and would
+      // otherwise build a five-hand boss for a two-hand squad.
+      app.raidSize = Math.min(5, Math.max(1, mesh.occupants.slice(0, mesh.capacity).filter(Boolean).length));
       app.difficulty = mesh.raidDifficulty; // the host's pick, mirrored to all
       app.campaignStage = 0;
     } else {
@@ -1748,6 +1997,16 @@ export class MenuSystem extends createSystem({}) {
   }
 
   /** Point the laser down the hand's ray, snap its end + dot to any hit. */
+  /** Every paint surface on the mirror — the head, the body and whatever
+   *  gear it wears — becomes a target for the bay's ray. Re-collected when
+   *  the gear changes, since a fresh piece is a fresh canvas. */
+  private collectBayMeshes(): void {
+    this.bayMeshes = [];
+    this.mirror?.group.traverse((o) => {
+      if (o.userData?.paintPart) this.bayMeshes.push(o);
+    });
+  }
+
   /** The ray is ON the blank in the paint bay: ghost/adjust/place/lift. */
   private bayBodyHit(hand: 'left' | 'right', hit: Intersection): void {
     const part = hit.object.userData.paintPart as PaintPart;
@@ -1757,15 +2016,17 @@ export class MenuSystem extends createSystem({}) {
     const gp = this.input.xr.gamepads[hand];
     const down = gp?.getButtonDown(InputComponent.Trigger) ?? false;
     if (bay.held) {
-      // THE MINUTELY: stick x twists, stick y sizes (grip → width).
+      // THE MINUTELY: stick x twists, stick y sizes — capped at
+      // PAINT.maxSize so a unit can never swallow the body (grip → width,
+      // for the stripe; dots and squares have one size).
       const axes = gp?.getAxesValues(InputComponent.Thumbstick);
       const grip = gp?.getButtonPressed(InputComponent.Squeeze) ?? false;
       if (axes) {
         const dt = 1 / 60;
         if (Math.abs(axes.x) > 0.25) bay.held.angle = (bay.held.angle + axes.x * dt * 0.25 + 1) % 1;
         if (Math.abs(axes.y) > 0.25) {
-          const k = grip ? 'wid' : 'len';
-          bay.held[k] = Math.max(0.02, Math.min(1, bay.held[k] - axes.y * dt * 0.5));
+          const k = grip && bay.held.kind === 'stripe' ? 'wid' : 'len';
+          bay.held[k] = Math.max(0.02, Math.min(PAINT.maxSize, bay.held[k] - axes.y * dt * 0.5));
         }
       }
       if (down) {
@@ -1852,6 +2113,10 @@ export class MenuSystem extends createSystem({}) {
 
   private applyState(): void {
     const inLobby = app.state === 'menu' || app.state === 'queueing';
+    // The terrace is a place you go for ONE bout: coming home to the lobby
+    // makes you a fighter again (AudienceSystem hands the rig back to the
+    // origin off the same flag).
+    if (inLobby && app.spectating) app.spectating = false;
     this.menu.setVisible(inLobby);
     // Back in the lobby: hand the audio over — the victory sting rings out, then
     // (and only then) the lobby music fades up, so they never overlap. During a
@@ -1925,10 +2190,10 @@ export class MenuSystem extends createSystem({}) {
       this.keyboard.close();
       this.kbPending = null;
     }
-    // Customisation (panel + mirror) and the gazette are lobby-only affairs.
+    // Customisation (panel + mirror) and the profile card are lobby-only affairs.
     if (!inLobby) {
       customization.open = false;
-      app.gazetteOpen = false;
+      profilePop.open = false;
       if (this.mirror) this.mirror.group.visible = false;
     }
 

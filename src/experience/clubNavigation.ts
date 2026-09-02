@@ -36,6 +36,11 @@ export function requestClubEntry(world: World, fallbackUrl: string): void {
   endSessionAndNavigate(world, fallbackUrl);
 }
 
+/** Cross to RAVE RAID (its own page — src/rave/): end the session, hop. */
+export function requestRaveEntry(world: World, url: string): void {
+  endSessionAndNavigate(world, url);
+}
+
 export function requestArenaReturn(world: World): void {
   if (leaveClubHandler) {
     void leaveClubHandler();

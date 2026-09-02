@@ -29,6 +29,14 @@ export type PeerMessage =
       acc?: number;
       acl?: number;
     }
+  /**
+   * A WATCHER's frame (DESIGN §3.2). Watchers ride the same mesh as the
+   * fighters but never the combat path: their pose is a head on a terrace,
+   * and `roar` is the one channel the audience has into a fighter's ears —
+   * how high their hands are, 0..1, aggregated room-wide into the crowd
+   * bed (audio/crowd.ts). Noise, never words.
+   */
+  | { k: 'watch'; head: PoseTuple; roar: number }
   /** I punched my `hand` ball: it left from `pos` with velocity `vel`. */
   | { k: 'throw'; hand: 0 | 1; pos: [number, number, number]; vel: [number, number, number]; curl?: [number, number, number] }
   /**
@@ -80,7 +88,7 @@ export type PeerMessage =
    *  winner can weight their score gain by rival quality) + my skin picks
    *  so you see me dressed the way I chose. `lk` is my packed paint look
    *  (avatar/paint.ts wire form) — the receive side re-validates it. */
-  | { k: 'iam'; name: string; elo: number; av?: string; pf?: string; avc?: number; avl?: number; lk?: string }
+  | { k: 'iam'; name: string; elo: number; av?: string; pf?: string; avc?: number; avl?: number; lk?: string; gr?: string }
   /** Host → guest match-state echo. Scores are in the HOST's perspective. */
   | {
       k: 'state';

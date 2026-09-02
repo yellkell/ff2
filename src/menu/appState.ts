@@ -157,16 +157,18 @@ export const app: {
   pubCount: number;
   /** Punter count per pub region id (for the EU/USA door picker). */
   pubRegionCounts: Record<string, number>;
+  /**
+   * I am in this bout as a WATCHER, not a fighter (DESIGN §3.2): dealt to
+   * the match's place with the squad, standing on the audience ground
+   * outside the cage line. No platform, no fireballs, nothing to hit — and
+   * the fighters never hear my words, only the crowd (audio/crowd.ts).
+   */
+  spectating: boolean;
   /** Which face the lobby info panel shows: its doors, or the pub-region picker. */
   infoView: 'root' | 'pubpick';
   /** THE PAINT BAY is open over the lobby (modal, like customisation —
    *  the locker mirror stands beside it so placement is live). */
   paintBayOpen: boolean;
-  /** The Gasket Gazette is open over the lobby (modal, like customisation). */
-  gazetteOpen: boolean;
-  /** The SETTINGS panel (audio sliders + music mute + voice toggle) is open
-   *  over the lobby (modal, like the gazette). */
-  settingsOpen: boolean;
   /** The ARCADE campaign line-up (the titan sub-menu) is open over the lobby
    *  (modal, like customisation). Campaign bouts return here, win or lose. */
   campaignOpen: boolean;
@@ -276,10 +278,9 @@ export const app: {
   searching: -1,
   pubCount: -1,
   pubRegionCounts: {},
+  spectating: false,
   infoView: 'root',
   paintBayOpen: false,
-  gazetteOpen: false,
-  settingsOpen: false,
   campaignOpen: false,
   campaignStage: 0,
   campaignMode: 'single',

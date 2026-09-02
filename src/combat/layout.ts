@@ -41,11 +41,30 @@ let cached: LocalSlot[] = MODE_LAYOUT['1v1'].map((s, i) => ({ ...s, canonical: i
 
 /** The active mode's roster expressed in MY frame (me at index 0). */
 export function localLayout(): LocalSlot[] {
-  const key = `${app.arcade}:${app.mySlot}`;
+  const key = `${app.arcade}:${app.mySlot}:${app.spectating ? 'w' : 'f'}`;
   if (key === cacheKey) return cached;
   cacheKey = key;
-  cached = computeLocalLayout();
+  cached = app.spectating ? watcherLayout() : computeLocalLayout();
   return cached;
+}
+
+/**
+ * A WATCHER's roster (DESIGN §3.2). Nobody is fighting at my origin, so
+ * every canonical seat becomes an other-fighter slot and the whole bout is
+ * on show: index 0 is me, standing nowhere in particular (AudienceSystem
+ * moves my rig out to the terrace), and 1..N are the fighters exactly
+ * where the arena put them.
+ *
+ * The frame is the CANONICAL one, which is what makes this cheap: with
+ * `app.mySlot` set to WATCHER_SLOT — a seat no layout has — every peer
+ * transform in this file falls back to the canonical origin, so a
+ * fighter's pose lands where that fighter actually is without a single
+ * special case downstream.
+ */
+function watcherLayout(): LocalSlot[] {
+  const canonical = MODE_LAYOUT[app.arcade];
+  const me: LocalSlot = { pos: [0, 0, 0], yaw: 0, team: 0, canonical: -1 };
+  return [me, ...canonical.map((s, c) => ({ ...s, team: c, canonical: c }))];
 }
 
 function computeLocalLayout(): LocalSlot[] {

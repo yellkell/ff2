@@ -15,6 +15,8 @@
 // clips (cash / announcer / landing, which ride louder than the synth mix) plug
 // straight into `_sfxOut` too — so one knob scales EVERY sound while keeping the
 // relative balance.
+import { cueCrowd } from './crowdBus.js';
+
 type Ctx = AudioContext & { _master?: GainNode; _sfxOut?: GainNode };
 
 const SFX_VOL_KEY = 'ff-sfx-vol';
@@ -375,6 +377,7 @@ export function micToggle(on: boolean): void {
 
 /** Your ball lands on the opponent — anvil ring over a heavy body. */
 export function hitDealt(): void {
+  cueCrowd('hit');
   clank(540, 0.26, 0.35);
   tone({ freq: 260, to: 78, type: 'sine', dur: 0.18, gain: 0.3 });
 }
@@ -411,6 +414,7 @@ export function armorClank(): void {
 
 /** A ball finding the exposed core — deep bell + electric fizz. */
 export function coreHit(): void {
+  cueCrowd('core');
   clank(420, 0.3, 0.5);
   clank(840, 0.12, 0.3, 0.02);
   tone({ freq: 1600, to: 320, type: 'sawtooth', dur: 0.22, gain: 0.09 });
@@ -527,6 +531,7 @@ export function boundaryBuzz(intensity = 1): void {
 }
 
 export function hitTaken(): void {
+  cueCrowd('hit');
   clank(760, 0.26, 0.45); // the iron ball ringing off your armour
   tone({ freq: 105, to: 36, type: 'sawtooth', dur: 0.3, gain: 0.3 });
   clank(270, 0.14, 0.26, 0.015); // loose chassis rattle behind it
@@ -635,6 +640,7 @@ export function roundBell(): void {
 
 /** End-of-round cue. */
 export function roundEnd(win: boolean | 'draw'): void {
+  cueCrowd(win === true ? 'win' : win === 'draw' ? 'round' : 'lose');
   bellStrike(0);
   if (win === 'draw') {
     tone({ freq: 440, type: 'triangle', dur: 0.12, gain: 0.16, delay: 0.24 });

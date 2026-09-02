@@ -14,7 +14,7 @@
 import { createSystem } from '@iwsdk/core';
 import { Color, Fog } from 'three';
 import { app, type AppEnvironment } from '../menu/appState.js';
-import { buildDesert, type Desert } from '../arena/desert/index.js';
+import { buildDesert, type Desert, type DesertSite } from '../arena/desert/index.js';
 import { buildFactory, type Factory } from '../arena/factory/index.js';
 import { buildSaltFlats, type SaltFlats } from '../arena/saltflats/index.js';
 import { CONFIG } from '../arena/desert/config.js';
@@ -53,9 +53,29 @@ export class DesertSystem extends createSystem({}) {
   update(delta: number): void {
     this.time += delta;
     if (app.environment !== this.applied) this.apply(app.environment);
+    // THE SITES: the desert walks you between its three clearings by what
+    // you're doing (arena/desert/sites.ts) — the trailhead to wait at, the
+    // flats to box on, the boneyard where titans are broken. The swap rides
+    // the state flip itself (the bout's own reset/entrance covers the cut),
+    // and the frozen shadow map re-bakes once for the new dressing.
+    const site = this.siteFor();
+    if (this.desert && this.desert.site !== site) {
+      this.desert.setSite(site);
+      if (app.environment === 'desert') this.world.renderer.shadowMap.needsUpdate = true;
+    }
     if (app.environment === 'desert') this.desert?.update(delta, this.time);
     else if (app.environment === 'factory') this.factory?.update(delta, this.time);
     else if (app.environment === 'saltflats') this.saltflats?.update(delta, this.time);
+  }
+
+  /** Which desert site the current activity stands in: every campaign
+   *  fight (solo or raid) is the boneyard, every other bout and Aim
+   *  Training the flats, and the lobby — including a raid room's seats
+   *  and browser — the trailhead. */
+  private siteFor(): DesertSite {
+    if (app.state === 'playing' && app.mode === 'campaign') return 'boneyard';
+    if (app.state === 'playing' || app.state === 'training') return 'flats';
+    return 'trailhead';
   }
 
   /** Re-assert the selected arena backdrop after an opaque club visit. */

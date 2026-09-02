@@ -88,12 +88,21 @@ console.log('=== the wire: pack / unpack ===');
     return res;
   });
 
-  check('demo look packs (12 units ≈ 130 b64 chars)', wire.packedLen === Math.ceil((1 + 12 * 8) / 3) * 4, String(wire.packedLen));
-  check('roundtrip keeps all 12 units', wire.count === 12, String(wire.count));
+  check('demo look packs (15 units ≈ 162 b64 chars)', wire.packedLen === Math.ceil((1 + 15 * 8) / 3) * 4, String(wire.packedLen));
+  check('roundtrip keeps all 15 units', wire.count === 15, String(wire.count));
   check('pack∘unpack is byte-identical (stable quantization)', wire.idempotent);
   check('junk / empty / numeric wire → bare base tone', wire.junk === 0 && wire.empty === 0 && wire.numeric === 0);
   check('oversized wire string is refused', wire.long === 0);
-  check('tampered colour byte drops that unit only', wire.tampered === 11, String(wire.tampered));
+  check('tampered colour byte drops that unit only', wire.tampered === 14, String(wire.tampered));
+  // The new geometry + the gear surface survive the wire as themselves.
+  const shapes = await page.evaluate(() => {
+    const p = window.__ff2.paint;
+    p.demo();
+    const back = p.unpack(p.pack()).paint;
+    p.clear();
+    return back.map((u) => `${u.kind}@${u.part}`).slice(-3);
+  });
+  check('a dot, a square and a gear-surface unit roundtrip as themselves', shapes.join(',') === 'dot@body,square@body,dot@gearHead', shapes.join(','));
   check('fields survive quantization (body stripe at u≈0.72)', wire.first.kind === 'stripe' && wire.first.part === 'body' && Math.abs(wire.first.u - 0.72) < 0.01, JSON.stringify(wire.first));
 
   // THE MERGE: chest and pelvis became one body surface, so a look packed
@@ -112,6 +121,15 @@ console.log('=== the wire: pack / unpack ===');
   check('a pre-merge look still unpacks (2 units)', legacy.length === 2, JSON.stringify(legacy));
   check('its chest unit lands on the body ABOVE the waist', !!oldChest && oldChest.part === 'body' && oldChest.v > 0.5, JSON.stringify(oldChest));
   check('its pelvis unit lands on the body BELOW the waist', !!oldPelvis && oldPelvis.part === 'body' && oldPelvis.v < 0.4, JSON.stringify(oldPelvis));
+  // …and a FORMAT-2 look (the merged body, before gear was paintable):
+  // kind in bit 0, part in bits 1+, over head/body.
+  const v2 = await page.evaluate(() => {
+    const P = window.__ff2.paint;
+    const unit = (partIdx, kindBit, v) => [(partIdx << 1) | kindBit, 11, 3, 191, Math.round(v * 255), 0, 120, 60];
+    const bytes = [2, ...unit(1, 1, 0.3), ...unit(0, 0, 0.6)];
+    return P.unpack(btoa(String.fromCharCode(...bytes))).paint.map((u) => `${u.kind}@${u.part}`);
+  });
+  check('a format-2 look still reads (splotch on the body, stripe on the head)', v2.join(',') === 'splotch@body,stripe@head', v2.join(','));
 
   // THE RECORD (P4): the look as words + as the profile-card banner.
   console.log('\n=== the record: colour words + the banner ===');
@@ -155,6 +173,9 @@ console.log('\n=== the room: hello → roster → bake-on-join ===');
   await ctxA.addInitScript(() => {
     const s = (part, u, v, angle, len, wid, colour) => ({ kind: 'stripe', part, u, v, angle, len, wid, colour, variant: 0 });
     localStorage.setItem('ff2-look', JSON.stringify({ paint: [s('chest', 0.75, 0.5, 0.25, 0.6, 0.15, 9), s('head', 0.75, 0.55, 0, 0.4, 0.12, 11)] }));
+    // …and PICASSO's gear (avatar/gear.ts): owned + worn, so it rides the hello.
+    localStorage.setItem('ff-owned-gear', JSON.stringify(['horns', 'belt']));
+    localStorage.setItem('ff-gear', 'horns,belt');
   });
 
   const pubUrl = (name) => `${base}/pub.html?name=${name}&server=${encodeURIComponent(pubWs)}`;
@@ -175,6 +196,8 @@ console.log('\n=== the room: hello → roster → bake-on-join ===');
     .then(() => true, () => false);
   const rosterB = await pageB.evaluate(() => window.__ff2.club.punters());
   check('RUBE sees PICASSO painted + baked on join', seesPainted, JSON.stringify(rosterB));
+  const picasso = rosterB.find((p) => p.name === 'PICASSO');
+  check("RUBE sees PICASSO's GEAR on the hello (horns + belt)", !!picasso && picasso.gr === 'horns,belt', picasso?.gr ?? '(no row)');
 
   // …and PICASSO sees RUBE bare but still baked (base tone fill).
   const seesBare = await pageA

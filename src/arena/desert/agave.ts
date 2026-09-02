@@ -20,7 +20,8 @@ function makeAgave(rng: () => number): Group {
   const blades = 7 + ((rng() * 5) | 0);
   for (let i = 0; i < blades; i++) {
     const len = 0.6 + rng() * 0.5;
-    const blade = new Mesh(new ConeGeometry(0.07, len, 4), makePaperDouble(P.agave));
+    const blade = new Mesh(new ConeGeometry(0.07, len, 8), makePaperDouble(P.agave));
+    blade.scale.z = 0.45; // a flat blade, not a spike
     blade.position.y = len * 0.5;
     blade.castShadow = true;
 

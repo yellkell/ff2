@@ -15,9 +15,7 @@
 
 import {
   AdditiveBlending,
-  BoxGeometry,
   BufferGeometry,
-  CanvasTexture,
   CatmullRomCurve3,
   CircleGeometry,
   Color,
@@ -26,16 +24,13 @@ import {
   Float32BufferAttribute,
   Group,
   HemisphereLight,
-  LinearFilter,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
-  PlaneGeometry,
   PointLight,
   Shape,
   ShapeGeometry,
   SphereGeometry,
-  SRGBColorSpace,
   TorusGeometry,
   TubeGeometry,
   Vector3,
@@ -44,10 +39,6 @@ import {
 import type { World } from '@iwsdk/core';
 import {
   ARENA_GAP,
-  CHAMFER,
-  EDGE_HALF,
-  OCTAGON_HALF_DEPTH,
-  OCTAGON_HALF_WIDTH,
   OCTAGON_VERTICES,
   PALETTE,
   PLATFORM,
@@ -58,12 +49,9 @@ import { MAX_OPPONENTS } from '../combat/opponentBus.js';
 import { localLayout } from '../combat/layout.js';
 import { app } from '../menu/appState.js';
 import { hazardTexture } from '../materials/hazard.js';
-import { oakTexture } from '../club/materials.js';
+import { deckLook } from './decks.js';
 import { octagonSlab } from './octagon.js';
 import { createTitleBanner } from './banner.js';
-
-/** Shared stage-oak deck map, built lazily (every pedestal reuses it). */
-let deckMap: CanvasTexture | undefined;
 
 /**
  * Set dressing that is IDENTICAL on every pedestal — the hazard stripes and
@@ -75,7 +63,6 @@ let deckMap: CanvasTexture | undefined;
  */
 let hazardMat: MeshBasicMaterial | undefined;
 let boltGeo: CylinderGeometry | undefined;
-let boltMat: MeshStandardMaterial | undefined;
 
 /**
  * Just proud of the slab's bevelled top face. The extrude BEVEL overhangs, so
@@ -273,13 +260,15 @@ export function setPlatformHazard(pad: Object3D, on: boolean): void {
   if (band) band.visible = on;
 }
 
-/** Corner screws at each rim vertex — brass now, like the club stage's
- *  fittings, holding the boards down where the steel studs used to be. */
+/** Corner screws at each rim vertex, holding the deck down. Their metal
+ *  is the skin's TRIM (iron under charred oak, chrome under ice, gold
+ *  under lacquer) — one material per pad so applyPlatformSkin can retint. */
 function makeCornerBolts(): Group {
   const bolts = new Group();
   bolts.name = 'corner-bolts';
-  boltGeo ??= new CylinderGeometry(0.028, 0.035, 0.035, 8);
-  boltMat ??= new MeshStandardMaterial({ color: 0xc9a86a, metalness: 0.92, roughness: 0.34 });
+  boltGeo ??= new CylinderGeometry(0.028, 0.035, 0.035, 12);
+  const boltMat = new MeshStandardMaterial({ color: 0x4a4c52, metalness: 0.92, roughness: 0.34 });
+  boltMat.userData.role = 'trim';
   for (const [x, z] of OCTAGON_VERTICES) {
     const bolt = new Mesh(boltGeo, boltMat);
     bolt.position.set(x * 0.97, 0.018, z * 0.97);
@@ -300,36 +289,24 @@ function makeCornerBolts(): Group {
 export function makePlatform(color: number, groupScale = 1): Group {
   const group = new Group();
 
-  if (!deckMap) {
-    // ExtrudeGeometry UVs are in shape units (metres): repeat = tiles per
-    // metre, and a tile carries eight boards — ~0.12 m planks at 1.05/m.
-    // Rotated a quarter so the boards run FRONT-TO-BACK, at your foe.
-    deckMap = oakTexture([1.5, 1.05]);
-    deckMap.center.set(0.5, 0.5);
-    deckMap.rotation = Math.PI / 2;
-  }
+  // THE DECK is a MATERIAL (arena/decks.ts): the pedestal is born as the
+  // house deck — SMOULDER's charred oak — and applyPlatformSkin swaps in
+  // whatever the fighter wears: ash, slate, marble, black glass, gold leaf.
+  // Every deck's maps are shared per style, so a skin change never uploads.
+  const look = deckLook('charred');
   const slabMat = new MeshStandardMaterial({
-    // A warm lamp-light tint over the map: the desert fights at dusk, and
-    // under that cool sky a neutral white left the boards reading slate —
-    // this puts the club stage's warmth back into the wood.
-    color: 0xffce9a,
-    map: deckMap,
-    // The colour map doubles as a bump: plank seams and grain read as
-    // grooves, which is most of what "real boards" costs.
-    bumpMap: deckMap,
-    bumpScale: 0.5,
-    // Steel used to wear a team-neon underglow; boards don't glow. A trace
-    // remains so premium skins' slabGlow still works through the same knob.
-    emissive: color,
-    emissiveIntensity: 0.02,
-    metalness: 0.05,
-    roughness: 0.55, // waxed, not varnished — the club stage's finish
+    color: look.color,
+    map: look.map,
+    bumpMap: look.bump,
+    bumpScale: look.bumpScale,
+    emissive: look.emissive ?? color,
+    emissiveIntensity: look.emissiveIntensity ?? 0.02,
+    metalness: look.metalness,
+    roughness: look.roughness,
   });
-  // The deck's top face stares straight at the dusk sky, and the PMREM
-  // environment (tuned for glistening steel) floods it blue-grey — wood
-  // takes its light from the arena's warm lamps instead.
-  slabMat.envMapIntensity = 0.25;
+  slabMat.envMapIntensity = look.envMapIntensity;
   slabMat.userData.role = 'slab';
+  slabMat.userData.deck = 'charred';
   const slab = new Mesh(octagonSlab(OCTAGON_VERTICES, PLATFORM.thickness), slabMat);
   // Top face at the floor line, body glowing faintly below. NB the extrude
   // BEVEL overhangs both ends, so the actual top face sits at +bevel (0.015)
@@ -345,154 +322,12 @@ export function makePlatform(color: number, groupScale = 1): Group {
   group.add(makeCornerBolts());
   group.add(makeNeonRim(color));
 
-  // --- Per-skin ornaments (hidden; applyPlatformSkin shows one set) ---
-  // INFERNO: upright glowing blade fins at every rim vertex.
-  const fins = new Group();
-  fins.name = 'vertex-fins';
-  const finMat = new MeshBasicMaterial({ color: new Color(color).lerp(new Color(0xffffff), 0.45) });
-  finMat.userData.role = 'neon-core';
-  for (const [x, z] of OCTAGON_VERTICES) {
-    const fin = new Mesh(new BoxGeometry(0.018, 0.085, 0.05), finMat);
-    fin.position.set(x * 1.02, 0.045, z * 1.02);
-    fin.rotation.y = Math.atan2(x, z); // blade faces outward, radially
-    fins.add(fin);
-  }
-  fins.userData.skinTag = 'inferno';
-  fins.visible = false;
-  group.add(fins);
-
-  // XD: a white grin painted on the deck (X eyes + a capital-D mouth), shown
-  // only for the 'xdface' skin. A flat decal just above the slab's top face —
-  // which is at +bevel, NOT y=0: at its old 0.004 it sat INSIDE the steel and
-  // never rendered at all.
-  const face = new Mesh(
-    new PlaneGeometry(1.18, 1.18),
-    new MeshBasicMaterial({ map: xdFaceTexture(), transparent: true, depthWrite: false }),
-  );
-  face.rotation.x = -Math.PI / 2; // lay it flat, texture-up pointing -Z (at the foe)
-  face.position.y = DECK_TOP;
-  face.renderOrder = 2;
-  face.userData.skinTag = 'xdface';
-  face.visible = false;
-  group.add(face);
-
-  // VOLT: a big lightning bolt struck across the deck, shown only for 'volt'.
-  // A real raised neon mesh (the transparent-decal approach vanished against
-  // the dark slab) — flat ShapeGeometry a hair above the deck, painted in the
-  // same unlit neon-core white-lerp the INFERNO fins use, so it team-tints on
-  // opponent pads too.
-  const boltShape = new Shape();
-  const boltRot = 0.35; // struck across the deck on a diagonal
-  const boltScale = 1.35;
-  (
-    [
-      [0.1, 0.42],
-      [-0.14, -0.02],
-      [0.015, -0.02],
-      [-0.1, -0.42],
-      [0.14, 0.06],
-      [-0.015, 0.06],
-    ] as [number, number][]
-  ).forEach(([px, py], i) => {
-    const bx = (px * Math.cos(boltRot) - py * Math.sin(boltRot)) * boltScale;
-    const by = (px * Math.sin(boltRot) + py * Math.cos(boltRot)) * boltScale;
-    if (i === 0) boltShape.moveTo(bx, by);
-    else boltShape.lineTo(bx, by);
-  });
-  const boltMat = new MeshBasicMaterial({ color: new Color(color).lerp(new Color(0xffffff), 0.45) });
-  boltMat.userData.role = 'neon-core';
-  const bolt = new Mesh(new ShapeGeometry(boltShape), boltMat);
-  bolt.rotation.x = -Math.PI / 2; // lay it flat; shape +y points -Z (at the foe)
-  bolt.position.y = DECK_TOP + 0.001; // clear of the (never co-shown) grin plane too
-  bolt.userData.skinTag = 'volt';
-  bolt.visible = false;
-  group.add(bolt);
-
-  // SYNTHWAVE: an outrun neon grid etched across the deck — raised thin bars
-  // (the same unlit neon-core treatment as the fins/bolt, so it team-tints),
-  // clipped to the octagon's outline. This is what keeps the pad from reading
-  // as just another purple recolour next to PLASMA.
-  const grid = new Group();
-  grid.name = 'deck-grid';
-  const gridMat = new MeshBasicMaterial({ color: new Color(color).lerp(new Color(0xffffff), 0.45) });
-  gridMat.userData.role = 'neon-core';
-  /**
-   * The deck's TRUE half-extent, derived from the octagon rather than guessed.
-   *
-   * The old grid ran bars only across z ∈ [−0.5, 0.5] and x ∈ [−0.6, 0.6] on a
-   * deck that reaches ±0.75 and ±0.86, with the run lengths taken from
-   * hand-fitted constants — so it sat as a small patch marooned in the middle
-   * of the pad with bare steel all round it, nowhere near the rim. These walk
-   * the real outline: full width until the chamfer starts, then tapering with
-   * it to the corner.
-   */
-  const inset = 0.03; // hold the ends just inside the rim tube
-  const halfW = (z: number): number => {
-    const a = Math.abs(z);
-    if (a <= CHAMFER) return OCTAGON_HALF_WIDTH - inset;
-    const t = (a - CHAMFER) / (OCTAGON_HALF_DEPTH - CHAMFER);
-    return OCTAGON_HALF_WIDTH - (OCTAGON_HALF_WIDTH - EDGE_HALF) * t - inset;
-  };
-  const halfD = (x: number): number => {
-    const a = Math.abs(x);
-    if (a <= EDGE_HALF) return OCTAGON_HALF_DEPTH - inset;
-    const t = (a - EDGE_HALF) / (OCTAGON_HALF_WIDTH - EDGE_HALF);
-    return OCTAGON_HALF_DEPTH - (OCTAGON_HALF_DEPTH - CHAMFER) * t - inset;
-  };
-  // Even pitch out to the rim in both directions, so the grid actually reads
-  // as a grid laid over the whole deck.
-  const zPitch = 0.25;
-  for (let z = -Math.floor(OCTAGON_HALF_DEPTH / zPitch) * zPitch; z <= OCTAGON_HALF_DEPTH; z += zPitch) {
-    const len = halfW(z) * 2;
-    if (len <= 0.05) continue;
-    const bar = new Mesh(new BoxGeometry(len, 0.008, 0.012), gridMat);
-    bar.position.set(0, DECK_TOP, z);
-    grid.add(bar);
-  }
-  const xPitch = 0.28;
-  for (let x = -Math.floor(OCTAGON_HALF_WIDTH / xPitch) * xPitch; x <= OCTAGON_HALF_WIDTH; x += xPitch) {
-    const len = halfD(x) * 2;
-    if (len <= 0.05) continue;
-    const bar = new Mesh(new BoxGeometry(0.012, 0.008, len), gridMat);
-    bar.position.set(x, DECK_TOP, 0);
-    grid.add(bar);
-  }
-  grid.userData.skinTag = 'synthwave';
-  grid.visible = false;
-  group.add(grid);
-
-  // GOLD RUSH: the one premium pad that had nothing struck into it — just a
-  // tint, which is why it read as a painted floor next to VOLT's bolt and
-  // SYNTHWAVE's grid. A minted MEDALLION at the centre of the deck inside a
-  // fine border ring, both in the same unlit neon-core the other ornaments
-  // use, so they team-tint on an opponent's pad too.
-  const bullion = new Group();
-  bullion.name = 'gold-trim';
-  const goldMat = new MeshBasicMaterial({ color: new Color(color).lerp(new Color(0xffffff), 0.45) });
-  goldMat.userData.role = 'neon-core';
-  const border = new Mesh(new TorusGeometry(0.56, 0.007, 8, 56), goldMat);
-  border.rotation.x = -Math.PI / 2;
-  border.position.y = DECK_TOP;
-  bullion.add(border);
-  // The medallion: a low struck disc with a raised lip round its edge.
-  const medal = new Mesh(new CylinderGeometry(0.17, 0.18, 0.01, 40), goldMat);
-  medal.position.y = DECK_TOP + 0.004;
-  bullion.add(medal);
-  const medalLip = new Mesh(new TorusGeometry(0.17, 0.009, 8, 40), goldMat);
-  medalLip.rotation.x = -Math.PI / 2;
-  medalLip.position.y = DECK_TOP + 0.009;
-  bullion.add(medalLip);
-  // Rays struck out of the medallion toward the border — a minted sunburst.
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const ray = new Mesh(new BoxGeometry(0.012, 0.008, 0.11), goldMat);
-    ray.position.set(Math.sin(a) * 0.4, DECK_TOP, Math.cos(a) * 0.4);
-    ray.rotation.y = a;
-    bullion.add(ray);
-  }
-  bullion.userData.skinTag = 'goldrush';
-  bullion.visible = false;
-  group.add(bullion);
+  // --- Per-skin FX (hidden; applyPlatformSkin shows one set by tag) ---
+  // The tint-era ornaments — the XD grin, VOLT's bolt, SYNTHWAVE's grid,
+  // INFERNO's fins, GOLD RUSH's medallion — are gone with their skins: a
+  // deck is its MATERIAL now. What stays is the two earned pads' living
+  // furniture, because those were never decoration: BLAZING burns and
+  // TIDEBREAKER is still wet.
 
   // BLAZING: not merely a flame decal. The earned pad carries a white-hot
   // deck brand, a burning outer rail and an animated flame crown at every
@@ -673,35 +508,7 @@ export function makePlatform(color: number, groupScale = 1): Group {
   tide.visible = false; // no point light — see BLAZING above
   group.add(tide);
 
-  // EMBER: the classic look — banding + bolts, no extra furniture.
   return group;
-}
-
-/** A white "XD" on transparent — painted huge across the deck of the black
- *  premium platform: one big X and an equal-size D, side by side and centred,
- *  reading left-to-right (horizontal). Built once and shared by every pedestal. */
-let xdFaceTex: CanvasTexture | undefined;
-function xdFaceTexture(): CanvasTexture {
-  if (xdFaceTex) return xdFaceTex;
-  const s = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = s;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = '#f6f8ff';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '900 320px system-ui, sans-serif';
-  // Pre-mirror horizontally: the decal lies flat facing the foe, so viewed
-  // from that side an un-mirrored draw reads backwards ("DX"). Flipping the
-  // canvas in X makes it read "XD" the right way round on the deck.
-  ctx.translate(s, 0);
-  ctx.scale(-1, 1);
-  ctx.fillText('X', s * 0.28, s * 0.5);
-  ctx.fillText('D', s * 0.72, s * 0.5);
-  xdFaceTex = new CanvasTexture(canvas);
-  xdFaceTex.colorSpace = SRGBColorSpace;
-  xdFaceTex.minFilter = LinearFilter;
-  return xdFaceTex;
 }
 
 /** Recolour a platform's neon rim + slab emissive to a team tint. (Exported

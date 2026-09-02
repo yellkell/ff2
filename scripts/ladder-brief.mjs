@@ -55,13 +55,57 @@ function paintColours(wire, max = 3) {
   } catch {
     return [];
   }
-  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || bytes[0] !== 1) return [];
+  // Wire format 1 (chest + pelvis parts), 2 (one body) or 3 (gear surfaces,
+  // dots and squares) — the colour byte sits in the same place in all three
+  // (docs/paint.md §3).
+  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || bytes[0] < 1 || bytes[0] > 3) return [];
   const tally = new Map();
   for (let o = 1; o + 8 <= bytes.length; o += 8) {
     const c = bytes[o + 1];
     if (c < PAINT_NAMES.length) tally.set(c, (tally.get(c) ?? 0) + 1);
   }
   return [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([c]) => PAINT_NAMES[c]);
+}
+
+// GEAR (src/avatar/gear.ts) and the DECKS (src/avatar/skins.ts) in Gasket's
+// own words — the ids ride the player doc; keep these in step with the game.
+const GEAR_WORDS = {
+  crest: 'a CREST bolted nose to nape',
+  antennae: 'twin ANTENNAE off the temples',
+  horns: 'a bull\'s pair of HORNS',
+  halo: 'a HALO, floating on nothing',
+  mohawk: 'a MOHAWK of spikes',
+  visorband: 'a VISOR BAND across the eyes',
+  pauldrons: 'PAULDRONS on both shoulders',
+  chestplate: 'a CHESTPLATE over the heart',
+  collar: 'a COLLAR under the head',
+  ridge: 'a RIDGE down the spine',
+  belt: 'a BELT, buckled',
+  epaulettes: 'EPAULETTES with a boss',
+  cuffs: 'CUFFS at the wrists',
+  knuckles: 'KNUCKLE spikes',
+  gauntlets: 'GAUNTLETS over the fists',
+};
+const PAD_WORDS = {
+  ember: 'SMOULDER (charred oak)',
+  azure: 'AZURE (pale ash)',
+  inferno: 'INFERNO (redwood)',
+  walnut: 'WALNUT',
+  slate: 'SLATE flagstones',
+  marble: 'MARBLE',
+  frost: 'FROST (river ice)',
+  obsidian: 'OBSIDIAN (black glass)',
+  jade: 'JADE',
+  bullion: 'BULLION (gold leaf)',
+  champion: 'the CHAMPION deck (crimson lacquer, gold inlay)',
+  tidebreaker: 'the TIDEBREAKER deck (wet green stone)',
+  blazing: 'the BLAZING deck (scorched boards)',
+};
+
+/** A player's worn gear (comma ids) as Cole's words, in slot order. */
+function gearWords(wire) {
+  if (typeof wire !== 'string' || wire.length > 48) return [];
+  return wire.split(',').map((id) => GEAR_WORDS[id.trim()]).filter(Boolean);
 }
 
 const db = getFirestore(initializeApp(firebaseConfig));
@@ -81,6 +125,8 @@ async function readPlayers() {
       ffa: x.ffa ?? 0,
       look: x.look ?? '',
       tone: x.tone ?? 'blank',
+      gear: x.gear ?? '',
+      pad: x.pad ?? '',
       updatedAt: x.updatedAt?.toMillis?.() ?? 0,
     };
   });
@@ -176,6 +222,9 @@ const rows = players.map((p, i) => {
     // plus their most-used paint colours (empty = still factory blank).
     tone: p.tone === 'onyx' ? 'onyx black' : 'bone white',
     colours: paintColours(p.look),
+    // THE IRONMONGERY + THE DECK: what they bolted on, what they stand on.
+    gear: gearWords(p.gear),
+    pad: PAD_WORDS[p.pad] ?? '',
   };
 });
 
@@ -202,6 +251,8 @@ const brief = {
     gamesApprox: 'ESTIMATED bouts fought since the last edition (round(xpGained / 25)) — THIS is the matches-played figure',
     raids:
       'squads that marched OUT of town and FELLED the wild machines since the last edition — kind "titans" is the five-boss raid (RUSTHOOK → GOLIATH), kind "goopliath" is the gel-beast. VICTORIES ONLY: beaten squads are never recorded, so no raid in this list failed. hardcore = no healing between titans; difficulty is normal/hard/blazing. Name the squad callsigns together — a raid is one deed by the whole posse.',
+    gear: "each player's GEAR — the shapes bolted onto the body, already in Cole's words ('a CREST bolted nose to nape'). Empty = bare iron. Cole calls it ironmongery; it's vanity, never a score.",
+    pad: "the DECK each player fights on, by material ('WALNUT', 'SLATE flagstones', 'BULLION (gold leaf)'). Empty = the house boards. The CHAMPION, TIDEBREAKER and BLAZING decks are EARNED, never bought — worth a line when someone stands on one.",
     colours:
       "each player's PAINT: `tone` is their body's base (bone white or onyx black) and `colours` their most-used paint colours, heaviest first. An empty colours list means a factory-blank body — unpainted iron, nobody's made it theirs yet. Cole can describe a champion by their war paint ('the EMBER-and-CYAN machine', 'that GOLD LEAF dandy'); colours are decoration the players chose, never a score.",
   },

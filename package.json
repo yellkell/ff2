@@ -1,7 +1,7 @@
 {
   "name": "fire-fight-2",
   "version": "0.1.0",
-  "description": "FIRE FIGHT 2 \u2014 the WebXR fireball-boxing sequel: Rave Raid folded in as a mode, a shared social club that launches everything, paintable mannequin fighters, and next-gen dark desert arenas. Built on the Immersive Web SDK.",
+  "description": "FIRE FIGHT 2 — the WebXR fireball-boxing sequel: Rave Raid folded in as a mode, a shared social club that launches everything, paintable mannequin fighters, and next-gen dark desert arenas. Built on the Immersive Web SDK.",
   "type": "module",
   "private": true,
   "scripts": {
@@ -11,10 +11,13 @@
     "typecheck": "tsc --noEmit",
     "server": "node server/index.mjs",
     "server:pub": "node server/pub.mjs",
+    "server:rave": "node server/rave.mjs",
     "check:wrap": "node tools/wrap-check.mjs",
     "check:paint": "node tools/paint-wire-check.mjs",
     "check:grammar": "node tools/grammar-check.mjs",
-    "check:pages": "node tools/pages-check.mjs"
+    "check:pages": "node tools/pages-check.mjs",
+    "check:desert": "node tools/desert-check.mjs",
+    "check:rave": "node tools/rave-check.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "0.4.2",

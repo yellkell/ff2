@@ -32,11 +32,11 @@ import {
   SRGBColorSpace,
   Vector3,
 } from 'three';
-import { PALETTE, hueToColor } from './palette.js';
+import { PALETTE, hueToColor } from '../config.js';
 import { glintTexture, glowSprite } from '../materials/glow.js';
-import { trackById } from './records.js';
+import { trackById } from '../audio/tracks.js';
 import { CLUB } from './config.js';
-import { font } from '../ui/kit/fonts.js';
+import { font } from '../ui/fonts.js';
 
 export const BALL_TOUCH_RADIUS = 0.42;
 

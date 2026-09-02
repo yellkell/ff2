@@ -41,6 +41,8 @@ import { CountdownSystem } from './systems/CountdownSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
 import { PromotionSystem } from './systems/PromotionSystem.js';
 import { PlayerFeedbackSystem } from './systems/PlayerFeedbackSystem.js';
+import { CrowdSystem } from './systems/CrowdSystem.js';
+import { AudienceSystem } from './systems/AudienceSystem.js';
 import { PlayerGloveSystem } from './systems/PlayerGloveSystem.js';
 import { PlayerGestureSystem } from './systems/PlayerGestureSystem.js';
 import { FXSystem } from './systems/FXSystem.js';
@@ -153,6 +155,8 @@ World.create(container, {
   world.registerSystem(MenuSystem);
   world.registerSystem(PromotionSystem);
   world.registerSystem(PlayerFeedbackSystem);
+  world.registerSystem(CrowdSystem); // the crowd bed + the hands-up roar (phase 6)
+  world.registerSystem(AudienceSystem); // watchers on the terrace (DESIGN §3.2)
   world.registerSystem(PlayerGloveSystem);
   world.registerSystem(PlayerGestureSystem);
   world.registerSystem(FXSystem);
