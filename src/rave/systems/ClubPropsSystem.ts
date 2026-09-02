@@ -66,8 +66,7 @@ import {
   sendPropPose,
   sendPropRelease,
   sendPropRest,
-  type PropWire,
-} from '../net/session.js';
+  type PropWire, inRoom as roomOpen } from '../net/session.js';
 
 const HANDS = ['left', 'right'] as const;
 type Hand = (typeof HANDS)[number];
@@ -306,7 +305,7 @@ export class ClubPropsSystem extends createSystem({}) {
   }
 
   update(delta: number): void {
-    const inRoom = net.phase === 'hosting' || net.phase === 'joined' || net.phase === 'live';
+    const inRoom = roomOpen() || net.phase === 'live';
     if (!inRoom) {
       if (this.hadRoom) {
         this.hadRoom = false;

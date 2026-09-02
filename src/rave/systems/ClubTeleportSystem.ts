@@ -53,7 +53,7 @@ import * as sfx from '../audio/sfx.js';
 import { DECOR, TELEPORT, TELEPORT_AREAS, crossesWall, floorYAt, type FloorArea } from '../club/config.js';
 import { match } from '../game/state.js';
 import { course } from '../course/state.js';
-import { net } from '../net/session.js';
+import { inRoom } from '../net/session.js';
 
 const _origin = new Vector3();
 const _dir = new Vector3();
@@ -224,7 +224,7 @@ export class ClubTeleportSystem extends createSystem({}) {
     // an answer to a question that experience refuses to ask.
     const menuRoom = match.screen === 'lobby' || match.screen === 'tour';
     const inClub =
-      menuRoom && (net.phase === 'hosting' || net.phase === 'joined') && !course.active;
+      menuRoom && inRoom() && !course.active;
 
     // A recentre moved the reference-space origin under our feet. In the
     // club, re-plant the rig on the banked pose so you stay exactly where

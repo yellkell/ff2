@@ -62,7 +62,7 @@ import { courseRoot } from '../course/world.js';
 import { match } from '../game/state.js';
 import { PointerRay } from '../ui/pointer.js';
 import { Panel, UI } from '../ui/panel.js';
-import { net } from '../net/session.js';
+import { inRoom } from '../net/session.js';
 import { teleportPlayer } from './ClubTeleportSystem.js';
 
 const _head = new Vector3();
@@ -216,7 +216,7 @@ export class CourseSystem extends createSystem({}) {
   update(delta: number): void {
     const dt = Math.min(delta, 0.1);
     const menuRoom = match.screen === 'lobby' || match.screen === 'tour';
-    const inClub = menuRoom && (net.phase === 'hosting' || net.phase === 'joined') && !match.holdFoyer;
+    const inClub = menuRoom && inRoom() && !match.holdFoyer;
 
     // The floor got booked (or you left the room) while you were out there.
     // No fade and no doorway: the raid's law is "my platform IS the world

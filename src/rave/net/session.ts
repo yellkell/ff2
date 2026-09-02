@@ -70,6 +70,12 @@ export interface BallState {
 
 export const net = {
   phase: 'off' as NetPhase,
+  /** A ROOM OF ONE. The venue is a place before it is a party: with no
+   *  relay to be had (offline, a dev serve with no server up, a relay
+   *  that never answered) the floor still opens, for you alone, with the
+   *  dumbwaiter served off a clock in this file rather than the relay's.
+   *  Every club system reads inRoom(), which is true here too. */
+  solo: false,
   code: '',
   members: [] as LobbyMember[],
   isHost: false,
@@ -98,6 +104,14 @@ export const net = {
 export const seatByIdx = new Map<number, number>();
 
 let ws: WebSocket | null = null;
+
+/** Am I on the club floor — in a relay room, or the room of one? The one
+ *  gate every club system reads (ClubSystem, teleport, mirror, props, the
+ *  course door…), so a solo night and a full one agree on what "the floor
+ *  is open" means. */
+export function inRoom(): boolean {
+  return net.solo || net.phase === 'hosting' || net.phase === 'joined';
+}
 let pingTimer: number | null = null;
 let myHue: number | null = null;
 let myName = 'DANCER';
@@ -106,6 +120,11 @@ let myName = 'DANCER';
 let myBody: { lk: string; gr: string; tn: string } = { lk: '', gr: '', tn: 'white' };
 
 function send(obj: unknown): void {
+  if (net.solo) {
+    const m = obj as Record<string, unknown>;
+    if (typeof m.t === 'string' && m.t.startsWith('prop')) soloProp(m);
+    return;
+  }
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
 }
 
@@ -170,6 +189,9 @@ function stopPing(): void {
 
 function teardown(reason: string): void {
   stopPing();
+  net.solo = false;
+  window.clearTimeout(soloServeTimer);
+  soloServeTimer = 0;
   if (ws) {
     ws.onclose = null;
     ws.onmessage = null;
@@ -515,6 +537,105 @@ export function leaveRoom(): void {
   teardown('');
 }
 
+/* ── THE ROOM OF ONE ────────────────────────────────────────────────────── */
+
+const SOLO_SERVE_MS = 1600; // the relay's own pace (server/rave.mjs SERVE_MS)
+const SOLO_RETRY_MS = 900;
+let soloServeTimer = 0;
+/** The house's glass ledger while solo: what the relay would remember. */
+const soloProps: Array<{ mode: 'idle' | 'pedestal' | 'held' | 'flight' | 'rest'; restedAt: number }> = [];
+
+/**
+ * Open the floor with nobody else on it. Same shape the relay hands a host
+ * (idx 0, no code, a public-looking room), so nothing downstream has to
+ * know — and the dumbwaiter runs off a local clock that speaks the wire's
+ * own words back through the prop hook, so ClubPropsSystem serves, grants
+ * and rests glasses exactly as it would with a relay brokering them.
+ */
+export function enterSoloFloor(): void {
+  teardown('');
+  net.solo = true;
+  net.phase = 'off';
+  net.myIdx = 0;
+  net.isHost = true;
+  net.isPublic = false;
+  net.members = [{ idx: 0, name: myName, hue: myHue, ...myBody } as unknown as LobbyMember];
+  net.dirty++;
+  match.holdFoyer = false;
+  soloProps.length = 0;
+  armSoloServe(SOLO_SERVE_MS);
+}
+
+function armSoloServe(ms: number): void {
+  window.clearTimeout(soloServeTimer);
+  soloServeTimer = window.setTimeout(fireSoloServe, ms);
+}
+
+/** The relay's fireServe(), at home: a fresh glass first, else the one
+ *  that has stood longest. */
+function fireSoloServe(): void {
+  soloServeTimer = 0;
+  if (!net.solo || !propHook) return;
+  const count = soloPoolSize();
+  while (soloProps.length < count) soloProps.push({ mode: 'idle', restedAt: 0 });
+  let id = soloProps.findIndex((p) => p.mode === 'idle');
+  if (id < 0) {
+    let oldest = Infinity;
+    soloProps.forEach((p, i) => {
+      if (p.mode === 'rest' && p.restedAt < oldest) {
+        oldest = p.restedAt;
+        id = i;
+      }
+    });
+  }
+  if (id < 0) {
+    armSoloServe(SOLO_RETRY_MS);
+    return;
+  }
+  soloProps[id].mode = 'pedestal';
+  propHook({ t: 'serve', id });
+}
+
+/** ClubPropsSystem tells us its pool size once (it owns POOL). */
+let soloPool = 6;
+export function setPropPoolSize(n: number): void {
+  soloPool = n;
+}
+function soloPoolSize(): number {
+  return soloPool;
+}
+
+/** A prop word from my own hands, answered by the house instead of the
+ *  relay — the same grant, the same rest, the same next serve. */
+function soloProp(msg: Record<string, unknown>): void {
+  if (!propHook) return;
+  const id = Number(msg.id);
+  const p = soloProps[id] ?? (soloProps[id] = { mode: 'idle', restedAt: 0 });
+  switch (msg.t) {
+    case 'prop-grab':
+      if (p.mode === 'pedestal') armSoloServe(SOLO_SERVE_MS);
+      p.mode = 'held';
+      propHook({ t: 'prop-grab', id, idx: 0 });
+      break;
+    case 'prop-release':
+      p.mode = 'flight';
+      propHook({ t: 'prop-release', id, idx: 0 });
+      break;
+    case 'prop-rest':
+      if (msg.idle) {
+        p.mode = 'idle';
+        propHook({ t: 'prop-rest', id, idle: true });
+      } else {
+        p.mode = 'rest';
+        p.restedAt = Date.now();
+        propHook({ t: 'prop-rest', id, pos: msg.pos as number[], quat: msg.quat as number[] });
+      }
+      break;
+    default:
+      break; // pose streams have nobody to reach
+  }
+}
+
 /* ── THE BALL: how games start from the floor ──────────────────────────── */
 
 /** Send the ball up at `pos` — my song pick and ring-size preference ride
@@ -581,28 +702,25 @@ export function sendClubPose(d: number[]): void {
 
 /* ── DRINKS: the glasses' side of the wire (see PropWire) ──────────────── */
 
-function onClubFloor(): boolean {
-  return net.phase === 'hosting' || net.phase === 'joined';
-}
 
 /** Ask the relay for glass `id` — the hand has already taken it on spec. */
 export function sendPropGrab(id: number): void {
-  if (onClubFloor()) send({ t: 'prop-grab', id });
+  if (inRoom()) send({ t: 'prop-grab', id });
 }
 
 /** The glass left my hand — mark it catchable; I still fly it. */
 export function sendPropRelease(id: number): void {
-  if (onClubFloor()) send({ t: 'prop-release', id });
+  if (inRoom()) send({ t: 'prop-release', id });
 }
 
 /** Owner pose stream: [px,py,pz, qx,qy,qz,qw, full01] at ~20 Hz. */
 export function sendPropPose(id: number, d: number[]): void {
-  if (onClubFloor()) send({ t: 'prop', id, d });
+  if (inRoom()) send({ t: 'prop', id, d });
 }
 
 /** My throw settled at pos/quat — or fell out of the world (nulls: idle). */
 export function sendPropRest(id: number, pos: number[] | null, quat: number[] | null): void {
-  if (!onClubFloor()) return;
+  if (!inRoom()) return;
   send(pos && quat ? { t: 'prop-rest', id, pos, quat } : { t: 'prop-rest', id, idle: true });
 }
 

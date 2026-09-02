@@ -39,7 +39,7 @@ import { myLook } from '../../avatar/paint.js';
 import { danceHue } from '../game/profile.js';
 import { match } from '../game/state.js';
 import { course } from '../course/state.js';
-import { memberHue, net } from '../net/session.js';
+import { memberHue, net, inRoom } from '../net/session.js';
 import { liveGlasses } from './ClubPropsSystem.js';
 import { clubFloorFigures } from './ClubSocialSystem.js';
 
@@ -127,7 +127,7 @@ export class ClubMirrorSystem extends createSystem({}) {
 
     const onFloor =
       (match.screen === 'lobby' || match.screen === 'tour') &&
-      (net.phase === 'hosting' || net.phase === 'joined') &&
+      inRoom() &&
       !course.active;
 
     // Head → glass distance (to the pane's span, not its centre — a wide

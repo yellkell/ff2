@@ -79,8 +79,7 @@ import {
   seatByIdx,
   sendClubPose,
   sendVoice,
-  startBall,
-} from '../net/session.js';
+  startBall, inRoom as roomOpen } from '../net/session.js';
 import { font } from '../ui/fonts.js';
 import { Panel, UI, type PanelButton } from '../ui/panel.js';
 import {
@@ -243,7 +242,7 @@ export class ClubSocialSystem extends createSystem({}) {
     // The west door takes you out of the hall entirely: the floor's
     // figures, its crowd and its panel all belong to a room you aren't in.
     const inClub = (match.screen === 'lobby' || match.screen === 'tour') && !course.active;
-    const inRoom = net.phase === 'hosting' || net.phase === 'joined';
+    const inRoom = roomOpen();
     const liveSet = net.phase === 'live';
 
     this.syncRoster(inRoom || liveSet);
@@ -766,7 +765,7 @@ export class ClubSocialSystem extends createSystem({}) {
     const ballUp = net.ball !== null;
     const mine = ballUp && net.ball!.callerIdx === net.myIdx;
     const setOut = net.gamePlayers.size > 0;
-    const inRoom = net.phase === 'hosting' || net.phase === 'joined';
+    const inRoom = roomOpen();
     const key =
       safetyKey(members, more) +
       `#${this.hover ?? ''}#${music ? 1 : 0}#${net.phase}#${cued?.id ?? ''}#${ballUp ? (mine ? `B${net.ball!.joins.size}` : 'b') : ''}#${setOut ? net.gamePlayers.size : 0}#${match.difficulty}#${this.songsOpen ? 1 : 0}#${net.crownIdx ?? ''}`;

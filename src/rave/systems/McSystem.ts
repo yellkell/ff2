@@ -44,7 +44,7 @@ import { CLUB as CLUB_LAYOUT } from '../club/config.js';
 import { ACCENT_REST, accentHex, buildDancer, type DancerPose, type DancerRig } from '../game/avatars.js';
 import { PoseMotion } from '../game/poseMotion.js';
 import { match, type GestureCue, showBeat } from '../game/state.js';
-import { net } from '../net/session.js';
+import { inRoom } from '../net/session.js';
 
 /** The eat window (song beats, negative = count-in) — mirrors GoopliathSystem. */
 const EAT_START = -2.8;
@@ -177,7 +177,7 @@ export class McSystem extends createSystem({}) {
       this.mime = null;
       // Foyer: beside the board, the live-service hero. Club floor open
       // (a room is hosting/joined): he's up at his decks, working.
-      const social = net.phase === 'hosting' || net.phase === 'joined';
+      const social = inRoom();
       const spot = social ? DECK_SPOT : MENU_SPOT;
       rig.root.position.set(spot.x, spot.y, spot.z);
       this.faceCrowd(spot.x, spot.z);

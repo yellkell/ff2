@@ -27,7 +27,7 @@ import { pickRaidTrack, trackById, tracksFor } from '../audio/tracks.js';
 import { actOfBeat } from '../choreo/setlist.js';
 import { clubMusicOn } from '../club/social.js';
 import { campaignComplete, match, menuMusic, phraseBeats } from '../game/state.js';
-import { net } from '../net/session.js';
+import { inRoom } from '../net/session.js';
 
 export class MusicSystem extends createSystem({}) {
   private generation = -1;
@@ -102,7 +102,7 @@ export class MusicSystem extends createSystem({}) {
         // rotation, and only ever offers the choice to someone who earned
         // it. A room on the social floor still gets CHILL either way: the
         // reward is the MENU's music, not the club's.
-        const social = net.phase === 'hosting' || net.phase === 'joined';
+        const social = inRoom();
         const closing = match.credits || (!social && menuMusic() === 'credits' && campaignComplete());
         const room = closing ? tracksFor('credits') : social ? tracksFor('club') : tracksFor('lobby');
         // THE MUSIC SWITCH belongs to the CLUB, not to the room loop as a

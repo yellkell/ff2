@@ -55,7 +55,7 @@ import { glintTexture, sizedPointsMaterial } from '../materials/glow.js';
 import { createLiquid, HandMotion, type LiquidVisual } from '../materials/liquid.js';
 import { danceHue } from '../game/profile.js';
 import { match, me, showBeat } from '../game/state.js';
-import { net } from '../net/session.js';
+import { inRoom } from '../net/session.js';
 
 const _head = new Vector3();
 const _hand = new Vector3();
@@ -568,7 +568,7 @@ export class PlayerSystem extends createSystem({}) {
     // glowsticks stay in the bag until a set takes you back to the ring.
     const clubFloor =
       (match.screen === 'lobby' || match.screen === 'tour') &&
-      (net.phase === 'hosting' || net.phase === 'joined');
+      inRoom();
 
     // ONCE THE RECORD DROPS, THE PLASTIC GOES. Through a set you are a
     // dancer holding two glowsticks, not somebody wearing two controllers:

@@ -106,14 +106,22 @@ nav = await wrap(`nav()`);
 check('ARCADE tab: modes + the demoted SHOOT BACK', nav.center === 'arcade' && has(slab, 'start-tutorial', 'open-campaign', 'open-raid', 'start-training', 'toggle-shootback'), notTabs(slab).join(','));
 check('ARCADE tab: the door to RAVE RAID', slab.includes('open-rave'), String(slab.includes('open-rave')));
 save('arcade', await wrap(`snap('train')`));
+// CLUB is a DOOR now, not a picker: pressing it crosses to the venue's
+// floor in-session (tools/venue-check.mjs walks that place properly — here
+// we only prove the tab opens the door and the arena comes back whole).
+await page.evaluate(() => localStorage.setItem('gdr-server', 'ws://127.0.0.1:1')); // no relay: the room of one
 await wrap(`act('wrap:tab-club')`);
-slab = await wrap(`buttons('train')`);
-nav = await wrap(`nav()`);
-check('CLUB tab: the region doors on the slab', nav.club && notTabs(slab).every((b) => b.startsWith('pub-go-')) && notTabs(slab).length > 0, notTabs(slab).join(','));
-save('club', await wrap(`snap('train')`));
+const crossed = await page
+  .waitForFunction(() => window.__town && window.__town.place === 'venue' && !window.__town.busy, { timeout: 40000 })
+  .then(() => true)
+  .catch(() => false);
+check('CLUB tab: the door onto the venue floor, in-session', crossed && (await page.evaluate(() => document.body.classList.contains('app-entered'))), JSON.stringify(await page.evaluate(() => ({ place: window.__town?.place }))));
+await page.evaluate(() => window.__town.leave());
+await page.waitForFunction(() => window.__town && window.__town.place === 'arena' && !window.__town.busy, { timeout: 40000 });
+await page.waitForTimeout(300);
 await wrap(`act('wrap:tab-fight')`);
 nav = await wrap(`nav()`);
-check('FIGHT tab again folds the club picker', nav.center === 'fight' && !nav.club, JSON.stringify(nav));
+check('home again, and FIGHT is the slab', nav.center === 'fight' && !nav.club, JSON.stringify(nav));
 
 console.log('\n=== through FIGHT: the flows still drill in and BACK out ===');
 await wrap(`act('private-open')`);
