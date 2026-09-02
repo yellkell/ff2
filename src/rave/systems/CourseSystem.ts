@@ -54,15 +54,16 @@ import {
 import * as sfx from '../audio/sfx.js';
 import { CLUB } from '../club/config.js';
 import { stepRefs } from '../club/step.js';
-import { COURSE_ORIGIN, CLIMB, MUSIC, PHASE, PLAY_AREA } from '../course/config.js';
-import { conductor } from '../course/conductor.js';
+import { COURSE_ORIGIN, MUSIC, PHASE, PLAY_AREA } from '../course/config.js';
+import { conductor, COURSE_BAR_SEC } from '../course/conductor.js';
 import { PLATFORMS, validateScore } from '../course/score.js';
 import { course, G, resetRide } from '../course/state.js';
 import { courseRoot } from '../course/world.js';
 import { match } from '../game/state.js';
 import { PointerRay } from '../ui/pointer.js';
 import { Panel, UI } from '../ui/panel.js';
-import { inRoom } from '../net/session.js';
+import { courseBars, inRoom } from '../net/session.js';
+import { updateVoiceListener } from '../club/voice.js';
 import { teleportPlayer } from './ClubTeleportSystem.js';
 
 const _head = new Vector3();
@@ -70,6 +71,8 @@ const _fwd = new Vector3();
 const _origin = new Vector3();
 const _dir = new Vector3();
 const _quat = new Quaternion();
+const _ear = new Vector3();
+const _earQ = new Quaternion();
 
 /** The lap lands, the bell rings, and THEN the black comes down. */
 const LAP_HOLD = 1.7;
@@ -103,7 +106,7 @@ export const courseView: {
     active: boolean;
     tracked: string;
     rig: { x: number; y: number; z: number };
-    body: { x: number; z: number };
+    body: { x: number; y: number; z: number };
     laps: number;
     slips: number;
     handovers: number;
@@ -200,7 +203,7 @@ export class CourseSystem extends createSystem({}) {
       active: course.active,
       tracked: PLATFORMS[G.tracked]?.id ?? '?',
       rig: { ...G.rig },
-      body: { x: G.body.x, z: G.body.z },
+      body: { x: G.body.x, y: G.body.y, z: G.body.z },
       laps: course.laps,
       slips: G.slips,
       handovers: G.handovers,
@@ -244,12 +247,19 @@ export class CourseSystem extends createSystem({}) {
     const blurred = this.visibilityState.value === VisibilityState.VisibleBlurred;
     conductor.playing = course.active && !blurred;
     if (course.active && !blurred) {
-      conductor.advance(dt);
+      // The ear goes where the head goes. The club drives the audio listener
+      // while you are IN the club and stops the moment you cross, which would
+      // leave it parked in a hall 300 m above — and every positional sound out
+      // here (the countdown, the chime, the thud) is well outside a panner's
+      // max distance from there. Silence, from a bug that looks like a mixer
+      // problem.
+      this.camera.getWorldPosition(_ear);
+      this.camera.getWorldQuaternion(_earQ);
+      updateVoiceListener(_ear, _earQ);
+      conductor.advance(dt, courseBars(COURSE_BAR_SEC));
       G.transport.bars = conductor.bars;
       G.transport.barPhase = conductor.barPhase;
       G.transport.beat = Math.floor(conductor.barPhase * MUSIC.beatsPerBar);
-      conductor.setClimb(G.rig.y / CLIMB.top);
-      conductor.setArpLevel(Math.min(1, G.flow / 6));
     }
 
     this.shade.visible = course.fade > 0.002;
@@ -516,7 +526,10 @@ export class CourseSystem extends createSystem({}) {
     // way it does in a set: your real floor's centre is the pad's centre.
     this.player.rotation.set(0, 0, 0);
     this.player.position.set(COURSE_ORIGIN.x, COURSE_ORIGIN.y, COURSE_ORIGIN.z);
-    conductor.start();
+    // Start on the ROOM's bar when there is a room: the circuit has been
+    // turning since the club opened, and crossing in joins it mid-lap rather
+    // than restarting it under everyone already out there.
+    conductor.start(courseBars(COURSE_BAR_SEC) ?? 0);
     this.checkRoom();
   }
 

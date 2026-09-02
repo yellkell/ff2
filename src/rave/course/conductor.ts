@@ -1,18 +1,41 @@
 /**
- * THE CONDUCTOR — one clock owns the ride, and one small procedural kit
- * plays over it.
+ * THE CONDUCTOR — one clock owns the ride, and the FLOOR does the talking.
  *
  * The transport advances on SIMULATION delta, not the wall clock: departures,
- * countdowns, wayfinding and lights all read `bars`, so the music and the
- * floor can never disagree about when a platform leaves.
+ * countdowns, wayfinding and lights all read `bars`, so the floor and the
+ * sound can never disagree about when a platform leaves. In a room it follows
+ * the ROOM's clock instead (see `advance`), which is what lets two people ride
+ * the same lap.
  *
- * The kit is synthesised rather than played off a record — a four-minute
- * master would have to be cut to a lap length nobody has run yet, and the
- * one thing the drone has to do is CLIMB with you: the root rises seven
- * semitones between the floor and the skywalk, which is the well's descent
- * from the movement notes played the other way up (research/01 §6). It hangs
- * off the club's own AudioContext and the user's music fader, so the door
- * doesn't open a second mixer nobody can turn down.
+ * WHAT USED TO BE HERE: a whole synthesised kit — two detuned saws droning
+ * under a lowpass whose root climbed seven semitones between the floor and the
+ * skywalk, a kick, a hat, and an arpeggio that opened up as your flow rose. It
+ * was a nice piece of code and it was the wrong idea. A generated bed plays
+ * whether or not anything is happening, so the one sound out here that carries
+ * information — ground counting itself out from under you — had to compete
+ * with a backing track for your attention. On a course whose whole argument is
+ * that THE FLOOR IS THE INSTRUCTION, that is backwards.
+ *
+ * So the bed is gone, and what is left is a vocabulary of ACTIONS, each one
+ * sounding from the place it happens:
+ *
+ *   tick   a deck counting out the last bar of its dwell — the countdown,
+ *          climbing in pitch and in volume as the beats run out
+ *   chime  a clean handover: you stepped, and the ground took you
+ *   thud   a slip: the ground went without you
+ *   bell   a lap closes
+ *
+ * They are POSITIONAL, and that is the point of the change rather than a
+ * detail of it. A countdown that comes from everywhere is a metronome; a
+ * countdown that comes from the deck two steps to your left is information you
+ * can act on without looking, which on a course you walk by feel is everything.
+ * Each one-shot builds its own panner and lets it fall out of scope — they are
+ * short and sparse, and a pool would exist only to save a few allocations a
+ * second.
+ *
+ * (A record can still play over all this — the rave's own shelf, shuffled per
+ * headset, see MusicSystem. That is something the player brought with them,
+ * which is a different thing from a bed the room insists on.)
  */
 
 import { audioContext, ensureAudio } from '../audio/sfx.js';
@@ -21,7 +44,16 @@ import { MUSIC } from './config.js';
 
 const BEAT_SEC = 60 / MUSIC.bpm;
 const BAR_SEC = BEAT_SEC * MUSIC.beatsPerBar;
-const LOOKAHEAD_SEC = 0.14;
+
+/** Seconds in one VOIDSTEP bar — the unit the room's shared clock counts in. */
+export const COURSE_BAR_SEC = BAR_SEC;
+
+/** Where in the world a sound comes from. Omit it and the sound is flat. */
+export interface SoundAt {
+  x: number;
+  y: number;
+  z: number;
+}
 
 class Conductor {
   bars = 0;
@@ -29,34 +61,58 @@ class Conductor {
 
   private ctx: AudioContext | undefined;
   private master: GainNode | undefined;
-  private crush!: BiquadFilterNode;
-  private droneOsc: OscillatorNode[] = [];
-  private droneGain!: GainNode;
   private noiseBuf!: AudioBuffer;
-  private scheduledBeat8 = -1; // last scheduled eighth-note index
-  private climb01 = 0;
-  private arpLevel = 0;
 
   get barPhase(): number {
     return this.bars - Math.floor(this.bars);
   }
 
-  advance(dt: number): void {
+  /**
+   * Move the clock on. `roomBars` is the room's own bar count when there is a
+   * room (net/session.ts `courseBars`), and this is where co-op is actually
+   * won or lost.
+   *
+   * Seeding the clock once on the way in is not enough. After that it would
+   * free-run on FRAME DELTA, so anything that costs this headset time — a
+   * decode hitch, a backgrounded tab, a headset that dozed for a second —
+   * leaves it permanently riding a different lap from everyone else, and the
+   * symptom is riders standing beside their decks rather than on them. So the
+   * room's clock is followed continuously.
+   *
+   * It is followed by RATE, not by jumping: countdowns are timed against
+   * `bars`, and yanking the number would fire a backlog of ticks or repeat one
+   * already sounded. A small error bends the rate by up to half, which closes
+   * a half-second gap in about a second and is invisible on a moving deck.
+   * Only a gross error — a headset that genuinely slept — snaps, and at that
+   * point a discontinuity is the honest thing.
+   */
+  advance(dt: number, roomBars?: number | null): void {
     if (!this.playing) return;
-    this.bars += dt / BAR_SEC;
-    this.schedule();
+    if (roomBars != null && Number.isFinite(roomBars)) {
+      const err = roomBars - this.bars;
+      if (Math.abs(err) > 2) this.bars = roomBars;
+      else this.bars += (dt / BAR_SEC) * (1 + Math.max(-0.5, Math.min(0.5, err)));
+    } else {
+      this.bars += dt / BAR_SEC;
+    }
   }
 
-  /** The door opens: take the clock back to the start line and wake the kit. */
-  start(): void {
-    this.bars = 0;
-    this.scheduledBeat8 = -1;
+  /**
+   * The door opens: take the clock to the start line.
+   *
+   * `atBars` is the room's clock. Solo it is 0 and the circuit begins the
+   * moment you cross — which is what it always did. In a room it is however
+   * long the course has been running, so two people who crossed a minute apart
+   * still find the same platform in the same place.
+   */
+  start(atBars = 0): void {
+    this.bars = Number.isFinite(atBars) && atBars > 0 ? atBars : 0;
     this.playing = true;
     this.build();
-    if (this.master) this.master.gain.setTargetAtTime(0.85, this.ctx!.currentTime, 0.08);
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(1, this.ctx.currentTime, 0.05);
   }
 
-  /** The door closes: the void goes quiet without ever cutting a tail short. */
+  /** The door closes: the void goes quiet without cutting a tail short. */
   stop(): void {
     this.playing = false;
     if (this.ctx && this.master) {
@@ -65,20 +121,11 @@ class Conductor {
     }
   }
 
-  /** 0 on the floor → 1 at the skywalk; the drone root rises with it. */
-  setClimb(climb01: number): void {
-    this.climb01 = Math.min(1, Math.max(0, climb01));
-  }
-
-  setArpLevel(level01: number): void {
-    this.arpLevel = Math.min(1, Math.max(0, level01));
-  }
-
   private ready(): boolean {
     return !!this.ctx && !!this.master && this.ctx.state === 'running';
   }
 
-  /** Build the graph on the club's context (idempotent). */
+  /** Build the (now very small) graph on the club's context. Idempotent. */
   private build(): void {
     if (this.ctx) return;
     ensureAudio();
@@ -86,121 +133,77 @@ class Conductor {
     const out = musicBus();
     if (!ctx || !out) return;
     this.ctx = ctx;
-
     this.master = ctx.createGain();
     this.master.gain.value = 0;
-    this.crush = ctx.createBiquadFilter();
-    this.crush.type = 'lowpass';
-    this.crush.frequency.value = 16000;
-    this.master.connect(this.crush).connect(out);
+    this.master.connect(out);
 
     const noise = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.2), ctx.sampleRate);
     const d = noise.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     this.noiseBuf = noise;
-
-    // The drone: two detuned saws through a slow lowpass. Its root follows
-    // the climb — the void brightens in pitch as you rise through it.
-    this.droneGain = ctx.createGain();
-    this.droneGain.gain.value = 0.05;
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.value = 480;
-    this.droneGain.connect(lp).connect(this.master);
-    for (const mult of [1, 1.5]) {
-      for (const cents of [-6, 6]) {
-        const o = ctx.createOscillator();
-        o.type = 'sawtooth';
-        o.frequency.value = 55 * mult;
-        o.detune.value = cents;
-        o.connect(this.droneGain);
-        o.start();
-        this.droneOsc.push(o);
-      }
-    }
   }
 
-  private schedule(): void {
-    if (!this.ready()) {
-      this.build();
-      if (!this.ready()) return;
-    }
+  /**
+   * A panner for one one-shot, or the master itself when the caller didn't say
+   * where the sound is. Inverse rolloff over a short reference distance: a deck
+   * at your feet is clearly louder than one across the circuit, without the far
+   * ones vanishing — you are meant to hear the shape of the whole floor
+   * counting, just not equally.
+   */
+  private outputAt(at?: SoundAt): AudioNode {
     const ctx = this.ctx!;
-    const beat8Now = this.bars * MUSIC.beatsPerBar * 2;
-    const target = Math.floor(beat8Now + (LOOKAHEAD_SEC / BEAT_SEC) * 2);
-    if (this.scheduledBeat8 < Math.floor(beat8Now) - 4) {
-      this.scheduledBeat8 = Math.floor(beat8Now) - 1; // dropped frames: skip, don't burst
+    if (!at) return this.master!;
+    const p = ctx.createPanner();
+    p.panningModel = 'HRTF';
+    p.distanceModel = 'inverse';
+    p.refDistance = 1.6;
+    p.maxDistance = 40;
+    p.rolloffFactor = 1.15;
+    if (p.positionX) {
+      p.positionX.value = at.x;
+      p.positionY.value = at.y;
+      p.positionZ.value = at.z;
+    } else {
+      p.setPosition(at.x, at.y, at.z);
     }
-    const root = 55 * Math.pow(2, (7 / 12) * this.climb01);
-    for (const [i, o] of this.droneOsc.entries()) {
-      const mult = i < 2 ? 1 : 1.5;
-      o.frequency.setTargetAtTime(root * mult, ctx.currentTime, 0.6);
-    }
-    while (this.scheduledBeat8 < target) {
-      this.scheduledBeat8++;
-      const b8 = this.scheduledBeat8;
-      const at = ctx.currentTime + Math.max(0.005, (b8 / 2 - beat8Now / 2) * BEAT_SEC);
-      if (b8 % 2 === 0) this.kick(at, (b8 / 2) % MUSIC.beatsPerBar === 0);
-      this.hat(at, b8 % 2 === 1);
-      if (this.arpLevel > 0) this.arp(at, b8);
-    }
+    p.connect(this.master!);
+    return p;
   }
 
-  private kick(at: number, downbeat: boolean): void {
+  /**
+   * DEPARTURE COUNTDOWN. Pitch climbs as the beats run out, and it sounds from
+   * the deck that is leaving — so a countdown behind you is one you can place
+   * without turning round.
+   */
+  tick(beatsLeft: number, at?: SoundAt): void {
+    if (!this.ready()) return;
     const ctx = this.ctx!;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(downbeat ? 170 : 145, at);
-    o.frequency.exponentialRampToValueAtTime(46, at + 0.08);
-    g.gain.setValueAtTime(downbeat ? 0.62 : 0.44, at);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 0.22);
-    o.connect(g).connect(this.master!);
-    o.start(at);
-    o.stop(at + 0.24);
-  }
-
-  private hat(at: number, off: boolean): void {
-    const ctx = this.ctx!;
-    const s = ctx.createBufferSource();
-    s.buffer = this.noiseBuf;
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 7800 - this.climb01 * 800;
-    const g = ctx.createGain();
-    const base = off ? 0.055 : 0.095;
-    g.gain.setValueAtTime(base * (1 + this.climb01 * 0.3), at);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 0.05);
-    s.connect(hp).connect(g).connect(this.master!);
-    s.start(at);
-    s.stop(at + 0.06);
-  }
-
-  private static ARP = [0, 7, 3, 5, 0, 10, 7, 12];
-  private arp(at: number, b8: number): void {
-    const ctx = this.ctx!;
-    const semis = Conductor.ARP[b8 % Conductor.ARP.length];
-    const root = 220 * Math.pow(2, (7 / 12) * this.climb01);
+    const t = ctx.currentTime + 0.005;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     o.type = 'square';
-    o.frequency.value = root * Math.pow(2, semis / 12);
+    o.frequency.value = 900 + (4 - Math.min(4, beatsLeft)) * 180;
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = 1300;
-    bp.Q.value = 2.2;
-    g.gain.setValueAtTime(0.055 * this.arpLevel, at);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 0.11);
-    o.connect(bp).connect(g).connect(this.master!);
-    o.start(at);
-    o.stop(at + 0.12);
+    bp.frequency.value = 2100;
+    bp.Q.value = 5;
+    // The LAST beat is the loud one. A deck three beats out murmurs and a deck
+    // about to go speaks up, so the urgency is in the dynamics as well as the
+    // pitch — and a floor full of decks at different counts reads as a texture
+    // with one clear voice in it rather than as a wall of clicks.
+    const urgency = 1 - Math.min(3, Math.max(0, beatsLeft - 1)) / 4;
+    g.gain.setValueAtTime(0.04 + 0.05 * urgency, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    o.connect(bp).connect(g).connect(this.outputAt(at));
+    o.start(t);
+    o.stop(t + 0.07);
   }
 
-  /** A clean handover: the pentatonic step, climbing with flow. */
-  chime(step: number): void {
+  /** A clean handover: you stepped and the ground took you. */
+  chime(step: number, at?: SoundAt): void {
     if (!this.ready()) return;
     const ctx = this.ctx!;
-    const at = ctx.currentTime + 0.01;
+    const t = ctx.currentTime + 0.01;
     const penta = [0, 3, 5, 7, 10];
     const f = 440 * Math.pow(2, penta[step % penta.length] / 12);
     const o = ctx.createOscillator();
@@ -212,62 +215,38 @@ class Conductor {
     m.frequency.value = f * 2.01;
     mg.gain.value = 90;
     m.connect(mg).connect(o.frequency);
-    g.gain.setValueAtTime(0.12, at);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 0.7);
-    o.connect(g).connect(this.master!);
-    o.start(at);
-    m.start(at);
-    o.stop(at + 0.75);
-    m.stop(at + 0.75);
+    g.gain.setValueAtTime(0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.7);
+    o.connect(g).connect(this.outputAt(at));
+    o.start(t);
+    m.start(t);
+    o.stop(t + 0.75);
+    m.stop(t + 0.75);
   }
 
-  /** Departure countdown click; pitch climbs as the beats run out. */
-  tick(beatsLeft: number): void {
+  /** A slip: the ground went without you. Low, and under your feet. */
+  thud(at?: SoundAt): void {
     if (!this.ready()) return;
     const ctx = this.ctx!;
-    const at = ctx.currentTime + 0.005;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'square';
-    o.frequency.value = 900 + (4 - Math.min(4, beatsLeft)) * 180;
-    const bp = ctx.createBiquadFilter();
-    bp.type = 'bandpass';
-    bp.frequency.value = 2100;
-    bp.Q.value = 5;
-    g.gain.setValueAtTime(0.07, at);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 0.06);
-    o.connect(bp).connect(g).connect(this.master!);
-    o.start(at);
-    o.stop(at + 0.07);
-  }
-
-  /** A slip: the ground went without you. The whole mix ducks dark for a
-   *  beat — the miss is audible as absence. */
-  thud(): void {
-    if (!this.ready()) return;
-    const ctx = this.ctx!;
-    const at = ctx.currentTime + 0.005;
+    const t = ctx.currentTime + 0.005;
     const s = ctx.createBufferSource();
     s.buffer = this.noiseBuf;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass';
     lp.frequency.value = 240;
     const g = ctx.createGain();
-    g.gain.setValueAtTime(0.5, at);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 0.3);
-    s.connect(lp).connect(g).connect(this.master!);
-    s.start(at);
-    s.stop(at + 0.32);
-    this.crush.frequency.cancelScheduledValues(at);
-    this.crush.frequency.setValueAtTime(700, at);
-    this.crush.frequency.exponentialRampToValueAtTime(16000, at + 0.9);
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+    s.connect(lp).connect(g).connect(this.outputAt(at));
+    s.start(t);
+    s.stop(t + 0.32);
   }
 
-  /** A lap closes: one deep bell over the drone. */
-  bell(step: number): void {
+  /** A lap closes: one deep bell, from the gate that closed it. */
+  bell(step: number, at?: SoundAt): void {
     if (!this.ready()) return;
     const ctx = this.ctx!;
-    const at = ctx.currentTime + 0.01;
+    const t = ctx.currentTime + 0.01;
     const penta = [0, 3, 5, 7, 10];
     const f = 220 * Math.pow(2, penta[step % penta.length] / 12);
     const o = ctx.createOscillator();
@@ -279,13 +258,13 @@ class Conductor {
     m.frequency.value = f * 1.41; // inharmonic partial: bell, not chime
     mg.gain.value = 160;
     m.connect(mg).connect(o.frequency);
-    g.gain.setValueAtTime(0.17, at);
-    g.gain.exponentialRampToValueAtTime(0.001, at + 1.8);
-    o.connect(g).connect(this.master!);
-    o.start(at);
-    m.start(at);
-    o.stop(at + 1.9);
-    m.stop(at + 1.9);
+    g.gain.setValueAtTime(0.17, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.8);
+    o.connect(g).connect(this.outputAt(at));
+    o.start(t);
+    m.start(t);
+    o.stop(t + 1.9);
+    m.stop(t + 1.9);
   }
 }
 

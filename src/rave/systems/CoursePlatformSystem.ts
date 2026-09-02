@@ -62,7 +62,7 @@ import {
   PLATFORMS,
   sqOffset,
 } from '../course/score.js';
-import { course, G } from '../course/state.js';
+import { course, G, platformSoundAt } from '../course/state.js';
 import { courseRoot } from '../course/world.js';
 import { courseView } from './CourseSystem.js';
 import { FLOOR_Y } from './CourseVoidSystem.js';
@@ -386,18 +386,23 @@ export class CoursePlatformSystem extends createSystem({}) {
     G.groundLeaving = G.platforms[G.tracked]?.departIn <= 1;
     if (G.slipFlash > 0) G.slipFlash = Math.max(0, G.slipFlash - dt);
 
-    // The countdown is audible too: ticks on each beat of the final dwell
-    // bar, for the ground you own or the ground you're being invited onto.
+    // THE COUNTDOWN, out loud. On each beat, EVERY deck in its final dwell
+    // bar ticks — from where it is, at a volume set by how close it is to
+    // going and how close you are to it.
+    //
+    // It used to be one tick: the ground you own, or failing that the ground
+    // you were being invited onto, and nothing else. That was a metronome
+    // with no direction in it, and it told you about at most one deck when
+    // the thing you actually want to know — walking a circuit by feel, half
+    // of it behind you — is which way the floor is about to move. Now the
+    // whole floor counts, quietly, and your ear picks the near one out.
     const beatNow = Math.floor(bar * 4);
     if (beatNow !== this.lastBeat) {
       this.lastBeat = beatNow;
-      for (const idx of [G.tracked, G.wayfind.targetIndex]) {
-        if (idx < 0) continue;
+      for (let idx = 0; idx < G.platforms.length; idx++) {
         const st = G.platforms[idx];
-        if (st.departIn <= 1) {
-          conductor.tick(Math.ceil(st.departIn * 4));
-          break;
-        }
+        if (st.departIn > 1) continue;
+        conductor.tick(Math.ceil(st.departIn * 4), platformSoundAt(idx));
       }
     }
 
