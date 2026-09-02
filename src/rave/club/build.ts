@@ -2104,6 +2104,74 @@ function buildStep(root: Group): void {
   spill.position.set(S.portalX, S.portalH * 0.55, pz - 0.5);
   root.add(spill);
 
+  // ── THE DANGER SIGN ──────────────────────────────────────────────────
+  // The room says nothing, and then it says this. A red neon hung on two
+  // drop rods from the low ceiling, out in front of the frame so it reads
+  // from the hall through the doorway as well as from inside: the one red
+  // thing in a building that is warm brass and cold cyan everywhere else,
+  // and the only word anywhere near this door. It is not an explanation —
+  // a doorway with moving ground behind it has earned a warning, and a
+  // warning is allowed to be a word.
+  const signY = 2.15;
+  const signZ = pz - 0.34;
+  const signW = 1.16;
+  const signH = 0.26;
+  const tube = neonMat(DECOR.danger, 1.35);
+  // Drop rods to the slab.
+  for (const sx of [-1, 1] as const) {
+    box(root, blackSteelMat(), 0.016, H - (signY + signH / 2), 0.016, S.portalX + sx * (signW / 2 - 0.08), (H + signY + signH / 2) / 2, signZ);
+  }
+  // The backing box, and the tube running its top and bottom edges.
+  box(root, blackSteelMat(), signW, signH, 0.045, S.portalX, signY, signZ);
+  for (const sy of [-1, 1] as const) {
+    box(root, tube, signW - 0.06, 0.022, 0.022, S.portalX, signY + sy * (signH / 2 - 0.018), signZ - 0.03);
+  }
+  // The word, in lit red glass, with a hazard chevron either side of it.
+  const danger = signPlane(signW - 0.08, signH - 0.06, 512, (g, sw, sh) => {
+    g.clearRect(0, 0, sw, sh);
+    const red = '#ff2233';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = font(700, Math.round(sh * 0.62));
+    g.letterSpacing = '12px';
+    // Two passes: a wide halo under a crisp core — lit gas, not paint.
+    g.shadowColor = red;
+    g.shadowBlur = sh * 0.5;
+    g.fillStyle = red;
+    g.fillText('DANGER', sw / 2, sh / 2 + 1);
+    g.shadowBlur = sh * 0.16;
+    g.fillStyle = '#ffd9d9';
+    g.fillText('DANGER', sw / 2, sh / 2 + 1);
+    g.shadowBlur = 0;
+    g.letterSpacing = '0px';
+    // The chevrons: three strokes leaning into the word from each end.
+    g.strokeStyle = red;
+    g.lineWidth = Math.max(2, sh * 0.07);
+    g.lineCap = 'round';
+    g.shadowColor = red;
+    g.shadowBlur = sh * 0.3;
+    for (let i = 0; i < 3; i++) {
+      for (const side of [-1, 1] as const) {
+        const x = sw / 2 + side * (sw * 0.36 + i * sh * 0.22);
+        g.beginPath();
+        g.moveTo(x - side * sh * 0.14, sh * 0.24);
+        g.lineTo(x + side * sh * 0.06, sh / 2);
+        g.lineTo(x - side * sh * 0.14, sh * 0.76);
+        g.stroke();
+      }
+    }
+    g.shadowBlur = 0;
+  });
+  danger.name = 'live-step-danger';
+  danger.position.set(S.portalX, signY, signZ - 0.026);
+  danger.rotation.y = Math.PI; // it reads from the room, and from the door
+  root.add(danger);
+  // Its own spill: short and weak, so the red dies well before the hall
+  // and never argues with the cyan coming out of the frame below it.
+  const warn = new PointLight(DECOR.danger, 0.55, 2.3, 2);
+  warn.position.set(S.portalX, signY - 0.12, signZ - 0.16);
+  root.add(warn);
+
   registerStep({ portal, portalMat, shimmerMat, plateMat });
 }
 

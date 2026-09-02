@@ -374,8 +374,8 @@ raid pit body, and the player doc (`gear`, beside `pad`, the deck) — re-valida
 `cleanGear` (unknown ids dropped, one per slot, hard length cap: the
 paint's fail-soft law). Probes: `check:wrap` dresses the podium through
 `__ff2.gear` and asserts the wire form; `check:paint`'s two-client room
-sees a punter's gear arrive on the hello. Not yet: gear as a PAINT
-surface (stripes stay on the body and head for now).
+sees a punter's gear arrive on the hello. PAINT 2 later made gear a
+PAINT SURFACE too, with its own canvases per slot.
 
 **SHIPPED — THE PADS, rebuilt entire.** The platform shop no longer sells
 neon tints over one steel slab with a grin, a bolt and a grid on top. A
@@ -635,7 +635,8 @@ Each phase is shippable; nothing waits on everything.
    tab, synced over the existing skin wire). Below the hips the loft is
    monotonic: hips, then only narrower, closing at a rounded tip — the
    silhouette finally agrees with the hitbox, which always ended at the
-   pelvis sphere. Still to come: the attachments shop.)*
+   pelvis sphere. THE GEAR shop shipped after it — crest, pauldrons and
+   the rest, fitted to the rig and carried on every cosmetics channel.)*
 4. **The paint** — stripe data model, per-part bake, locker paint mode,
    cosmetics sync. (The moment "lasting through games" works, ship it.)
 5. **The venue + THE BELL** — new club on RAVE RAID's club architecture,
@@ -710,9 +711,9 @@ Each phase is shippable; nothing waits on everything.
    the fighters can see. THE ROAR is aggregated per headset off those
    same frames (no relay needed: everyone receives everyone), and the
    voice split is enforced where it bites, in MeshSystem's speaker
-   attach: a fighter never opens a watcher's voice. Still to land:
-   sourced crowd recordings behind the same API, and the bell dealing the
-   audience from the club floor once presence ships.)*
+   attach: a fighter never opens a watcher's voice. The bell now deals
+   the audience from the club floor (§3.1). Still to land: sourced crowd
+   recordings behind the same API.)*
 7. **RAVE mode** — port the set, decks, records; mannequin on the ring;
    coins per song; bell learns RAVE SET.
    *(Shipped as a PAGE, then MOUNTED: `rave.html` still boots `src/rave/`
@@ -726,12 +727,17 @@ Each phase is shippable; nothing waits on everything.
    the one wallet and the grade card names it; every figure — groupies,
    the giant MC, the club's room-mates, your reflection — wears THE BLANK
    through `rave/game/blankDancer.ts` (the arena's rig, `solveTorso`,
-   gear and paint bakes, glowsticks out of the fists). Still to land:
-   looks and gear on the rave's own wire (remote humans dance bare
-   today), the bell's RAVE SET, the two clubs folding into one, and
-   the goopliath/choreo copies deduplicated.)*
+   gear and paint bakes, glowsticks out of the fists). Looks and gear
+   now ride the rave's own wire, the two club copies are folded into
+   one, and the bell's RAVE tab calls a record off the same desk that
+   calls a fight. Still to land: the goopliath/choreo copies
+   deduplicated between `src/campaign/` and `src/rave/choreo/`.)*
 8. **Campaign 2** — move-grammar port (telegraphs/setlist/floor manager),
    new titan line-up, the on-beat titan, raid cut.
+   *(Shipped: the grammar module (`campaign/grammar.ts`) with the
+   telegraph and blockfall vocabulary ported, folded into the classic
+   five titans so each one dances its own shape with a bespoke windup,
+   and the raid arc riding the mesh.)*
 9. **Desert 2.0** — the dusk rebuild, then the venue exterior, then the
    rest of the environments.
    *(First pass shipped: golden hour dying into night — deep violet-navy

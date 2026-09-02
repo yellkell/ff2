@@ -206,6 +206,10 @@ export const DECOR = {
    *  signage, both the rave's own (PALETTE). */
   neon: 0x4fb7ff,
   neonHot: 0xff2ad5,
+  /** THE ONE RED IN THE HOUSE. Nothing in this building is allowed to
+   *  wear it except a warning — so when the corner by THE STEP glows red,
+   *  it means the thing it is hanging over. */
+  danger: 0xff2233,
 } as const;
 
 /* ── teleport-only locomotion (the FIRE FIGHT club's system, carried over
