@@ -71,7 +71,7 @@ export const AVATAR_SKINS: AvatarSkin[] = [
   // all resolve here through avatarSkin()'s fallback.
   // The palette fields only paint its SHOP TILE — the body's materials are
   // untagged, so it stays primer no matter what the recolour machinery does.
-  { id: 'blank', name: 'THE BLANK', chassis: 0xf4f2ee, trim: 0xd8d5cf, accent: 0xf4f2ee },
+  { id: 'blank', name: 'YOU', chassis: 0xf4f2ee, trim: 0xd8d5cf, accent: 0xf4f2ee },
   // …and its midnight twin: the same body in factory black. The base tone
   // is the ONE choice the body itself offers — everything else is paint.
   { id: 'onyx', name: 'THE ONYX', chassis: 0x17171a, trim: 0x0c0c0e, accent: 0x8f8f98 },

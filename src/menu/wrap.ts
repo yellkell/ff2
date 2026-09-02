@@ -522,7 +522,7 @@ function youBoard(): Face {
       },
       {
         id: 'open-custom',
-        label: 'YOUR BLANK',
+        label: 'CUSTOMIZATION',
         sub: lock ? SEAL_SUB : 'base tone · gear · pads · arena',
         x: X, y: 360, w: W, h: 130,
         disabled: lock,

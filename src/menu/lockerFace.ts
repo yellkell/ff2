@@ -1,6 +1,11 @@
 /**
- * THE LOCKER and THE STORE (MENUS 3) — one plate, two faces, on the panel
- * kit. What you own and wear; what you don't and could.
+ * CUSTOMIZATION — THE LOCKER and THE STORE (MENUS 3): one plate, two faces,
+ * on the panel kit. What you own and wear; what you don't and could.
+ *
+ * The panel is named for what you came to do, not for what the body is
+ * called under the hood. "THE BLANK" is the mannequin's engineering name
+ * (avatar/mannequin.ts) and it stays there; nothing in the menus asks a
+ * player to learn it.
  *
  * The tab grammar the wrap wears (MENUS 2) comes to the modals: LOCKER ·
  * STORE across the top, and under it the row of sub-boards each face
@@ -64,7 +69,7 @@ export function accentBarLight(u: number): number {
 /** The brand mark in the tab strip. The TABS say which face is up, so the
  *  mark says what the plate is FOR — repeating "LOCKER" beside the lit
  *  LOCKER tab told you nothing twice. */
-const TITLE = 'THE BLANK';
+const TITLE = 'CUSTOMIZATION';
 
 const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
 
@@ -150,8 +155,8 @@ const ARENA: Array<{ env: AppEnvironment | null; label: string; sub: string; id:
 export function lockerFace(locker: boolean): LockerFace {
   const b = board(locker);
   const buttons: PanelButton[] = [
-    { id: 'open-locker', label: 'LOCKER', tab: true, x: 300, y: TAB_Y, w: 200, h: TAB_H, selected: locker },
-    { id: 'open-shop', label: 'STORE', tab: true, x: 520, y: TAB_Y, w: 200, h: TAB_H, selected: !locker },
+    { id: 'open-locker', label: 'LOCKER', tab: true, x: 400, y: TAB_Y, w: 200, h: TAB_H, selected: locker },
+    { id: 'open-shop', label: 'STORE', tab: true, x: 620, y: TAB_Y, w: 200, h: TAB_H, selected: !locker },
   ];
 
   // The sub-board chips: what this face has to show.
@@ -287,8 +292,8 @@ function colourButtons(): PanelButton[] {
   const onyx = customization.avatar === 'onyx';
   const half = (INNER - 24) / 2;
   return [
-    { id: 'base-white', label: 'ALL WHITE', sub: onyx ? 'the blank, bare' : 'worn', x: M, y: BASE_Y, w: half, h: BASE_H, selected: !onyx },
-    { id: 'base-black', label: 'ALL BLACK', sub: onyx ? 'worn' : 'the blank, in onyx', x: M + half + 24, y: BASE_Y, w: half, h: BASE_H, selected: onyx },
+    { id: 'base-white', label: 'ALL WHITE', sub: onyx ? 'you, bare' : 'worn', x: M, y: BASE_Y, w: half, h: BASE_H, selected: !onyx },
+    { id: 'base-black', label: 'ALL BLACK', sub: onyx ? 'worn' : 'you, in onyx', x: M + half + 24, y: BASE_Y, w: half, h: BASE_H, selected: onyx },
     { id: 'accent-color', label: '', ghost: true, x: HUE_BAR.x, y: HUE_BAR.y, w: HUE_BAR.w, h: HUE_BAR.h },
     { id: 'accent-light', label: '', ghost: true, x: LIGHT_BAR.x, y: LIGHT_BAR.y, w: LIGHT_BAR.w, h: LIGHT_BAR.h },
     {
