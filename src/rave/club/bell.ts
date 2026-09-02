@@ -66,6 +66,9 @@ export interface FightDeal {
   callerIdx: number;
   /** Am I the caller (and so the arena room's host)? */
   mine: boolean;
+  /** Dealt from a ROOM OF ONE: there is no arena room to join — the
+   *  arena starts the fight against its own bots. */
+  solo: boolean;
   fighters: DealtMember[];
   watchers: DealtMember[];
   seed: number;

@@ -6,13 +6,14 @@
  * bar with a DAMAGE TRAIL (the ember ghost of what they just lost, easing
  * away behind the live level), the round pips, and the two states a glance
  * has to catch — LOW (a hazard chevron strip breathing under the bar) and
- * OUT (the card dims and a red stamp lands across it). A hit flashes the
- * card's rim. Nothing is a box: your real room shows through everything.
+ * OUT (the card dims; no stamp, no word — the dim is the word). A hit
+ * flashes the card's rim. Nothing is a box: your real room shows through
+ * everything.
  *
  * WHERE THE CARDS HANG depends on the format:
  *
  *   1V1   the classic pair — YOURS left, THEIRS right — over the rival's
- *         pad, with the ROUND PLAQUE (round, first-to, the clock) between.
+ *         pad, with the CLOCK between.
  *   2V2   your column (you, your ally above) and theirs, each column with
  *         its TEAM total under the lower card.
  *   FFA   the north rival keeps the right-hand card, but the fighters on
@@ -319,15 +320,6 @@ function healthBar(
   }
 }
 
-/** The OUT stamp — a red metal word slammed across a dimmed card. */
-function outStamp(ctx: CanvasRenderingContext2D): void {
-  ctx.save();
-  ctx.translate(W / 2, H / 2 + 10);
-  ctx.rotate(-0.12);
-  metalText(ctx, 'OUT', 0, 0, 150, UI.danger);
-  ctx.restore();
-}
-
 /* ── the board ────────────────────────────────────────────────────────── */
 
 export function createScoreboard(scene: Scene): Scoreboard {
@@ -471,13 +463,13 @@ export function createScoreboard(scene: Scene): Scoreboard {
   };
 
   /** THE ROUND PLAQUE. */
-  const drawPlaque = (state: MatchState, target: number, now: number): void => {
+  const drawPlaque = (state: MatchState, now: number): void => {
     const secs = Math.max(0, Math.ceil(state.roundTimer));
     const live = state.phase === 'playing';
     const hot = live && secs <= CLOCK_HOT;
     const warn = live && secs <= CLOCK_WARN;
     const text = state.phase === 'countdown' ? 'READY' : fmtTime(state.roundTimer);
-    const key = `p|${text}|${state.round}|${target}|${hot ? 'h' : warn ? 'w' : ''}`;
+    const key = `p|${text}|${hot ? 'h' : warn ? 'w' : ''}`;
     // The hot clock's pulse rides the mesh, not the canvas.
     plaque.mesh.scale.setScalar(hot ? 1 + 0.05 * Math.sin(now * 0.012) : 1);
     if (plaque.key === key) return;
@@ -486,14 +478,10 @@ export function createScoreboard(scene: Scene): Scoreboard {
     ctx.clearRect(0, 0, w, h);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    // Round and format, small, above the digits.
-    ctx.font = futuristicFont(24, 700);
-    ctx.letterSpacing = '4px';
-    ctx.fillStyle = UI.textDim;
-    ctx.fillText(`ROUND ${state.round}  ·  FIRST TO ${target}`, w / 2, 34);
-    ctx.letterSpacing = '0px';
-    // The clock: bare steel-white digits wrapped in neon — amber, then red
-    // and hot as the round runs out.
+    // The clock, and only the clock: bare steel-white digits wrapped in
+    // neon — amber, then red and hot as the round runs out. (The round
+    // number and the format used to sit above it; the pips already say
+    // both, and the plaque reads better as one thing.)
     const neon = hot ? UI.danger : warn ? UI.amber : 'rgba(255,176,0,0.9)';
     ctx.font = stencilFont(100);
     ctx.shadowColor = neon;
@@ -567,7 +555,6 @@ export function createScoreboard(scene: Scene): Scoreboard {
       ctx.shadowBlur = 0;
     }
     ctx.restore();
-    if (dim) outStamp(ctx);
     tex.needsUpdate = true;
   };
 
@@ -709,7 +696,7 @@ export function createScoreboard(scene: Scene): Scoreboard {
         lastReset = state.resetCount;
         motion.clear();
       }
-      drawPlaque(state, target, now);
+      drawPlaque(state, now);
       const you = fighters[0];
       const allies = fighters.filter((f, i) => i > 0 && f.team === 0);
       const enemies = fighters.filter((f) => f.team !== 0);

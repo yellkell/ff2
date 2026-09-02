@@ -34,6 +34,11 @@ export class CrowdSystem extends createSystem({}) {
     const live = app.state === 'playing';
     if (live !== this.wasLive) {
       this.wasLive = live;
+      // THE BED IS OFF. The synthesised murmur/rumble/roar read as noise in
+      // the headset, not as a crowd, and it went. The hands-up channel
+      // below keeps running for the terrace's BODIES — a crowd you can
+      // see going up — and when real recordings are sourced they land
+      // behind startCrowd() again (audio/crowd.ts CROWD_BED).
       if (live) startCrowd();
       else stopCrowd();
     }

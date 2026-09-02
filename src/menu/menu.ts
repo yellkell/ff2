@@ -165,6 +165,9 @@ export type MenuAction =
   | 'tab-avatars'
   | 'tab-platforms'
   | 'tab-gear'
+  | 'gear-head'
+  | 'gear-body'
+  | 'gear-hands'
   | 'tab-colour'
   /** Tap an avatar tile (equip) or a platform tile (buy if unowned, else equip). */
   | `shop-av-${number}`

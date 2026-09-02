@@ -177,10 +177,22 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         }
         ctx.fill();
         break;
-      default: // visorband
-        ctx.moveTo(cx - r * 0.55, cy - r * 0.05);
-        ctx.lineTo(cx + r * 0.55, cy - r * 0.05);
+      default: {
+        // visorband: a wraparound plate across the eyes, with its slit.
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.56, cy - r * 0.2);
+        ctx.quadraticCurveTo(cx, cy - r * 0.34, cx + r * 0.56, cy - r * 0.2);
+        ctx.lineTo(cx + r * 0.5, cy + r * 0.1);
+        ctx.quadraticCurveTo(cx, cy + r * 0.22, cx - r * 0.5, cy + r * 0.1);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = Math.max(1.5, line * 0.4);
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.4, cy - r * 0.06);
+        ctx.quadraticCurveTo(cx, cy - r * 0.16, cx + r * 0.4, cy - r * 0.06);
         ctx.stroke();
+      }
     }
   } else if (def.slot === 'body') {
     ctx.fillStyle = dim;
@@ -210,8 +222,16 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         ctx.fill();
         break;
       case 'collar':
-        ctx.ellipse(cx, cy - r * 0.6, r * 0.42, r * 0.14, 0, 0, Math.PI * 2);
+        // A ring sitting ON the shoulders, and its pendant plate.
+        ctx.lineWidth = line * 1.3;
+        ctx.ellipse(cx, cy - r * 0.5, r * 0.44, r * 0.17, 0, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.1, cy - r * 0.34);
+        ctx.lineTo(cx + r * 0.1, cy - r * 0.34);
+        ctx.lineTo(cx, cy - r * 0.1);
+        ctx.closePath();
+        ctx.fill();
         break;
       case 'ridge':
         for (let i = 0; i < 5; i++) {
@@ -226,8 +246,23 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         ctx.stroke();
         ctx.fillRect(cx - r * 0.09, cy + r * 0.22, r * 0.18, r * 0.2);
         break;
-      default: // epaulettes
-        for (const s of [-1, 1]) ctx.fillRect(cx + s * r * 0.62 - r * 0.2, cy - r * 0.66, r * 0.4, r * 0.14);
+      default: // epaulettes: a board on each shoulder, a boss at the tip, fringe
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.roundRect(cx + s * r * 0.64 - r * 0.24, cy - r * 0.7, r * 0.48, r * 0.16, r * 0.04);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(cx + s * r * 0.84, cy - r * 0.62, r * 0.09, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.lineWidth = Math.max(1.5, line * 0.5);
+          for (let i = 0; i < 3; i++) {
+            const x = cx + s * (r * 0.72 + i * r * 0.08);
+            ctx.beginPath();
+            ctx.moveTo(x, cy - r * 0.54);
+            ctx.lineTo(x, cy - r * 0.34);
+            ctx.stroke();
+          }
+        }
     }
   } else {
     // A fist from above: the palm block and four fingers.
@@ -249,6 +284,28 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         ctx.moveTo(cx - r * 0.5, cy + r * 0.55);
         ctx.lineTo(cx + r * 0.5, cy + r * 0.55);
         ctx.stroke();
+        break;
+      case 'gauntlets':
+        // The back plate over the fist, ridged, and the flared cuff.
+        ctx.beginPath();
+        ctx.roundRect(cx - r * 0.38, cy - r * 0.14, r * 0.76, r * 0.5, r * 0.08);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.5, cy + r * 0.44);
+        ctx.lineTo(cx + r * 0.5, cy + r * 0.44);
+        ctx.lineTo(cx + r * 0.58, cy + r * 0.72);
+        ctx.lineTo(cx - r * 0.58, cy + r * 0.72);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = Math.max(1.5, line * 0.4);
+        for (let i = 0; i < 3; i++) {
+          const y = cy - r * 0.02 + i * r * 0.14;
+          ctx.beginPath();
+          ctx.moveTo(cx - r * 0.3, y);
+          ctx.lineTo(cx + r * 0.3, y);
+          ctx.stroke();
+        }
         break;
       case 'knuckles':
         for (let i = 0; i < 4; i++) {
@@ -453,7 +510,7 @@ function drawDeckSwatch(ctx: CanvasRenderingContext2D, deck: DeckStyle, cx: numb
       break;
     }
     case 'marble':
-      fill('#ece9e2');
+      fill('#dcd8d0');
       ctx.strokeStyle = '#8d8a90';
       ctx.lineWidth = Math.max(1, r * 0.05);
       ctx.beginPath();

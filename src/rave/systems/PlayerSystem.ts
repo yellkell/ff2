@@ -55,7 +55,6 @@ import { glintTexture, sizedPointsMaterial } from '../materials/glow.js';
 import { createLiquid, HandMotion, type LiquidVisual } from '../materials/liquid.js';
 import { danceHue } from '../game/profile.js';
 import { match, me, showBeat } from '../game/state.js';
-import { inRoom } from '../net/session.js';
 
 const _head = new Vector3();
 const _hand = new Vector3();
@@ -563,12 +562,14 @@ export class PlayerSystem extends createSystem({}) {
       this.stickColor.setHex(hueToColor(hue, 0.6));
     }
 
-    // The sticks are RING kit. On the club floor your hands are hands —
-    // drinks to hold, panels to poke, an arcade to shoot — so the
-    // glowsticks stay in the bag until a set takes you back to the ring.
-    const clubFloor =
-      (match.screen === 'lobby' || match.screen === 'tour') &&
-      inRoom();
+    // The sticks are RING kit, and ONLY ring kit. On the club floor, in
+    // the foyer, at the board — anywhere that isn't a set — your hands are
+    // hands: drinks to hold, panels to poke, an arcade to shoot. They used
+    // to hide only on a joined club floor, which left them in your fists
+    // in the foyer and through the seconds a relay took to answer; now
+    // they come out of the bag for the count-in, the record and the
+    // podium, and go straight back.
+    const clubFloor = !(match.screen === 'countdown' || match.screen === 'raid' || match.screen === 'podium');
 
     // ONCE THE RECORD DROPS, THE PLASTIC GOES. Through a set you are a
     // dancer holding two glowsticks, not somebody wearing two controllers:

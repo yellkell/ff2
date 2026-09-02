@@ -85,7 +85,7 @@ export const PLATFORM_SKINS: PlatformSkin[] = [
   // ── the shop: materials, cheap to precious ────────────────────────────
   { id: 'walnut', name: 'WALNUT', deck: 'walnut', neon: 0xffb347, trim: TRIM.brass, price: 100, blurb: 'dark figured boards, waxed' },
   { id: 'slate', name: 'SLATE', deck: 'slate', neon: 0x5ff2ff, trim: TRIM.iron, price: 150, blurb: 'quarried flagstones, cleaved' },
-  { id: 'marble', name: 'MARBLE', deck: 'marble', neon: 0xffd84a, trim: TRIM.brass, price: 250, blurb: 'white stone, grey veins' },
+  { id: 'marble', name: 'MARBLE', deck: 'marble', neon: 0xffd84a, trim: TRIM.brass, price: 250, blurb: 'grey-white stone, dark veins' },
   { id: 'frost', name: 'FROST', deck: 'frost', neon: 0x8ae4ff, trim: TRIM.chrome, price: 400, blurb: 'river ice, bubbles frozen in' },
   { id: 'obsidian', name: 'OBSIDIAN', deck: 'obsidian', neon: 0xb06bff, trim: TRIM.iron, price: 600, blurb: 'black glass, rippled where it cooled' },
   { id: 'jade', name: 'JADE', deck: 'jade', neon: 0x7dffc2, trim: TRIM.brass, price: 800, blurb: 'green stone with a cloud in it' },

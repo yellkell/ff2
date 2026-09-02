@@ -173,6 +173,10 @@ export const customization = {
   shopOpen: false,
   /** Which tab the shop / locker shows. 'colour' and 'arena' are locker-only. */
   tab: 'platforms' as 'avatars' | 'platforms' | 'gear' | 'colour' | 'arena',
+  /** Which of the GEAR board's three shelves is out — head, body or
+   *  hands. Fifteen pieces on one board crushed the tiles until the
+   *  prices fell off them; a shelf holds six at full size. */
+  gearSlot: 'head' as 'head' | 'body' | 'hands',
   /** STORE try-on: the unowned skin the mirror (avatar) or your pad (platform)
    *  is modelling right now; its tile grows a BUY button. Nothing is owned or
    *  equipped until the buy — cleared on purchase and when the store closes. */

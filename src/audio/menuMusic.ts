@@ -17,7 +17,11 @@ import musicUrl from '../assets/music/smoldering.mp3?url';
 import { MusicTrack } from './musicTrack.js';
 import { musicVolume, onMusicVolume } from './musicVolume.js';
 
-const MUTE_KEY = 'ibb-music-muted';
+/** FIRE FIGHT 2's OWN mute key. It was 'ibb-music-muted' — Iron Balls
+ *  Boxing's — which means a mute set in FF1 on a shared origin carried
+ *  over here silently, with the only tell a lit breaker on a settings tab.
+ *  A new game starts unmuted. */
+const MUTE_KEY = 'ff-music-muted';
 const BASE_VOLUME = 0.5;
 /** The lobby track's live level: its base scaled by the master music volume. */
 function targetVol(): number {
@@ -120,6 +124,24 @@ export function fadeInMenuMusic(): void {
 onMusicVolume(() => {
   if (audio && !audio.paused && fadeTimer === null) audio.volume = targetVol();
 });
+
+/**
+ * THE READOUT: why the lobby music is or isn't sounding right now, in
+ * one word for the settings tab — so a silent headset can say which gate
+ * it is stuck behind instead of just being silent.
+ */
+export function menuMusicStatus(): string {
+  if (isMusicMuted()) return 'MUTED';
+  if (musicVolume() <= 0.005) return 'VOLUME AT ZERO';
+  if (!entered) return 'WAITING FOR THE CURTAIN';
+  if (!lobbyActive) return 'PAUSED FOR THE BOUT';
+  const a = audio;
+  if (!a) return 'NOT STARTED';
+  if (a.status === 'failed') return 'DECODE FAILED';
+  if (a.status === 'suspended') return 'AUDIO SUSPENDED';
+  if (a.status === 'loading') return 'LOADING';
+  return a.paused ? 'PAUSED' : 'PLAYING';
+}
 
 /**
  * Kick the track's fetch + decode WITHOUT starting playback — called the

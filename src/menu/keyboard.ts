@@ -1,9 +1,14 @@
 /**
- * The in-game name keyboard — an industrial smoked-steel plate of clickable
- * keys, raycast by the same menu pointers. It pops up ONCE per player: the
- * first time they do something that puts a name on the leaderboard (starting
- * Aim Training or queueing for multiplayer). The typed callsign is saved and
- * shared by both boards forever after.
+ * The in-game name keyboard — a kit panel of clickable keys, raycast by the
+ * same menu pointers. It pops up ONCE per player: the first time they do
+ * something that puts a name on the leaderboard (starting Aim Training or
+ * queueing for multiplayer). The typed callsign is saved and shared by both
+ * boards forever after.
+ *
+ * It wears the wrap's own kit — the smoked-steel panel, the hairline
+ * plates, hazard amber for the hot key and the caret — in the house face,
+ * so it reads as one of the menus and not as a leftover from the first
+ * game's plate-steel era.
  */
 
 import {
@@ -14,10 +19,11 @@ import {
   PlaneGeometry,
   type Scene,
 } from 'three';
-import { UI, hazardStrip, plate, stencilFont } from '../ui/industrial.js';
+import { KIT } from '../ui/kit/panel.js';
+import { font, onFontsReady } from '../ui/kit/fonts.js';
 
-const KW = 640;
-const KH = 480;
+const KW = 704;
+const KH = 528;
 const MAX_LEN = 12;
 
 const ROWS: string[][] = [
@@ -61,7 +67,7 @@ export function createNameKeyboard(scene: Scene): NameKeyboard {
   const texture = new CanvasTexture(canvas);
   texture.minFilter = LinearFilter;
   const mesh = new Mesh(
-    new PlaneGeometry(0.84, 0.63),
+    new PlaneGeometry(0.88, (0.88 * KH) / KW),
     new MeshBasicMaterial({ map: texture, transparent: true }),
   );
   mesh.name = 'name-keyboard';
@@ -75,53 +81,117 @@ export function createNameKeyboard(scene: Scene): NameKeyboard {
   let hover: string | null = null;
   let zones: KeyZone[] = [];
 
-  const key = (id: string, x: number, y: number, w: number, h: number, label = id): void => {
+  /** A key: the kit's plate, its hairline, and the accent when hot. The
+   *  primary (OK) key is solid accent like the wrap's own CTA. */
+  const key = (id: string, x: number, y: number, w: number, h: number, label = id, primary = false, danger = false): void => {
     zones.push({ id, x, y, w, h });
     const hot = hover === id;
-    plate(ctx, x, y, w, h, {
-      cut: 8,
-      fill: hot ? 'rgba(255,176,0,0.22)' : 'rgba(150,150,170,0.10)',
-      stroke: hot ? UI.amber : UI.steelDim,
-      rivets: false,
-    });
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 12);
+    if (primary) {
+      ctx.fillStyle = hot ? '#ffc35a' : KIT.accent;
+      ctx.fill();
+    } else {
+      ctx.fillStyle = hot ? KIT.plateHover : KIT.plate;
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = hot ? (danger ? KIT.danger : KIT.accent) : KIT.line;
+      ctx.stroke();
+    }
+    // The kit's edge tick on a hot key.
+    if (hot && !primary) {
+      ctx.fillStyle = danger ? KIT.danger : KIT.accent;
+      ctx.beginPath();
+      ctx.roundRect(x + 6, y + 10, 4, h - 20, 2);
+      ctx.fill();
+    }
     ctx.textAlign = 'center';
-    ctx.font = `700 ${Math.round(h * 0.48)}px system-ui, sans-serif`;
-    ctx.fillStyle = hot ? UI.amber : UI.text;
-    ctx.fillText(label, x + w / 2, y + h / 2 + 2);
+    ctx.font = font(700, Math.round(h * 0.46));
+    ctx.letterSpacing = label.length > 1 ? '2px' : '0px';
+    ctx.fillStyle = primary ? KIT.onAccent : hot ? KIT.textHi : danger ? KIT.danger : KIT.text;
+    ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+    ctx.letterSpacing = '0px';
   };
 
   const draw = (): void => {
     zones = [];
     ctx.clearRect(0, 0, KW, KH);
-    plate(ctx, 8, 8, KW - 16, KH - 16, { cut: 26, fill: 'rgba(12,13,17,0.74)', stroke: UI.amberSoft });
-    hazardStrip(ctx, 40, 28, 56, 14, UI.amber);
-    ctx.textAlign = 'left';
-    ctx.font = stencilFont(24);
-    ctx.fillStyle = UI.amberSoft;
-    ctx.fillText(prompt, 112, 36);
+    // The panel: the wrap's smoked steel, and its corner brackets.
+    ctx.fillStyle = KIT.panel;
+    ctx.beginPath();
+    ctx.roundRect(6, 6, KW - 12, KH - 12, 22);
+    ctx.fill();
+    ctx.strokeStyle = KIT.line;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = KIT.accent;
+    ctx.lineWidth = 3;
+    for (const [x, y, dx, dy] of [
+      [22, 22, 1, 1],
+      [KW - 22, 22, -1, 1],
+      [22, KH - 22, 1, -1],
+      [KW - 22, KH - 22, -1, -1],
+    ] as const) {
+      ctx.beginPath();
+      ctx.moveTo(x + dx * 22, y);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x, y + dy * 22);
+      ctx.stroke();
+    }
 
-    // The entry field, with a cursor while there's room to type. The font
-    // shrinks to keep a long note on one line (a name never gets close).
-    plate(ctx, 60, 62, KW - 120, 62, { cut: 12, fill: 'rgba(20,22,28,0.9)', stroke: UI.steel, rivets: false });
+    // The prompt, in the house face with the wrap's tracking, and the
+    // accent tick beside it.
+    ctx.fillStyle = KIT.accent;
+    ctx.beginPath();
+    ctx.roundRect(40, 34, 5, 28, 2.5);
+    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.font = font(700, 26);
+    ctx.letterSpacing = '3px';
+    ctx.fillStyle = KIT.accent;
+    ctx.fillText(prompt, 58, 48);
+    ctx.letterSpacing = '0px';
+
+    // The entry field: a well with a hairline, the text in the house face,
+    // and an amber caret while there is room to type. The font shrinks to
+    // keep a long note on one line (a name never gets close).
+    ctx.beginPath();
+    ctx.roundRect(40, 76, KW - 80, 72, 14);
+    ctx.fillStyle = KIT.well;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = KIT.lineFaint;
+    ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.fillStyle = UI.text;
-    const shown = text + (text.length < maxLen ? '_' : '');
-    const fieldW = KW - 120 - 40;
-    let fs = 40;
-    ctx.font = stencilFont(fs);
-    const w = ctx.measureText(shown).width;
+    const fieldW = KW - 80 - 48;
+    let fs = 42;
+    ctx.font = font(700, fs);
+    ctx.letterSpacing = '4px';
+    let w = ctx.measureText(text).width;
     if (w > fieldW) {
       fs = Math.max(18, Math.floor((fs * fieldW) / w));
-      ctx.font = stencilFont(fs);
+      ctx.font = font(700, fs);
+      w = ctx.measureText(text).width;
     }
-    ctx.fillText(shown, KW / 2, 94);
+    ctx.fillStyle = KIT.textHi;
+    ctx.fillText(text, KW / 2, 113);
+    if (text.length < maxLen) {
+      ctx.fillStyle = KIT.accent;
+      ctx.fillRect(KW / 2 + w / 2 + 6, 113 - fs * 0.42, 4, fs * 0.84);
+    }
+    ctx.letterSpacing = '0px';
+    // The counter, faint, on the right of the field.
+    ctx.textAlign = 'right';
+    ctx.font = font(600, 18);
+    ctx.fillStyle = KIT.faint;
+    ctx.fillText(`${text.length}/${maxLen}`, KW - 40, 168);
 
     // The key grid.
-    const keyH = 56;
+    const keyH = 58;
     const gap = 8;
-    let y = 148;
+    let y = 184;
     for (const row of ROWS) {
-      const keyW = 52;
+      const keyW = 56;
       const total = row.length * keyW + (row.length - 1) * gap;
       let x = (KW - total) / 2;
       for (const k of row) {
@@ -131,12 +201,17 @@ export function createNameKeyboard(scene: Scene): NameKeyboard {
       y += keyH + gap;
     }
     // Bottom row: DEL | SPACE | OK. Spaces are valid in both a name and a note.
-    key('back', 72, y, 120, keyH, 'DEL');
-    key('space', 200, y, 240, keyH, 'SPACE');
-    key('ok', 448, y, 120, keyH, 'OK');
+    key('back', 64, y, 140, keyH, 'DEL', false, true);
+    key('space', 216, y, 272, keyH, 'SPACE');
+    key('ok', 500, y, 140, keyH, 'OK', true);
 
     texture.needsUpdate = true;
   };
+
+  // The house woff2s may land after the first paint: re-ink when they do.
+  onFontsReady(() => {
+    if (mesh.visible) draw();
+  });
 
   return {
     mesh,

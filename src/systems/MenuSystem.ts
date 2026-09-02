@@ -1171,6 +1171,12 @@ export class MenuSystem extends createSystem({}) {
       case 'tab-gear':
         customization.tab = 'gear';
         break;
+      case 'gear-head':
+      case 'gear-body':
+      case 'gear-hands':
+        customization.tab = 'gear';
+        customization.gearSlot = action.slice(5) as 'head' | 'body' | 'hands';
+        break;
       case 'av-uncolor':
         setAvatarColor(-1); // back to the skin's own palette
         break;

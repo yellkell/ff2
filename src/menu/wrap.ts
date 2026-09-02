@@ -210,30 +210,26 @@ function fightRoot(): Face {
       : {
           id: 'quick-match',
           label: 'QUICK MATCH',
-          sub: app.searching > 0 ? `${app.searching} searching now` : 'best of three · drop in',
           x: M, y: 160, w: COL, h: 200,
           primary: true,
         },
     {
       id: 'ranked-match',
       label: 'RANKED',
-      sub: app.onlyBots ? 'off while ONLY BOTS is on' : 'best of five · the ladder',
       x: M, y: 390, w: COL, h: 150,
       disabled: app.onlyBots || queueing,
     },
     {
       id: 'private-open',
       label: 'PRIVATE MATCH',
-      sub: 'a five-digit code for your lot',
       x: M, y: 570, w: COL, h: 150,
       disabled: queueing,
     },
-    { id: 'arcade-2v2', label: '2V2', sub: 'tag brawl', x: C2, y: 160, w: COL, h: 170, disabled: queueing },
-    { id: 'arcade-ffa', label: 'FFA', sub: 'last one up', x: C2, y: 360, w: COL, h: 170, disabled: queueing },
+    { id: 'arcade-2v2', label: '2V2', x: C2, y: 160, w: COL, h: 170, disabled: queueing },
+    { id: 'arcade-ffa', label: 'FFA', x: C2, y: 360, w: COL, h: 170, disabled: queueing },
     {
       id: 'toggle-onlybots',
       label: 'ONLY BOTS',
-      sub: 'never queue online',
       x: C2, y: 590, w: COL, h: 110,
       small: true,
       selected: app.onlyBots,
@@ -241,7 +237,9 @@ function fightRoot(): Face {
   ];
   return {
     title: 'FIRE FIGHT 2',
-    body: note('every finished bout banks 10 iron-dollars', 900, CW),
+    // No note under the buttons: the main menu says what it is, and the
+    // wallet on the YOU wing already says what a bout pays.
+    body: () => {},
     buttons,
   };
 }
@@ -359,27 +357,24 @@ function browserFace(): Face {
 
 function arcadeFace(): Face {
   const buttons: PanelButton[] = [
-    { id: 'start-tutorial', label: 'TUTORIAL', sub: 'the guided basics', x: M, y: 160, w: COL, h: 200 },
-    { id: 'open-campaign', label: 'CAMPAIGN', sub: 'five titans, left to right', x: C2, y: 160, w: COL, h: 200 },
+    { id: 'start-tutorial', label: 'TUTORIAL', x: M, y: 160, w: COL, h: 200 },
+    { id: 'open-campaign', label: 'CAMPAIGN', x: C2, y: 160, w: COL, h: 200 },
     {
       id: 'open-raid',
       label: 'RAID',
-      sub: app.raidsOpen > 0 ? `${app.raidsOpen} squad${app.raidsOpen === 1 ? '' : 's'} forming now` : 'four boxers, one gauntlet',
       x: M, y: 390, w: COL, h: 200,
       tone: app.raidsOpen > 0 ? KIT.positive : undefined,
     },
-    { id: 'start-training', label: 'AIM TRAINING', sub: 'the heart of the game', x: C2, y: 390, w: COL, h: 200 },
+    { id: 'start-training', label: 'AIM TRAINING', x: C2, y: 390, w: COL, h: 200 },
     {
       id: 'open-rave',
       label: 'RAVE RAID',
-      sub: 'the record shelf — dance the night, bank the coins',
       x: M, y: 620, w: COL, h: 200,
       tone: KIT.info,
     },
     {
       id: 'toggle-shootback',
       label: 'SHOOT BACK',
-      sub: 'aim-training targets return fire',
       x: C2, y: 630, w: COL, h: 110,
       small: true,
       selected: app.shootBack,
@@ -387,7 +382,7 @@ function arcadeFace(): Face {
   ];
   return {
     title: 'FIRE FIGHT 2',
-    body: note('every finished run — and every finished record — pays the same flat coins', 900, CW),
+    body: () => {},
     buttons,
   };
 }
@@ -515,7 +510,7 @@ function youBoard(): Face {
       {
         id: 'open-paintbay',
         label: 'PAINT',
-        sub: lock ? SEAL_SUB : 'stripes · splotches · dots · squares',
+        sub: lock ? SEAL_SUB : undefined,
         x: X, y: 170, w: W, h: 160,
         primary: !lock,
         disabled: lock,
@@ -523,7 +518,7 @@ function youBoard(): Face {
       {
         id: 'open-custom',
         label: 'CUSTOMIZATION',
-        sub: lock ? SEAL_SUB : 'base tone · gear · pads',
+        sub: lock ? SEAL_SUB : undefined,
         x: X, y: 360, w: W, h: 130,
         disabled: lock,
       },

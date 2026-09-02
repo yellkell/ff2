@@ -166,11 +166,14 @@ function marbleSkin(): { map: CanvasTexture; bump: CanvasTexture } {
     // Veins: thin dark lines where a warped noise crosses a threshold band.
     const warp = n(x * 2, y * 2, 3);
     const v = Math.abs(Math.sin((x * 3 + warp * 5 + y * 1.3) * Math.PI));
-    const vein = clamp01((0.06 - v) / 0.06) * (0.4 + n(x * 8, y * 8) * 0.6);
+    const vein = clamp01((0.08 - v) / 0.08) * (0.4 + n(x * 8, y * 8) * 0.6);
     const cloud = n(x * 3 + 5, y * 3 + 5, 3);
-    const l = 0.92 + (cloud - 0.5) * 0.1 - vein * 0.45;
+    // Warm grey stone rather than paper-white: a headset's sun-lit deck
+    // tone-maps a 0.9 albedo to a blinding sheet, so the base sits at
+    // ~0.7 with the clouding and the veins carrying the read.
+    const l = 0.52 + (cloud - 0.5) * 0.18 - vein * 0.45;
     const h = clamp01(0.6 - vein * 0.25 + (cloud - 0.5) * 0.08);
-    return [l, l * 0.99, l * 0.97, h];
+    return [l, l * 0.98, l * 0.95, h];
   });
 }
 
@@ -291,7 +294,7 @@ function rawLook(style: DeckStyle): DeckLook {
     case 'slate':
       return { ...slateSkin(), color: 0xffffff, roughness: 0.85, metalness: 0.05, bumpScale: 0.6, envMapIntensity: 0.3, repeat: [0.9, 0.9] };
     case 'marble':
-      return { ...marbleSkin(), color: 0xffffff, roughness: 0.22, metalness: 0.02, bumpScale: 0.2, envMapIntensity: 0.6, repeat: [0.7, 0.7] };
+      return { ...marbleSkin(), color: 0xcfccc6, roughness: 0.5, metalness: 0.02, bumpScale: 0.2, envMapIntensity: 0.3, repeat: [0.7, 0.7] };
     case 'obsidian':
       return { ...obsidianSkin(), color: 0xffffff, roughness: 0.12, metalness: 0.1, bumpScale: 0.25, envMapIntensity: 0.9, repeat: [0.8, 0.8] };
     case 'frost':

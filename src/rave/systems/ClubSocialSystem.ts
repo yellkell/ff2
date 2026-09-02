@@ -778,6 +778,12 @@ export class ClubSocialSystem extends createSystem({}) {
     _fwd.set(0, 0, -1).applyQuaternion(_q);
     const pos = ballSpawnPos(_v, _fwd);
     const mode = this.fight;
+    if (net.solo) {
+      // A ROOM OF ONE: no arena room to open — the ball deals you into a
+      // fight against the arena's own bots (net/session.ts soloCall).
+      callBall(pos, { mode, code: '' });
+      return;
+    }
     const me = net.members.find((m) => m.idx === net.myIdx);
     this.calling = true;
     this.callError = '';
