@@ -578,7 +578,7 @@ function fireSoloServe(): void {
   if (!net.solo || !propHook) return;
   const count = soloPoolSize();
   while (soloProps.length < count) soloProps.push({ mode: 'idle', restedAt: 0 });
-  let id = soloProps.findIndex((p) => p.mode === 'idle');
+  let id = soloProps.findIndex((p) => p && p.mode === 'idle');
   if (id < 0) {
     let oldest = Infinity;
     soloProps.forEach((p, i) => {
@@ -606,34 +606,41 @@ function soloPoolSize(): number {
 }
 
 /** A prop word from my own hands, answered by the house instead of the
- *  relay — the same grant, the same rest, the same next serve. */
+ *  relay — the same grant, the same rest, the same next serve, answered
+ *  SYNCHRONOUSLY. A relay applies the room's words in order, so a glass
+ *  re-thrown after it settled sees its rest echo before its new flight;
+ *  deferring the echo here (tried) let a stale rest land on top of a
+ *  fresh throw and snap the glass back to the floor. */
 function soloProp(msg: Record<string, unknown>): void {
   if (!propHook) return;
   const id = Number(msg.id);
-  const p = soloProps[id] ?? (soloProps[id] = { mode: 'idle', restedAt: 0 });
+  while (soloProps.length <= id) soloProps.push({ mode: 'idle', restedAt: 0 }); // no holes — findIndex walks them
+  const p = soloProps[id];
+  let echo: PropWire | null = null;
   switch (msg.t) {
     case 'prop-grab':
       if (p.mode === 'pedestal') armSoloServe(SOLO_SERVE_MS);
       p.mode = 'held';
-      propHook({ t: 'prop-grab', id, idx: 0 });
+      echo = { t: 'prop-grab', id, idx: 0 };
       break;
     case 'prop-release':
       p.mode = 'flight';
-      propHook({ t: 'prop-release', id, idx: 0 });
+      echo = { t: 'prop-release', id, idx: 0 };
       break;
     case 'prop-rest':
       if (msg.idle) {
         p.mode = 'idle';
-        propHook({ t: 'prop-rest', id, idle: true });
+        echo = { t: 'prop-rest', id, idle: true };
       } else {
         p.mode = 'rest';
         p.restedAt = Date.now();
-        propHook({ t: 'prop-rest', id, pos: msg.pos as number[], quat: msg.quat as number[] });
+        echo = { t: 'prop-rest', id, pos: msg.pos as number[], quat: msg.quat as number[] };
       }
       break;
     default:
       break; // pose streams have nobody to reach
   }
+  if (echo) propHook(echo);
 }
 
 /* ── THE BALL: how games start from the floor ──────────────────────────── */

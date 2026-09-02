@@ -66,13 +66,14 @@ import {
   sendPropPose,
   sendPropRelease,
   sendPropRest,
-  type PropWire, inRoom as roomOpen } from '../net/session.js';
+  type PropWire, inRoom as roomOpen, setPropPoolSize } from '../net/session.js';
 
 const HANDS = ['left', 'right'] as const;
 type Hand = (typeof HANDS)[number];
 
-/** Glass pool size — MUST match the relay's PROP_COUNT (server/index.mjs). */
-const POOL = 6;
+/** Glass pool size — MUST match the relay's PROP_COUNT (server/rave.mjs).
+ *  Twelve: enough for a tower AND a round on the bar. */
+const POOL = 12;
 /** The dumbwaiter's square, set into the bar top mid-counter. The relay owns
  *  its clock; this side only plays the plate's travel (exp ease). */
 const WAITER = {
@@ -158,6 +159,10 @@ export const propsView: {
     grounded: boolean;
     pos: [number, number, number];
     vel: [number, number, number];
+    /** Tumble rate (rad/s) and who is simulating it. */
+    spin: number;
+    spinAxis: [number, number, number];
+    owner: number | null;
     /** How far the glass's lowest point sits above the surface under it —
      *  0 is seated, negative means it is INSIDE the floor. Counts another
      *  glass's rim as a surface, so a stacked glass reads 0 too. */
@@ -203,6 +208,7 @@ export class ClubPropsSystem extends createSystem({}) {
     this.group.name = 'club-props';
     this.group.visible = false;
     this.scene.add(this.group);
+    setPropPoolSize(POOL); // the room of one serves from the same pool
 
     // The collar: a dark square frame in the counter, reading as the hatch.
     const collar = new Mesh(
@@ -254,16 +260,25 @@ export class ClubPropsSystem extends createSystem({}) {
         // its local position is the palm offset and tells you nothing.
         const p = g.refs.root.getWorldPosition(_p);
         const drop = this.bottomOffset(g);
+        // Read the up axis into a LOCAL before anything else runs: the
+        // clearance below asks supportAt(), which sets the shared `_up`
+        // from every resting glass it looks at — so an `upright` taken
+        // from `_up` after it reported the last neighbour's, not this
+        // glass's, and every coupe read as standing once any one rested.
         _up.set(0, 1, 0).applyQuaternion(g.refs.root.quaternion);
+        const upright = _up.y;
         return {
           id: g.id,
           mode: g.mode,
           grounded: g.grounded,
           pos: [p.x, p.y, p.z] as [number, number, number],
           vel: [g.vel.x, g.vel.y, g.vel.z] as [number, number, number],
+          spin: g.spin,
+          spinAxis: [g.spinAxis.x, g.spinAxis.y, g.spinAxis.z] as [number, number, number],
+          owner: g.owner,
           clearance: p.y + drop - this.supportAt(p.x, p.z, g, p.y),
           /** World-Y of the glass's own up axis: 1 standing, 0 on its side. */
-          upright: _up.y,
+          upright,
         };
       });
     propsView.launch = (id, at, vel, spin = 0) => {
@@ -548,6 +563,14 @@ export class ClubPropsSystem extends createSystem({}) {
 
   /* ── flight, landing, rest ────────────────────────────────────────────── */
 
+  /** How hard a surface grinds a skidding glass, by what the surface is —
+   *  read off its height: the bar's polished top, a table, the floor. */
+  private frictionAt(surfaceY: number): number {
+    if (Math.abs(surfaceY - CLUB.bar.top) < 0.02) return PROP_PHYS.frictionBar;
+    if (surfaceY > 0.3) return PROP_PHYS.frictionTable;
+    return PROP_PHYS.frictionFloor;
+  }
+
   /** The ARCHITECTURE under a point: floor, table, ledge. Knows nothing
    *  about glasses — supportAt() layers those on top. */
   private restingYAt(x: number, z: number): number {
@@ -650,12 +673,63 @@ export class ClubPropsSystem extends createSystem({}) {
   private integrate(glass: Glass, delta: number): void {
     const root = glass.refs.root;
     _prev.copy(root.position);
-    // A grounded glass is SLIDING, not falling: it keeps its footing and
-    // loses speed to the surface instead of to gravity.
+    _up.set(0, 1, 0).applyQuaternion(root.quaternion);
+    // A grounded glass is SLIDING or ROLLING, not falling: it keeps its
+    // footing and loses speed to the surface instead of to gravity.
     if (glass.grounded) {
-      const grind = Math.exp(-PROP_PHYS.slideFriction * delta);
-      glass.vel.x *= grind;
-      glass.vel.z *= grind;
+      // THE TIP. Gravity's torque, cheaply: landed on its foot it rights;
+      // landed on its rim edge it goes over onto its side — a skidding
+      // glass used to keep whatever tilt it hit the floor with.
+      if (_up.y < 0.999 && _up.y > -0.999) {
+        const standing = _up.y > PROP_PHYS.tipUprightMin;
+        if (standing) _axis.set(0, 1, 0);
+        else _axis.set(_up.x, 0, _up.z).normalize();
+        _wq.setFromUnitVectors(_up, _axis);
+        _q.identity().slerp(_wq, Math.min(1, PROP_PHYS.tipRate * delta));
+        root.quaternion.premultiply(_q);
+        _up.set(0, 1, 0).applyQuaternion(root.quaternion);
+      }
+      const horiz = Math.hypot(glass.vel.x, glass.vel.z);
+      const lying = _up.y < PROP_PHYS.rollUprightMax;
+      if (lying && horiz > PROP_PHYS.slideStop) {
+        // ROLLING. The heading bends toward the foot (the narrow end of the
+        // cone), the glass turns about the floor-axis across its travel at
+        // rim speed, and rolling resistance is gentler than a skid's grind.
+        _axis.set(_up.x, 0, _up.z); // which way the rim points, on the floor
+        _dir.set(glass.vel.x / horiz, 0, glass.vel.z / horiz);
+        // Sign: is the foot to the left or right of the travel?
+        const side = Math.sign(_dir.x * _axis.z - _dir.z * _axis.x) || 1;
+        const turn = side * PROP_PHYS.rollCurvature * horiz * delta;
+        const c = Math.cos(turn);
+        const sn = Math.sin(turn);
+        const vx = glass.vel.x * c - glass.vel.z * sn;
+        const vz = glass.vel.x * sn + glass.vel.z * c;
+        glass.vel.x = vx;
+        glass.vel.z = vz;
+        // Roll about the axis perpendicular to travel, lying in the floor
+        // — and swing the glass's own axis onto that line as it goes: a
+        // cylinder cannot roll along its axis, so one that landed skewed
+        // squares up across its travel within a turn or two.
+        _axis.set(0, 1, 0).cross(_dir).normalize();
+        const along = _axis.dot(_up);
+        if (Math.abs(along) < 0.995) {
+          if (along < 0) _axis.negate();
+          _wq.setFromUnitVectors(_up, _axis);
+          _q.identity().slerp(_wq, Math.min(1, PROP_PHYS.rollAlignRate * delta));
+          root.quaternion.premultiply(_q);
+          if (along < 0) _axis.negate();
+        }
+        _q.setFromAxisAngle(_axis, (horiz / PROP_PHYS.rimR) * delta);
+        root.quaternion.premultiply(_q);
+        glass.spin = 0; // the roll IS the spin now
+        const roll = Math.exp(-PROP_PHYS.rollFriction * delta);
+        glass.vel.x *= roll;
+        glass.vel.z *= roll;
+      } else {
+        const grind = Math.exp(-this.frictionAt(root.position.y - this.bottomOffset(glass)) * delta);
+        glass.vel.x *= grind;
+        glass.vel.z *= grind;
+      }
       glass.vel.y = 0;
     } else {
       glass.vel.y -= PROP_PHYS.gravity * delta;
@@ -670,35 +744,45 @@ export class ClubPropsSystem extends createSystem({}) {
     }
 
     // Walls: axis-aligned segments with heights — reflect the crossing
-    // component, damp, and ring the glass.
+    // component, damp, and ring the glass. It is the BOWL that meets the
+    // wall (a sphere of bodyR round it), not the origin at the foot: a
+    // glass used to sink its bowl a bowl's width into the plaster before
+    // the maths noticed, and ring off the wall late.
+    _up.set(0, 1, 0).applyQuaternion(root.quaternion);
+    _c1.copy(root.position).addScaledVector(_up, PROP_PHYS.bodyY); // the bowl, now
+    const R = PROP_PHYS.bodyR;
     for (const w of PROP_WALLS) {
-      if (root.position.y > w.h) continue;
+      if (_c1.y - R > w.h) continue;
       if (w.ax === w.bx) {
         // Vertical (constant-x) wall.
         const z0 = Math.min(w.az, w.bz);
         const z1 = Math.max(w.az, w.bz);
-        const crossed =
-          (_prev.x - w.ax) * (root.position.x - w.ax) < 0 &&
-          root.position.z >= z0 &&
-          root.position.z <= z1;
-        if (crossed) {
-          root.position.x = w.ax + Math.sign(_prev.x - w.ax) * 0.03;
-          glass.vel.x *= -PROP_PHYS.restitution;
-          glass.vel.z *= 0.8;
-          sfx.glassTap(Math.abs(glass.vel.x) > 0.8);
+        if (_c1.z < z0 || _c1.z > z1) continue;
+        const side = Math.sign(_prev.x + (_c1.x - root.position.x) - w.ax) || 1;
+        const pen = R - side * (_c1.x - w.ax);
+        if (pen > 0) {
+          root.position.x += side * pen;
+          _c1.x += side * pen;
+          if (side * glass.vel.x < 0) {
+            glass.vel.x *= -PROP_PHYS.restitution;
+            glass.vel.z *= 0.8;
+            sfx.glassTap(Math.abs(glass.vel.x) > 0.8);
+          }
         }
       } else {
         const x0 = Math.min(w.ax, w.bx);
         const x1 = Math.max(w.ax, w.bx);
-        const crossed =
-          (_prev.z - w.az) * (root.position.z - w.az) < 0 &&
-          root.position.x >= x0 &&
-          root.position.x <= x1;
-        if (crossed) {
-          root.position.z = w.az + Math.sign(_prev.z - w.az) * 0.03;
-          glass.vel.z *= -PROP_PHYS.restitution;
-          glass.vel.x *= 0.8;
-          sfx.glassTap(Math.abs(glass.vel.z) > 0.8);
+        if (_c1.x < x0 || _c1.x > x1) continue;
+        const side = Math.sign(_prev.z + (_c1.z - root.position.z) - w.az) || 1;
+        const pen = R - side * (_c1.z - w.az);
+        if (pen > 0) {
+          root.position.z += side * pen;
+          _c1.z += side * pen;
+          if (side * glass.vel.z < 0) {
+            glass.vel.z *= -PROP_PHYS.restitution;
+            glass.vel.x *= 0.8;
+            sfx.glassTap(Math.abs(glass.vel.z) > 0.8);
+          }
         }
       }
     }
@@ -713,16 +797,32 @@ export class ClubPropsSystem extends createSystem({}) {
     // what lets a thrown coupe land ON a tower instead of through it.
     const surfaceY = this.supportAt(root.position.x, root.position.z, glass, root.position.y);
     const restY = surfaceY - this.bottomOffset(glass);
-    if (root.position.y <= restY && (glass.grounded || _prev.y >= restY - 0.02)) {
+    // A grounded glass is allowed a little computed LIFT: tipping and
+    // rolling move its lowest point by millimetres every substep, and
+    // treating each of those as "the floor went away" had a rolling coupe
+    // un-grounding, dropping two centimetres and landing again every other
+    // frame. Only a real drop (a table edge, the terrace lip) lets it go.
+    const slack = glass.grounded ? 0.045 : 0;
+    if (root.position.y <= restY + slack && (glass.grounded || _prev.y >= restY - 0.02)) {
       root.position.y = restY;
       const vy = Math.abs(glass.vel.y);
       const horiz = Math.hypot(glass.vel.x, glass.vel.z);
       if (!glass.grounded && (glass.vel.length() >= PROP_PHYS.settleSpeed && vy >= 0.5)) {
-        // Fast enough to come back up: bounce.
+        // Fast enough to come back up: bounce — and a bounce with sideways
+        // speed puts TUMBLE in, about the floor-axis across the travel,
+        // the way a glass skipped off a bar top turns over in the air.
         glass.vel.y = vy * PROP_PHYS.restitution;
         glass.vel.x *= 0.7;
         glass.vel.z *= 0.7;
-        glass.spin *= 0.6;
+        if (horiz > 0.2) {
+          _axis.set(0, 1, 0).cross(_dir.set(glass.vel.x, 0, glass.vel.z).normalize());
+          if (_axis.lengthSq() > 1e-6) {
+            glass.spinAxis.copy(_axis.normalize());
+            glass.spin = Math.min(PROP_PHYS.spinMax, glass.spin * 0.4 + horiz * PROP_PHYS.spinFromBounce);
+          }
+        } else {
+          glass.spin *= 0.6;
+        }
         this.tap(glass, vy, vy > 1.2);
       } else if (horiz > PROP_PHYS.slideStop) {
         // Too slow to bounce but still travelling: SKID. This is what
@@ -785,14 +885,35 @@ export class ClubPropsSystem extends createSystem({}) {
    */
   private collideGlasses(glass: Glass): void {
     const root = glass.refs.root;
-    _c1.set(0, PROP_PHYS.bodyY, 0).applyQuaternion(root.quaternion).add(root.position);
-    const minGap = PROP_PHYS.bodyR * 2;
+    // TWO SPHERES a glass: the bowl and the foot. Test all four pairings
+    // and answer the deepest, so a coupe on its side has a length and two
+    // glasses meeting foot-to-bowl actually meet.
+    const mine: Array<[Vector3, number]> = [
+      [_c1.set(0, PROP_PHYS.bodyY, 0).applyQuaternion(root.quaternion).add(root.position), PROP_PHYS.bodyR],
+      [_c3.set(0, PROP_PHYS.footY, 0).applyQuaternion(root.quaternion).add(root.position), PROP_PHYS.footR],
+    ];
     for (const other of this.glasses) {
       if (other === glass || other.mode === 'idle' || other.mode === 'pedestal') continue;
       const oRoot = other.refs.root;
-      _c2.set(0, PROP_PHYS.bodyY, 0).applyQuaternion(oRoot.quaternion).add(oRoot.position);
-      _v.copy(_c1).sub(_c2);
-      const d = _v.length();
+      const theirs: Array<[Vector3, number]> = [
+        [_c2.set(0, PROP_PHYS.bodyY, 0).applyQuaternion(oRoot.quaternion).add(oRoot.position), PROP_PHYS.bodyR],
+        [_c4.set(0, PROP_PHYS.footY, 0).applyQuaternion(oRoot.quaternion).add(oRoot.position), PROP_PHYS.footR],
+      ];
+      let minGap = 0;
+      let d = Infinity;
+      let deepest = -Infinity;
+      for (const [ca, ra] of mine) {
+        for (const [cb, rb] of theirs) {
+          const dist = ca.distanceTo(cb);
+          const pen = ra + rb - dist;
+          if (pen > deepest) {
+            deepest = pen;
+            d = dist;
+            minGap = ra + rb;
+            _v.copy(ca).sub(cb);
+          }
+        }
+      }
       if (d >= minGap || d < 1e-5) continue;
       // STACKED, not colliding: a glass standing on this one's rim shares
       // its axis, so the bowls overlap by design. Shoving there is exactly
@@ -1139,5 +1260,9 @@ const _head = new Vector3();
 const _up = new Vector3();
 const _c1 = new Vector3();
 const _c2 = new Vector3();
+const _c3 = new Vector3();
+const _c4 = new Vector3();
+const _axis = new Vector3();
+const _dir = new Vector3();
 const _q = new Quaternion();
 const _wq = new Quaternion();

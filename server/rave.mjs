@@ -71,7 +71,7 @@ const MAX_ROOM = 24;
 const RING_SIZES = [4, 8, 12, 16, 20, 24];
 const ringFor = (n) => RING_SIZES.find((size) => size >= n) ?? MAX_ROOM;
 const START_IN_MS = 5500; // count-in cushion: 8 beats at 128 BPM is 3750 ms
-const PROP_COUNT = 6; // mirrors the client's glass pool (ClubPropsSystem)
+const PROP_COUNT = 12; // mirrors the client's glass pool (ClubPropsSystem)
 const SERVE_MS = 1600; // the plate's sink + pause before the next coupe rises
 const SERVE_RETRY_MS = 900; // every glass out on the floor — bide, try again
 

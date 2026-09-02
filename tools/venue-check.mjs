@@ -133,6 +133,68 @@ const served = await page
   .catch(() => false);
 const glasses = await page.evaluate(() => window.__gdr.props?.glasses?.().map((g) => g.mode) ?? []);
 check('a coupe rises on the plate', served, glasses.join(','));
+check('the house pours twelve', glasses.length === 12, String(glasses.length));
+
+console.log('\n=== THE GLASSES: thrown, walled, rolled ===');
+// A throw across the bar: it must come to rest ON something, never inside it.
+await page.evaluate(() => window.__gdr.props.launch(1, [5.6, 1.5, -3.2], [2.2, 1.2, 0.3]));
+// (Headless renders slowly and the flight sim caps how much time one frame
+// may simulate, so the glasses run in slow motion here — give them room.)
+let worst = 0;
+for (let i = 0; i < 70; i++) {
+  await page.waitForTimeout(140);
+  const g = await page.evaluate(() => window.__gdr.props.glasses()[1]);
+  worst = Math.min(worst, g.clearance);
+  if (g.mode === 'rest') break;
+}
+let g1 = await page.evaluate(() => window.__gdr.props.glasses()[1]);
+check('a thrown coupe lands and rests seated', g1.mode === 'rest' && Math.abs(g1.clearance) < 0.012, JSON.stringify({ mode: g1.mode, clearance: g1.clearance, pos: g1.pos.map((v) => +v.toFixed(2)) }));
+check('and was never inside the furniture on the way', worst > -0.03, `worst clearance ${worst.toFixed(3)}`);
+// A line drive at the north wall: the BOWL stops at the plaster.
+await page.evaluate(() => window.__gdr.props.launch(2, [0, 1.3, -9.8], [0, 0.4, -6]));
+let minZ = 0;
+for (let i = 0; i < 16; i++) {
+  await page.waitForTimeout(90);
+  const g = await page.evaluate(() => window.__gdr.props.glasses()[2]);
+  minZ = Math.min(minZ, g.pos[2]);
+}
+check('a line drive rings off the wall and never enters it', minZ > -11.5 - 0.02, `deepest z ${minZ.toFixed(3)} vs wall at -11.5`);
+// A coupe launched tumbling lands on its rim edge, TIPS onto its side and
+// ROLLS — its heading bends. Where it lands in the tumble is a coin toss,
+// so it gets a few throws; one roll is the claim.
+let roll = { rollingFrames: 0, bend: null };
+for (const spin of [7, 11, 5]) {
+  await page.evaluate((sp) => window.__gdr.props.launch(3, [-2, 0.35, 0.5], [1.3, 0.3, 0], sp), spin);
+  const track = [];
+  for (let i = 0; i < 45; i++) {
+    await page.waitForTimeout(120);
+    const g = await page.evaluate(() => window.__gdr.props.glasses()[3]);
+    track.push(g);
+    if (g.mode === 'rest') break;
+  }
+  if (process.env.TRACE) {
+    console.log(track.slice(0, 10).map((g) => `${g.mode}${g.grounded ? 'G' : '-'} up${g.upright.toFixed(2)} s${g.spin.toFixed(1)} ax${g.spinAxis.map((v) => v.toFixed(1)).join(',')} o${g.owner} p${g.pos.map((v) => v.toFixed(2)).join(',')}`).join(' | '));
+    console.log('  others:', JSON.stringify(await page.evaluate(() => window.__gdr.props.glasses().filter((g) => g.mode !== 'idle').map((g) => [g.id, g.mode, g.owner]))), 'myIdx', await page.evaluate(() => window.__gdr.net.state.myIdx), 'solo', await page.evaluate(() => window.__gdr.net.state.solo));
+  }
+  const rolling = track.filter((g) => g.grounded && g.upright < 0.55 && Math.hypot(g.vel[0], g.vel[2]) > 0.15);
+  const headings = rolling.map((g) => Math.atan2(g.vel[2], g.vel[0]));
+  const bend = headings.length >= 2 ? headings[headings.length - 1] - headings[0] : null;
+  roll = { rollingFrames: rolling.length, bend: bend === null ? null : +bend.toFixed(3) };
+  if (rolling.length >= 3 && bend !== null && Math.abs(bend) > 0.05) break;
+}
+check('a coupe on its side rolls, and rolls in an arc', roll.rollingFrames >= 3 && roll.bend !== null && Math.abs(roll.bend) > 0.05, JSON.stringify(roll));
+// Two thrown at each other: they clack and part, they don't pass through.
+await page.evaluate(() => {
+  window.__gdr.props.launch(4, [-1.0, 1.2, -2.0], [1.6, 0.1, 0]);
+  window.__gdr.props.launch(5, [1.0, 1.2, -2.0], [-1.6, 0.1, 0]);
+});
+let closest = Infinity;
+for (let i = 0; i < 14; i++) {
+  await page.waitForTimeout(80);
+  const [a, b] = await page.evaluate(() => { const g = window.__gdr.props.glasses(); return [g[4], g[5]]; });
+  closest = Math.min(closest, Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2]));
+}
+check('two glasses thrown at each other meet and part', closest < 0.3 && closest > 0.06, `closest ${closest.toFixed(3)} m`);
 
 console.log('\n=== THE MIRROR: shadows, not a second rig, and no light ===');
 await page.evaluate(() => window.__gdr.rig(6.65, -8.6, 0)); // up to the glass, facing it
