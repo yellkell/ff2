@@ -279,6 +279,14 @@ const play = await page.evaluate(() => {
   row.click();
   return document.querySelector('#lab-tape .tape-open')?.textContent ?? '';
 });
+// THE LAB speaks of a PLAYER and an OPPONENT: a tape in here may be
+// anybody's, so second person has no place in it.
+const voice = await page.evaluate(() => ({
+  lab: document.getElementById('lab').textContent,
+  maps: [...document.querySelectorAll('#lab .maps figcaption')].map((f) => f.textContent).join(' '),
+}));
+check('THE LAB never says "you"', !/\byou\b|\byour\b|\byours\b/i.test(voice.lab), (/\byou\b|\byour\b|\byours\b/i.exec(voice.lab) || ['—'])[0]);
+check('the maps name the player and the opponent', /player/i.test(voice.maps) && /opponent/i.test(voice.maps), voice.maps.slice(0, 120));
 check('a bout opens into its play-by-play and rounds', /KO/.test(play) && /throw|threw/i.test(play), play.replace(/\s+/g, ' ').slice(0, 120));
 check('the open tape names the attachments each side fired', /SHRINK ×1/.test(play) && /SPLIT ×1/.test(play), play.replace(/\s+/g, ' ').slice(0, 200));
 const tl = await page.evaluate(() => {
@@ -295,7 +303,7 @@ const tl = await page.evaluate(() => {
   }
   return { h: c.height, ember, cool, amber };
 });
-check('the timeline draws both pools and the attachment pips', tl.h === 224 && tl.ember > 200 && tl.cool > 200 && tl.amber > 30, JSON.stringify(tl));
+check('the timeline draws both health lines and the attachment pips', tl.h === 224 && tl.ember > 200 && tl.cool > 200 && tl.amber > 30, JSON.stringify(tl));
 
 console.log('\n=== stats.html: THE PROFILE ===');
 await page.evaluate(() => document.querySelector('#lab-tape .who-link').click());

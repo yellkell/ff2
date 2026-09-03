@@ -1114,7 +1114,7 @@
         margin: 0 0 12px;
       }
       .att-row .cap {
-        width: 52px;
+        width: 78px;
         flex: none;
         font-size: 11px;
         font-weight: 700;
@@ -1559,16 +1559,12 @@
           <section class="panel opening" style="animation-delay: 0.03s">
             <i class="halo"></i><span class="sheen"></span>
             <h2 class="panel-title">The platform</h2>
-            <p class="panel-note">
-              Every tape's grid, laid over the octagon. The fight is up the screen, and the
-              hotter the cell the more it happened there.
-            </p>
             <div class="maps" style="margin-top: 16px">
               <figure><canvas class="heat" id="heat-stand" width="320" height="300"></canvas><figcaption>Standing<small>where the head is, sampled all bout</small></figcaption></figure>
               <figure><canvas class="heat" id="heat-thrL" width="320" height="300"></canvas><figcaption>Throws · left<small>where the left fist let go</small></figcaption></figure>
               <figure><canvas class="heat" id="heat-thrR" width="320" height="300"></canvas><figcaption>Throws · right<small>where the right fist let go</small></figcaption></figure>
-              <figure><canvas class="heat" id="heat-land" width="320" height="300"></canvas><figcaption>Landing<small>where you stood when yours connected</small></figcaption></figure>
-              <figure><canvas class="heat" id="heat-hit" width="320" height="300"></canvas><figcaption>Hits taken<small>where you stood when theirs did</small></figcaption></figure>
+              <figure><canvas class="heat" id="heat-land" width="320" height="300"></canvas><figcaption>Landing<small>where the player stood when theirs connected</small></figcaption></figure>
+              <figure><canvas class="heat" id="heat-hit" width="320" height="300"></canvas><figcaption>Hits taken<small>where the player stood when the opponent's did</small></figcaption></figure>
             </div>
           </section>
           <div class="after">
@@ -2210,7 +2206,7 @@
           { cap: 'Parries a bout', val: (par / n).toFixed(1), sub: `${num(par)} balls slapped down`, minor: true },
           { cap: 'Rounds by KO', val: pct(kos, roundsAll.length), sub: `${kos} of ${roundsAll.length}`, minor: true },
           { cap: 'Swing speed', val: spd ? spd.toFixed(1) : '—', sub: 'metres a second at release', minor: true },
-          { cap: 'Hits taken a bout', val: (taken / n).toFixed(1), sub: `${num(sum((b) => b.hits.takenHead))} to your head`, minor: true },
+          { cap: 'Hits taken a bout', val: (taken / n).toFixed(1), sub: `${num(sum((b) => b.hits.takenHead))} to the head`, minor: true },
         ];
         document.getElementById('lab-tiles').innerHTML = tiles
           .map((t) => `<div class="stat${t.minor ? ' minor' : ''}"><div class="cap">${t.cap}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`)
@@ -2249,7 +2245,7 @@
             `<em><span>HEAD ${pct(head, total)}</span><span>BODY ${pct(body, total)}</span></em></div></div>`;
         };
         document.getElementById('lab-parts').innerHTML =
-          partBar('Where you land it', partTally.dealt) + partBar('Where you take it', partTally.taken);
+          partBar('Where the player lands it', partTally.dealt) + partBar('Where the player takes it', partTally.taken);
 
         renderTapeList(document.getElementById('lab-tape'), rows, lab, drawLab);
       }
@@ -2339,7 +2335,7 @@
       /** The open tape: the rounds, both health lines, the play-by-play. */
       function tapeOpen(b) {
         const rounds = b.rounds.length
-          ? `<table class="tape-rounds"><tr><th>Rd</th><th>Result</th><th>How</th><th>You</th><th>Them</th><th>Time</th></tr>` +
+          ? `<table class="tape-rounds"><tr><th>Rd</th><th>Result</th><th>How</th><th>Player</th><th>Opponent</th><th>Time</th></tr>` +
             b.rounds
               .map((r) => `<tr><td>${r.n}</td><td class="${r.out === 'win' ? 'w' : r.out === 'loss' ? 'l' : ''}">${esc(String(r.out).toUpperCase())}</td>` +
                 `<td>${r.res === 'ko' ? 'KO' : 'TIME'}</td><td>${r.hp?.[0] ?? ''}</td><td>${r.hp?.[1] ?? ''}</td><td>${clock(r.dur)}</td></tr>`)
@@ -2351,11 +2347,11 @@
             const t = `<b>${clock(e[0])}</b>`;
             switch (e[1]) {
               case 0: return `${t} threw ${hand(e[2])} from (${e[3]}, ${e[4]}) at ${e[5]} m/s`;
-              case 1: return `${t} <span class="tk">took ${e[5]} to the ${PART[e[6]] || 'body'}</span> off their ${hand(e[2])}${e[7] ? ' on the return' : ''}, standing at (${e[3]}, ${e[4]})`;
+              case 1: return `${t} <span class="tk">took ${e[5]} to the ${PART[e[6]] || 'body'}</span> off the opponent's ${hand(e[2])}${e[7] ? ' on the return' : ''}, standing at (${e[3]}, ${e[4]})`;
               case 2: return `${t} <span class="hit">landed ${e[3]}</span> with the ${hand(e[2])}${e[5] >= 0 ? ` to the ${PART[e[5]]}` : ''}${e[4] ? ' on the return' : ''}`;
               case 3: return `${t} <span class="pa">parried</span> with the ${hand(e[2])}`;
-              case 4: return `${t} <span class="rd">ROUND ${e[2]} — ${OUTW[e[3]] || ''} by ${e[4] === 0 ? 'KO' : 'the clock'} · you ${e[5]} · them ${e[6]}</span>`;
-              case 5: return `${t} ${e[2] === 0 ? 'you' : 'they'} recalled the ${hand(e[3])} on <span style="color:${ATT_COLOUR[e[4]]};font-weight:600">${ATT_NAME[e[4]] || '?'}</span>`;
+              case 4: return `${t} <span class="rd">ROUND ${e[2]} — ${OUTW[e[3]] || ''} by ${e[4] === 0 ? 'KO' : 'the clock'} · player ${e[5]} · opponent ${e[6]}</span>`;
+              case 5: return `${t} the ${e[2] === 0 ? 'player' : 'opponent'} recalled the ${hand(e[3])} on <span style="color:${ATT_COLOUR[e[4]]};font-weight:600">${ATT_NAME[e[4]] || '?'}</span>`;
               default: return '';
             }
           })
@@ -2377,15 +2373,15 @@
           return `<div class="att-row"><span class="cap">${cap}</span>${pips.length ? pips.join('') : '<span class="none">none fired</span>'}</div>`;
         };
         const att = b.att && (b.att.mine || b.att.theirs)
-          ? attSide(b.att.mine, 'You') + attSide(b.att.theirs, 'Them')
+          ? attSide(b.att.mine, 'Player') + attSide(b.att.theirs, 'Opponent')
           : '';
         const key =
           '<div class="tl-key">' +
-          '<span style="color:#ff7a18"><i></i>your pool</span>' +
-          '<span style="color:#4fb7ff"><i></i>their pool</span>' +
-          '<span style="color:#ff7a18"><i class="tick"></i>your throws</span>' +
+          '<span style="color:#ff7a18"><i></i>player\'s health</span>' +
+          '<span style="color:#4fb7ff"><i></i>opponent\'s health</span>' +
+          '<span style="color:#ff7a18"><i class="tick"></i>player\'s throws</span>' +
           '<span style="color:#6fc8ff"><i></i>parry</span>' +
-          '<span style="color:#ff5266"><i></i>hit you took</span>' +
+          '<span style="color:#ff5266"><i></i>hit taken</span>' +
           '<span style="color:#ffb02e"><i></i>attachment</span>' +
           '</div>';
         return `<p class="panel-note">${esc(meta)}</p>${rounds}<canvas width="900" height="224"></canvas>` +
@@ -2396,10 +2392,14 @@
       /* ── THE TIMELINE ──────────────────────────────────────────────────
          One bout, end to end, on one canvas. The rounds are bands across
          the top; both health pools are lines through the middle, rebuilt
-         from the hits the tape recorded; and under them two LANES — yours
-         and theirs — carry the acts: every throw a tick, every parry a
-         diamond, every attachment a lettered pip, every landed hit a
-         wedge sized by its damage.
+         from the hits the tape recorded; and under them two LANES — the
+         player's and the opponent's — carry the acts: every throw a tick,
+         every parry a diamond, every attachment a lettered pip, every
+         landed hit a wedge sized by its damage.
+
+         THE VOICE is third person throughout: a tape in here may belong
+         to anybody (there is a player picker over it), so the two sides
+         are THE PLAYER and THE OPPONENT and never "you".
 
          The play-by-play under it is the same events as words. This is
          the shape of the fight; that is the detail of it. */
@@ -2415,7 +2415,7 @@
         const H = canvas.height;
         g.clearRect(0, 0, W, H);
         const T = Math.max(1, b.dur || (b.ev.length ? b.ev[b.ev.length - 1][0] : 1));
-        const L = 58;
+        const L = 78;
         const R = W - 14;
         const x = (t) => L + (Math.max(0, Math.min(T, t)) / T) * (R - L);
 
@@ -2530,10 +2530,10 @@
         dot(hitsOnThem, '#4fb7ff');
         dot(hitsOnMe, '#ff5266');
 
-        /* THE LANES. Yours over theirs, each with its own row of acts. */
+        /* THE LANES. The player's over the opponent's, each with its own row of acts. */
         const lanes = [
-          { y: 148, label: 'YOU', who: 0 },
-          { y: 182, label: 'THEM', who: 1 },
+          { y: 148, label: 'PLAYER', who: 0 },
+          { y: 182, label: 'OPPONENT', who: 1 },
         ];
         for (const lane of lanes) {
           g.strokeStyle = 'rgba(255,255,255,0.08)';
@@ -2563,7 +2563,7 @@
             g.lineTo(px, laneY(0) + up * 8);
             g.stroke();
           } else if (e[1] === 3) {
-            // A parry: a small diamond on your lane.
+            // A parry: a small diamond on the player's lane.
             g.fillStyle = '#6fc8ff';
             g.beginPath();
             g.moveTo(px, laneY(0) - 6);
@@ -2586,7 +2586,7 @@
             g.textBaseline = 'middle';
             g.fillText(ATT_LETTER[e[4]] || '?', px, y + 1);
           } else if (e[1] === 1) {
-            // A hit you took: a red wedge under THEIR lane, sized by damage.
+            // A hit the player took: a red wedge under the OPPONENT's lane, sized by damage.
             const y = laneY(1);
             const w = Math.max(3, Math.min(8, 2 + e[5] / 5));
             g.fillStyle = 'rgba(255,82,102,0.9)';
@@ -2597,7 +2597,7 @@
             g.closePath();
             g.fill();
           } else if (e[1] === 2) {
-            // …and one you landed, over yours.
+            // …and one the player landed, over theirs.
             const y = laneY(0);
             const w = Math.max(3, Math.min(8, 2 + e[3] / 5));
             g.fillStyle = 'rgba(79,183,255,0.9)';
@@ -2629,9 +2629,9 @@
         g.textAlign = 'left';
         g.font = '700 10px Rajdhani, system-ui, sans-serif';
         g.fillStyle = '#ff7a18';
-        g.fillText('YOUR POOL', L, hy0 - 13);
+        g.fillText("PLAYER'S HEALTH", L, hy0 - 13);
         g.fillStyle = '#4fb7ff';
-        g.fillText('THEIRS', L + 70, hy0 - 13);
+        g.fillText("OPPONENT'S HEALTH", L + 104, hy0 - 13);
       }
 
       /* ══ RAVE RAID ════════════════════════════════════════════════════ */
