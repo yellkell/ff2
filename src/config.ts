@@ -1048,7 +1048,7 @@ export const NET = {
  * Override per-session with ?server=wss://host (no path — the path is added
  * per relay) or by setting `ibb-room-server` in localStorage.
  */
-export const ROOM_SERVER = 'wss://rave-raid-relay.onrender.com';
+export const ROOM_SERVER = 'wss://ff2-room.onrender.com';
 
 /** Where the room server lives, without a relay path. */
 export function roomServerHost(): string {
