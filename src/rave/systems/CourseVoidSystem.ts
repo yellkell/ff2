@@ -230,9 +230,20 @@ export class CourseVoidSystem extends createSystem({}) {
     // that took over at that point and explained the route; it was four
     // lines of a manual for a game with no controls, in a place whose whole
     // argument is that it doesn't need one.
+    //
+    // The one thing it does still say is WHICH WAY. The circuit is a loop
+    // with a direction — home, east, up, north, west, home (course/score.ts)
+    // — and the first leg out of the pad runs to (2.60, 0, −1.20) while you
+    // arrive facing −z, which puts it on your right. Nothing else in the
+    // view says so until the invitation lights up on the floor a beat
+    // later, and that is a circle on the ground you have to be looking down
+    // to find. A body that turns the wrong way off the pad has been failed
+    // by the room in the same way the space check exists to prevent, so it
+    // is said in the same place, once, and it leaves with the card.
     const room = panelTexture({
       title: 'CLEAR 1.8 × 1.8 m',
       lines: ['STAND IN THE MIDDLE AND RECENTRE'],
+      way: 'right',
       width: 2.5,
       accent: PALETTE.cyan,
       color: '#dcf1ff',
@@ -246,6 +257,13 @@ export class CourseVoidSystem extends createSystem({}) {
     });
     this.card = new Mesh(new PlaneGeometry(2.5, 2.5 * room.aspect), this.cardMat);
     this.card.position.set(0, 1.6, -2.5);
+    // OVER THE AIR. The void's glow layers (shafts, horizon, dust) are
+    // transparent and carry render orders of their own, so a card left at
+    // zero got sorted among them and had haze blended over its lower half
+    // — which is exactly where the words sit, and why the bottom line read
+    // as grey while the title stayed sharp. The only writing in the place
+    // draws last.
+    this.card.renderOrder = 24;
     root.add(this.card);
 
     // DANGER, hung over the room check.
@@ -272,6 +290,7 @@ export class CourseVoidSystem extends createSystem({}) {
       toneMapped: false, // lit gas reads through the tone curve, like every neon here
     });
     this.danger = new Mesh(new PlaneGeometry(signW, signH), this.dangerMat);
+    this.danger.renderOrder = 24;
     this.danger.position.set(0, 1.6 + cardH / 2 + 0.18 + signH / 2, -2.5);
     root.add(this.danger);
   }

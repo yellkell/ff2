@@ -240,6 +240,18 @@ export interface PanelSpec {
   width: number; // metres
   color?: string;
   accent?: number;
+  /**
+   * A DIRECTION BAND across the foot of the card: the words GO THIS WAY and
+   * an arrow, pointing the side the circuit actually runs.
+   *
+   * The route out of the home pad is one-way — home, east, up, north, west,
+   * home — and standing on the pad for the first time there is nothing in
+   * the view that says so. The floor's invitation appears a beat later and
+   * is a circle of light on the ground, which you have to already be
+   * looking down to find. This is on the one thing you are certainly
+   * looking at, because it is the only writing in the place.
+   */
+  way?: 'left' | 'right';
 }
 
 /** Just the picture, for a card that changes what it says. */
@@ -247,13 +259,18 @@ export function panelTexture(spec: PanelSpec): { tex: CanvasTexture; aspect: num
   const W = 1024;
   const pad = 64;
   const titleSize = 104;
-  const lineSize = 52;
+  const lineSize = 60;
   const smallSize = 34;
   const lineGap = 26;
+  // The way band is the instruction you act on, so it is set at the title's
+  // weight rather than the body's — a caption under two louder lines is a
+  // caption, and gets read last or not at all.
+  const waySize = 76;
   let h = pad * 2;
   if (spec.title) h += titleSize + 40;
   h += spec.lines.length * (lineSize + lineGap);
   if (spec.small) h += smallSize + 30;
+  if (spec.way) h += waySize + 12;
 
   const accent = spec.accent ?? PALETTE.magenta;
   const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
@@ -263,9 +280,13 @@ export function panelTexture(spec: PanelSpec): { tex: CanvasTexture; aspect: num
   c.height = h;
   const g = c.getContext('2d')!;
   g.clearRect(0, 0, W, h);
-  g.fillStyle = 'rgba(10,3,14,0.72)';
+  // Nearly solid. At 0.72 the circuit's own lasers and grid read straight
+  // through the card and fought every letter on it; the void is a place of
+  // thin bright lines, and the one surface with words on it is allowed to
+  // be the one surface you cannot see through.
+  g.fillStyle = 'rgba(8,3,12,0.93)';
   g.fillRect(0, 0, W, h);
-  g.strokeStyle = 'rgba(255,42,213,0.5)';
+  g.strokeStyle = 'rgba(255,42,213,0.62)';
   g.lineWidth = 6;
   g.strokeRect(3, 3, W - 6, h - 6);
 
@@ -286,7 +307,7 @@ export function panelTexture(spec: PanelSpec): { tex: CanvasTexture; aspect: num
     y += titleSize + 40;
   }
   g.fillStyle = color;
-  g.font = font(500, lineSize);
+  g.font = font(600, lineSize);
   for (const line of spec.lines) {
     g.fillText(line, W / 2, y + lineSize * 0.8, W - pad * 2);
     y += lineSize + lineGap;
@@ -295,6 +316,60 @@ export function panelTexture(spec: PanelSpec): { tex: CanvasTexture; aspect: num
     g.fillStyle = 'rgba(232,198,255,0.6)';
     g.font = font(500, smallSize);
     g.fillText(spec.small, W / 2, y + smallSize * 0.9, W - pad * 2);
+    y += smallSize + 30;
+  }
+
+  // THE WAY BAND. The words and the arrow are centred as one group, so the
+  // pair reads as a single sign rather than as a caption with a decoration
+  // beside it. The arrow is DRAWN rather than typed: a glyph would inherit
+  // whatever the fallback font thinks an arrow is, at whatever weight, and
+  // this one has to be as loud as the word next to it.
+  if (spec.way) {
+    const label = 'GO THIS WAY';
+    const right = spec.way === 'right';
+    g.font = font(700, waySize);
+    g.letterSpacing = '6px';
+    const textW = g.measureText(label).width;
+    const shaft = 92;
+    const head = 54;
+    const arrowW = shaft + head;
+    const gap = 34;
+    const x0 = (W - (textW + gap + arrowW)) / 2;
+    const mid = y + waySize * 0.52;
+
+    // A rule above it, so the band is its own line of the sign rather than
+    // a third sentence running on from the second.
+    g.strokeStyle = 'rgba(255,255,255,0.16)';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.moveTo(pad, y - 14);
+    g.lineTo(W - pad, y - 14);
+    g.stroke();
+
+    g.fillStyle = css(accent);
+    g.shadowColor = css(accent);
+    g.shadowBlur = 26;
+    g.textAlign = 'left';
+    // The arrow leads on the side it points to, the way a real sign does.
+    g.fillText(label, right ? x0 : x0 + arrowW + gap, y + waySize * 0.8);
+    g.letterSpacing = '0px';
+
+    const ax = right ? x0 + textW + gap : x0;
+    const tip = right ? ax + arrowW : ax;
+    const tail = right ? ax : ax + arrowW;
+    const barb = right ? tip - head : tip + head;
+    g.beginPath();
+    g.moveTo(tail, mid - 10);
+    g.lineTo(barb, mid - 10);
+    g.lineTo(barb, mid - 30);
+    g.lineTo(tip, mid);
+    g.lineTo(barb, mid + 30);
+    g.lineTo(barb, mid + 10);
+    g.lineTo(tail, mid + 10);
+    g.closePath();
+    g.fill();
+    g.shadowBlur = 0;
+    g.textAlign = 'center';
   }
 
   const tex = new CanvasTexture(c);
