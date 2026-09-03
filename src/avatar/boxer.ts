@@ -339,6 +339,10 @@ export function buildBoxer(team: number, skinId?: string): BoxerRig {
 const UP = new Vector3(0, 1, 0);
 /** Platform top in the solve's local space — the torso never sinks below it. */
 const GROUND_Y = 0.14;
+/** Hips to the head's centre when the neck SEATS: the loft's top ring
+ *  (mannequin.ts BODY_RINGS, 0.488) plus the egg's half-height and a
+ *  hair of air, so the head floats just clear of the collar. */
+const NECK_SEAT = 0.64;
 const _hips = new Vector3();
 const _chest = new Vector3();
 const _spine = new Vector3();
@@ -374,6 +378,7 @@ export function solveTorso(
   outChest: Vector3,
   outPelvis: Vector3,
   setBackBase: number = BODY_IK.spineSetBack,
+  seatUnderHead = false,
 ): void {
   rig.head.position.copy(headPos);
   rig.head.quaternion.copy(headQuat);
@@ -394,7 +399,14 @@ export function solveTorso(
   // Hips track the anchor laterally so big leans drag the torso along, and
   // follow it down on a duck — but NEVER below the platform top, so a low
   // lay-out smushes up against the slab rather than clipping through it.
-  const hipY = Math.max(GROUND_Y, Math.min(BODY_IK.hipHeight, headPos.y - 0.5));
+  // The arena pins the hips at BODY_IK.hipHeight because its hitbox
+  // spheres live there and every headset must agree on them; a figure
+  // with no hitboxes (the club's dancers, the mirror) may instead SEAT
+  // the loft under the head, so a tall player's head is not left
+  // hovering clear of the neck.
+  const hipY = seatUnderHead
+    ? Math.max(GROUND_Y, headPos.y - NECK_SEAT)
+    : Math.max(GROUND_Y, Math.min(BODY_IK.hipHeight, headPos.y - 0.5));
   _hips.set(padX * 0.4 + _anchor.x * 0.6, hipY, padZ * 0.4 + _anchor.z * 0.6);
   _chest.copy(_hips).lerp(_anchor, BODY_IK.chestAlong);
   _chest.y = Math.max(GROUND_Y + 0.12, _chest.y); // chest stays off the slab too

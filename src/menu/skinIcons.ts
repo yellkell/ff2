@@ -221,18 +221,6 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         ctx.closePath();
         ctx.fill();
         break;
-      case 'collar':
-        // A ring sitting ON the shoulders, and its pendant plate.
-        ctx.lineWidth = line * 1.3;
-        ctx.ellipse(cx, cy - r * 0.5, r * 0.44, r * 0.17, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(cx - r * 0.1, cy - r * 0.34);
-        ctx.lineTo(cx + r * 0.1, cy - r * 0.34);
-        ctx.lineTo(cx, cy - r * 0.1);
-        ctx.closePath();
-        ctx.fill();
-        break;
       case 'ridge':
         for (let i = 0; i < 5; i++) {
           ctx.moveTo(cx, cy - r * 0.45 + i * r * 0.26);

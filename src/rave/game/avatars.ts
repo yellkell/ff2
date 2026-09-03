@@ -80,6 +80,20 @@ export interface DancerPose {
   rx: number;
   ry: number;
   rz: number;
+  /** Hand ORIENTATION, as each controller's world quaternion — present
+   *  when the wire carries it (the club floor does), absent on the ring.
+   *  `w` of 0 (or missing) means unknown, and the figure falls back to
+   *  pointing the fist along the forearm, which is how a palm held up
+   *  came out as a wrist hanging down: the guess only ever knew where a
+   *  hand WAS, never which way it faced. */
+  lqx?: number;
+  lqy?: number;
+  lqz?: number;
+  lqw?: number;
+  rqx?: number;
+  rqy?: number;
+  rqz?: number;
+  rqw?: number;
   /** 0 dancing … 1 melted on the deck (eliminated). */
   slump: number;
 }

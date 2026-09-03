@@ -602,7 +602,11 @@ hosting targets.
 - Reads FF1's `players`/`run*` collections and RAVE RAID's `scores`
   ratchet board directly; when FF2 gets its own Firestore project the
   page gains an FF2 board the same way.
-- **THE CHANNEL** (the third face): a live top-down broadcast of whatever is on —
+- **A PROFILE** behind every name (tap one anywhere): the painting
+  behind the name, rank, honours, achievements, the note, the kit; then
+  every board's rank and best, every rave chart danced, and their own
+  tapes with their own heatmaps. `#player=<uid>` deep-links one.
+- **FFTV** (the third face): a live top-down broadcast of whatever is on —
   the headset running a bout casts frames to `server/tv.mjs` at `/tv`
   (`systems/BroadcastSystem.ts`, `net/tvCast.ts`); the page draws
   platforms, fighters, balls, clock, titan; falls back to the rave
@@ -619,8 +623,8 @@ hosting targets.
   fastest clear across every tier. The page gives it a difficulty
   sub-rail; the lobby merges the three back into one ranked list.
 - **THE LAB** (a board of the FIRE FIGHT rail, not a tab of its own): THE TAPE — `net/telemetry.ts` records each bout
-  (standing / throw-left / throw-right / hit-taken heatmap grids over the
-  platform footprint, the timed play-by-play, the rounds) into the
+  (standing / throw-left / throw-right / LANDING / hit-taken heatmap
+  grids over the platform footprint, the timed play-by-play, the rounds) into the
   `bouts` collection; the page aggregates the last 200 into tiles, four
   heatmaps, a hands panel and an expandable tape with health lines.
 

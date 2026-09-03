@@ -103,10 +103,10 @@ export function ballsFace(): BallsFace {
       {
         id: 'ball:curve',
         label: 'CURVE',
-        sub: 'a flicked wrist bends the throw',
         x: M, y: 170, w: INNER, h: 96,
         small: true,
         selected: curve,
+        toggle: true,
       },
       { id: 'ball:bend-', label: '−', x: M, y: 316, w: 110, h: 96, px: 44, disabled: app.curveStrength <= 0.1 },
       {
@@ -121,22 +121,18 @@ export function ballsFace(): BallsFace {
       {
         id: 'ball:body',
         label: 'SHOW MY BODY',
-        sub: 'look down and see your own machine',
         x: M, y: 462, w: INNER, h: 96,
         small: true,
         selected: app.showBody,
+        toggle: true,
       },
     );
     return {
       title: 'THE BALL',
       buttons,
-      body: (g) => {
-        g.textAlign = 'center';
-        g.textBaseline = 'middle';
-        g.font = font(500, 22);
-        g.fillStyle = KIT.faint;
-        g.fillText('your hands, not the bout — these follow you everywhere', BALLS_W / 2, BALLS_H - 92);
-      },
+      // No prose under the breakers: the switches say what they are, and
+      // the one number that needs a word keeps its "how hard it bends".
+      body: () => {},
     };
   }
 

@@ -308,7 +308,7 @@ export class ClubMirrorSystem extends createSystem({}) {
       }
       if (!this.me) {
         // My tone, gear and paint — the body the arena shows everyone.
-        this.me = { rig: buildDancer(hue, { tone: myTone(), gear: myGear(), look: myLook() }), hue };
+        this.me = { rig: buildDancer(hue, { tone: myTone(), gear: myGear(), look: myLook(), sticks: false }), hue };
         const old = this.shadows.get(-1);
         if (old) {
           disposeShadow(old);
@@ -378,7 +378,22 @@ export class ClubMirrorSystem extends createSystem({}) {
         x = _fwd.x;
         y = _fwd.y;
         z = _fwd.z;
+        // …and which way it faces, the same quaternion the floor streams.
+        obj.getWorldQuaternion(_q);
+        if (hand === 'left') {
+          p.lqx = _q.x;
+          p.lqy = _q.y;
+          p.lqz = _q.z;
+          p.lqw = _q.w;
+        } else {
+          p.rqx = _q.x;
+          p.rqy = _q.y;
+          p.rqz = _q.z;
+          p.rqw = _q.w;
+        }
       } else {
+        if (hand === 'left') p.lqw = 0;
+        else p.rqw = 0;
         // No controllers (headless walks): the same resting-hands guess
         // pumpClubPose() streams, so the glass agrees with the room.
         x = p.hx + (hand === 'left' ? -0.25 : 0.25);

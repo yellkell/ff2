@@ -6,7 +6,7 @@
     <title>FIRE FIGHT 2 — WORLDWIDE LEADERBOARD</title>
     <meta
       name="description"
-      content="Every board in FIRE FIGHT 2 — the ladder, the speedruns, the raids, the rave charts, live television from the arena, and the tape room."
+      content="Every board in FIRE FIGHT 2 — the ladder, the speedruns, the raids, the rave charts, FFTV live from the arena, and the tape room."
     />
     <meta name="theme-color" content="#0a0810" />
     <meta property="og:title" content="FIRE FIGHT 2 — WORLDWIDE LEADERBOARD" />
@@ -1128,6 +1128,216 @@
         letter-spacing: 0.05em;
       }
 
+      /* ── THE PROFILE ─────────────────────────────────────────────────────
+         A player's service record, the way the headset's card lays it out:
+         the painting behind the name, rank and points, honours and
+         achievements, the note — then everything they have done. */
+      .who-link {
+        appearance: none;
+        border: 0;
+        padding: 0;
+        margin: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        letter-spacing: inherit;
+        cursor: pointer;
+        border-bottom: 1.5px solid transparent;
+        transition: border-color 0.18s linear, color 0.18s linear;
+      }
+      .who-link:hover,
+      .who-link:focus-visible {
+        outline: none;
+        color: var(--text);
+        border-bottom-color: var(--accent);
+        transition-duration: 0.1s;
+      }
+      .profile-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: clamp(14px, 2vw, 20px);
+      }
+      .banner-wrap {
+        position: relative;
+        border-radius: 22px;
+        overflow: hidden;
+        border: 2px solid var(--line-faint);
+        background: rgba(0, 0, 0, 0.32);
+        min-height: 150px;
+        display: flex;
+        align-items: flex-end;
+        padding: 18px 22px;
+      }
+      .banner-wrap canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.85;
+      }
+      .banner-wrap::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(rgba(10, 8, 16, 0.05), rgba(10, 8, 16, 0.78));
+        pointer-events: none;
+      }
+      .banner-wrap > .id {
+        position: relative;
+        z-index: 1;
+      }
+      .banner-wrap .callsign {
+        margin: 0;
+        font-weight: 700;
+        font-size: clamp(28px, 4vw, 42px);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        text-shadow: 0 2px 12px rgba(0, 0, 0, 0.7);
+      }
+      .banner-wrap .rank {
+        margin-top: 4px;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .banner-wrap .rank small {
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--dim);
+        text-transform: none;
+        margin-left: 10px;
+      }
+      .xpbar {
+        height: 8px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.06);
+        overflow: hidden;
+        margin: 12px 0 6px;
+      }
+      .xpbar i {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+        border-radius: 4px;
+      }
+      .record-line {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        color: var(--faint);
+        text-transform: uppercase;
+      }
+      .chips-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 12px;
+      }
+      .chips-row .cap {
+        width: 130px;
+        flex: none;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .chips-row .none {
+        color: var(--disabled);
+        font-size: 15px;
+        letter-spacing: 0.03em;
+      }
+      .honour {
+        display: inline-flex;
+        align-items: center;
+        padding: 6px 14px;
+        border-radius: 12px;
+        border: 2px solid currentColor;
+        background: rgba(0, 0, 0, 0.35);
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.14em;
+      }
+      .feat {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 14px 6px 8px;
+        border-radius: 12px;
+        border: 2px solid currentColor;
+        background: rgba(0, 0, 0, 0.35);
+      }
+      .feat .medal {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(0, 0, 0, 0.45);
+        border: 1.5px solid currentColor;
+        display: grid;
+        place-items: center;
+        flex: none;
+      }
+      .feat .medal svg {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+      }
+      .feat b {
+        display: block;
+        color: var(--text);
+        font-weight: 700;
+        font-size: 14px;
+        letter-spacing: 0.12em;
+      }
+      .feat small {
+        display: block;
+        font-weight: 600;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+      }
+      .note {
+        margin-top: 14px;
+        border-radius: 14px;
+        background: var(--well);
+        border: 2px solid var(--line-faint);
+        padding: 12px 16px;
+        text-align: center;
+        font-size: 16px;
+        letter-spacing: 0.03em;
+        color: var(--text);
+      }
+      .note.empty {
+        color: var(--disabled);
+      }
+      .kit-line {
+        margin-top: 10px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        color: var(--faint);
+        text-transform: uppercase;
+      }
+      .kit-line b {
+        color: var(--dim);
+        font-weight: 600;
+      }
+      .record .row .score {
+        min-width: 110px;
+      }
+      .record .row .rank {
+        width: 54px;
+      }
+      #profile .maps {
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      }
+
       .hidden { display: none !important; }
 
       ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -1172,7 +1382,7 @@
       <nav class="rail" id="face-rail" role="tablist" aria-label="Board">
         <button class="rail-tab" id="tab-ff" role="tab" type="button" aria-selected="true">Fire Fight</button>
         <button class="rail-tab" id="tab-rr" role="tab" type="button" aria-selected="false">Rave Raid</button>
-        <button class="rail-tab" id="tab-tv" role="tab" type="button" aria-selected="false">The Channel</button>
+        <button class="rail-tab" id="tab-tv" role="tab" type="button" aria-selected="false">FFTV</button>
         <div class="rail-marker" id="face-marker"></div>
       </nav>
 
@@ -1222,7 +1432,8 @@
               <figure><canvas class="heat" id="heat-stand" width="320" height="300"></canvas><figcaption>Standing<small>where the head is, sampled all bout</small></figcaption></figure>
               <figure><canvas class="heat" id="heat-thrL" width="320" height="300"></canvas><figcaption>Throws · left<small>where the left fist let go</small></figcaption></figure>
               <figure><canvas class="heat" id="heat-thrR" width="320" height="300"></canvas><figcaption>Throws · right<small>where the right fist let go</small></figcaption></figure>
-              <figure><canvas class="heat" id="heat-hit" width="320" height="300"></canvas><figcaption>Hits taken<small>where you stood when it landed</small></figcaption></figure>
+              <figure><canvas class="heat" id="heat-land" width="320" height="300"></canvas><figcaption>Landing<small>where you stood when yours connected</small></figcaption></figure>
+              <figure><canvas class="heat" id="heat-hit" width="320" height="300"></canvas><figcaption>Hits taken<small>where you stood when theirs did</small></figcaption></figure>
             </div>
           </section>
           <div class="after">
@@ -1245,6 +1456,65 @@
             <p class="panel-note">Every recorded bout, newest first. Open one for its rounds, both health lines and the play-by-play.</p>
             <div id="lab-tape" style="margin-top: 12px"></div>
             <div class="status hidden" id="lab-status"><div class="line"></div><div class="hint"></div></div>
+          </section>
+        </div>
+
+        <!-- THE PROFILE: a name tapped anywhere on the page lands here. -->
+        <div id="profile" class="hidden">
+          <div class="profile-head">
+            <button class="plate" id="profile-back" type="button"><span class="flash-layer"></span>Back</button>
+            <span class="chip" id="profile-chip" data-tone="warn"><span class="dot"></span><span id="profile-chip-text">PULLING THE RECORD</span></span>
+          </div>
+
+          <section class="panel opening">
+            <i class="halo"></i><span class="sheen"></span>
+            <div class="banner-wrap" id="profile-banner">
+              <canvas id="profile-paint" width="800" height="216"></canvas>
+              <div class="id">
+                <h2 class="callsign" id="profile-name">—</h2>
+                <div class="rank" id="profile-rank"></div>
+              </div>
+            </div>
+            <div class="xpbar"><i id="profile-xp" style="width: 0%"></i></div>
+            <div class="record-line"><span id="profile-lp"></span><span id="profile-next"></span></div>
+            <div class="chips-row"><span class="cap">Honours</span><span id="profile-honours"></span></div>
+            <div class="chips-row"><span class="cap">Achievements</span><span id="profile-feats"></span></div>
+            <div class="note empty" id="profile-note">no note</div>
+            <div class="kit-line" id="profile-kit"></div>
+          </section>
+
+          <div class="after">
+            <section class="panel opening record" style="animation-delay: 0.06s">
+              <i class="halo"></i><span class="sheen"></span>
+              <h2 class="panel-title">The record</h2>
+              <div class="col-caps board-caps">
+                <span class="c-name">Board</span><span class="c-rank">#</span><span class="c-score">Best</span>
+              </div>
+              <ul class="rows" id="profile-record"></ul>
+            </section>
+            <section class="panel opening record" style="animation-delay: 0.12s">
+              <i class="halo"></i><span class="sheen"></span>
+              <h2 class="panel-title">Rave charts</h2>
+              <div class="col-caps board-caps">
+                <span class="c-name">Record</span><span class="c-rank">Grade</span><span class="c-score">Score</span>
+              </div>
+              <ul class="rows" id="profile-rave"></ul>
+              <div class="status hidden" id="profile-rave-status"><div class="line"></div><div class="hint"></div></div>
+            </section>
+          </div>
+
+          <section class="panel opening" style="animation-delay: 0.18s; margin-top: clamp(12px, 1.6vw, 18px)">
+            <i class="halo"></i><span class="sheen"></span>
+            <h2 class="panel-title">Their tape</h2>
+            <p class="panel-note" id="profile-tape-note">Every bout this player recorded.</p>
+            <section class="strip" id="profile-tiles" style="margin-top: 14px"></section>
+            <div class="maps">
+              <figure><canvas class="heat" id="pheat-stand" width="320" height="300"></canvas><figcaption>Standing<small>where they stand</small></figcaption></figure>
+              <figure><canvas class="heat" id="pheat-land" width="320" height="300"></canvas><figcaption>Landing<small>where they stand when they hit you</small></figcaption></figure>
+              <figure><canvas class="heat" id="pheat-hit" width="320" height="300"></canvas><figcaption>Hit<small>where they stand when they get hit</small></figcaption></figure>
+            </div>
+            <div id="profile-tape" style="margin-top: 12px"></div>
+            <div class="status hidden" id="profile-tape-status"><div class="line"></div><div class="hint"></div></div>
           </section>
         </div>
       </section>
@@ -1296,8 +1566,8 @@
             <canvas id="tv-canvas" width="960" height="540"></canvas>
             <div class="tv-guide" id="tv-guide"></div>
             <p class="panel-note" style="margin-top: 14px">
-              Live bouts, brawls and raids as they happen, top-down from the headset running
-              them. Nothing on air and the channel peeps into the club instead.
+              FFTV: live bouts, brawls and raids as they happen, top-down from the headset
+              running them. Nothing on air and it peeps into the club instead.
             </p>
           </section>
         </main>
@@ -1344,6 +1614,9 @@
         const structuredQuery = { from: [{ collectionId }] };
         if (opts.orderBy) {
           structuredQuery.orderBy = [{ field: { fieldPath: opts.orderBy }, direction: opts.dir || 'DESCENDING' }];
+        }
+        if (opts.where) {
+          structuredQuery.where = { fieldFilter: { field: { fieldPath: opts.where.field }, op: 'EQUAL', value: { stringValue: String(opts.where.value) } } };
         }
         if (opts.limit) structuredQuery.limit = opts.limit;
         const ctrl = new AbortController();
@@ -1551,6 +1824,7 @@
             const docs = await runQuery('players', { orderBy: f, dir: 'DESCENDING', limit: 100 });
             rows = docs
               .map((d) => ({
+                uid: d.id,
                 name: d.data.name || '???',
                 value: Number(d.data[f]) || 0,
                 look: d.data.look || '',
@@ -1565,6 +1839,7 @@
               limit: 100,
             });
             rows = docs.map((d) => ({
+              uid: d.id,
               name: d.data.name || '???',
               value: Number(d.data.value) || 0,
               names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [],
@@ -1599,10 +1874,14 @@
           .map((r, i) => {
             if (def.kind === 'player') {
               return `<li class="row ${rowClass(i)}"><span class="rank">${i + 1}</span>` +
-                `<span class="name">${esc(r.name)}${paintChips(r.look)}</span>` +
+                `<span class="name">${who(r.uid, r.name)}${paintChips(r.look)}</span>` +
                 `<span class="score">${num(r.value)}</span></li>`;
             }
-            const squad = r.names.length > 1 ? r.names.map(esc).join(' · ') : esc(r.name);
+            // The poster's name is the door; squadmates are names only — their
+            // uids never rode the row.
+            const squad = r.names.length > 1
+              ? r.names.map((n) => (n === r.name ? who(r.uid, n) : esc(n))).join(' · ')
+              : who(r.uid, r.name);
             const chips =
               (r.difficulty === 'hard' ? '<span class="diff-chip hard">HARD</span>' : '') +
               (r.difficulty === 'blazing' ? '<span class="diff-chip blazing">BLAZING</span>' : '') +
@@ -1628,9 +1907,9 @@
           if (rows[0] && (!fastest || rows[0].value < fastest.value)) fastest = { ...rows[0], tier: tier.label };
         }
         const tiles = [
-          { cap: `Season ${seasonIndex()} leader`, val: ranked[0] ? esc(ranked[0].name) : '—', sub: ranked[0] ? `${num(ranked[0].value)} points` : 'nobody has banked a point' },
+          { cap: `Season ${seasonIndex()} leader`, val: ranked[0] ? who(ranked[0].uid, ranked[0].name) : '—', sub: ranked[0] ? `${num(ranked[0].value)} points` : 'nobody has banked a point' },
           { cap: 'Fastest speedrun', val: fastest ? runClock(fastest.value) : '—', sub: fastest ? `${esc(fastest.name)} · ${fastest.tier}` : 'the titans stand unbeaten', minor: true },
-          { cap: 'Most experience', val: xp[0] ? num(xp[0].value) : '—', sub: xp[0] ? esc(xp[0].name) : 'no XP banked yet', minor: true },
+          { cap: 'Most experience', val: xp[0] ? num(xp[0].value) : '—', sub: xp[0] ? who(xp[0].uid, xp[0].name) : 'no XP banked yet', minor: true },
         ];
         host.innerHTML = tiles
           .map((t) => `<div class="stat${t.minor ? ' minor' : ''}"><div class="cap">${t.cap}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`)
@@ -1640,7 +1919,6 @@
       function drawFfRail() {
         fillRail('board-rail', 'board-marker', FF_BOARDS, ff.board, (id) => {
           ff.board = id;
-          drawFfRail();
           syncFfFace();
           void loadFf(false);
         });
@@ -1658,11 +1936,19 @@
         }
       }
 
-      /** THE LAB is a board of this rail, so the stage gives way to it. */
+      /** THE LAB is a board of this rail, so the stage gives way to it — and
+       *  THE PROFILE, when one is open, takes the whole face: strip, rails,
+       *  stage and lab all stand down behind it. */
       function syncFfFace() {
         const isLab = ff.board === 'lab';
-        document.getElementById('ff-stage').classList.toggle('hidden', isLab);
-        document.getElementById('lab').classList.toggle('hidden', !isLab);
+        const open = profile.open;
+        document.getElementById('ff-strip').classList.toggle('hidden', open);
+        document.getElementById('board-rail').classList.toggle('hidden', open);
+        if (open) document.getElementById('tier-rail').classList.add('hidden');
+        else drawFfRail();
+        document.getElementById('ff-stage').classList.toggle('hidden', open || isLab);
+        document.getElementById('lab').classList.toggle('hidden', open || !isLab);
+        document.getElementById('profile').classList.toggle('hidden', !open);
       }
 
       /* ══ THE LAB ══════════════════════════════════════════════════════ */
@@ -1683,6 +1969,7 @@
         const b = d.data || d;
         return {
           id: d.id,
+          uid: b.uid || '',
           kind: b.kind || 'solo',
           net: !!b.net,
           quick: !!b.quick,
@@ -1783,7 +2070,7 @@
           .map((t) => `<div class="stat${t.minor ? ' minor' : ''}"><div class="cap">${t.cap}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`)
           .join('');
 
-        for (const key of ['stand', 'thrL', 'thrR', 'hit']) drawHeat(document.getElementById(`heat-${key}`), rows, key);
+        for (const key of ['stand', 'thrL', 'thrR', 'land', 'hit']) drawHeat(document.getElementById(`heat-${key}`), rows, key);
 
         const dl = sum((b) => b.hits.dealtL);
         const dr = sum((b) => b.hits.dealtR);
@@ -1818,32 +2105,7 @@
         document.getElementById('lab-parts').innerHTML =
           partBar('Where you land it', partTally.dealt) + partBar('Where you take it', partTally.taken);
 
-        const host = document.getElementById('lab-tape');
-        host.innerHTML = rows
-          .map((b, i) => {
-            const others = b.names.filter((x) => x !== b.name);
-            const who = `<b>${esc(b.name)}</b>${others.length ? ' vs ' + others.map(esc).join(' · ') : ''}` +
-              (b.boss ? ` <span class="diff-chip">${esc(b.boss.name)}</span>` : '');
-            return `<div class="tape-row" data-i="${i}">` +
-              `<span class="when">${esc(b.at ? ago(b.at.toISOString()) : '')}</span>` +
-              `<span class="kind">${esc(KIND_LABEL[b.kind] || b.kind.toUpperCase())}</span>` +
-              `<span class="who">${who}</span>` +
-              `<span class="verdict ${b.win ? 'w' : 'l'}">${b.win ? 'WIN' : 'LOSS'} ${b.score.length ? esc(b.score.join('–')) : ''}</span>` +
-              `<span class="clock">${clock(b.dur)}</span></div>` +
-              (lab.open === b.id ? `<div class="tape-open">${tapeOpen(b)}</div>` : '');
-          })
-          .join('');
-        host.querySelectorAll('.tape-row').forEach((r) =>
-          r.addEventListener('click', () => {
-            const b = rows[Number(r.dataset.i)];
-            lab.open = lab.open === b.id ? null : b.id;
-            drawLab();
-            const c = document.querySelector('#lab-tape .tape-open canvas');
-            if (c) drawHealthStrip(c, rows.find((x) => x.id === lab.open));
-          }),
-        );
-        const c = document.querySelector('#lab-tape .tape-open canvas');
-        if (c && lab.open) drawHealthStrip(c, rows.find((x) => x.id === lab.open));
+        renderTapeList(document.getElementById('lab-tape'), rows, lab, drawLab);
       }
 
       /* The platform footprint (src/config.ts OCTAGON_*): 1.72 × 1.5 m,
@@ -2067,6 +2329,7 @@
         try {
           const docs = await runQuery('rows', { parent: `boards/${board}`, orderBy: 'value', dir: 'DESCENDING', limit: 100 });
           const rows = docs.map((d) => ({
+            uid: d.id,
             name: d.data.name || '???',
             value: Number(d.data.value) || 0,
             grade: (d.data.meta && d.data.meta.grade) || '',
@@ -2095,7 +2358,7 @@
         rowsEl.innerHTML = rows
           .map((r, i) =>
             `<li class="row ${rowClass(i)}"><span class="rank">${i + 1}</span>` +
-            `<span class="name">${esc(r.name)}</span>` +
+            `<span class="name">${who(r.uid, r.name)}</span>` +
             `<span class="when">${esc(ago(r.at))}</span>` +
             `<span class="score">${num(r.value)}</span>` +
             `<span class="grade" style="color:${GRADE_COLOUR[r.grade] || 'var(--faint)'}">${esc(r.grade)}</span></li>`,
@@ -2536,17 +2799,470 @@
         cx.fillText('PEEPING INTO THE PUBLIC FLOOR — NOTHING ON AIR', 16, H - 10);
       }
 
+      /* ══ THE PAINTING — a look as a picture, ported from src/avatar/paint.ts ══
+         The profile card in the headset shows the FRONT of the part a player
+         painted most, behind their name; this is the same bake, on a 2D
+         canvas, from the same packed bytes their player doc carries. Byte
+         layout, part tables and unit shapes mirror paint.ts exactly — keep
+         them in step when the racks or the wire grow. */
+
+      const PAINT_CANVAS = { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128, hand: 256 };
+      const WIRE_PARTS = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand'];
+      const WIRE_PARTS_V2 = ['head', 'body'];
+      const WIRE_PARTS_V1 = ['head', 'chest', 'pelvis'];
+      const WIRE_KINDS = ['stripe', 'splotch', 'dot', 'square'];
+      const BODY_V_SPLIT = 0.2050;
+      const TONE_FILL = { white: '#f4f2ee', onyx: '#17171a' };
+      const clamp01 = (n) => (typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0);
+
+      function unpackLook(wire) {
+        if (typeof wire !== 'string' || !wire || wire.length > 1024) return [];
+        let bin;
+        try { bin = atob(wire); } catch { return []; }
+        if (bin.length < 9 || (bin.length - 1) % 8 !== 0) return [];
+        const format = bin.charCodeAt(0);
+        if (format !== 3 && format !== 2 && format !== 1) return [];
+        const parts = format === 1 ? WIRE_PARTS_V1 : format === 2 ? WIRE_PARTS_V2 : WIRE_PARTS;
+        const kindBits = format === 3 ? 3 : 1;
+        const partShift = format === 3 ? 2 : 1;
+        const count = Math.min((bin.length - 1) / 8, 64);
+        const paint = [];
+        for (let i = 0; i < count; i++) {
+          const o = 1 + i * 8;
+          const b0 = bin.charCodeAt(o);
+          const kind = WIRE_KINDS[b0 & kindBits];
+          let part = parts[b0 >> partShift];
+          const colour = bin.charCodeAt(o + 1);
+          if (!kind || !part || colour >= PAINT_HEX.length) continue;
+          let v = clamp01(bin.charCodeAt(o + 4) / 255);
+          // The pre-merge parts fold onto the body's upper and lower bands.
+          if (part === 'chest') { part = 'body'; v = BODY_V_SPLIT + v * (1 - BODY_V_SPLIT); }
+          else if (part === 'pelvis') { part = 'body'; v = v * BODY_V_SPLIT; }
+          paint.push({
+            kind, part, colour,
+            variant: bin.charCodeAt(o + 2),
+            u: clamp01(bin.charCodeAt(o + 3) / 255), v,
+            angle: clamp01(bin.charCodeAt(o + 5) / 255),
+            len: clamp01(bin.charCodeAt(o + 6) / 255),
+            wid: clamp01(bin.charCodeAt(o + 7) / 255),
+          });
+        }
+        return paint;
+      }
+
+      /** mulberry32 — a splotch rolls the same silhouette everywhere it bakes. */
+      function paintRng(seed) {
+        let a = (seed * 2654435761) >>> 0;
+        return () => {
+          a |= 0;
+          a = (a + 0x6d2b79f5) | 0;
+          let t = Math.imul(a ^ (a >>> 15), 1 | a);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
+      function drawUnit(g, p, W, H) {
+        g.fillStyle = PAINT_HEX[p.colour];
+        const cy = (1 - p.v) * H;
+        for (const off of [-1, 0, 1]) {
+          const cx = (p.u + off) * W;
+          if (cx < -W * 0.6 || cx > W * 1.6) continue;
+          g.save();
+          g.translate(cx, cy);
+          g.rotate(p.angle * Math.PI * 2);
+          if (p.kind === 'stripe') {
+            const w = Math.max(4, p.len * W), h = Math.max(3, p.wid * H * 0.35);
+            g.beginPath(); g.roundRect(-w / 2, -h / 2, w, h, h / 2); g.fill();
+          } else if (p.kind === 'dot') {
+            g.beginPath(); g.arc(0, 0, Math.max(3, p.len * W * 0.5), 0, Math.PI * 2); g.fill();
+          } else if (p.kind === 'square') {
+            const s = Math.max(4, p.len * W * 0.6);
+            g.beginPath(); g.roundRect(-s / 2, -s / 2, s, s, s * 0.06); g.fill();
+          } else {
+            const r = Math.max(4, p.len * W * 0.3);
+            const squash = 0.6 + 0.4 * (p.wid || 0.5);
+            const roll = paintRng(p.variant + p.colour * 31 + 7);
+            const points = 9;
+            g.beginPath();
+            for (let i = 0; i <= points; i++) {
+              const a = (i / points) * Math.PI * 2;
+              const rad = r * (0.62 + 0.38 * roll());
+              const x = Math.cos(a) * rad, y = Math.sin(a) * rad * squash;
+              if (i === 0) g.moveTo(x, y);
+              else {
+                const pa = ((i - 0.5) / points) * Math.PI * 2;
+                const pr = r * (0.75 + 0.35 * roll());
+                g.quadraticCurveTo(Math.cos(pa) * pr, Math.sin(pa) * pr * squash, x, y);
+              }
+            }
+            g.closePath(); g.fill();
+            for (let d = 0; d < 3; d++) {
+              const a = roll() * Math.PI * 2, dist = r * (1.15 + roll() * 0.5), dr = r * (0.08 + roll() * 0.1);
+              g.beginPath(); g.arc(Math.cos(a) * dist, Math.sin(a) * dist * squash, dr, 0, Math.PI * 2); g.fill();
+            }
+          }
+          g.restore();
+        }
+      }
+
+      /** Paint the look's banner into `canvas`. False when the look is bare. */
+      function paintBanner(canvas, wire, tone) {
+        const paint = unpackLook(wire);
+        const g = canvas.getContext('2d');
+        g.clearRect(0, 0, canvas.width, canvas.height);
+        if (!paint.length) return false;
+        const counts = {};
+        for (const p of paint) counts[p.part] = (counts[p.part] || 0) + 1;
+        const part = counts.body ? 'body' : counts.head ? 'head' : paint[0].part;
+        const size = PAINT_CANVAS[part] || 256;
+        const flat = document.createElement('canvas');
+        flat.width = flat.height = size;
+        const fg = flat.getContext('2d');
+        fg.fillStyle = TONE_FILL[tone === 'onyx' ? 'onyx' : 'white'];
+        fg.fillRect(0, 0, size, size);
+        for (const p of paint) if (p.part === part) drawUnit(fg, p, size, size);
+        // The front of the part, mid-band — the face you'd see squaring up.
+        g.drawImage(flat, size * 0.5, size * 0.2, size * 0.5, size * 0.6, 0, 0, canvas.width, canvas.height);
+        return true;
+      }
+
+      /* ══ THE PROFILE ═════════════════════════════════════════════════ */
+
+      /* The rank tiers (src/config.ts LADDER.tiers) and the season honours
+         (src/menu/ladder.ts AWARD_STYLE), mirrored so the card reads as the
+         headset's does. */
+      const TIER_TABLE = [
+        [0, 'BRONZE', '#cd7f32'], [100, 'SILVER', '#c9ced6'], [400, 'GOLD', '#ffd75e'], [1000, 'PLATINUM', '#b9ffc4'],
+        [2000, 'DIAMOND', '#6fc8ff'], [3500, 'MASTER', '#b06bff'], [5750, 'LEGENDARY', '#ff7a18'], [9000, 'OVERLORD', '#ff5266'],
+      ];
+      function tierForXp(xp) {
+        let i = 0;
+        for (let k = 0; k < TIER_TABLE.length; k++) if (xp >= TIER_TABLE[k][0]) i = k;
+        return { index: i, name: TIER_TABLE[i][1], colour: TIER_TABLE[i][2], from: TIER_TABLE[i][0], next: TIER_TABLE[i + 1] ? TIER_TABLE[i + 1][0] : null, nextName: TIER_TABLE[i + 1] ? TIER_TABLE[i + 1][1] : '' };
+      }
+      const AWARDS = [
+        ['first', '1ST', '#d9a832', 'won a ranked season'], ['second', '2ND', '#c8d2dc', 'finished a ranked season 2nd'],
+        ['third', '3RD', '#c97a1e', 'finished a ranked season 3rd'], ['top10', 'TOP 10', 'var(--accent)', 'top 10 ranked season finish'],
+        ['top25', 'TOP 25', 'var(--dim)', 'top 25 ranked season finish'],
+      ];
+      const GLYPH = {
+        star: '<svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.6 7.1.7-5.4 4.8 1.6 7L12 17.5 5.8 21l1.6-7L2 9.3l7.1-.7z"/></svg>',
+        shield: '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5.2-3.4 9.6-8 11-4.6-1.4-8-5.8-8-11V5z"/></svg>',
+        drop: '<svg viewBox="0 0 24 24"><path d="M12 2c3.5 5 7 8.4 7 12.5A7 7 0 0 1 5 14.5C5 10.4 8.5 7 12 2z"/></svg>',
+      };
+      const GEAR_NAMES = {
+        crest: 'CREST', antennae: 'ANTENNAE', horns: 'HORNS', halo: 'HALO', mohawk: 'MOHAWK', visorband: 'VISOR BAND',
+        pauldrons: 'PAULDRONS', chestplate: 'CHESTPLATE', ridge: 'RIDGE', belt: 'BELT', cuffs: 'CUFFS', knuckles: 'KNUCKLES', gauntlets: 'GAUNTLETS',
+      };
+      const RUN_BOARD_NAMES = [
+        ['ff2-speedrun-normal-time', 'Speedrun · Normal'], ['ff2-speedrun-hard-time', 'Speedrun · Hard'], ['ff2-speedrun-blazing-time', 'Speedrun · Blazing'],
+        ['ff2-raid-time', 'Raid'], ['ff2-goopliath-time', 'Goopliath'],
+      ];
+
+      const profile = { uid: '', name: '', open: false, tapes: [], tape: { open: null }, seq: 0 };
+      window.__ffProfile = { open: (uid, name) => openProfile(uid, name), state: () => profile };
+
+      /** A name, as a link to its owner. */
+      const who = (uid, name) =>
+        uid ? `<button class="who-link" type="button" data-uid="${esc(uid)}" data-name="${esc(name)}">${esc(name)}</button>` : esc(name);
+
+      /** One document by path, or null when it isn't there. */
+      async function getDoc(path) {
+        const res = await fetch(`${DOCS}/${path}?key=${API_KEY}`);
+        if (res.status === 404) return null;
+        if (!res.ok) throw new Error(`firestore ${res.status}`);
+        const doc = await res.json();
+        return { id: doc.name.split('/').pop(), data: decodeFields(doc.fields || {}) };
+      }
+      /** Many documents by path in one round trip; a Map of path → data | null. */
+      async function batchGet(paths) {
+        const out = new Map(paths.map((p) => [p, null]));
+        if (!paths.length) return out;
+        const res = await fetch(`${DOCS}:batchGet?key=${API_KEY}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ documents: paths.map((p) => `${DOCS.replace('https://firestore.googleapis.com/v1/', '')}/${p}`) }),
+        });
+        if (!res.ok) throw new Error(`firestore ${res.status}`);
+        const parts = await res.json();
+        for (const part of parts) {
+          if (!part.found) continue;
+          const name = part.found.name;
+          const path = name.slice(name.indexOf('/documents/') + '/documents/'.length);
+          out.set(path, decodeFields(part.found.fields || {}));
+        }
+        return out;
+      }
+
+      function openProfile(uid, name) {
+        if (!uid) return;
+        profile.uid = uid;
+        profile.name = name || '';
+        profile.open = true;
+        profile.tape.open = null;
+        if (face !== 'ff') showFace('ff');
+        syncFfFace();
+        try { history.replaceState(null, '', `#player=${encodeURIComponent(uid)}`); } catch {}
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        void loadProfile();
+      }
+      function closeProfile() {
+        profile.open = false;
+        syncFfFace();
+        try { history.replaceState(null, '', '#firefight'); } catch {}
+        void loadFf(false);
+      }
+      document.getElementById('profile-back').addEventListener('click', closeProfile);
+      // A name is a door, wherever it is printed — caught on the way DOWN so
+      // a tape row underneath it doesn't also open.
+      document.addEventListener('click', (e) => {
+        const b = e.target.closest('.who-link');
+        if (!b) return;
+        e.stopPropagation();
+        e.preventDefault();
+        openProfile(b.dataset.uid, b.dataset.name);
+      }, true);
+
+      function profileChip(text, tone) {
+        document.getElementById('profile-chip-text').textContent = text;
+        document.getElementById('profile-chip').dataset.tone = tone;
+      }
+
+      async function loadProfile() {
+        const seq = ++profile.seq;
+        const uid = profile.uid;
+        document.getElementById('profile-name').textContent = profile.name || '…';
+        document.getElementById('profile-rank').textContent = '';
+        document.getElementById('profile-record').innerHTML = '';
+        document.getElementById('profile-rave').innerHTML = '';
+        document.getElementById('profile-tape').innerHTML = '';
+        document.getElementById('profile-tiles').innerHTML = '';
+        profileChip('PULLING THE RECORD', 'warn');
+        setStatus('PULLING THE RECORD', 'warn');
+
+        // The player doc, the run boards and every rave chart, all at once.
+        const ravePaths = [];
+        for (const [track] of RR_TRACKS) for (const d of ['0', '1', '2', '3']) ravePaths.push(`boards/${raveBoard(track, d)}/rows/${uid}`);
+        const runPaths = RUN_BOARD_NAMES.map(([id]) => `boards/${id}/rows/${uid}`);
+        let player = null, rows = new Map(), tapes = [];
+        try {
+          const [p, r] = await Promise.all([getDoc(`players/${uid}`), batchGet([...runPaths, ...ravePaths])]);
+          player = p;
+          rows = r;
+        } catch {
+          if (seq !== profile.seq) return;
+          profileChip('THE RECORD IS UNREACHABLE', 'danger');
+          setStatus('RECORD UNREACHABLE', 'danger');
+        }
+        if (seq !== profile.seq) return;
+        const pd = player ? player.data : {};
+        const name = (pd.name || profile.name || '???').slice(0, 16);
+        profile.name = name;
+        renderProfileHead(pd, name, uid);
+
+        // THE RECORD: the player-doc boards, then the run boards — with each
+        // one's rank, which needs the board (cached from the rail, or pulled).
+        void renderRecord(uid, pd, rows, seq);
+        renderRave(rows);
+
+        // Their tapes: the cloud's, or — when it has none — whatever the LAB
+        // already holds for them (a fixture, an older pull).
+        try {
+          const docs = await runQuery('bouts', { where: { field: 'uid', value: uid }, limit: 100 });
+          tapes = docs.map(normBout).sort((a, b) => (b.at?.getTime() || 0) - (a.at?.getTime() || 0));
+        } catch {
+          tapes = [];
+        }
+        if (!tapes.length) tapes = lab.all.filter((b) => b.uid === uid);
+        if (seq !== profile.seq) return;
+        profile.tapes = tapes;
+        renderProfileTape();
+        profileChip(player ? 'RECORD IS IN' : 'NO PROFILE ON THE BOARD', player ? 'live' : 'warn');
+        setStatus(player ? 'RECORD IS IN' : 'NO PROFILE', player ? 'live' : 'warn');
+      }
+
+      function renderProfileHead(pd, name, uid) {
+        const xp = Number(pd.xp) || 0;
+        const tier = tierForXp(xp);
+        document.getElementById('profile-name').textContent = name;
+        const rankEl = document.getElementById('profile-rank');
+        rankEl.style.color = tier.colour;
+        rankEl.innerHTML = `${esc(tier.name)}<small>${num(xp)} XP</small>`;
+        const span = tier.next ? tier.next - tier.from : 1;
+        document.getElementById('profile-xp').style.width = `${tier.next ? Math.min(100, ((xp - tier.from) / span) * 100) : 100}%`;
+        const lp = Number(pd[`score_s${seasonIndex()}`]) || 0;
+        document.getElementById('profile-lp').textContent = `${num(lp)} LP this season · ${num(Number(pd.score) || 0)} lifetime`;
+        document.getElementById('profile-next').textContent = tier.next ? `${num(tier.next - xp)} XP to ${tier.nextName}` : 'MAX RANK';
+        const painted = paintBanner(document.getElementById('profile-paint'), pd.look || '', pd.tone === 'onyx' ? 'onyx' : 'white');
+        document.getElementById('profile-paint').style.display = painted ? '' : 'none';
+
+        const awards = pd.awards && typeof pd.awards === 'object' ? pd.awards : {};
+        const honours = AWARDS.filter(([k]) => Number(awards[k]) > 0)
+          .map(([k, label, colour, tip]) => {
+            const n = Number(awards[k]);
+            return `<span class="honour" style="color:${colour}" title="${esc(tip)}${n > 1 ? ` · ×${n}` : ''}">${label}${n > 1 ? ` ×${n}` : ''}</span>`;
+          });
+        document.getElementById('profile-honours').innerHTML = honours.length ? honours.join('') : '<span class="none">none yet</span>';
+
+        const tierName = (t) => (t >= 3 ? 'BLAZING' : t === 2 ? 'HARD' : 'NORMAL');
+        const feats = [
+          ['star', 'SPEEDRUN', Number(pd.gauntletBest) || 0, Number(pd.gauntletBestHc) || 0],
+          ['shield', 'RAID', Number(pd.raidBest) || 0, Number(pd.raidBestHc) || 0],
+          ['drop', 'GOOPLIATH', Number(pd.goopBest) || 0, 0],
+        ].filter(([, , t]) => t > 0).map(([glyph, label, t, hc]) => {
+          const hardcore = hc >= t;
+          const colour = hardcore ? 'var(--danger)' : t >= 3 ? '#ff5a1f' : t === 2 ? 'var(--accent)' : 'var(--dim)';
+          return `<span class="feat" style="color:${colour}"><span class="medal">${GLYPH[glyph]}</span><span><b>${label}</b><small>${tierName(t)}${hardcore ? ' · HC' : ''}</small></span></span>`;
+        });
+        document.getElementById('profile-feats').innerHTML = feats.length ? feats.join('') : '<span class="none">none yet</span>';
+
+        const noteEl = document.getElementById('profile-note');
+        noteEl.textContent = pd.note ? String(pd.note).slice(0, 96) : 'no note';
+        noteEl.classList.toggle('empty', !pd.note);
+
+        const gear = String(pd.gear || '').split(',').map((g) => GEAR_NAMES[g.trim()]).filter(Boolean);
+        const pad = pd.pad ? String(pd.pad).toUpperCase() : '';
+        const kit = [gear.length ? `wears <b>${gear.map(esc).join(' · ')}</b>` : 'wears nothing', pad ? `fights on the <b>${esc(pad)}</b> pad` : '']
+          .filter(Boolean).join(' · ');
+        document.getElementById('profile-kit').innerHTML = kit;
+      }
+
+      async function renderRecord(uid, pd, rows, seq) {
+        const host = document.getElementById('profile-record');
+        const lines = [];
+        // The player-doc boards, ranked against the top hundred.
+        const fieldBoards = [
+          [`score_s${seasonIndex()}`, 'Ranked', 'DESCENDING', (v) => num(v)], ['xp', 'XP', 'DESCENDING', (v) => num(v)],
+          ['training', 'Aim', 'DESCENDING', (v) => num(v)], ['duo', '2v2 wins', 'DESCENDING', (v) => num(v)], ['ffa', 'FFA wins', 'DESCENDING', (v) => num(v)],
+        ];
+        const rankOf = async (key, fetcher) => {
+          if (!ff.cache.has(key)) {
+            try { ff.cache.set(key, await fetcher()); } catch { return -1; }
+          }
+          const list = ff.cache.get(key) || [];
+          const i = list.findIndex((r) => r.uid === uid);
+          return i < 0 ? -1 : i + 1;
+        };
+        for (const [field, label, dir, fmt] of fieldBoards) {
+          const v = Number(pd[field]) || 0;
+          if (v <= 0) continue;
+          const rank = await rankOf(`p:${field}`, async () =>
+            (await runQuery('players', { orderBy: field, dir, limit: 100 }))
+              .map((d) => ({ uid: d.id, name: d.data.name || '???', value: Number(d.data[field]) || 0, look: d.data.look || '' }))
+              .filter((r) => r.value > 0));
+          lines.push([label, rank, fmt(v)]);
+        }
+        for (const [id, label] of RUN_BOARD_NAMES) {
+          const row = rows.get(`boards/${id}/rows/${uid}`);
+          if (!row) continue;
+          const rank = await rankOf(`b:${id}`, async () =>
+            (await runQuery('rows', { parent: `boards/${id}`, orderBy: 'value', dir: 'ASCENDING', limit: 100 }))
+              .map((d) => ({ uid: d.id, name: d.data.name || '???', value: Number(d.data.value) || 0, names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [], difficulty: d.data.meta?.difficulty || 'normal', hardcore: !!d.data.meta?.hardcore, at: Number(d.data.at) || 0 })));
+          const hc = row.meta && row.meta.hardcore ? ' <span class="diff-chip hc">HC</span>' : '';
+          lines.push([label + hc, rank, runClock(Number(row.value) || 0)]);
+        }
+        if (seq !== profile.seq) return;
+        host.innerHTML = lines.length
+          ? lines.map(([label, rank, val]) =>
+              `<li class="row${rank === 1 ? ' top1' : rank > 1 && rank <= 3 ? ' top3' : ''}"><span class="name">${label}</span>` +
+              `<span class="rank">${rank > 0 ? `#${rank}` : '—'}</span><span class="score">${val}</span></li>`).join('')
+          : '<li class="row"><span class="name" style="color:var(--disabled)">nothing posted yet</span></li>';
+      }
+
+      function renderRave(rows) {
+        const host = document.getElementById('profile-rave');
+        const status = document.getElementById('profile-rave-status');
+        const charts = [];
+        for (const [track, title] of RR_TRACKS) {
+          for (const d of ['0', '1', '2', '3']) {
+            const r = rows.get(`boards/${raveBoard(track, d)}/rows/${profile.uid}`);
+            if (r) charts.push({ title, diff: RR_DIFFS.find((x) => x.id === d)?.label || d, score: Number(r.value) || 0, grade: (r.meta && r.meta.grade) || '' });
+          }
+        }
+        charts.sort((a, b) => b.score - a.score);
+        if (!charts.length) {
+          host.innerHTML = '';
+          showStatus(status, 'NO RECORDS DANCED', '', true);
+          return;
+        }
+        status.classList.add('hidden');
+        host.innerHTML = charts.map((c) =>
+          `<li class="row"><span class="name">${esc(c.title)} <span class="diff-chip">${esc(c.diff.toUpperCase())}</span></span>` +
+          `<span class="rank" style="color:${GRADE_COLOUR[c.grade] || 'var(--faint)'};font-weight:700">${esc(c.grade || '—')}</span>` +
+          `<span class="score">${num(c.score)}</span></li>`).join('');
+      }
+
+      function renderProfileTape() {
+        const rows = profile.tapes;
+        const status = document.getElementById('profile-tape-status');
+        const n = rows.length || 1;
+        const sum = (f) => rows.reduce((a, b) => a + (Number(f(b)) || 0), 0);
+        const throws = sum((b) => b.thr.n), dealt = sum((b) => b.hits.dealt), heads = sum((b) => b.hits.head), wins = rows.filter((b) => b.win).length;
+        const tiles = [
+          { cap: 'Tapes', val: num(rows.length), sub: `${wins} won · ${rows.length - wins} lost` },
+          { cap: 'Win rate', val: pct(wins, rows.length), sub: '' },
+          { cap: 'Hit rate', val: pct(dealt, throws), sub: `${num(dealt)} of ${num(throws)}` },
+          { cap: 'Headshots', val: pct(heads, dealt), sub: `${num(heads)} found a head` },
+          { cap: 'Parries a bout', val: (sum((b) => b.par) / n).toFixed(1), sub: '' },
+        ];
+        document.getElementById('profile-tiles').innerHTML = rows.length
+          ? tiles.map((t) => `<div class="stat"><div class="cap">${t.cap}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`).join('')
+          : '';
+        for (const key of ['stand', 'land', 'hit']) drawHeat(document.getElementById(`pheat-${key}`), rows, key);
+        if (!rows.length) {
+          document.getElementById('profile-tape').innerHTML = '';
+          showStatus(status, 'NO TAPES FROM THIS PLAYER', 'A bout that lasts records itself.', true);
+          return;
+        }
+        status.classList.add('hidden');
+        renderTapeList(document.getElementById('profile-tape'), rows, profile.tape, renderProfileTape);
+      }
+
+      /**
+       * A list of tapes into `host`, one row each, the open one unfolded
+       * under its row. `st.open` is which; `rerender` is who to call when a
+       * row is tapped, so THE LAB and THE PROFILE can share the one painter.
+       */
+      function renderTapeList(host, rows, st, rerender) {
+        host.innerHTML = rows
+          .map((b, i) => {
+            const others = b.names.filter((x) => x !== b.name);
+            const whoLine = `<b>${who(b.uid, b.name)}</b>${others.length ? ' vs ' + others.map(esc).join(' · ') : ''}` +
+              (b.boss ? ` <span class="diff-chip">${esc(b.boss.name)}</span>` : '');
+            return `<div class="tape-row" data-i="${i}">` +
+              `<span class="when">${esc(b.at ? ago(b.at.toISOString()) : '')}</span>` +
+              `<span class="kind">${esc(KIND_LABEL[b.kind] || b.kind.toUpperCase())}</span>` +
+              `<span class="who">${whoLine}</span>` +
+              `<span class="verdict ${b.win ? 'w' : 'l'}">${b.win ? 'WIN' : 'LOSS'} ${b.score.length ? esc(b.score.join('–')) : ''}</span>` +
+              `<span class="clock">${clock(b.dur)}</span></div>` +
+              (st.open === b.id ? `<div class="tape-open">${tapeOpen(b)}</div>` : '');
+          })
+          .join('');
+        host.querySelectorAll('.tape-row').forEach((r) =>
+          r.addEventListener('click', () => {
+            const b = rows[Number(r.dataset.i)];
+            st.open = st.open === b.id ? null : b.id;
+            rerender();
+          }),
+        );
+        const c = host.querySelector('.tape-open canvas');
+        if (c && st.open) drawHealthStrip(c, rows.find((x) => x.id === st.open));
+      }
+
       /* ══ THE FACES ════════════════════════════════════════════════════ */
 
       const FACES = {
         ff: { tab: 'tab-ff', el: 'face-ff', hash: '#firefight', mark: '<span class="a">FIRE</span> <span class="b">FIGHT</span>', kicker: 'WORLDWIDE LEADERBOARD' },
         rr: { tab: 'tab-rr', el: 'face-rr', hash: '#raveraid', mark: '<span class="a">RAVE</span> <span class="b">RAID</span>', kicker: 'WORLDWIDE LEADERBOARD' },
-        tv: { tab: 'tab-tv', el: 'face-tv', hash: '#tv', mark: '<span class="a">THE</span> <span class="b">CHANNEL</span>', kicker: 'LIVE FROM THE ARENA' },
+        tv: { tab: 'tab-tv', el: 'face-tv', hash: '#fftv', mark: '<span class="a">FF</span><span class="b">TV</span>', kicker: 'LIVE FROM THE ARENA' },
       };
       let face = 'ff';
 
       function showFace(id) {
         if (face === 'tv' && id !== 'tv') tvClose();
+        // A face change closes an open profile; the rail is the way back.
+        if (id !== 'ff' || face === 'ff') profile.open = false;
         face = id;
         document.body.dataset.face = id;
         for (const [k, f] of Object.entries(FACES)) {
@@ -2558,7 +3274,7 @@
         document.getElementById('kicker').textContent = FACES[id].kicker;
         moveMarker(document.getElementById('face-rail'), document.getElementById('face-marker'));
         try { history.replaceState(null, '', FACES[id].hash); } catch {}
-        if (id === 'ff') { drawFfRail(); syncFfFace(); void loadFf(false); }
+        if (id === 'ff') { syncFfFace(); if (!profile.open) void loadFf(false); }
         else if (id === 'rr') { drawRrRail(); drawRrSongs(); void loadRr(false); }
         else { tvOpen(); tvGuide(); tvBar(); }
       }
@@ -2593,11 +3309,14 @@
         else { tvClose(); tvOpen(); }
       });
 
-      /* Boot on whichever face the address names. */
-      const startFace = Object.entries(FACES).find(([, f]) => f.hash === location.hash);
+      /* Boot on whichever face the address names — or on a player, when the
+         link is one of theirs. */
+      const startFace = Object.entries(FACES).find(([, f]) => f.hash === location.hash || (f.hash === '#fftv' && location.hash === '#tv'));
+      const startPlayer = /^#player=(.+)$/.exec(location.hash);
       drawFfRail();
       syncFfFace();
       showFace(startFace ? startFace[0] : 'ff');
+      if (startPlayer) openProfile(decodeURIComponent(startPlayer[1]), '');
       /* The strip wants the ladder and the speedruns whether or not they are
          the board on screen — one quiet pass behind the first paint. */
       if (!startFace || startFace[0] === 'ff') {
@@ -2606,6 +3325,7 @@
             for (const tier of TIERS) {
               const docs = await runQuery('rows', { parent: `boards/ff2-speedrun-${tier.id}-time`, orderBy: 'value', dir: 'ASCENDING', limit: 100 });
               ff.cache.set(`b:ff2-speedrun-${tier.id}-time`, docs.map((d) => ({
+                uid: d.id,
                 name: d.data.name || '???',
                 value: Number(d.data.value) || 0,
                 names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [],
@@ -2615,7 +3335,7 @@
               })));
             }
             const xpDocs = await runQuery('players', { orderBy: 'xp', dir: 'DESCENDING', limit: 100 });
-            ff.cache.set('p:xp', xpDocs.map((d) => ({ name: d.data.name || '???', value: Number(d.data.xp) || 0, look: d.data.look || '' })).filter((r) => r.value > 0));
+            ff.cache.set('p:xp', xpDocs.map((d) => ({ uid: d.id, name: d.data.name || '???', value: Number(d.data.xp) || 0, look: d.data.look || '' })).filter((r) => r.value > 0));
             drawFfStrip();
           } catch {
             /* the strip simply stays as it is */

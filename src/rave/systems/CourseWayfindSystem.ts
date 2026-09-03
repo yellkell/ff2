@@ -11,13 +11,19 @@
  *   will dock while it is still away, so you aim your body at ground that
  *   is COMING rather than ground that has gone.
  *
+ *   THE ARROW — a chevron on the ground a step ahead of you, pointing at
+ *   the invitation. The circuit only closes one way round, and a body
+ *   stood on a deck with ground on both sides was picking the wrong one
+ *   half the time: the invitation said WHERE, but from a few metres off
+ *   two glowing tiles look alike. The chevron says WHICH WAY.
+ *
  * The route is one ring — the circuit — so this system also keeps the lap
  * ledger: stepping home off the west runner closes it and rings the bell,
  * and CourseSystem takes that as the cue to open the door back to the club.
  */
 
 import { createSystem } from '@iwsdk/core';
-import { AdditiveBlending, BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, PlaneGeometry } from 'three';
+import { AdditiveBlending, BoxGeometry, DoubleSide, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Shape, ShapeGeometry } from 'three';
 import { glowTexture } from '../materials/glow.js';
 import { COLOR, GRID, WAYFIND } from '../course/config.js';
 import { conductor } from '../course/conductor.js';
@@ -37,6 +43,10 @@ interface BerthSlot {
 export class CourseWayfindSystem extends createSystem({}) {
   private invitation!: Mesh;
   private invitationMat!: MeshBasicMaterial;
+  /** THE ARROW: a chevron a step ahead of the body, turned toward the
+   *  invitation. The group yaws; the chevron inside it lies flat. */
+  private arrow!: Group;
+  private arrowMat!: MeshBasicMaterial;
   private berths!: Bank;
   private berthSlots: BerthSlot[] = [];
   private lastTracked = 0;
@@ -68,6 +78,37 @@ export class CourseWayfindSystem extends createSystem({}) {
     this.invitation.visible = false;
     registerDim(this.invitationMat, 'ground');
     root.add(this.invitation);
+
+    // The chevron: a flat ">" pointing along its group's −z, so yawing
+    // the group is all it takes to aim it. Additive like the invitation,
+    // so it reads as light on the ground and never as a solid.
+    this.arrowMat = new MeshBasicMaterial({
+      color: COLOR.rimSafe,
+      transparent: true,
+      opacity: 0.85,
+      blending: AdditiveBlending,
+      depthWrite: false,
+      side: DoubleSide,
+    });
+    registerDim(this.arrowMat, 'ground');
+    const shape = new Shape();
+    const L = GRID.tile * 0.34;
+    const T = GRID.tile * 0.11;
+    // A chevron drawn in the XY plane with its point at +y; the mesh is
+    // then laid flat, which maps +y onto −z.
+    shape.moveTo(0, L);
+    shape.lineTo(L * 0.9, -L * 0.25);
+    shape.lineTo(L * 0.9 - T, -L * 0.25 - T * 0.4);
+    shape.lineTo(0, L - T * 1.6);
+    shape.lineTo(-(L * 0.9 - T), -L * 0.25 - T * 0.4);
+    shape.lineTo(-L * 0.9, -L * 0.25);
+    shape.closePath();
+    const chevron = new Mesh(new ShapeGeometry(shape), this.arrowMat);
+    chevron.rotation.x = -Math.PI / 2;
+    this.arrow = new Group();
+    this.arrow.add(chevron);
+    this.arrow.visible = false;
+    root.add(this.arrow);
 
     // Every stop of every moving platform gets a set of corner nubs; per
     // frame only the route-relevant berth is shown.
@@ -237,8 +278,29 @@ export class CourseWayfindSystem extends createSystem({}) {
       this.invitation.position.set(invTile.x, invTile.y + 0.025, invTile.z);
       this.invitation.scale.setScalar(breath);
       this.invitationMat.color.setHex(urgent ? COLOR.rimWarn : COLOR.rimSafe);
+
+      // THE ARROW: from where the body stands toward the invitation, laid
+      // a step ahead on the body's own ground. Not on the home pad at the
+      // start (the invitation IS under your feet then) and not once the
+      // tile is close enough to be the ground you are looking at.
+      const bx = G.rig.x + G.body.x;
+      const bz = G.rig.z + G.body.z;
+      const dx = invTile.x - bx;
+      const dz = invTile.z - bz;
+      const dist = Math.hypot(dx, dz);
+      if (G.handovers > 0 && dist > GRID.tile * 0.9) {
+        const step = Math.min(GRID.tile * 0.75, dist * 0.5);
+        this.arrow.visible = true;
+        this.arrow.position.set(bx + (dx / dist) * step, G.rig.y + 0.03, bz + (dz / dist) * step);
+        this.arrow.rotation.y = Math.atan2(-dx, -dz);
+        this.arrow.scale.setScalar(breath);
+        this.arrowMat.color.setHex(urgent ? COLOR.rimWarn : COLOR.rimSafe);
+      } else {
+        this.arrow.visible = false;
+      }
     } else {
       this.invitation.visible = false;
+      this.arrow.visible = false;
     }
 
     // The berth: brackets only where the route's next machine will dock,

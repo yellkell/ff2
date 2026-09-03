@@ -2,8 +2,12 @@
  * GEAR — the attachments shop (DESIGN.md §5.2: "shapes, never colour").
  *
  * Coins buy SHAPES that bolt onto THE BLANK: crests, antennae, horns and
- * halos for the head; pauldrons, a chestplate, a collar, a dorsal ridge
- * and a belt for the body; knuckle spikes and cuffs for the hands. Every
+ * halos for the head; pauldrons, a chestplate, a dorsal ridge and a belt
+ * for the body; knuckle spikes and cuffs for the hands. (A COLLAR was
+ * sold for a while and withdrawn — it never sat right on the loft. The id
+ * is retired, not reused: an old save still naming it just wears nothing
+ * on the body, because cleanGear drops what the catalogue no longer
+ * knows.) Every
  * piece is sold in the body's own primer — white on a blank, black on an
  * onyx — so identity still comes from what you bolt on and what you paint,
  * never from a catalogue of colours. Gear is PURELY VISUAL: it parents to
@@ -53,7 +57,6 @@ export const GEAR: GearDef[] = [
   // ── body ──────────────────────────────────────────────────────────────
   { id: 'pauldrons', name: 'PAULDRONS', slot: 'body', price: 100, blurb: 'plates on both shoulders' },
   { id: 'chestplate', name: 'CHESTPLATE', slot: 'body', price: 120, blurb: 'one plate over the heart' },
-  { id: 'collar', name: 'COLLAR', slot: 'body', price: 80, blurb: 'a ruff ring under the head' },
   { id: 'ridge', name: 'RIDGE', slot: 'body', price: 140, blurb: 'a dorsal ridge down the spine' },
   { id: 'belt', name: 'BELT', slot: 'body', price: 60, blurb: 'a band round the waist, buckled' },
   // ── hands ─────────────────────────────────────────────────────────────
@@ -106,8 +109,8 @@ function primer(tone: BlankTone): MeshStandardMaterial {
 }
 
 /** THE TRIM — the one other finish a piece may carry: gunmetal on the
- *  white blank, pale steel on the onyx, for a visor's glass, a collar's
- *  chain, a gauntlet's ridges. Not a paint surface: the bake leaves it
+ *  white blank, pale steel on the onyx, for a visor's glass, a gauntlet's
+ *  ridges. Not a paint surface: the bake leaves it
  *  its own colour, so a dark slit stays dark across a primer plate
  *  instead of vanishing into it. */
 function trim(tone: BlankTone): MeshStandardMaterial {
@@ -398,48 +401,6 @@ const BUILDERS: Record<string, Builder> = {
     const slabMat = mat.clone();
     slabMat.side = DoubleSide; // the hand-wound slab must never cull itself away
     g.add(new Mesh(slab, slabMat));
-    return g;
-  },
-  collar: (mat, _side, trimMat) => {
-    // A collar that SITS: a flat-section ring lying on the shoulder slope
-    // at the neck's root, a raised rim along its outer edge, and a pendant
-    // plate hanging off the front. The old ruff hovered under the head
-    // like a ring tossed over it.
-    const g = new Group();
-    const ring = new Mesh(new CylinderGeometry(0.105, 0.115, 0.018, 40, 1, false), mat);
-    ring.position.set(0, 0.425, -0.012);
-    ring.scale.set(1.15, 1, 0.9);
-    ring.rotation.x = 0.16; // follows the shoulder slope, front dipping
-    g.add(ring);
-    const rim = asTrim(new Mesh(new TorusGeometry(0.113, 0.011, 10, 40), trimMat));
-    rim.rotation.x = Math.PI / 2 + 0.16;
-    rim.position.set(0, 0.434, -0.012);
-    rim.scale.set(1.15, 1, 0.9);
-    g.add(rim);
-    // The hole the neck rises through, cut by a dark inner ring.
-    const throatMat = trimMat.clone();
-    throatMat.side = DoubleSide;
-    const throat = asTrim(new Mesh(new CylinderGeometry(0.068, 0.07, 0.024, 32, 1, true), throatMat));
-    throat.position.copy(ring.position);
-    throat.rotation.copy(ring.rotation);
-    g.add(throat);
-    // The chain: a run of dark links down from the front rim to the
-    // pendant, so the piece reads as a NECKLACE from across the room.
-    for (let i = 0; i < 3; i++) {
-      const link = asTrim(new Mesh(new TorusGeometry(0.008, 0.0025, 6, 12), trimMat));
-      link.position.set(0, 0.424 - i * 0.013, -0.108 - i * 0.004);
-      link.rotation.y = (i % 2) * (Math.PI / 2);
-      g.add(link);
-    }
-    // The pendant: a chamfered plate, dark, with a primer stud on it.
-    const pendant = asTrim(new Mesh(new BoxGeometry(0.038, 0.046, 0.008), trimMat));
-    pendant.position.set(0, 0.36, -0.118);
-    pendant.rotation.x = 0.2;
-    g.add(pendant);
-    const stud = new Mesh(new CylinderGeometry(0.009, 0.009, 0.004, 12), mat);
-    stud.rotation.x = Math.PI / 2 + 0.2;
-    stud.position.set(0, 0.36, -0.1235);
-    g.add(stud);
     return g;
   },
   ridge: (mat) => {

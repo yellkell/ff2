@@ -305,10 +305,12 @@ export type ProfileSpot = {
   tip: string;
 } & (
   | { kind: 'award'; award: SeasonAward; count: number }
-  | { kind: 'clear'; glyph: 'star' | 'shield' | 'drop'; tier: number; hardcore: boolean }
+  | { kind: 'clear'; glyph: 'star' | 'shield' | 'drop'; tier: number; hardcore: boolean; short: string; tierName: string }
 );
 
 const CHIP_H = 40;
+/** An achievement badge's width: medallion + name + tier, three across a card. */
+const CLEAR_W = 164;
 const LABEL_W = 190; // the section label's column, left of the chips
 const BLOCK = {
   banner: 136,
@@ -340,19 +342,30 @@ export function profileSpots(row: LbRow, x: number, y: number, w: number): Profi
     spots.push({ kind: 'award', id: `badge-${key}`, x: ax, y: ay, w: cw, h: CHIP_H, award: key, count, tip: AWARD_TIP[key] + times });
     ax += cw + 10;
   }
-  const clears: Array<['star' | 'shield' | 'drop', string, number, number]> = [
-    ['star', 'GAUNTLET CLEARED', row.gauntletBest ?? 0, row.gauntletBestHc ?? 0],
-    ['shield', 'TITAN RAID CLEARED', row.raidBest ?? 0, row.raidBestHc ?? 0],
-    ['drop', 'GOOPLIATH FELLED', row.goopBest ?? 0, 0],
+  // ACHIEVEMENTS used to be a 64px chip with a bare glyph and, on blazing,
+  // a flame crammed in beside it — three anonymous shapes in a row that
+  // nobody could read without hovering each one. Each is a proper badge
+  // now: the medallion, the feat's NAME, and the tier it was done on, on
+  // one chip wide enough to say so, wrapping to a second row if the card
+  // is narrow.
+  const clears: Array<['star' | 'shield' | 'drop', string, string, number, number]> = [
+    ['star', 'SPEEDRUN', 'SPEEDRUN CLEARED', row.gauntletBest ?? 0, row.gauntletBestHc ?? 0],
+    ['shield', 'RAID', 'TITAN RAID CLEARED', row.raidBest ?? 0, row.raidBestHc ?? 0],
+    ['drop', 'GOOPLIATH', 'GOOPLIATH FELLED', row.goopBest ?? 0, 0],
   ];
   let bx = x0;
-  const by = ay + CHIP_H + 14;
-  for (const [glyph, what, tier, hcTier] of clears) {
+  let by = ay + CHIP_H + 14;
+  for (const [glyph, short, what, tier, hcTier] of clears) {
     if (!tier) continue;
     const hardcore = hcTier >= tier;
     const tierName = tier >= 3 ? 'BLAZING' : tier === 2 ? 'HARD' : 'NORMAL';
-    spots.push({ kind: 'clear', id: `badge-${glyph}`, x: bx, y: by, w: 64, h: CHIP_H + 4, glyph, tier, hardcore, tip: `${what} · ${tierName}${hardcore ? ' · HARDCORE' : ''}` });
-    bx += 76;
+    const cw = CLEAR_W;
+    if (bx + cw > x + w) {
+      bx = x0;
+      by += CHIP_H + 12;
+    }
+    spots.push({ kind: 'clear', id: `badge-${glyph}`, x: bx, y: by, w: cw, h: CHIP_H + 4, glyph, tier, hardcore, short, tierName, tip: `${what} · ${tierName}${hardcore ? ' · HARDCORE' : ''}` });
+    bx += cw + 8;
   }
   return spots;
 }
@@ -497,8 +510,31 @@ export function drawProfileBlock(g: CanvasRenderingContext2D, row: LbRow, x: num
     } else {
       const color = s.hardcore ? KIT.danger : s.tier >= 3 ? '#ff5a1f' : s.tier === 2 ? KIT.accent : KIT.dim;
       chip(g, s.x, s.y, s.w, s.h, color);
-      drawClearGlyph(g, s.glyph, s.x + 26, s.y + s.h / 2, 15, color);
-      if (s.tier >= 3) drawFlame(g, s.x + 50, s.y + 10, 18);
+      // The medallion: a dark disc with the glyph in it, so three different
+      // shapes read as three badges of one kind rather than three loose marks.
+      const mx = s.x + 24;
+      const my = s.y + s.h / 2;
+      g.fillStyle = 'rgba(0,0,0,0.45)';
+      g.beginPath();
+      g.arc(mx, my, 16, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 1.5;
+      g.strokeStyle = color;
+      g.stroke();
+      drawClearGlyph(g, s.glyph, mx, my, 10, color);
+      // The name, and the tier under it.
+      g.textAlign = 'left';
+      g.textBaseline = 'middle';
+      g.font = font(700, 17);
+      g.letterSpacing = '1.5px';
+      g.fillStyle = KIT.text;
+      g.fillText(s.short, s.x + 48, my - 9, s.w - 56);
+      g.font = font(600, 14);
+      g.letterSpacing = '2px';
+      g.fillStyle = color;
+      g.fillText(s.hardcore ? `${s.tierName} · HC` : s.tierName, s.x + 48, my + 10, s.w - 56);
+      g.letterSpacing = '0px';
+      if (s.tier >= 3) drawFlame(g, s.x + s.w - 30, s.y + 9, 16);
     }
   }
 

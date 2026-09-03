@@ -231,6 +231,7 @@ function fightRoot(): Face {
       x: C2, y: 590, w: COL, h: 110,
       small: true,
       selected: app.onlyBots,
+      toggle: true,
     },
   ];
   return {
@@ -376,6 +377,7 @@ function arcadeFace(): Face {
       x: C2, y: 630, w: COL, h: 110,
       small: true,
       selected: app.shootBack,
+      toggle: true,
     },
   ];
   return {

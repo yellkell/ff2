@@ -459,7 +459,9 @@ export class ClubSocialSystem extends createSystem({}) {
     for (const [idx, { name, hue, body }] of want) {
       const existing = this.puppets.get(idx);
       if (existing) continue;
-      const rig = buildDancer(hue, body);
+      // No glowsticks on the floor: the club is a room you talk in, and a
+      // baton of light in every fist read as a rave that never stopped.
+      const rig = buildDancer(hue, { ...body, sticks: false });
       rig.root.visible = false;
       this.crowd.add(rig.root);
       const tagMat = new MeshBasicMaterial({
@@ -492,6 +494,13 @@ export class ClubSocialSystem extends createSystem({}) {
    *  longer poison a figure). */
   private wireTarget(p: ClubPuppet, s: RemotePose): void {
     const t = p.tgt;
+    // The hands' turn, when the frame has it; w = 0 says "guess".
+    if (s.lq) {
+      [t.lqx, t.lqy, t.lqz, t.lqw] = s.lq;
+    } else t.lqw = 0;
+    if (s.rq) {
+      [t.rqx, t.rqy, t.rqz, t.rqw] = s.rq;
+    } else t.rqw = 0;
     t.hx = s.hx;
     t.hy = s.hy;
     t.hz = s.hz;
@@ -525,8 +534,24 @@ export class ClubSocialSystem extends createSystem({}) {
       }
     }
     d.push(_e.x, _e.z);
+    // THE HANDS' TURN: each controller's world quaternion, so a palm held
+    // up on the floor is a palm held up in the glass and on every other
+    // headset. The arena's gloves are built on exactly this (glove world
+    // = ray quaternion × HAND_ADDUCTION), so the figure can wear it as is.
+    for (const hand of ['left', 'right'] as const) {
+      const obj = this.world.playerSpaceEntities?.raySpaces?.[hand]?.object3D;
+      if (obj) {
+        obj.getWorldQuaternion(this.handQ);
+        d.push(this.handQ.x, this.handQ.y, this.handQ.z, this.handQ.w);
+      } else {
+        d.push(0, 0, 0, 0);
+      }
+    }
     sendClubPose(d);
   }
+
+  /** Scratch for the hands' quaternions on the way out. */
+  private readonly handQ = new Quaternion();
 
   /* ── the SOCIAL panel ─────────────────────────────────────────────────── */
 

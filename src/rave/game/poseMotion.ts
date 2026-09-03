@@ -69,6 +69,7 @@ export class PoseMotion {
   snap(pose: DancerPose, tgt: DancerPose): void {
     for (const k of EXPO_KEYS) pose[k] = sane(tgt[k], pose[k]);
     pose.yaw = sane(tgt.yaw, pose.yaw);
+    for (const keys of QUAT_KEYS) for (const k of keys) pose[k] = tgt[k];
     for (let i = 0; i < HAND_KEYS.length; i++) {
       pose[HAND_KEYS[i]] = sane(tgt[HAND_KEYS[i]], pose[HAND_KEYS[i]]);
       this.vel[i] = 0;
@@ -117,5 +118,52 @@ export class PoseMotion {
       pose[key] = x;
       this.vel[i] = v;
     }
+
+    // The hands' turn: a normalised lerp along the short arc, chasing at
+    // the head's rate. Between two frames of the same hand the arc is
+    // small, and there nlerp is slerp to the eye. A target with no turn
+    // (w = 0) clears the pose's, so the figure drops back to the guess.
+    const kq = 1 - Math.exp(-tuning.headRate * h);
+    for (const [kx, ky, kz, kw] of QUAT_KEYS) {
+      const tw = tgt[kw];
+      if (tw === undefined || tw === 0) {
+        pose[kw] = 0;
+        continue;
+      }
+      const tx = tgt[kx] ?? 0;
+      const ty = tgt[ky] ?? 0;
+      const tz = tgt[kz] ?? 0;
+      let px = pose[kx] ?? 0;
+      let py = pose[ky] ?? 0;
+      let pz = pose[kz] ?? 0;
+      let pw = pose[kw] ?? 0;
+      if (pw === 0 && px === 0 && py === 0 && pz === 0) {
+        px = tx;
+        py = ty;
+        pz = tz;
+        pw = tw;
+      } else {
+        const sgn = px * tx + py * ty + pz * tz + pw * tw < 0 ? -1 : 1;
+        px += (tx * sgn - px) * kq;
+        py += (ty * sgn - py) * kq;
+        pz += (tz * sgn - pz) * kq;
+        pw += (tw * sgn - pw) * kq;
+        const n = Math.hypot(px, py, pz, pw) || 1;
+        px /= n;
+        py /= n;
+        pz /= n;
+        pw /= n;
+      }
+      pose[kx] = px;
+      pose[ky] = py;
+      pose[kz] = pz;
+      pose[kw] = pw;
+    }
   }
 }
+
+/** The hand-quaternion keys, per hand, in [x, y, z, w] order. */
+const QUAT_KEYS = [
+  ['lqx', 'lqy', 'lqz', 'lqw'],
+  ['rqx', 'rqy', 'rqz', 'rqw'],
+] as const;

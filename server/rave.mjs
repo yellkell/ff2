@@ -769,9 +769,10 @@ wss.on('connection', (ws) => {
         if (!room) break;
         const info = room.members.get(ws);
         if (!info) break;
-        // Remembered for THE CHANNEL's peep (clubSnapshot): the head and
-        // hands, twelve numbers at most, nothing the relay reads itself.
-        if (Array.isArray(msg.d) && msg.d.length >= 4 && msg.d.length <= 12 && msg.d.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+        // Remembered for THE CHANNEL's peep (clubSnapshot): the head, the
+        // hands and (since the hands learned to turn) their quaternions —
+        // twenty numbers at most, nothing the relay reads itself.
+        if (Array.isArray(msg.d) && msg.d.length >= 4 && msg.d.length <= 20 && msg.d.every((n) => typeof n === 'number' && Number.isFinite(n))) {
           info.pose = msg.d;
           info.poseAt = Date.now();
         }

@@ -11,6 +11,8 @@
  *  - WHERE YOU GOT HIT: your standing spot at the moment of every hit you
  *    took, binned, with the part that took it (head / chest / pelvis) and
  *    the hand that threw it;
+ *  - WHERE YOU LANDED IT: your standing spot at the moment one of yours
+ *    connected — the LANDING heatmap, the throw grids' answer;
  *  - THE PLAY-BY-PLAY: every throw, hit taken, hit dealt, parry and round
  *    as a timed tuple, so the page can replay how the bout went;
  *  - THE ROUNDS: outcome, KO or the clock, both health pools at the bell.
@@ -71,6 +73,7 @@ interface Tape extends BoutContext {
   thrL: Uint16Array;
   thrR: Uint16Array;
   hit: Uint16Array;
+  land: Uint16Array;
   ev: number[][];
   /** Events past the cap are counted, not listed. */
   dropped: number;
@@ -133,6 +136,7 @@ export const telemetry = {
       thrL: new Uint16Array(CELLS),
       thrR: new Uint16Array(CELLS),
       hit: new Uint16Array(CELLS),
+      land: new Uint16Array(CELLS),
       ev: [],
       dropped: 0,
       thr: { n: 0, l: 0, r: 0, spdSum: 0 },
@@ -182,6 +186,7 @@ export const telemetry = {
   /** My ball landed on someone. `part` is known on a local sim only. */
   hitDealt(hand: 0 | 1, dmg: number, ret: boolean, part: HitPart | null = null): void {
     if (!tape) return;
+    bump(tape.land, this.head.x, this.head.z);
     tape.hits.dealt += 1;
     if (hand === 0) tape.hits.dealtL += 1;
     else tape.hits.dealtR += 1;
@@ -228,7 +233,7 @@ export const telemetry = {
       thr: { n: t.thr.n, l: t.thr.l, r: t.thr.r, spd: t.thr.n ? Math.round((t.thr.spdSum / t.thr.n) * 10) / 10 : 0 },
       hits: t.hits,
       par: t.par,
-      grid: { w: TV.gridW, h: TV.gridH, stand: Array.from(t.stand), thrL: Array.from(t.thrL), thrR: Array.from(t.thrR), hit: Array.from(t.hit) },
+      grid: { w: TV.gridW, h: TV.gridH, stand: Array.from(t.stand), thrL: Array.from(t.thrL), thrR: Array.from(t.thrR), hit: Array.from(t.hit), land: Array.from(t.land) },
       ev: t.ev,
       dropped: t.dropped,
       ...(t.boss ? { boss: t.boss } : {}),

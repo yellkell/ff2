@@ -72,6 +72,11 @@ export interface PanelButton {
   tab?: boolean;
   /** A red pip on the label's shoulder — the unread mark (a fresh paper). */
   badge?: boolean;
+  /** A BREAKER: the label sits left and a switch sits right — track and
+   *  knob, the knob thrown to the accent side when `selected`. A plain
+   *  selected plate reads as "this is the one I picked"; a breaker has
+   *  to read as ON or OFF at a glance, from across the room. */
+  toggle?: boolean;
 }
 
 /** Panel construction options. */
@@ -506,6 +511,11 @@ export class Panel {
       return;
     }
 
+    if (b.toggle) {
+      this.paintToggle(g, b, hov, flash, r, labelPx);
+      return;
+    }
+
     // Neutral plate (the default), selected, or disabled.
     const plateA = b.disabled ? 0.02 : 0.045 + 0.045 * hov;
     g.fillStyle = b.selected ? KIT.accentFaint : `rgba(255,255,255,${plateA.toFixed(3)})`;
@@ -551,6 +561,74 @@ export class Panel {
       g.fillStyle = KIT.danger;
       g.fill();
     }
+  }
+
+  /**
+   * THE BREAKER. The plate itself stays neutral — no accent tint, no edge
+   * tick — because the SWITCH is the whole state: a 78×38 track on the
+   * right, dark when off with the knob parked left and dim, accent when
+   * on with the knob thrown right and white. The label sits left in the
+   * plate's own type, and a `sub` (if any) under it.
+   */
+  private paintToggle(g: CanvasRenderingContext2D, b: PanelButton, hov: number, flash: number, r: number, labelPx: number): void {
+    const on = !!b.selected && !b.disabled;
+    const plateA = b.disabled ? 0.02 : 0.045 + 0.045 * hov;
+    g.fillStyle = `rgba(255,255,255,${plateA.toFixed(3)})`;
+    g.beginPath();
+    g.roundRect(b.x, b.y, b.w, b.h, r);
+    g.fill();
+    if (flash > 0) {
+      g.fillStyle = `rgba(255,176,46,${(0.2 * flash).toFixed(3)})`;
+      g.fill();
+    }
+    g.lineWidth = 2;
+    g.strokeStyle = b.disabled ? 'rgba(255,255,255,0.05)' : `rgba(255,255,255,${(0.1 + 0.2 * hov).toFixed(3)})`;
+    g.stroke();
+
+    // The switch.
+    const tw = 78;
+    const th = 38;
+    const tx = b.x + b.w - 26 - tw;
+    const ty = b.y + b.h / 2 - th / 2;
+    g.fillStyle = on ? KIT.accent : 'rgba(255,255,255,0.08)';
+    g.beginPath();
+    g.roundRect(tx, ty, tw, th, th / 2);
+    g.fill();
+    if (!on) {
+      g.lineWidth = 2;
+      g.strokeStyle = 'rgba(255,255,255,0.18)';
+      g.stroke();
+    }
+    const kr = th / 2 - 5;
+    const kx = on ? tx + tw - 5 - kr : tx + 5 + kr;
+    g.fillStyle = on ? '#ffffff' : KIT.disabled;
+    g.beginPath();
+    g.arc(kx, ty + th / 2, kr, 0, Math.PI * 2);
+    g.fill();
+
+    // The word, so nobody has to know the convention.
+    g.textAlign = on ? 'left' : 'right';
+    g.textBaseline = 'middle';
+    g.font = font(700, 16);
+    g.letterSpacing = '2px';
+    g.fillStyle = on ? KIT.accent : KIT.faint;
+    g.fillText(on ? 'ON' : 'OFF', on ? tx - 12 - 30 : tx - 12, ty + th / 2);
+    g.letterSpacing = '0px';
+
+    // The label, left.
+    g.textAlign = 'left';
+    g.fillStyle = b.disabled ? KIT.disabled : (b.tone ?? KIT.text);
+    g.font = font(600, labelPx);
+    g.letterSpacing = '1.5px';
+    const labelY = b.sub ? b.y + b.h / 2 - 12 : b.y + b.h / 2;
+    g.fillText(b.label, b.x + 28, labelY, b.w - tw - 120);
+    g.letterSpacing = '0px';
+    if (b.sub) {
+      g.font = font(500, 21);
+      g.fillStyle = b.disabled ? 'rgba(250,246,238,0.2)' : KIT.dim;
+      g.fillText(b.sub, b.x + 28, b.y + b.h / 2 + 16, b.w - tw - 120);
+    }
+    g.textAlign = 'center';
   }
 
   /** What this panel is currently offering, by id — the pressable ones only

@@ -462,6 +462,10 @@ function handle(msg: Record<string, unknown>): void {
       const idx = Number(msg.idx);
       const d = msg.d as number[];
       if (!Number.isFinite(idx) || !Array.isArray(d) || d.length < 10) break;
+      // Appended, and defaulted: a frame from before the hands turned
+      // carries no quaternions, and the figure falls back to the guess.
+      const quat = (o: number): [number, number, number, number] | undefined =>
+        d.length >= o + 4 && d[o + 3] !== 0 ? [d[o], d[o + 1], d[o + 2], d[o + 3]] : undefined;
       clubPoses.set(idx, {
         hx: d[0], hy: d[1], hz: d[2], hyaw: d[3],
         lx: d[4], ly: d[5], lz: d[6],
@@ -469,6 +473,8 @@ function handle(msg: Record<string, unknown>): void {
         // Appended, and defaulted: a frame from before the neck existed
         // decodes as a dancer who simply isn't nodding.
         hpitch: d[10] ?? 0, hroll: d[11] ?? 0,
+        lq: quat(12),
+        rq: quat(16),
         t: performance.now(),
       });
       break;

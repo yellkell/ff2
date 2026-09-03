@@ -34,6 +34,7 @@ import {
   Vector3,
 } from 'three';
 import { buildBoxer, setAvatarAccent, solveTorso } from '../../avatar/boxer.js';
+import { HAND_ADDUCTION } from '../../avatar/hands.js';
 import { toneSkinId, type BlankTone } from '../../avatar/mannequin.js';
 import { applyGear } from '../../avatar/gear.js';
 import { applyLook, type Look } from '../../avatar/paint.js';
@@ -49,6 +50,9 @@ export interface BlankDress {
   tone?: BlankTone;
   gear?: readonly string[];
   look?: Look;
+  /** The glowsticks — a baton of light out of each fist. On by default
+   *  (the ring, the course); the club floor and its mirror turn them off. */
+  sticks?: boolean;
 }
 
 /* Figure proportions the solver needs (the blank's are in avatar/boxer's
@@ -63,6 +67,7 @@ const STICK_HOT = 0.72;
 const UP = new Vector3(0, 1, 0);
 const _head = new Vector3();
 const _headQ = new Quaternion();
+const _handQ = new Quaternion();
 const _euler = new Euler(0, 0, 0, 'YXZ');
 const _chest = new Vector3();
 const _pelvis = new Vector3();
@@ -161,16 +166,18 @@ export function buildDancer(hue: number, dress: BlankDress = {}): DancerRig {
   // hue in the halo. The blank's gauntlet keeps its knuckles down −z; the
   // stick stands up its local +y, so a fist reads as gripping it.
   const stickMat = new MeshBasicMaterial({ color: _tintC.setHex(color).lerp(_whiteC, STICK_HOT).getHex() });
-  accents.push({ mat: stickMat, gain: 1, neon: true, hot: STICK_HOT });
   const halos: Sprite[] = [];
-  for (const glove of rig.gloves) {
-    const baton = new Mesh(stick(), stickMat);
-    baton.position.set(0, 0.01, -0.02);
-    glove.add(baton);
-    const halo = glowSprite(color, 0.32, 0.55);
-    halo.position.set(0, 0.17, -0.02);
-    glove.add(halo);
-    halos.push(halo);
+  if (dress.sticks !== false) {
+    accents.push({ mat: stickMat, gain: 1, neon: true, hot: STICK_HOT });
+    for (const glove of rig.gloves) {
+      const baton = new Mesh(stick(), stickMat);
+      baton.position.set(0, 0.01, -0.02);
+      glove.add(baton);
+      const halo = glowSprite(color, 0.32, 0.55);
+      halo.position.set(0, 0.17, -0.02);
+      glove.add(halo);
+      halos.push(halo);
+    }
   }
 
   let crown: Group | null = null;
@@ -185,8 +192,14 @@ export function buildDancer(hue: number, dress: BlankDress = {}): DancerRig {
     _euler.set(clamp(p.pitch, PITCH_MAX) * (1 - melt) - melt * 0.9, p.yaw, clamp(p.roll, ROLL_MAX) * (1 - melt) + melt * 0.35);
     _headQ.setFromEuler(_euler);
     // The arena's own solve: the one-piece body planted under the head,
-    // leaned along the spine, ducking with it.
-    solveTorso(rig, _head, _headQ, p.hx, p.hz, _chest, _pelvis);
+    // leaned along the spine, ducking with it — but SEATED under the head
+    // rather than pinned at the arena's fixed hip height. The arena pins
+    // hips at 0.95 m because its hitboxes live there; a figure with no
+    // hitboxes has no reason to, and a tall dancer's head was floating a
+    // hand's width clear of the neck. And a third-person set-back, so the
+    // head sits over the shoulders instead of jutting ahead of them the
+    // way it must for the wearer looking down.
+    solveTorso(rig, _head, _headQ, p.hx, p.hz, _chest, _pelvis, 0.06, true);
 
     // The body's own axes at this yaw (yaw 0 faces −Z, toward the stage).
     const cos = Math.cos(p.yaw);
@@ -209,6 +222,20 @@ export function buildDancer(hue: number, dress: BlankDress = {}): DancerRig {
       _hint.normalize();
       _hint.set(_hint.x + _right.x * side * 0.18, _hint.y + 0.8, _hint.z + _right.z * side * 0.18).normalize();
       glove.quaternion.setFromUnitVectors(UP, _hint).multiply(_yawQ);
+      // THE HANDS' TURN, when the pose carries it: the controller's own
+      // world quaternion, worn exactly as the arena wears it — so a palm
+      // up is a palm up. The pointer guess above is only for frames that
+      // never learned which way the hand faced (the ring's).
+      const qw = side < 0 ? p.lqw : p.rqw;
+      if (qw !== undefined && qw !== 0) {
+        _handQ.set(
+          (side < 0 ? p.lqx : p.rqx) ?? 0,
+          (side < 0 ? p.lqy : p.rqy) ?? 0,
+          (side < 0 ? p.lqz : p.rqz) ?? 0,
+          qw,
+        );
+        glove.quaternion.copy(_handQ.multiply(HAND_ADDUCTION[side < 0 ? 0 : 1]));
+      }
     }
     if (crown) {
       crown.position.set(p.hx, p.hy + CROWN_RISE, p.hz);

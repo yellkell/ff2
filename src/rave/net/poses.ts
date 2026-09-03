@@ -22,6 +22,10 @@ export interface RemotePose {
   rx: number;
   ry: number;
   rz: number;
+  /** Each hand's world quaternion [x, y, z, w], when the frame carried
+   *  one (club poses do; ring poses never have). */
+  lq?: [number, number, number, number];
+  rq?: [number, number, number, number];
   /** Wall-clock ms of arrival (stale poses freeze rather than glide). */
   t: number;
 }

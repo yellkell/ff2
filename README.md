@@ -37,11 +37,21 @@ carried over verbatim: everything in it still applies to this code.
     you stand, where each hand throws from and where you were when hit;
     the play-by-play of every throw, hit taken, hit dealt, parry and round
     as timed events; the rounds with both health pools at the bell. The
-    page aggregates the last two hundred, filtered by boxer, into stat
-    tiles, the four heatmaps, a hands panel, a damage panel, and the tape
+    page aggregates the last two hundred, filtered by player, into stat
+    tiles, five heatmaps (standing, each fist's throws, LANDING — where
+    you stood when yours connected — and hits taken), a hands panel, a
+    damage panel, and the tape
     itself — open one for its rounds, both health lines rebuilt from the
     hits, and the play-by-play.
-  - **THE CHANNEL** — television. The headset RUNNING a bout (a bot
+  - **A PROFILE** behind every name: tap one on any board, tape or chart
+    and the page lands on that player's service record, laid out the way
+    the headset's card is — their PAINTING behind the name (the same bake
+    the profile card uses, ported byte for byte from `avatar/paint.ts`),
+    rank and points, honours, achievements, the note, what they wear —
+    then the record: their rank and best on every FIRE FIGHT board, every
+    rave chart they have danced, and their own tapes with their own
+    heatmaps (standing, LANDING, hit). `#player=<uid>` deep-links one.
+  - **FFTV** — television. The headset RUNNING a bout (a bot
     bout's one player, a duel's host, the mesh authority, the raid host)
     casts a top-down frame five times a second to THE ROOM SERVER's `/tv`
     relay (`server/tv.mjs`; `systems/BroadcastSystem.ts` and
@@ -70,6 +80,31 @@ carried over verbatim: everything in it still applies to this code.
   seconds, and the final when it ends (bot bouts never make the paper).
   `DISCORD_BOT_TOKEN` arms it, `PUBLIC_URL` sets the links, and
   `DISCORD_BELL=off` quiets the bell.
+- **THE CLUB, IN THE GLASS AND ON THE FLOOR** — three things a night in
+  the club showed up. The hands now carry their TURN on the club wire:
+  each controller's world quaternion rides the pose (eight more numbers
+  on a `cp` frame), and every figure — the room-mates on the floor, your
+  own reflection — wears it exactly as the arena's gloves do, so a palm
+  held up is a palm held up and not a wrist hanging down. The glowsticks
+  are gone from the floor and the mirror (the ring and the course keep
+  theirs). And the figure's loft SEATS under the head instead of pinning
+  its hips at the arena's fixed height, so a tall player's head no longer
+  floats a hand clear of the neck in the glass (`solveTorso`'s new
+  `seatUnderHead`; the arena keeps its hitbox-locked solve).
+- **VOIDSTEP points the way**: the circuit only closes one way round, and
+  a body on a deck with ground on both sides picked wrong half the time.
+  A chevron on the ground a step ahead of you now points at the
+  invitation (`CourseWayfindSystem`), so the direction is never a guess.
+- **BREAKERS look like breakers**: the panel kit grew a `toggle` role — a
+  switch on the plate, label left, track and knob right, ON in the accent
+  — worn by CURVE and SHOW MY BODY on the ball's ADVANCED face and by ONLY
+  BOTS and SHOOT BACK on the slab. The ADVANCED face lost its prose too,
+  keeping only "how hard it bends".
+- **ACHIEVEMENTS that read**: the profile card's clear badges were bare
+  glyphs on a 64px chip; each is a medallion, the feat's name and the
+  tier now, wrapping when the card is narrow. GAUNTLET reads SPEEDRUN.
+- **THE COLLAR is withdrawn** from the gear shop; an old save naming it
+  simply wears nothing on the body.
 - **THE HORNS** re-cut: the gear shop's HORNS are a ram's pair now — one
   tapered tube per side along a spline, rooted thick on the temple, up and
   back over the ear, down behind the jaw and forward to a point level with
