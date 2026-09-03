@@ -33,12 +33,19 @@ import { mesh } from '../net/mesh.js';
 import { myName, rival } from '../net/leaderboard.js';
 import { telemetry, type BoutKind } from '../net/telemetry.js';
 import { tvCast, type CastMeta } from '../net/tvCast.js';
+import { captureFrame, cameraBroken, releaseCamera, tvCamera } from '../net/tvVideo.js';
 import { titanView } from '../campaign/titanView.js';
-import { TV } from '../config.js';
+import { TV, VIDEO } from '../config.js';
 
 const _v = new Vector3();
 const _rig = new Vector3();
 const _q = new Quaternion();
+/** The cameraman's working room — a look-at point, an eye, and the axis
+ *  between the fighters it stands square to. */
+const _eye = new Vector3();
+const _aim = new Vector3();
+const _axis = new Vector3();
+const _up = new Vector3(0, 1, 0);
 const HANDS = ['left', 'right'] as const;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -52,6 +59,8 @@ export class BroadcastSystem extends createSystem({
   private lastScore: [number, number] = [0, 0];
   private sampleT = 0;
   private castT = 0;
+  /** The picture runs on its own slower clock than the pose frame. */
+  private shotT = 0;
   private tapeKind: BoutKind = 'solo';
 
   init(): void {
@@ -91,11 +100,95 @@ export class BroadcastSystem extends createSystem({
       if (meta) tvCast.open(meta);
       tvCast.frame(this.buildFrame());
     }
+
+    // THE PICTURE. Slower than the pose frame and entirely optional: it is
+    // fired and forgotten, and a headset that cannot render one keeps
+    // televising the diagram (net/tvVideo.ts).
+    if (cameraBroken()) return;
+    this.shotT -= delta;
+    if (this.shotT <= 0) {
+      this.shotT = 1 / VIDEO.hz;
+      void this.shoot();
+    }
+  }
+
+  /* ── the picture ────────────────────────────────────────────────────── */
+
+  /** Stand the broadcast camera where it can see the fight, shoot one
+   *  frame, and send it. Never awaited by the sim. */
+  private async shoot(): Promise<void> {
+    if (!tvCast.live) return;
+    this.placeCamera();
+    const d = await captureFrame(this.renderer, this.scene);
+    if (d) tvCast.video(d);
+  }
+
+  /**
+   * Where television stands. Ringside for a fight — square to the line
+   * between the fighters, so neither one hides the other and the platform
+   * reads as a platform — and over the shoulder for a solo run or a raid,
+   * where the thing worth seeing is what the player is facing.
+   */
+  private placeCamera(): void {
+    const cam = tvCamera();
+    const rig = this.playerEntity?.object3D;
+    if (rig) rig.getWorldPosition(_rig);
+    else _rig.set(0, 0, 0);
+
+    // Every head in world space: mine measured, theirs rig-local like the
+    // pose frame's.
+    const heads: Vector3[] = [];
+    const head = this.playerHeadEntity?.object3D;
+    if (head) heads.push(head.getWorldPosition(new Vector3()));
+    for (const pose of opponents) {
+      if (pose) heads.push(new Vector3().copy(pose.headPos).add(_rig));
+    }
+
+    if (heads.length >= 2) {
+      _aim.set(0, 0, 0);
+      for (const h of heads) _aim.add(h);
+      _aim.multiplyScalar(1 / heads.length);
+      _aim.y = 1.3;
+      // The spread of the fighters sets how far back to stand.
+      let spread = 0;
+      for (const h of heads) spread = Math.max(spread, h.distanceTo(_aim));
+      _axis.copy(heads[1]).sub(heads[0]).setY(0);
+      if (_axis.lengthSq() < 1e-4) _axis.set(1, 0, 0);
+      _axis.normalize().cross(_up).normalize(); // square to the line of fire
+      const back = Math.min(6, Math.max(2.6, spread * 1.7 + 1.9));
+      _eye.copy(_aim).addScaledVector(_axis, back);
+      _eye.y = _aim.y + 1.25;
+    } else {
+      // One fighter: stand behind and above their shoulder, looking the way
+      // they are — at the titan in a raid, down the platform in a run.
+      const me = heads[0] ?? _rig;
+      _aim.copy(me);
+      if (app.mode === 'campaign') {
+        _aim.set(titanView.x + _rig.x, Math.max(1.2, titanView.y + _rig.y), titanView.z + _rig.z);
+        _aim.lerp(me, 0.35);
+      }
+      _v.copy(_aim).sub(me).setY(0);
+      if (_v.lengthSq() < 1e-4) {
+        if (head) {
+          head.getWorldQuaternion(_q);
+          _v.set(0, 0, -1).applyQuaternion(_q).setY(0);
+        } else _v.set(0, 0, -1);
+        _aim.copy(me).addScaledVector(_v.clone().normalize(), 3);
+        _aim.y = 1.3;
+      }
+      _v.normalize();
+      _eye.copy(me).addScaledVector(_v, -2.5);
+      _eye.y = me.y + 1.0;
+    }
+    cam.position.copy(_eye);
+    cam.lookAt(_aim);
+    cam.updateMatrixWorld();
   }
 
   /* ── the bell and the final ─────────────────────────────────────────── */
 
   private begin(): void {
+    this.shotT = 0;
     this.tapeKind = this.kind();
     telemetry.begin({
       kind: this.tapeKind,
@@ -111,6 +204,9 @@ export class BroadcastSystem extends createSystem({
   }
 
   private end(): void {
+    // Television is over: give the render target and its buffers back
+    // rather than holding a megabyte of VRAM open across the lobby.
+    releaseCamera();
     telemetry.setNames(this.names());
     if (app.mode === 'campaign') {
       if (titanView.name) telemetry.setBoss(titanView.name, titanView.stage);

@@ -1043,6 +1043,39 @@ export const NET = {
  * and every throw, hit, parry and round as a timed event — posted to the
  * `bouts` collection at the final bell for THE LAB to read back.
  */
+/**
+ * THE PICTURE — FFTV's video feed (net/tvVideo.ts).
+ *
+ * The channel carries two things at once: the POSE frame (numbers, a
+ * top-down diagram, always sent) and this, a real render of the scene
+ * shrunk to a postcard and sent as a JPEG. The page prefers the picture
+ * and falls back to the diagram the moment the pictures stop, so a headset
+ * too busy or too old to shoot one still televises the fight.
+ *
+ * The numbers are chosen to keep a HEADSET honest, not to look good on a
+ * desktop: 256×144 is 37k pixels, three a second, and the readback is
+ * fenced rather than stalled. Turn any of them up and the cost lands on
+ * the person actually fighting.
+ */
+export const VIDEO = {
+  /** The postcard. 16:9, because every player's view is. */
+  w: 256,
+  h: 144,
+  /** Frames a second. Three reads as motion without competing with the
+   *  bout for GPU time; the pose frame still runs at TV.castHz. */
+  hz: 3,
+  /** JPEG quality. Under about 0.4 the paint goes muddy, which is the one
+   *  thing the picture exists to show. */
+  quality: 0.45,
+  /** A wide ringside lens: the whole platform and both players in frame. */
+  fov: 58,
+  /** Refuse a frame bigger than this many base64 characters (~24 KiB of
+   *  JPEG). A frame this big means the encoder mis-set, not a busy scene. */
+  maxBytes: 32000,
+  /** No picture for this long and the page falls back to the diagram. */
+  staleMs: 2500,
+} as const;
+
 export const TV = {
   /** Frames a second to the transmitter. Five reads as motion on a 2D
    *  board and costs about a kilobyte a second; the relay caps a frame

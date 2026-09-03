@@ -23,6 +23,7 @@
     "check:course": "node tools/course-check.mjs",
     "check:bot": "node tools/bot-check.mjs",
     "check:rules": "firebase emulators:exec --only firestore --project ff2-rules-check \"node tools/rules-check.mjs\"",
+    "check:mirror": "node tools/mirror-check.mjs",
     "check:voidstep": "node tools/voidstep-check.mjs",
     "check:tv": "node tools/tv-check.mjs"
   },

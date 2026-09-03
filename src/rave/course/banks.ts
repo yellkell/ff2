@@ -24,6 +24,7 @@ import {
   Matrix4,
   MeshBasicMaterial,
   Object3D,
+  Plane,
   Quaternion,
   Vector3,
 } from 'three';
@@ -116,12 +117,31 @@ export class Bank {
  * The reflection of a live bank: the same instance buffers drawn upside
  * down under the black glass. It animates for free because the buffers are
  * shared; only the material darkens.
+ *
+ * AND IT IS CLIPPED TO THE FLOOR. A flip about a plane is only honest for
+ * geometry that stands entirely above that plane, and the circuit's decks
+ * do not: a deck carries a two-step KEEL hanging 270 mm under its face, so
+ * a deck resting AT ground level has body below the mirror plane, and the
+ * flip folds that body back UP through the deck. The visible result was
+ * the exact opposite of what the machine is meant to say — the keel that
+ * hangs so well under a deck in flight appeared as a stack of blocks
+ * sitting ON TOP of every grounded deck, covering the face, the etch and
+ * the scan line, and the two ground-level runners wore them the whole way
+ * round the circuit.
+ *
+ * One world-space plane per reflection fixes it at the fragment: keep only
+ * what is genuinely under the glass. A deck straddling the floor is cut
+ * cleanly at the floor line rather than vanishing, and the reflection of
+ * anything at height is untouched, which is where it was always right.
  */
 export function mirrorBank(bank: Bank, floorY: number, dim = 0.34): Group {
   const src = bank.mesh;
   const clone = new InstancedMesh(src.geometry, src.material, 0);
   const mat = (src.material as MeshBasicMaterial).clone();
   mat.color.multiplyScalar(dim);
+  // Keep y < floorY. (Plane keeps normal·p + constant > 0; with a normal of
+  // -Y and constant floorY that reads -y + floorY > 0.)
+  mat.clippingPlanes = [new Plane(new Vector3(0, -1, 0), floorY)];
   clone.material = mat;
   // Share the live buffers; the count follows the source every frame.
   clone.instanceMatrix = src.instanceMatrix;

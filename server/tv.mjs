@@ -48,6 +48,26 @@ const PORT = Number(process.env.PORT || 8790);
 const CHANNEL_TTL_MS = 6000;
 /** Frames are small; anything bigger is a mistake or an attack. */
 const FRAME_MAX = 12 * 1024;
+/** A PICTURE is a 256x144 JPEG in base64 (src/config.ts VIDEO) — a few
+ *  kilobytes in practice. The cap is generous enough for a busy scene and
+ *  mean enough that nobody streams video of something else through here. */
+const VIDEO_MAX = 48 * 1024;
+/** No picture for this long and the channel is a diagram again. */
+const VIDEO_TTL_MS = 4000;
+
+/**
+ * THE CLUB'S PICTURE. The club is not a channel — it has no caster and no
+ * result, and the relay draws it for itself out of the poses every member
+ * is already sending. So the picture rides ALONGSIDE that feed rather than
+ * turning the floor into a channel: whoever holds the room sends frames
+ * here, and viewers peeping at the club get the render instead of the map.
+ *
+ * Last writer wins, which is the host, and there is only ever one of them.
+ * When they leave, the picture goes with them and the map comes back —
+ * which is why the socket is kept beside the frame.
+ */
+let clubVideo = null;
+const clubFresh = () => !!clubVideo && Date.now() - clubVideo.at < VIDEO_TTL_MS;
 /** The club feed's rate — it's people walking about, not a fight. */
 const TICK_MS = 250;
 /** A channel must hold this long before the bot calls it LIVE — a mis-tap
@@ -69,7 +89,12 @@ const viewers = new Map();
 let nextId = 1;
 let guideKey = '';
 
-export const wss = new WebSocketServer({ noServer: true, maxPayload: FRAME_MAX + 1024 });
+// The socket has to admit a PICTURE, which is several times a pose frame.
+// The pose frame's own 12 KiB limit is enforced in onFrame instead — it
+// used to be enforced here, by the transport refusing the message and
+// killing the connection, which stopped being possible the moment video
+// needed the ceiling raised.
+export const wss = new WebSocketServer({ noServer: true, maxPayload: VIDEO_MAX + 8 * 1024 });
 wss.on('error', (err) => console.error('[tv] server error', err));
 
 function send(ws, obj) {
@@ -154,7 +179,22 @@ function endChannel(id, result) {
 
 function onFrame(ws, msg, rawLen) {
   const c = ws.channel ? channels.get(ws.channel) : null;
-  if (!c || c.ended || rawLen > FRAME_MAX || !msg.f || typeof msg.f !== 'object') return;
+  if (!c || c.ended) return;
+  // A pose frame this big is a mistake or an attack — it is numbers, and a
+  // bout's worth of them is a couple of kilobytes. The caster loses its
+  // channel and its socket, which is what the transport used to do before
+  // the ceiling went up to let pictures through.
+  if (rawLen > FRAME_MAX) {
+    endChannel(c.id, '');
+    ws.channel = null;
+    try {
+      ws.terminate();
+    } catch {
+      /* already gone */
+    }
+    return;
+  }
+  if (!msg.f || typeof msg.f !== 'object') return;
   c.frame = msg.f;
   c.frameAt = Date.now();
   const out = JSON.stringify({ t: 'f', id: c.id, kind: c.kind, f: c.frame });
@@ -162,6 +202,52 @@ function onFrame(ws, msg, rawLen) {
     if (watching(v) !== c.id || ws2.readyState !== ws2.OPEN) continue;
     if (ws2.bufferedAmount > 256 * 1024) continue;
     ws2.send(out, () => {});
+  }
+}
+
+/**
+ * A picture of the club floor, from whoever holds the room. Forwarded to
+ * everyone peeping at the club, and kept so the next viewer sees it at
+ * once. It never keeps anything "on air": the club is on whenever there
+ * are people on it, picture or no picture.
+ */
+function onClubVideo(ws, msg, bytes) {
+  if (bytes > VIDEO_MAX) return;
+  if (typeof msg.d !== 'string' || !msg.d) return;
+  clubVideo = { d: msg.d, at: Date.now(), ws };
+  const out = JSON.stringify({ t: 'cv', d: msg.d });
+  for (const [vws, v] of viewers) {
+    if (watching(v) !== 'club') continue;
+    if (vws.readyState === vws.OPEN && vws.bufferedAmount < 256 * 1024) vws.send(out, () => {});
+  }
+}
+
+/** Is this channel's picture still worth forwarding? */
+function fresh(c) {
+  return !!c.video && Date.now() - c.videoAt < VIDEO_TTL_MS;
+}
+
+/**
+ * A PICTURE from the caster: one JPEG, forwarded to everyone watching that
+ * channel and kept so a viewer tuning in has something the same instant.
+ *
+ * It is deliberately NOT part of the channel's liveness: `frameAt` (the
+ * pose frame) is what keeps a channel on air, so a headset that cannot
+ * make pictures — or stops being able to mid-bout — televises the diagram
+ * instead of going dark.
+ */
+function onVideo(ws, msg, bytes) {
+  const c = ws.channel && channels.get(ws.channel);
+  if (!c) return;
+  if (bytes > VIDEO_MAX) return;
+  if (typeof msg.d !== 'string' || !msg.d) return;
+  c.video = msg.d;
+  c.videoAt = Date.now();
+  const out = JSON.stringify({ t: 'v', id: c.id, d: c.video });
+  for (const [vws, v] of viewers) {
+    if (watching(v) !== c.id) continue;
+    // A viewer who cannot keep up gets the next one instead of a backlog.
+    if (vws.readyState === vws.OPEN && vws.bufferedAmount < 256 * 1024) vws.send(out, () => {});
   }
 }
 
@@ -214,6 +300,12 @@ wss.on('connection', (ws) => {
       case 'f':
         onFrame(ws, msg, raw.length);
         break;
+      case 'v':
+        onVideo(ws, msg, raw.length);
+        break;
+      case 'cv':
+        onClubVideo(ws, msg, raw.length);
+        break;
       case 'end':
         if (ws.channel) endChannel(ws.channel, text(msg.result, 200));
         ws.channel = null;
@@ -225,7 +317,11 @@ wss.on('connection', (ws) => {
         const on = watching(v);
         const c = channels.get(on);
         if (c?.frame) send(ws, { t: 'f', id: c.id, kind: c.kind, f: c.frame });
-        else if (on === 'club') send(ws, { t: 'club', f: clubSnapshot() });
+        if (c && fresh(c)) send(ws, { t: 'v', id: c.id, d: c.video });
+        if (!c && on === 'club') {
+          send(ws, { t: 'club', f: clubSnapshot() });
+          if (clubFresh()) send(ws, { t: 'cv', d: clubVideo.d });
+        }
         break;
       }
       case 'tune': {
@@ -235,6 +331,7 @@ wss.on('connection', (ws) => {
         const on = watching(v);
         const c = channels.get(on);
         if (c?.frame) send(ws, { t: 'f', id: c.id, kind: c.kind, f: c.frame });
+        if (c && fresh(c)) send(ws, { t: 'v', id: c.id, d: c.video });
         break;
       }
       case 'ping':
@@ -247,6 +344,8 @@ wss.on('connection', (ws) => {
   ws.on('close', () => {
     viewers.delete(ws);
     if (ws.channel) endChannel(ws.channel, '');
+    // The floor's camera walked out; the map takes over again.
+    if (clubVideo && clubVideo.ws === ws) clubVideo = null;
   });
 });
 

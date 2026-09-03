@@ -40,6 +40,7 @@ import { AvatarSystem } from './systems/AvatarSystem.js';
 import { ChoreoSystem } from './systems/ChoreoSystem.js';
 import { ClubBallSystem } from './systems/ClubBallSystem.js';
 import { ClubMirrorSystem } from './systems/ClubMirrorSystem.js';
+import { ClubCastSystem } from './systems/ClubCastSystem.js';
 import { ClubPropsSystem } from './systems/ClubPropsSystem.js';
 import { ClubSocialSystem } from './systems/ClubSocialSystem.js';
 import { ClubSystem } from './systems/ClubSystem.js';
@@ -128,6 +129,7 @@ export function mountRaveExperience(world: World, onLeaveToArena: () => void): R
     CourseRidersSystem,
     ClubSocialSystem,
     ClubMirrorSystem,
+    ClubCastSystem,
     ClubBallSystem,
     ArcadeSystem,
     ClubPropsSystem,

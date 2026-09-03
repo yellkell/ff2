@@ -103,6 +103,37 @@ export const tvCast = {
     ws.send(JSON.stringify({ t: 'f', f }));
   },
 
+  /**
+   * One PICTURE (base64 JPEG, net/tvVideo.ts). Dropped rather than queued,
+   * and dropped hardest of all: a video frame is worth nothing late, and a
+   * socket with a backlog is a socket about to cost the bout frame time.
+   * The pose frame still goes every tick, so dropping these only costs the
+   * viewer the picture, never the broadcast.
+   */
+  video(d: string): void {
+    if (!live || !d) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (ws.bufferedAmount > 64 * 1024) return;
+    ws.send(JSON.stringify({ t: 'v', d }));
+  },
+
+  /**
+   * A picture of THE CLUB FLOOR, sent without opening a channel.
+   *
+   * The club is not a match: it has no card, no result and no place in the
+   * guide, and the relay already describes it to viewers out of the poses
+   * the floor is sending anyway. This only replaces the DRAWING of it with
+   * a render, so it needs the socket and nothing else — no `cast`, no
+   * `end`, and no effect on what the guide says is on air.
+   */
+  clubVideo(d: string): void {
+    if (!d) return;
+    if (!ws) connect();
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (ws.bufferedAmount > 64 * 1024) return;
+    ws.send(JSON.stringify({ t: 'cv', d }));
+  },
+
   /** Sign off with a result line ("ROOK 3–1", "GOLIATH fell"). */
   end(result: string): void {
     if (!live) return;

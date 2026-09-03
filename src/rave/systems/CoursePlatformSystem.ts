@@ -145,6 +145,13 @@ export class CoursePlatformSystem extends createSystem({}) {
   private lastBeat = -1;
 
   init(): void {
+    // The reflections carry per-material clipping planes (course/banks.ts
+    // mirrorBank), and three ignores those unless the renderer is told to
+    // respect object-level clipping. The club's mirror sets the same flag
+    // for itself; the circuit is a scene the club's mirror never enters,
+    // so it has to ask on its own behalf. It costs nothing for the
+    // materials that carry no planes, which is all of them but six.
+    this.renderer.localClippingEnabled = true;
     const root = courseRoot();
     courseView.deckTint = (id) => {
       const pi = INDEX[id];

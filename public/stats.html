@@ -561,6 +561,25 @@
         scrollbar-width: none;
       }
       .rail::-webkit-scrollbar { display: none; }
+      /* A rail wider than the phone it is on already scrolled — but with the
+         scrollbar hidden and the last tab sliced clean off at the edge, it
+         read as a rail that simply ENDED at 2V2, and the four boards past it
+         (Raid, Goopliath, the Lab) were invisible to anyone who did not
+         think to swipe. These say so: the well fades out on whichever side
+         still has tabs behind it, and the fade goes the moment you reach
+         that end. `scrollFades` sets the classes. */
+      .rail.can-l { -webkit-mask-image: linear-gradient(to right, transparent 0, #000 34px); mask-image: linear-gradient(to right, transparent 0, #000 34px); }
+      .rail.can-r { -webkit-mask-image: linear-gradient(to left, transparent 0, #000 34px); mask-image: linear-gradient(to left, transparent 0, #000 34px); }
+      .rail.can-l.can-r {
+        -webkit-mask-image: linear-gradient(to right, transparent 0, #000 34px, #000 calc(100% - 34px), transparent 100%);
+        mask-image: linear-gradient(to right, transparent 0, #000 34px, #000 calc(100% - 34px), transparent 100%);
+      }
+      .rail {
+        /* Momentum on the phone, and a swipe on the rail never drags the
+           page sideways with it. */
+        overscroll-behavior-x: contain;
+        scroll-behavior: smooth;
+      }
       .rail-tab {
         position: relative;
         flex: 1 1 0;
@@ -623,6 +642,9 @@
       }
       .rail.tier {
         max-width: 460px;
+      }
+      .rail.lab {
+        max-width: 380px;
       }
 
       /* ── THE BOARD LAYOUT ─────────────────────────────────────────────── */
@@ -1555,6 +1577,20 @@
             <select id="lab-player"><option value="">Everyone</option></select>
             <span class="count" id="lab-count"></span>
           </div>
+          <!-- THE LAB'S TWO VIEWS. The breakdown is the analysis — totals,
+               the platform, the hands, the body. The LOG is the plain list
+               of what has actually been played, which was previously the
+               last thing on a very long page: five heatmaps and two panels
+               stood between you and "what happened recently", and that is
+               the question the page gets asked most. Its own tab puts it
+               one tap from the rail, and skips drawing five canvases you
+               were not looking at. -->
+          <nav class="rail sub lab" id="lab-rail" role="tablist" aria-label="Lab views">
+            <div class="rail-marker" id="lab-marker"></div>
+          </nav>
+          <div class="status hidden" id="lab-status"><div class="line"></div><div class="hint"></div></div>
+
+          <div id="lab-view-break">
           <section class="strip" id="lab-tiles" aria-label="Tape totals"></section>
           <section class="panel opening" style="animation-delay: 0.03s">
             <i class="halo"></i><span class="sheen"></span>
@@ -1581,13 +1617,16 @@
               <div class="hands" id="lab-parts" style="margin-top: 14px"></div>
             </section>
           </div>
-          <section class="panel opening" style="animation-delay: 0.21s; margin-top: clamp(12px, 1.6vw, 18px)">
-            <i class="halo"></i><span class="sheen"></span>
-            <h2 class="panel-title">The tape</h2>
-            <p class="panel-note">Every recorded bout, newest first. Open one for its rounds, both health lines and the play-by-play.</p>
-            <div id="lab-tape" style="margin-top: 12px"></div>
-            <div class="status hidden" id="lab-status"><div class="line"></div><div class="hint"></div></div>
-          </section>
+          </div>
+
+          <div id="lab-view-log" class="hidden">
+            <section class="panel opening">
+              <i class="halo"></i><span class="sheen"></span>
+              <h2 class="panel-title">The match log</h2>
+              <p class="panel-note">Every recorded match, newest first. Tap one to open its rounds, both health lines and the play-by-play.</p>
+              <div id="lab-tape" style="margin-top: 12px"></div>
+            </section>
+          </div>
         </div>
 
         <!-- THE PROFILE: a name tapped anywhere on the page lands here. -->
@@ -1856,6 +1895,12 @@
         marker.style.transform = `translateX(${on.offsetLeft + (on.offsetWidth - w) / 2 - rail.scrollLeft}px)`;
       }
       function railOf(id) { return document.getElementById(id); }
+      /** Show a fade on whichever side of a rail still hides tabs. */
+      function scrollFades(rail) {
+        const max = rail.scrollWidth - rail.clientWidth;
+        rail.classList.toggle('can-l', rail.scrollLeft > 4);
+        rail.classList.toggle('can-r', rail.scrollLeft < max - 4);
+      }
       /** Build a rail's tabs from a list, and wire the marker. */
       function fillRail(railId, markerId, items, current, onPick) {
         const rail = railOf(railId);
@@ -1871,10 +1916,23 @@
           b.addEventListener('click', () => onPick(it.id));
           rail.insertBefore(b, marker);
         }
-        requestAnimationFrame(() => moveMarker(rail, marker));
+        requestAnimationFrame(() => {
+          moveMarker(rail, marker);
+          scrollFades(rail);
+          // Bring the chosen tab into view. A board reached by deep link or
+          // by the keyboard is otherwise selected somewhere off the right
+          // edge of a phone, with the marker under it where you can't see.
+          const on = rail.querySelector('.rail-tab[aria-selected="true"]');
+          if (on) {
+            const l = on.offsetLeft, r = l + on.offsetWidth;
+            if (l < rail.scrollLeft + 8) rail.scrollLeft = Math.max(0, l - 8);
+            else if (r > rail.scrollLeft + rail.clientWidth - 8) rail.scrollLeft = r - rail.clientWidth + 8;
+          }
+        });
         if (!rail.dataset.wired) {
           rail.dataset.wired = '1';
-          rail.addEventListener('scroll', () => moveMarker(rail, marker), { passive: true });
+          rail.addEventListener('scroll', () => { moveMarker(rail, marker); scrollFades(rail); }, { passive: true });
+          addEventListener('resize', () => { moveMarker(rail, marker); scrollFades(rail); }, { passive: true });
         }
       }
 
@@ -2079,7 +2137,25 @@
         '1v1': '1V1', '2v2': '2V2', ffa: 'FFA', raid: 'TITAN RAID',
         gauntlet: 'SPEEDRUN', solo: 'SOLO', club: 'THE CLUB',
       };
-      const lab = { all: [], player: '', query: '', open: null, loaded: false };
+      const lab = { all: [], player: '', query: '', open: null, loaded: false, view: 'break' };
+
+      /** THE LAB's two faces. The breakdown opens first: it is the reason
+       *  the lab exists, and the log is one tap away from it. */
+      const LAB_VIEWS = [
+        { id: 'break', label: 'Breakdown' },
+        { id: 'log', label: 'Match log' },
+      ];
+
+      /** What counts as a MATCH: people against people. The lab keeps a tape
+       *  of everything you play — a speedrun, an aim drill, a titan raid, a
+       *  round with Goopliath — and all of it belongs in the breakdown,
+       *  because where you stand and which fist you throw is the same
+       *  question whoever is opposite. A log of matches is a different
+       *  question, and a solo run answers none of it: there is no opponent,
+       *  the verdict is a clock, and it pushed the actual matches down the
+       *  page. Anything carrying a BOSS is out too, whatever it is tagged. */
+      const MATCH_KINDS = new Set(['1v1', '2v2', 'ffa']);
+      const isMatch = (b) => MATCH_KINDS.has(b.kind) && !b.boss;
       window.__ffLab = {
         inject: (docs) => { lab.all = docs.map(normBout); lab.loaded = true; drawLab(); },
         state: () => lab,
@@ -2187,16 +2263,35 @@
             .join('');
         sel.onchange = () => { lab.player = sel.value; lab.open = null; drawLab(); };
 
+        // The view rail. Switching it keeps the filter and the open tape,
+        // so you can read a match, flip to the breakdown, and come back to
+        // the same row still open.
+        fillRail('lab-rail', 'lab-marker', LAB_VIEWS, lab.view, (id) => {
+          lab.view = id;
+          drawLab();
+        });
+        const isLog = lab.view === 'log';
+        document.getElementById('lab-view-break').classList.toggle('hidden', isLog);
+        document.getElementById('lab-view-log').classList.toggle('hidden', !isLog);
+
         const rows = labRows();
-        document.getElementById('lab-count').textContent = lab.all.length
-          ? rows.length + ' of ' + lab.all.length + (lab.all.length === 1 ? ' tape' : ' tapes')
+        // The log shows matches; the breakdown reads every tape.
+        const shown = isLog ? rows.filter(isMatch) : rows;
+        const pool = isLog ? lab.all.filter(isMatch) : lab.all;
+        const noun = isLog ? ' match' : ' tape';
+        document.getElementById('lab-count').textContent = pool.length
+          ? shown.length + ' of ' + pool.length + noun + (pool.length === 1 ? '' : isLog ? 'es' : 's')
           : '';
         const status = document.getElementById('lab-status');
-        if (!rows.length) {
+        if (!shown.length) {
           showStatus(
             status,
-            lab.all.length ? 'NOTHING MATCHES' : 'NO TAPES YET',
-            lab.all.length ? 'Try another name, or clear the search.' : 'Fight something for a quarter of a minute and it records itself.',
+            pool.length ? 'NOTHING MATCHES' : isLog ? 'NO MATCHES YET' : 'NO TAPES YET',
+            pool.length
+              ? 'Try another name, or clear the search.'
+              : isLog
+                ? 'Box someone for a quarter of a minute and it records itself.'
+                : 'Fight something for a quarter of a minute and it records itself.',
             true,
           );
         } else {
@@ -2232,7 +2327,7 @@
           .map((t) => `<div class="stat${t.minor ? ' minor' : ''}"><div class="cap">${t.cap}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`)
           .join('');
 
-        for (const key of ['stand', 'thrL', 'thrR', 'land', 'hit']) drawHeat(document.getElementById(`heat-${key}`), rows, key);
+        if (!isLog) for (const key of ['stand', 'thrL', 'thrR', 'land', 'hit']) drawHeat(document.getElementById(`heat-${key}`), rows, key);
 
         const dl = sum((b) => b.hits.dealtL);
         const dr = sum((b) => b.hits.dealtR);
@@ -2267,7 +2362,7 @@
         document.getElementById('lab-parts').innerHTML =
           partBar('Where the player lands it', partTally.dealt) + partBar('Where the player takes it', partTally.taken);
 
-        renderTapeList(document.getElementById('lab-tape'), rows, lab, drawLab);
+        renderTapeList(document.getElementById('lab-tape'), shown, lab, drawLab);
       }
 
       /* THE PLATFORM's own footprint, copied from src/config.ts: 1.72 m
@@ -2778,6 +2873,9 @@
         watching: null, pinned: null,
         frame: null, prev: null, frameAt: 0, prevAt: 0,
         club: null, raf: 0, lastDraw: 0,
+        // THE PICTURE: the decoded JPEG on screen, whose channel it belongs
+        // to, and when it landed. Null until a caster sends one.
+        pic: null, picId: null, picAt: 0, clubPic: null, clubPicAt: 0,
       };
       window.__ffTv = {
         state: () => ({ watching: tv.watching, frame: tv.frame, club: tv.club, guide: tv.guide, connected: tv.connected }),
@@ -2812,6 +2910,18 @@
           } else if (m.t === 'club') {
             tv.club = m.f;
             if (tv.watching !== 'club') { tv.watching = 'club'; tv.frame = null; tv.prev = null; tvBar(); }
+          } else if (m.t === 'cv') {
+            // The club's own picture, from whoever holds the room.
+            const img = new Image();
+            img.onload = () => { tv.clubPic = img; tv.clubPicAt = performance.now(); };
+            img.onerror = () => {};
+            img.src = 'data:image/jpeg;base64,' + m.d;
+          } else if (m.t === 'v') {
+            // THE PICTURE (src/net/tvVideo.ts): a 256x144 JPEG a few times
+            // a second. Decoding is asynchronous, so the image swaps itself
+            // in when it is ready and the loop draws whatever is current —
+            // a half-decoded frame is never painted.
+            tvPicture(m.id, m.d);
           }
         };
         ws.onclose = () => {
@@ -2850,6 +2960,28 @@
         return tv.watching && tv.watching !== 'club' && tv.frame && performance.now() - tv.frameAt < 6000;
       }
 
+      /**
+       * Take one JPEG off the wire. Two images are kept: the one on screen
+       * and the one decoding, so the canvas never shows a torn frame and a
+       * slow decode simply means the last good picture stays up.
+       */
+      function tvPicture(id, d) {
+        if (!d || (tv.watching && id !== tv.watching)) return;
+        const img = new Image();
+        img.onload = () => {
+          tv.pic = img;
+          tv.picId = id;
+          tv.picAt = performance.now();
+        };
+        img.onerror = () => {};
+        img.src = 'data:image/jpeg;base64,' + d;
+      }
+
+      /** A picture worth drawing: this channel's, and recent (VIDEO.staleMs). */
+      function tvHasPicture() {
+        return !!tv.pic && tv.picId === tv.watching && performance.now() - tv.picAt < 2500;
+      }
+
       function tvBar() {
         const badge = document.getElementById('tv-onair');
         const title = document.getElementById('tv-title');
@@ -2866,7 +2998,7 @@
           const ch = tv.guide.channels.find((c) => c.id === tv.watching);
           badge.className = 'onair live';
           badge.textContent = 'LIVE';
-          title.textContent = `${KIND_LABEL[tv.frame.kind] || ''} · ${ch ? ch.title : ''}`;
+          title.textContent = `${KIND_LABEL[tv.frame.kind] || ''} · ${ch ? ch.title : ''}${tvHasPicture() ? '' : ' · diagram'}`;
           clockEl.textContent = tv.frame.tm != null ? `RD ${tv.frame.rd || 1} · ${clock(tv.frame.tm)}` : (tv.frame.boss ? tv.frame.boss.n : '');
           if (face === 'tv') setStatus('ON AIR', 'onair');
         } else {
@@ -2910,9 +3042,64 @@
         cx.fillStyle = '#06050a';
         cx.fillRect(0, 0, cv.width, cv.height);
         if (!tv.connected) return drawCard('NO SIGNAL', tvUrl().replace(/^wss?:\/\//, ''), 'rgba(243,240,234,0.52)');
-        if (tvLive()) return drawMatch(now);
+        if (tvLive()) return tvHasPicture() ? drawPicture(now) : drawMatch(now);
         if (tv.club && tv.club.rooms && tv.club.rooms.length) return drawClub(now);
         drawCard('THE CLUB IS DARK', 'nobody on the floor · nothing on air', '#ff2ad5');
+      }
+
+      /**
+       * THE PICTURE: the caster's own render, letterboxed to the canvas,
+       * with the scoreboard laid over it.
+       *
+       * The overlay comes from the POSE frame rather than being burnt into
+       * the video, which is the whole reason both are sent: the numbers
+       * arrive five times a second and the picture three, so health and the
+       * clock stay crisp and current while the image behind them is a
+       * JPEG. It also means the HUD is legible at any canvas size, which a
+       * 256-pixel-wide render's text would never be.
+       */
+      function drawPicture(now) {
+        const W = cv.width, H = cv.height;
+        const img = tv.pic;
+        // Cover, not contain: a postcard letterboxed inside a wide canvas
+        // leaves more bar than picture. The crop is even, top and bottom.
+        const scale = Math.max(W / img.width, H / img.height);
+        const dw = img.width * scale, dh = img.height * scale;
+        cx.imageSmoothingEnabled = true;
+        cx.imageSmoothingQuality = 'high';
+        cx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+
+        // A vignette, so the overlay has something to sit on at any bright
+        // frame, and the picture stops feeling like a pasted screenshot.
+        const g = cx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, 'rgba(6,5,10,0.72)');
+        g.addColorStop(0.26, 'rgba(6,5,10,0)');
+        g.addColorStop(0.74, 'rgba(6,5,10,0)');
+        g.addColorStop(1, 'rgba(6,5,10,0.72)');
+        cx.fillStyle = g;
+        cx.fillRect(0, 0, W, H);
+
+        const f = tv.frame;
+        if (!f) return;
+        const players = (f.p || []).slice(0, 4);
+        const bw = Math.min(210, (W - 60) / Math.max(2, players.length));
+        players.forEach((p, i) => {
+          const x = 24 + i * (bw + 12);
+          hpBar(x, 34, bw, p.hp, i === 0 ? '#ffb020' : '#4cc2ff', (p.n || '').toUpperCase());
+        });
+        cx.textAlign = 'right';
+        cx.textBaseline = 'top';
+        cx.fillStyle = '#f3f0ea';
+        cx.font = '700 22px Rajdhani, system-ui, sans-serif';
+        if (f.tm != null) cx.fillText(`RD ${f.rd || 1} · ${clock(f.tm)}`, W - 24, 24);
+        else if (f.boss) cx.fillText(String(f.boss.n || ''), W - 24, 24);
+        if (f.msg) {
+          cx.textAlign = 'center';
+          cx.textBaseline = 'bottom';
+          cx.fillStyle = '#ffb020';
+          cx.font = '700 30px Rajdhani, system-ui, sans-serif';
+          cx.fillText(String(f.msg).toUpperCase(), W / 2, H - 26);
+        }
       }
 
       function drawCard(big, small, colour) {
@@ -2929,6 +3116,32 @@
         cx.fillStyle = 'rgba(243,240,234,0.52)';
         cx.font = '600 16px Rajdhani, system-ui, sans-serif';
         cx.fillText(small, W / 2, H / 2 + 28);
+      }
+
+      /** THE FLOOR, as a picture: the same cover-crop and vignette the
+       *  match picture gets, captioned with the room rather than a score. */
+      function drawClubPicture() {
+        const W = cv.width, H = cv.height;
+        const img = tv.clubPic;
+        const scale = Math.max(W / img.width, H / img.height);
+        const dw = img.width * scale, dh = img.height * scale;
+        cx.imageSmoothingEnabled = true;
+        cx.imageSmoothingQuality = 'high';
+        cx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+        const g = cx.createLinearGradient(0, 0, 0, H);
+        g.addColorStop(0, 'rgba(6,5,10,0.7)');
+        g.addColorStop(0.28, 'rgba(6,5,10,0)');
+        cx.fillStyle = g;
+        cx.fillRect(0, 0, W, H);
+        const room = tv.club && tv.club.rooms && tv.club.rooms[0];
+        cx.textAlign = 'left';
+        cx.textBaseline = 'top';
+        cx.fillStyle = '#ff2ad5';
+        cx.font = '700 15px Rajdhani, system-ui, sans-serif';
+        cx.fillText(
+          room ? `THE CLUB · ROOM ${room.code} · ${room.members.length} IN` : 'THE CLUB',
+          18, 16,
+        );
       }
 
       /** Fit the frame's platforms (and the titan) into the screen, −z up. */
@@ -3101,6 +3314,10 @@
 
       function drawClub(now) {
         const W = cv.width, H = cv.height;
+        // A render of the floor beats a map of it, when the room is sending
+        // one (src/rave/systems/ClubCastSystem.ts). The map is what you get
+        // when nobody in there can shoot a picture.
+        if (tv.clubPic && now - tv.clubPicAt < 2500) return drawClubPicture();
         const room = tv.club.rooms.slice().sort((a, b) => b.members.length - a.members.length)[0];
         const placed = room.members.filter((m) => m.x != null && !m.away);
         const pts = placed.map((m) => [m.x, m.z]);

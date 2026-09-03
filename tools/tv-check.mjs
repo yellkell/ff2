@@ -67,6 +67,36 @@ viewer.send(JSON.stringify({ t: 'watch' }));
 await sleep(300);
 check('a viewer with nothing on is shown the club', seen.some((m) => m.t === 'guide') && seen.some((m) => m.t === 'club'), seen.map((m) => m.t).join(','));
 
+// THE FLOOR'S PICTURE rides beside the club feed rather than as a channel
+// (src/rave/systems/ClubCastSystem.ts), so it reaches whoever is peeping
+// at the club and changes nothing about what the guide says is on air.
+// It has to be tested with nothing else running: auto-tune prefers a live
+// bout over the floor, and a viewer cannot be pinned to the club.
+const floorCam = await open(`ws://localhost:${PORT}/tv`);
+floorCam.send(JSON.stringify({ t: 'cv', d: 'FLOORPIC' }));
+await sleep(250);
+const guideC = await fetch(`http://localhost:${PORT}/tv/guide`).then((r) => r.json());
+check('the club picture reaches a club viewer without becoming a channel',
+  seen.some((m) => m.t === 'cv' && m.d === 'FLOORPIC') && guideC.channels.length === 0,
+  `${guideC.channels.length} channel(s), ${seen.filter((m) => m.t === 'cv').length} picture(s)`);
+
+const lateClub = await open(`ws://localhost:${PORT}/tv`);
+const lateClubIn = inbox(lateClub);
+lateClub.send(JSON.stringify({ t: 'watch' }));
+await sleep(250);
+check('a viewer arriving at a lit floor is handed its picture', lateClubIn.some((m) => m.t === 'cv' && m.d === 'FLOORPIC'), lateClubIn.map((m) => m.t).join(','));
+lateClub.close();
+
+// The camera walking out takes the picture with it: the map comes back.
+floorCam.close();
+await sleep(300);
+const afterCam = await open(`ws://localhost:${PORT}/tv`);
+const afterCamIn = inbox(afterCam);
+afterCam.send(JSON.stringify({ t: 'watch' }));
+await sleep(250);
+check('when the floor camera leaves, the picture goes with it', !afterCamIn.some((m) => m.t === 'cv'), afterCamIn.map((m) => m.t).join(','));
+afterCam.close();
+
 const caster = await open(`ws://localhost:${PORT}/tv`);
 const casterIn = inbox(caster);
 caster.send(JSON.stringify({ t: 'cast', kind: '1v1', title: 'PROBE vs ROOK', names: ['PROBE', 'ROOK'] }));
@@ -95,6 +125,32 @@ const guide1 = await fetch(`http://localhost:${PORT}/tv/guide`).then((r) => r.js
 check('the guide lists the duel as featured', guide1.channels.length === 1 && guide1.channels[0].title === 'PROBE vs ROOK' && guide1.featured === guide1.channels[0].id, JSON.stringify(guide1.channels));
 const frames = seen.filter((m) => m.t === 'f');
 check('the viewer auto-tunes to it and receives its frames', frames.length >= 4 && frames.at(-1).f.p.length === 2, `${frames.length} frames`);
+
+// THE PICTURE. The channel carries a render as well as the pose frame
+// (src/net/tvVideo.ts); the relay forwards it to whoever is tuned in and
+// keeps the latest so a viewer arriving mid-bout sees it at once.
+caster.send(JSON.stringify({ t: 'v', d: 'PICTUREONE' }));
+await sleep(220);
+const pics = seen.filter((m) => m.t === 'v');
+check('a picture reaches the viewer tuned to that channel', pics.length >= 1 && pics.at(-1).d === 'PICTUREONE' && pics.at(-1).id, JSON.stringify(pics.at(-1)));
+
+const late = await open(`ws://localhost:${PORT}/tv`);
+const lateIn = inbox(late);
+late.send(JSON.stringify({ t: 'watch' }));
+await sleep(250);
+check('a viewer arriving mid-bout is handed the last picture', lateIn.some((m) => m.t === 'v' && m.d === 'PICTUREONE'), lateIn.map((m) => m.t).join(','));
+late.close();
+
+// A picture over the cap is dropped without touching the channel: the
+// pose frame is what keeps a bout on air, so television degrades to the
+// diagram rather than going dark.
+caster.send(JSON.stringify({ t: 'v', d: 'X'.repeat(50 * 1024) }));
+await sleep(220);
+const guideV = await fetch(`http://localhost:${PORT}/tv/guide`).then((r) => r.json());
+check('an oversized picture is dropped and the bout stays on air',
+  !seen.some((m) => m.t === 'v' && m.d.length > 50000) && guideV.channels.some((c) => c.title === 'PROBE vs ROOK'),
+  `${seen.filter((m) => m.t === 'v').length} pictures through`);
+
 
 // An oversized frame: `ws` hangs up on a socket that exceeds maxPayload,
 // so this goes on a throwaway caster — the duel must not even flicker.
@@ -136,6 +192,49 @@ const painted = await page.evaluate(() => {
 check('the broadcast canvas is painted', painted > 200, `${painted} bright samples`);
 const tvState = await page.evaluate(() => window.__ffTv?.state());
 check('the page keeps two fighters, two balls and a round clock', tvState && tvState.frame?.p?.length === 2 && tvState.frame?.b?.length === 2 && typeof tvState.frame?.tm === 'number', JSON.stringify(tvState?.frame?.sc));
+
+// THE PICTURE, on the page. A real JPEG is made in the browser (node has
+// no encoder here), pushed through the relay by the caster, and the canvas
+// is read back: the picture's own colours must reach the screen, and the
+// moment they stop arriving the diagram must come back.
+const jpeg = await page.evaluate(() => {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 144;
+  const g = c.getContext('2d');
+  g.fillStyle = '#101a2e';
+  g.fillRect(0, 0, 256, 144);
+  g.fillStyle = '#12ff6a'; // a green nothing in the diagram ever draws
+  g.fillRect(0, 0, 256, 90);
+  return c.toDataURL('image/jpeg', 0.6).split(',')[1];
+});
+for (let i = 0; i < 3; i++) {
+  caster.send(JSON.stringify({ t: 'f', f: frame(castT) }));
+  caster.send(JSON.stringify({ t: 'v', d: jpeg }));
+  await sleep(160);
+}
+await sleep(500);
+const shown = await page.evaluate(() => {
+  const c = document.querySelector('#face-tv canvas');
+  const g = c.getContext('2d');
+  const count = () => {
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    let green = 0;
+    for (let p = 0; p < d.length; p += 4) {
+      if (d[p + 3] > 200 && d[p] < 120 && d[p + 1] > 170 && d[p + 2] < 150) green++;
+    }
+    return green;
+  };
+  drawTv(performance.now());
+  const withPic = count();
+  const had = tvHasPicture();
+  // Age it past VIDEO.staleMs and draw again: the diagram must take over.
+  tv.picAt = performance.now() - 9000;
+  drawTv(performance.now());
+  return { withPic, stale: count(), had };
+});
+check('the page draws the caster\'s picture, not the diagram', shown.had && shown.withPic > 400, `${shown.withPic} px of the picture`);
+check('when the pictures stop the diagram comes back', shown.stale < shown.withPic / 8, `${shown.withPic} → ${shown.stale}`);
 
 clearInterval(casting);
 caster.send(JSON.stringify({ t: 'end', result: 'PROBE 3–1' }));
@@ -304,6 +403,33 @@ const tl = await page.evaluate(() => {
   return { h: c.height, ember, cool, amber };
 });
 check('the timeline draws both health lines and the attachment pips', tl.h === 224 && tl.ember > 200 && tl.cool > 200 && tl.amber > 30, JSON.stringify(tl));
+
+// THE MATCH LOG: the lab's second view, and it lists MATCHES — a solo run,
+// a raid and a boss are tapes, not matches, and belong to the breakdown.
+const logView = await page.evaluate(async () => {
+  const pick = (t) => [...document.querySelectorAll('#lab-rail .rail-tab')].find((b) => new RegExp(t, 'i').test(b.textContent));
+  const labels = [...document.querySelectorAll('#lab-rail .rail-tab')].map((b) => b.textContent.trim());
+  pick('match log').click();
+  await new Promise((r) => setTimeout(r, 250));
+  const log = {
+    kinds: [...document.querySelectorAll('#lab-tape .tape-row .kind')].map((e) => e.textContent.trim()),
+    count: document.getElementById('lab-count').textContent,
+    breakHidden: document.getElementById('lab-view-break').classList.contains('hidden'),
+    maps: [...document.querySelectorAll('#lab-view-break canvas.heat')].length,
+  };
+  pick('breakdown').click();
+  await new Promise((r) => setTimeout(r, 250));
+  const back = {
+    logHidden: document.getElementById('lab-view-log').classList.contains('hidden'),
+    count: document.getElementById('lab-count').textContent,
+  };
+  return { labels, log, back };
+});
+check('THE LAB opens on the breakdown with a match log beside it', logView.labels.join(',') === 'Breakdown,Match log', logView.labels.join(','));
+check('the match log hides the breakdown and lists only matches',
+  logView.log.breakHidden && logView.log.kinds.every((k) => ['1V1', '2V2', 'FFA'].includes(k)),
+  `${logView.log.kinds.join(',') || 'no rows'} · ${logView.log.count}`);
+check('the breakdown still counts every tape', /tape/.test(logView.back.count) && logView.back.logHidden, logView.back.count);
 
 console.log('\n=== stats.html: THE PROFILE ===');
 await page.evaluate(() => document.querySelector('#lab-tape .who-link').click());

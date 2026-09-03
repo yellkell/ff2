@@ -56,6 +56,7 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
+  Plane,
   OctahedronGeometry,
   Points,
   PointsMaterial,
@@ -199,6 +200,11 @@ export function mirrorOf(src: Object3D, dim = 0.42, floorY = 0): Object3D {
       if (std.emissive) std.emissive.multiplyScalar(dim);
       c.side = DoubleSide;
       c.depthWrite = false;
+      // Clipped to below the glass, for the same reason the circuit's banks
+      // are (course/banks.ts mirrorBank): a flip is only honest above the
+      // plane, so anything sitting ON the floor would otherwise fold its
+      // underside back up through itself.
+      c.clippingPlanes = [new Plane(new Vector3(0, -1, 0), floorY)];
       return c;
     };
     mesh.material = Array.isArray(mat) ? mat.map(dimOne) : dimOne(mat);
