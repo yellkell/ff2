@@ -405,11 +405,7 @@ export function pubServerUrl(): string {
   return `${roomServerHost()}/pub`;
 }
 
-/** The pub server's HTTP origin (same host as the WS relay) + the LiveKit voice
- *  token route. ws→http, wss→https. The room server mints the join token. */
-export function pubVoiceTokenUrl(): string {
-  return `${pubServerUrl().replace(/^ws/, 'http')}/token`;
-}
-
-/** The single shared LiveKit room every punter's voice joins. */
-export const PUB_VOICE_ROOM = 'iron-balls-pub';
+// (A pubVoiceTokenUrl() and a PUB_VOICE_ROOM lived here, for a LiveKit SFU the
+//  pub stopped using when voice became PCM over the room socket. Nothing had
+//  called either of them for some time — voice/capture.ts ships frames down the
+//  same WebSocket as the poses, and voice/playback.ts pans them locally.)

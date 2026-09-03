@@ -282,11 +282,15 @@ four things that matter are:
 `server/` is self-contained — node built-ins, `ws`, and its own files — so
 Render never builds the client to run the relay.
 
-**The env vars do not travel with the code.** `LIVEKIT_URL`,
-`LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` live on whichever service used to
-run the pub; without them the pub still works and nobody can hear each other.
-`DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` (the bar TV) and `ADMIN_TOKEN` (the
-ban panel) are optional.
+**Voice needs no configuration.** The pub's voice is Int16 PCM over the same
+socket as the poses, panned client-side — no SFU, no keys. (An earlier build
+brokered it through a LiveKit SFU and the server minted join tokens; the code
+stopped using it, and three secrets went on being carried in the deploy
+environment for a route nothing called.)
+
+Both remaining env vars are optional: `DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID`
+light up the bar TV, and `ADMIN_TOKEN` arms the ban panel — without it the ban
+controls are inert, which is deliberate, so a random punter can't wield them.
 
 You can tell by eye which build a host is running — the room server answers `/`
 with `{"room":"fire-fight-2","relays":[…]}`, where a single old relay answers

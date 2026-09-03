@@ -33,16 +33,11 @@ services:
     # running the room server rather than one of the old single relays.
     healthCheckPath: /
     envVars:
-      # VOICE in the pub. The relay mints LiveKit join tokens at /pub/token;
-      # without these the pub still works and nobody can hear each other.
-      # These currently live on the OLD pub service — copy them across, they
-      # do not travel with the code.
-      - key: LIVEKIT_URL
-        sync: false
-      - key: LIVEKIT_API_KEY
-        sync: false
-      - key: LIVEKIT_API_SECRET
-        sync: false
+      # Voice needs NOTHING here. The pub's voice is Int16 PCM over the same
+      # socket as the poses, panned client-side — no SFU, no keys, nothing to
+      # configure. (An earlier build brokered it through LiveKit and this list
+      # asked for three secrets to match; the code had stopped using them.)
+      #
       # THE DISCORD BOT, both directions (server/discord.mjs). The same
       # token READS the channel for the pub's bar TV and now POSTS to it:
       # the bell's join link when a ball goes up, the lobby's SHARE card,
