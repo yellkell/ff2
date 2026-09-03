@@ -68,7 +68,7 @@ import { goTelegraph, type Telegraph } from '../campaign/telegraphs.js';
 import { LINES, PRAISE_POOL, type LineKey } from '../tutorial/script.js';
 import { grantGraduationStripe } from '../avatar/paint.js';
 import { customization } from '../menu/customization.js';
-import { wrapText } from '../menu/menu.js';
+import { wrapLines, wrapText } from '../menu/menu.js';
 import { BALLS_H, BALLS_W, ballsClick, ballsHit, renderBallsPanel } from '../menu/ballsFace.js';
 
 /** The bot's health in tutorial — deliberately low so a beginner can win. */
@@ -101,7 +101,24 @@ const PERCH_POS = new Vector3(1.5, 2.5, -1.9);
 
 // --- canvases ---------------------------------------------------------------
 const CAP_W = 768;
+/**
+ * The caption plate's canvas. CAP_H is the plate's SHORTEST height, not its
+ * only one: a line long enough to need a fifth row grows the plate rather
+ * than running off the bottom of it (drawCaption). Ember's sign-off after
+ * the graduation fight is the one that does — it sends you to the store and
+ * then to the club in a single breath, and at the fixed height its last two
+ * lines were simply not drawn.
+ */
 const CAP_H = 236;
+/** How wide the plate stands in the world; the height follows the canvas. */
+const CAP_WORLD = 0.68;
+/** Where her words start, and how far apart the rows sit. */
+const CAP_TEXT_Y = 102;
+const CAP_LINE_H = 38;
+/** Below the last row: the descender, then the plate's own bottom margin. */
+const CAP_TAIL = 36;
+/** Measured with, and drawn with — the two must not drift apart. */
+const CAP_FONT = '600 31px system-ui, sans-serif';
 const CON_W = 384;
 const CON_H = 300;
 const BEGIN_BTN = { x: 72, y: 206, w: 240, h: 64 };
@@ -1172,7 +1189,7 @@ export class TutorialSystem extends createSystem({
   // --- caption plate ----------------------------------------------------------
 
   private makeCaption(): void {
-    this.caption = this.makePanel(CAP_W, CAP_H, 0.68, 'ember-caption');
+    this.caption = this.makePanel(CAP_W, CAP_H, CAP_WORLD, 'ember-caption');
     this.caption.mesh.visible = false;
     // The caption often overlaps the console panels (she hovers above them
     // while talking there). At the shared renderOrder, three.js sorted the
@@ -1192,9 +1209,17 @@ export class TutorialSystem extends createSystem({
   private drawCaption(): void {
     if (!this.caption) return;
     const ctx = this.caption.ctx;
-    ctx.clearRect(0, 0, CAP_W, CAP_H);
+    // MEASURE FIRST, in the font the words will actually be drawn in, then
+    // give the plate the height that many rows need. Only ever taller than
+    // CAP_H, never shorter: every other line she speaks keeps the plate it
+    // has always had, and only the one that overflows gets a bigger one.
+    ctx.font = CAP_FONT;
+    const rows = this.captionText ? wrapLines(ctx, this.captionText, CAP_W - 68).length : 1;
+    const capH = Math.max(CAP_H, CAP_TEXT_Y + (rows - 1) * CAP_LINE_H + CAP_TAIL);
+    this.sizeCaption(capH);
+    ctx.clearRect(0, 0, CAP_W, capH);
     if (this.captionText) {
-      plate(ctx, 6, 6, CAP_W - 12, CAP_H - 12, {
+      plate(ctx, 6, 6, CAP_W - 12, capH - 12, {
         cut: 14,
         fill: 'rgba(8,9,13,0.8)',
         stroke: 'rgba(255,192,77,0.55)',
@@ -1217,11 +1242,36 @@ export class TutorialSystem extends createSystem({
       rule.addColorStop(1, 'rgba(255,192,77,0)');
       ctx.fillStyle = rule;
       ctx.fillRect(46, 62, CAP_W - 86, 2);
-      ctx.font = '600 31px system-ui, sans-serif';
+      ctx.font = CAP_FONT;
       ctx.fillStyle = UI.text;
-      wrapText(ctx, this.captionText, 34, 102, CAP_W - 68, 38);
+      wrapText(ctx, this.captionText, 34, CAP_TEXT_Y, CAP_W - 68, CAP_LINE_H);
     }
     this.caption.tex.needsUpdate = true;
+  }
+
+  /**
+   * Re-cut the caption plate to a new height.
+   *
+   * Resizing a canvas throws its contents away and invalidates the texture
+   * that was uploaded from it, so the texture is replaced rather than
+   * flagged — and the plane is re-cut to match, or the same picture would
+   * simply be squashed into the old plate's shape. Both are skipped when
+   * the height has not moved, which is every line but one.
+   */
+  private sizeCaption(capH: number): void {
+    if (!this.caption) return;
+    const canvas = this.caption.ctx.canvas;
+    if (canvas.height === capH) return;
+    canvas.height = capH;
+    this.caption.tex.dispose();
+    const tex = new CanvasTexture(canvas);
+    tex.minFilter = LinearFilter;
+    this.caption.tex = tex;
+    const mat = this.caption.mesh.material as MeshBasicMaterial;
+    mat.map = tex;
+    mat.needsUpdate = true;
+    this.caption.mesh.geometry.dispose();
+    this.caption.mesh.geometry = new PlaneGeometry(CAP_WORLD, (CAP_WORLD * capH) / CAP_W);
   }
 
   // --- the console (BEGIN, then the ball loadout) ------------------------------

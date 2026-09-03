@@ -1117,21 +1117,29 @@ export function createActionPanel(scene: Scene): ActionPanel {
 /* ── a shared text helper (the tutorial's captions use it too) ── */
 /** Word-wrap `text` into `maxW`, returning the count of lines drawn.
  *  Exported: the tutorial's caption plate wraps with the same algorithm. */
-export function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number): void {
+export function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const words = text.split(' ');
+  const out: string[] = [];
   let line = '';
-  let cy = y;
   for (const w of words) {
     const test = line ? `${line} ${w}` : w;
     if (ctx.measureText(test).width > maxW && line) {
-      ctx.fillText(line, x, cy);
+      out.push(line);
       line = w;
-      cy += lineH;
     } else {
       line = test;
     }
   }
-  if (line) ctx.fillText(line, x, cy);
+  if (line) out.push(line);
+  return out;
+}
+
+export function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxW: number, lineH: number): void {
+  let cy = y;
+  for (const line of wrapLines(ctx, text, maxW)) {
+    ctx.fillText(line, x, cy);
+    cy += lineH;
+  }
 }
 
 // --- THE GASKET GAZETTE -----------------------------------------------------
