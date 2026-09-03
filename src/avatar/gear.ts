@@ -2,12 +2,15 @@
  * GEAR — the attachments shop (DESIGN.md §5.2: "shapes, never colour").
  *
  * Coins buy SHAPES that bolt onto THE BLANK: crests, antennae, horns and
- * halos for the head; pauldrons, a chestplate, a dorsal ridge and a belt
- * for the body; knuckle spikes and cuffs for the hands. (A COLLAR was
- * sold for a while and withdrawn — it never sat right on the loft. The id
- * is retired, not reused: an old save still naming it just wears nothing
- * on the body, because cleanGear drops what the catalogue no longer
- * knows.) Every
+ * halos for the head; pauldrons, a chestplate, a TAIL and a belt for the
+ * body; knuckle spikes and cuffs for the hands. (A COLLAR and a dorsal
+ * RIDGE were sold for a while and withdrawn — the collar never sat right
+ * on the loft, and the ridge was a 24 mm strip laid along the spine using
+ * the loft's half-depths while ignoring the forward LEAN of its upper
+ * rings, so the top of it sank inside the back and the rest was too thin
+ * to find. Both ids are retired, not reused: an old save still naming one
+ * just wears nothing on the body, because cleanGear drops what the
+ * catalogue no longer knows.) Every
  * piece is sold in the body's own primer — white on a blank, black on an
  * onyx — so identity still comes from what you bolt on and what you paint,
  * never from a catalogue of colours. Gear is PURELY VISUAL: it parents to
@@ -57,7 +60,7 @@ export const GEAR: GearDef[] = [
   // ── body ──────────────────────────────────────────────────────────────
   { id: 'pauldrons', name: 'PAULDRONS', slot: 'body', price: 100, blurb: 'plates on both shoulders' },
   { id: 'chestplate', name: 'CHESTPLATE', slot: 'body', price: 120, blurb: 'one plate over the heart' },
-  { id: 'ridge', name: 'RIDGE', slot: 'body', price: 140, blurb: 'a dorsal ridge down the spine' },
+  { id: 'tail', name: 'TAIL', slot: 'body', price: 140, blurb: 'swept back off the spine, tip flicked up' },
   { id: 'belt', name: 'BELT', slot: 'body', price: 60, blurb: 'a band round the waist, buckled' },
   // ── hands ─────────────────────────────────────────────────────────────
   { id: 'cuffs', name: 'CUFFS', slot: 'hands', price: 60, blurb: 'a ring at each wrist' },
@@ -403,20 +406,37 @@ const BUILDERS: Record<string, Builder> = {
     g.add(new Mesh(slab, slabMat));
     return g;
   },
-  ridge: (mat) => {
+  tail: (mat) => {
+    // A TAIL, where a dorsal ridge used to be. One tapered tube along a
+    // spline (the horns' own taperedTube): rooted in the small of the
+    // back, swept back and down under its own weight, and flicked UP at
+    // the tip so it reads as a tail rather than a hanging cable. Flat
+    // shaded, so the facets segment it like plate.
+    //
+    // The ridge it replaces was invisible in play. It sat a 24 mm strip
+    // along the spine positioned from BODY_RINGS' half-depths alone —
+    // but the upper rings carry a forward `z` lean (the trapezius meets
+    // the neck ahead of the chest), so the top plates were placed behind
+    // where the back actually is and the whole piece read as nothing.
+    // A tail hangs off the silhouette instead, where it cannot hide.
     const g = new Group();
-    // Down the spine (the back is +z): plates from the nape to the hips.
-    // The back's half-depth by height (BODY_RINGS d, top to hips).
-    const depth = [0.062, 0.09, 0.1, 0.098, 0.09, 0.077, 0.074, 0.086, 0.1, 0.104];
-    for (let i = 0; i < depth.length; i++) {
-      const t = i / (depth.length - 1);
-      const y = 0.44 - t * 0.47;
-      const h = 0.045 + Math.sin(t * Math.PI) * 0.035;
-      const p = new Mesh(new BoxGeometry(0.024, 0.055, h), mat);
-      p.position.set(0, y, depth[i] + h * 0.35 - 0.004);
-      p.rotation.x = 0.5;
-      g.add(p);
-    }
+    const faceted = mat.clone();
+    faceted.flatShading = true;
+    const pts = [
+      [0, 0.125, 0.074], // the root, small of the back
+      [0, 0.088, 0.185],
+      [0, 0.022, 0.276],
+      [0, -0.052, 0.336],
+      [0, -0.104, 0.376],
+      [0, -0.106, 0.428], // the flick
+      [0, -0.068, 0.462],
+    ].map(([x, y, z]) => new Vector3(x, y, z));
+    g.add(new Mesh(taperedTube(pts, 0.044, 0.009, 32, 7), faceted));
+    // A boss where it meets the back, so the root reads as seated.
+    const boss = new Mesh(new SphereGeometry(0.05, 10, 8), faceted);
+    boss.position.copy(pts[0]);
+    boss.scale.set(1, 0.92, 0.8);
+    g.add(boss);
     return g;
   },
   belt: (mat) => {

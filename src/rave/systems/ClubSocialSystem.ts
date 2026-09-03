@@ -916,7 +916,10 @@ export class ClubSocialSystem extends createSystem({}) {
         // The chevron says the row opens onto something, rather than
         // advancing one notch per press.
         label: `${this.songsOpen ? '◂' : '▸'}  ♪ ${cued ? cued.title : 'SHUFFLE'}`,
-        sub: cued ? `${cued.bpm.toFixed(cued.bpm % 1 ? 2 : 0)} BPM` : undefined,
+        // No BPM under it. The kit stacks a `sub` below the label at a
+        // fixed offset, which on a row this short hung the tempo outside
+        // the plate — and the number is on the record list a tap away,
+        // where it belongs when you are choosing between records.
         selected: this.songsOpen,
         x: 24,
         y: fights ? 698 : 652,

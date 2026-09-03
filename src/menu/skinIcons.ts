@@ -221,11 +221,16 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         ctx.closePath();
         ctx.fill();
         break;
-      case 'ridge':
-        for (let i = 0; i < 5; i++) {
-          ctx.moveTo(cx, cy - r * 0.45 + i * r * 0.26);
-          ctx.lineTo(cx + r * 0.16, cy - r * 0.36 + i * r * 0.26);
-        }
+      case 'tail':
+        // A tail: swept back and down off the body, tapering, tip flicked up.
+        ctx.lineWidth = line * 1.6;
+        ctx.moveTo(cx - r * 0.05, cy - r * 0.18);
+        ctx.quadraticCurveTo(cx + r * 0.42, cy + r * 0.06, cx + r * 0.5, cy + r * 0.46);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.lineWidth = line;
+        ctx.moveTo(cx + r * 0.5, cy + r * 0.46);
+        ctx.quadraticCurveTo(cx + r * 0.6, cy + r * 0.6, cx + r * 0.74, cy + r * 0.52);
         ctx.stroke();
         break;
       case 'belt':

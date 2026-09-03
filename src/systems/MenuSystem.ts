@@ -64,7 +64,7 @@ import { installGrammarDevHook } from '../campaign/grammar.js';
 import { botGradeLine, botLive, installBotBrainDevHook } from '../combat/botBrain.js';
 import { KitMenuPanel } from '../menu/wrap.js';
 import type { PanelButton } from '../ui/kit/panel.js';
-import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey } from '../menu/paintbay.js';
+import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey, bayTurn } from '../menu/paintbay.js';
 import {
   avatarOwned,
   clearShopPreview,
@@ -196,6 +196,9 @@ export class MenuSystem extends createSystem({}) {
   /** THE PODIUM: your blank standing beside the YOU wing, always on show
    *  in the lobby — the avatar IS the menu's centrepiece now. */
   private podium?: Group;
+  /** The mirror's resting yaw — it faces the player; the paint bay's turn
+   *  is added on top of it (menu/paintbay.ts bayTurn). */
+  private mirrorYaw0 = 0;
   private skinVersion = 0;
   /** The opponent pad is modelling a STORE platform try-on (needs restoring). */
   private oppPadPreviewed = false;
@@ -447,6 +450,10 @@ export class MenuSystem extends createSystem({}) {
 
   update(delta: number): void {
     this.takeBootJoin();
+    // THE BLANK'S TURN: the bay's buttons yaw the mirror so its back is
+    // reachable. One assignment, and only while the bay is the thing you
+    // are looking at — the locker's own mirror always faces you.
+    if (this.mirror) this.mirror.group.rotation.y = this.mirrorYaw0 + (app.paintBayOpen ? bayTurn() : 0);
     if (app.state !== this.lastState) this.applyState();
     this.applyOwnSkins();
     this.pulseBannerGlow();
@@ -1602,7 +1609,8 @@ export class MenuSystem extends createSystem({}) {
     rig.gloves[1].position.set(0.22, 1.12, -0.28);
     group.position.set(-0.75, 0, -2.0);
     // Face the player standing at the rig origin (default forward is -Z).
-    group.rotation.y = Math.PI + Math.atan2(0 - group.position.x, 0 - group.position.z);
+    this.mirrorYaw0 = Math.PI + Math.atan2(0 - group.position.x, 0 - group.position.z);
+    group.rotation.y = this.mirrorYaw0;
     this.scene.add(group);
     this.mirror = { group, rig };
     this.skinVersion = -1; // force a re-apply so the mirror dresses correctly

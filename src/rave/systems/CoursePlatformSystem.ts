@@ -568,10 +568,19 @@ export class CoursePlatformSystem extends createSystem({}) {
       // the WARNING and to nothing else: ground that is simply yours to
       // stand on carries none of them, so a docked deck is a clean square
       // instead of four raised nubs you step around. They stand UP OUT of
-      // the face (base flush with it) the moment the deck counts out,
-      // drives, or burns.
+      // the face (base flush with it) the moment the deck counts out or
+      // burns.
+      //
+      // A deck merely TRAVELLING no longer raises them. The circuit's
+      // ground-level legs are the two runners and they are moving most of
+      // the time, so down here every platform wore four blocks while the
+      // static decks up at height wore none — the floor read as two
+      // different kits depending on your altitude. It costs nothing to
+      // drop: this system says everything three ways at once (posts, rims,
+      // face), and a travelling deck still runs RED on both of the others,
+      // which is what the handover gate reads anyway.
       const beatsLeft = warn ? Math.max(1, Math.ceil(st.departIn * 4)) : 0;
-      const up = warn || st.moving || burn > 0;
+      const up = warn || burn > 0;
       for (let k = 0; k < 4; k++) {
         const [pcx, pcz] = POST_CORNERS[k];
         const inset = GRID.tile / 2 - 0.04;

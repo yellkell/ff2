@@ -85,7 +85,22 @@ const VOID = new Color(VOID_BG);
  * actually being alive. A relay that REFUSES is not waited on at all — the
  * error phase short-circuits below.
  */
-const RELAY_PATIENCE_TICKS = 25;
+/**
+ * How long the club waits for the relay before falling back to a room of
+ * one. This was five seconds, which is fine against a warm host and wrong
+ * against the one we actually have: ff2-room is on Render's free tier, and
+ * a free instance SLEEPS when idle and takes the better part of a minute
+ * to wake. Five seconds meant the first person into the club after a quiet
+ * hour always got a solo floor — no room on the relay, so nobody could
+ * join them and FFTV had nothing to peep at — and it never retried.
+ *
+ * Sixty seconds covers a cold start. Nothing is worse for the wait: the
+ * hall is already up and you are standing in it, the only question is
+ * whether the room you are in is shared. A relay that is genuinely down
+ * still answers with an error, which drops to solo at once without
+ * spending the patience.
+ */
+const RELAY_PATIENCE_TICKS = 300;
 const RELAY_POLL_MS = 200;
 
 interface Pausable {

@@ -38,8 +38,25 @@ const M = 72;
 const HALF = (BAY_W - M * 2 - 48) / 2; // two columns
 const RIGHT = M + HALF + 48;
 
-/** Which kind the tray/rack grids are showing. */
-export const bayFaceState = { kind: 'stripe' as PaintKind, version: 1 };
+/**
+ * Which kind the tray/rack grids are showing — and WHICH WAY THE BLANK IS
+ * FACING.
+ *
+ * The bay paints onto the locker mirror, which stood fixed facing you, so
+ * half of the body could never be reached: everything behind the shoulder
+ * line was unpaintable, and a stripe meant for the spine went on the chest
+ * or nowhere. `turn` is in eighths of a circle (0 = facing you), stepped
+ * by the bay's own buttons, and MenuSystem yaws the mirror to match.
+ */
+export const bayFaceState = { kind: 'stripe' as PaintKind, turn: 0, version: 1 };
+
+/** The eight stops, named for the face they put in front of you. */
+const TURN_FACE = ['FRONT', 'FRONT-LEFT', 'LEFT SIDE', 'BACK-LEFT', 'BACK', 'BACK-RIGHT', 'RIGHT SIDE', 'FRONT-RIGHT'];
+
+/** How far the blank is turned, in radians. */
+export function bayTurn(): number {
+  return (bayFaceState.turn / TURN_FACE.length) * Math.PI * 2;
+}
 
 const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
 
@@ -47,7 +64,7 @@ const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
 const CHIP = 4;
 const chipRect = (x0: number, i: number): { x: number; y: number; w: number; h: number } => {
   const w = (HALF - (CHIP - 1) * 14) / CHIP;
-  return { x: x0 + (i % CHIP) * (w + 14), y: 384 + Math.floor(i / CHIP) * (w + 26), w, h: w };
+  return { x: x0 + (i % CHIP) * (w + 14), y: 420 + Math.floor(i / CHIP) * (w + 26), w, h: w };
 };
 
 export interface BayFace {
@@ -73,6 +90,22 @@ export function bayFace(): BayFace {
       tone: KIT.accent,
     },
   ];
+  // TURN THE BLANK: the only way to reach its back. Left of the tray's
+  // caption, because it belongs to the body rather than to the paint.
+  buttons.push(
+    { id: 'pb:turn-', label: '◂', x: M, y: 262, w: 86, h: 74, px: 40 },
+    {
+      id: 'pb:turn',
+      label: TURN_FACE[bayFaceState.turn % TURN_FACE.length],
+      sub: 'turn the blank',
+      x: M + 94, y: 262, w: 260, h: 74,
+      display: true,
+      small: true,
+      tone: bayFaceState.turn === 0 ? undefined : KIT.accent,
+    },
+    { id: 'pb:turn+', label: '▸', x: M + 362, y: 262, w: 86, h: 74, px: 40 },
+  );
+
   // Ghost chips: tray (left) takes, rack (right) buys.
   PAINT.colours.forEach((_, i) => {
     if (PAINT.tierOf(i) === 2) return; // the top shelf arrives later
@@ -95,8 +128,8 @@ export function bayFace(): BayFace {
     g.font = font(600, 30);
     g.fillStyle = KIT.dim;
     g.textAlign = 'left';
-    g.fillText('THE TRAY — yours, tap to take', M, 330);
-    g.fillText('THE RACK — buy with $', RIGHT, 330);
+    g.fillText('THE TRAY — yours, tap to take', M, 392);
+    g.fillText('THE RACK — buy with $', RIGHT, 392);
     // The chips themselves (ghost buttons hit-test; we paint).
     PAINT.colours.forEach((hex, i) => {
       if (PAINT.tierOf(i) === 2) return;
@@ -158,6 +191,9 @@ export function bayClick(id: string): boolean {
     bayFaceState.version += 1;
     return true;
   };
+  if (id === 'pb:turn-') return (bayFaceState.turn = (bayFaceState.turn + 7) % 8), done();
+  if (id === 'pb:turn+') return (bayFaceState.turn = (bayFaceState.turn + 1) % 8), done();
+  if (id === 'pb:turn') return true; // a readout, not a button
   if (id === 'pb:kind-stripe') return (bayFaceState.kind = 'stripe'), done();
   if (id === 'pb:kind-splotch') return (bayFaceState.kind = 'splotch'), done();
   if (id === 'pb:kind-dot') return (bayFaceState.kind = 'dot'), done();
@@ -180,5 +216,5 @@ export function bayClick(id: string): boolean {
 
 /** Everything the bay face repaints on — MenuSystem's freshness key. */
 export function bayFaceKey(): string {
-  return [bayFaceState.version, bay.version, invState.version, coins.balance].join('|');
+  return [bayFaceState.version, bayFaceState.turn, bay.version, invState.version, coins.balance].join('|');
 }
