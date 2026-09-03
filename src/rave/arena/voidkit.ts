@@ -174,6 +174,20 @@ export function mirrorOf(src: Object3D, dim = 0.42, floorY = 0): Object3D {
   out.scale.y = -1;
   out.position.y = floorY * 2 - src.position.y;
 
+  // ONE plane for the whole reflection, kept pointed at the real floor.
+  // The hook goes on every mirrored MESH rather than on `out`, because
+  // onBeforeRender never fires for a Group and `out` usually is one — the
+  // plane would then keep its build-time constant for ever, which is the
+  // silent no-op this whole thing exists to avoid.
+  const plane = new Plane(new Vector3(0, -1, 0), floorY);
+  const _floor = new Vector3();
+  const syncPlane = (): void => {
+    const p = out.parent;
+    if (!p) return;
+    _floor.set(0, floorY, 0).applyMatrix4(p.matrixWorld);
+    plane.constant = _floor.y;
+  };
+
   const from: Object3D[] = [];
   const to: Object3D[] = [];
   src.traverse((o) => from.push(o));
@@ -203,11 +217,14 @@ export function mirrorOf(src: Object3D, dim = 0.42, floorY = 0): Object3D {
       // Clipped to below the glass, for the same reason the circuit's banks
       // are (course/banks.ts mirrorBank): a flip is only honest above the
       // plane, so anything sitting ON the floor would otherwise fold its
-      // underside back up through itself.
-      c.clippingPlanes = [new Plane(new Vector3(0, -1, 0), floorY)];
+      // underside back up through itself. The constant is the floor's WORLD
+      // height, refreshed per frame — these planes are world-space and the
+      // scenery they cut is not built at the world origin.
+      c.clippingPlanes = [plane];
       return c;
     };
     mesh.material = Array.isArray(mat) ? mat.map(dimOne) : dimOne(mat);
+    mesh.onBeforeRender = syncPlane;
     mesh.renderOrder = -1; // under the world, always
   }
   return out;

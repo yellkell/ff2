@@ -46,7 +46,14 @@ await page.addInitScript(() => {
   localStorage.setItem('gdr-server', 'ws://127.0.0.1:1');
 });
 
-await page.goto(base, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => page.goto(base));
+// THE PATIENCE, turned down. The floor now keeps ASKING while a sleeping
+// relay wakes (net/session.ts openPublicFloor) rather than reading the
+// first refused socket as "no relay here" — which is what a free-tier host
+// looks like for its first two hundred milliseconds, and why players kept
+// landing in a room of one. The room of one is still the last resort, and
+// this proves it still happens; it just no longer waits a minute to say so.
+const floorUrl = `${base}/?floorPatience=1200`;
+await page.goto(floorUrl, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => page.goto(floorUrl));
 await page.waitForTimeout(1200);
 await page.click('#enter-vr');
 await page.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 30000 });
@@ -106,7 +113,7 @@ const floor = await page.waitForFunction(
   { timeout: 8000 },
 ).then(() => true).catch(() => false);
 const netState = await page.evaluate(() => ({ solo: window.__gdr.net.state.solo, phase: window.__gdr.net.state.phase, screen: window.__gdr.match.screen, myIdx: window.__gdr.net.state.myIdx }));
-check('the floor opens as a ROOM OF ONE when no relay answers', floor && netState.solo && netState.screen === 'lobby' && netState.myIdx === 0, JSON.stringify(netState));
+check('the floor falls back to a ROOM OF ONE once the patience is spent', floor && netState.solo && netState.screen === 'lobby' && netState.myIdx === 0, JSON.stringify(netState));
 await page.waitForTimeout(800);
 let read = await sceneRead();
 check('the club is standing and the curtain is clear', read.club === true && read.curtain === false, JSON.stringify(read));

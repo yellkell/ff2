@@ -619,6 +619,113 @@ export function leaveRoom(): void {
   teardown('');
 }
 
+/* ── THE PATIENT DOOR ───────────────────────────────────────────────────
+ *
+ * Getting onto the public floor against a host that may be ASLEEP.
+ *
+ * The room server is on Render's free tier, and a free instance sleeps
+ * when idle and takes the better part of a minute to wake. While it is
+ * waking it does not politely queue a WebSocket upgrade — it refuses it.
+ * So the first attempt fails almost instantly, `net.phase` goes to
+ * 'error', and the old floor logic read that one refusal as "no relay
+ * here" and opened a ROOM OF ONE. The sixty seconds of patience it had
+ * been given were never spent: a sleeping relay looks exactly like a dead
+ * one for the first two hundred milliseconds, and that is the only look
+ * anybody ever got.
+ *
+ * So: keep asking. An HTTP knock first (Render wakes on any request, and
+ * a plain GET gets further than an upgrade against a cold router), then a
+ * socket, and another every few seconds until either the floor answers or
+ * the patience really is gone. A room of one is the last resort it was
+ * always meant to be rather than the usual outcome.
+ */
+
+/** How often to look at what happened. */
+const FLOOR_POLL_MS = 200;
+/**
+ * How many of those looks to take before opening a floor with nobody on
+ * it. Three hundred is a minute of POLLING, which covers a cold start on
+ * Render's free tier.
+ *
+ * Counted in TICKS rather than wall clock, and that is not a detail. The
+ * first walk into the club BUILDS the rave — a lazy import, a venue and a
+ * circuit — and that blocks the main thread for well over a second. A
+ * deadline measured against the clock is therefore spent while the club is
+ * still being assembled, so the first poll after the stall can find itself
+ * already out of time and open a room of one against a relay that was
+ * healthy the whole way through. Ticks cannot run while the thread is
+ * blocked, so the patience measures attempts, which is what it is for.
+ *
+ * `?floorPatience=` shortens it (in milliseconds, converted here) so the
+ * venue check can prove the room of one still happens without sitting
+ * through a whole wake-up.
+ */
+const FLOOR_PATIENCE_TICKS = (() => {
+  const ms = Number(new URLSearchParams(location.search).get('floorPatience'));
+  if (Number.isFinite(ms) && ms >= 0) return Math.max(1, Math.round(ms / FLOOR_POLL_MS));
+  return 300;
+})();
+/** How many ticks between attempts on a relay that refused. */
+const FLOOR_RETRY_TICKS = 15;
+let floorTimer = 0;
+
+/**
+ * Knock on the relay over HTTP. Fire and forget: the point is to make a
+ * sleeping instance start waking, not to learn anything from the answer.
+ */
+export function warmRelay(): void {
+  try {
+    const http = serverUrl().replace(/^ws/, 'http').replace(/\/(ff|pub|rave|tv)$/, '');
+    void fetch(http, { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+  } catch {
+    /* no relay configured, or fetch is unavailable — the socket still tries */
+  }
+}
+
+/**
+ * Walk onto the public floor, and keep trying while the host wakes up.
+ * `stillWanted` is asked every tick so that walking back out of the club
+ * stops the attempt rather than dropping a room on an empty venue.
+ */
+/*
+ * There is deliberately NO navigator.onLine shortcut here. It reads false
+ * in environments that are perfectly online (headless Chromium, for one,
+ * which is how the venue check runs), and a false negative sends everybody
+ * straight to a room of one — which is the exact failure this function was
+ * written to stop. The patience window covers a genuinely offline headset
+ * anyway: it waits, then opens the floor of one.
+ */
+export function openPublicFloor(stillWanted: () => boolean = () => true): void {
+  cancelPublicFloor();
+  warmRelay();
+  enterPublicRoom();
+  let ticks = 0;
+  let lastTry = 0;
+  const poll = (): void => {
+    floorTimer = 0;
+    if (!stillWanted()) return;
+    if (inRoom()) return; // we are in — nothing more to do
+    if (++ticks > FLOOR_PATIENCE_TICKS) {
+      enterSoloFloor();
+      return;
+    }
+    // A refusal is what a WAKING host looks like. Try it again.
+    if (net.phase === 'error' && ticks - lastTry >= FLOOR_RETRY_TICKS) {
+      lastTry = ticks;
+      warmRelay();
+      enterPublicRoom();
+    }
+    floorTimer = window.setTimeout(poll, FLOOR_POLL_MS);
+  };
+  floorTimer = window.setTimeout(poll, FLOOR_POLL_MS);
+}
+
+/** Stop trying (walking out of the club, or leaving the page). */
+export function cancelPublicFloor(): void {
+  window.clearTimeout(floorTimer);
+  floorTimer = 0;
+}
+
 /* ── THE ROOM OF ONE ────────────────────────────────────────────────────── */
 
 const SOLO_SERVE_MS = 1600; // the relay's own pace (server/rave.mjs SERVE_MS)

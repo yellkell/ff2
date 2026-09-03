@@ -43,6 +43,25 @@ import { NetworkSystem } from './systems/NetworkSystem.js';
 import { PlayerSystem } from './systems/PlayerSystem.js';
 import { RankSystem } from './systems/RankSystem.js';
 import { installRaveDevHook } from './devHook.js';
+import { ClubCastSystem } from './systems/ClubCastSystem.js';
+import { openPublicFloor, warmRelay } from './net/session.js';
+import { toLobby } from './game/flow.js';
+
+/**
+ * WHICH DOOR SENT US. FIRE FIGHT's club tab and its RAVE RAID tab both fall
+ * back to hopping this page when there is no live session to curtain, and
+ * they used to hop to the same bare URL — so a player who asked for the
+ * CLUB got the campaign screen (state.ts opens on 'tour') and had to walk
+ * to the floor they had already chosen. `?to=club` says otherwise.
+ */
+const DESTINATION = new URLSearchParams(location.search).get('to');
+
+// Knock on the room server the moment the page loads, whoever sent us. The
+// host sleeps on Render's free tier and takes the better part of a minute
+// to wake, and the landing page is the one place we have a minute: the
+// player is still reading the button. By the time they tap it the relay is
+// usually up, and the floor they walk onto has other people on it.
+warmRelay();
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
 const enterButton = document.getElementById('enter-vr') as HTMLButtonElement | null;
@@ -57,6 +76,14 @@ function hideLanding(): void {
   // House lights down: the title card plays on the inside of the headset,
   // cued by the same moment the web page gets out of the way.
   introView.begin?.();
+  // Asked for the club: open on the floor rather than the campaign screen,
+  // and start walking onto the public floor straight away. openPublicFloor
+  // keeps trying while the relay wakes instead of dropping a room of one
+  // on the first refusal (net/session.ts).
+  if (DESTINATION === 'club') {
+    toLobby();
+    openPublicFloor();
+  }
 }
 
 function showLanding(): void {
@@ -111,6 +138,10 @@ World.create(container, {
   world.registerSystem(CourseRidersSystem);
   world.registerSystem(ClubSocialSystem);
   world.registerSystem(ClubMirrorSystem);
+  // FFTV's house camera. It was registered only on the in-session mount
+  // (rave/experience.ts), so a club reached by hopping this page had no
+  // camera in it at all and the channel fell back to the relay's map.
+  world.registerSystem(ClubCastSystem);
   world.registerSystem(ClubBallSystem);
   world.registerSystem(ArcadeSystem);
   world.registerSystem(ClubPropsSystem);
@@ -154,6 +185,12 @@ World.create(container, {
     });
   } else if (enterButton) {
     enterButton.textContent = 'XR unavailable';
+  }
+
+  // Name the door on the button, so the tap that costs a page load says
+  // where it goes.
+  if (enterButton && DESTINATION === 'club' && xrSupported) {
+    enterButton.textContent = 'ENTER THE CLUB';
   }
 
   // eslint-disable-next-line no-console

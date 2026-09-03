@@ -68,7 +68,12 @@ export function requestVenueEntry(world: World): void {
     void handlers.enterVenue();
     return;
   }
-  endSessionAndNavigate(world, raveUrl());
+  // The fallback is a PAGE HOP, and the two doors used to hop to the same
+  // bare URL — where the rave page opens on its campaign screen (state.ts
+  // screen: 'tour'). So asking for the club got you the RAVE RAID menu and
+  // a second walk to find the floor you had already chosen. Say which door
+  // it was, and the page opens on the right side of it.
+  endSessionAndNavigate(world, `${raveUrl()}?to=club`);
 }
 
 /** Cross to RAVE RAID's foyer. */
@@ -78,7 +83,7 @@ export function requestRaveEntry(world: World): void {
     void handlers.enterRave();
     return;
   }
-  endSessionAndNavigate(world, raveUrl());
+  endSessionAndNavigate(world, `${raveUrl()}?to=foyer`);
 }
 
 export function requestArenaReturn(world: World): void {

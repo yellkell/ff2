@@ -134,14 +134,26 @@ export class Bank {
  * cleanly at the floor line rather than vanishing, and the reflection of
  * anything at height is untouched, which is where it was always right.
  */
+const _floor = new Vector3();
+
 export function mirrorBank(bank: Bank, floorY: number, dim = 0.34): Group {
   const src = bank.mesh;
   const clone = new InstancedMesh(src.geometry, src.material, 0);
   const mat = (src.material as MeshBasicMaterial).clone();
   mat.color.multiplyScalar(dim);
-  // Keep y < floorY. (Plane keeps normal·p + constant > 0; with a normal of
-  // -Y and constant floorY that reads -y + floorY > 0.)
-  mat.clippingPlanes = [new Plane(new Vector3(0, -1, 0), floorY)];
+  // Keep y < the floor. (A Plane keeps normal·p + constant > 0; with a
+  // normal of -Y that reads -y + constant > 0.)
+  //
+  // The constant is the floor's WORLD height, and it is set per frame
+  // rather than here, because a clipping plane is world-space and the
+  // circuit is NOT at the world origin — it is built three hundred metres
+  // under the club so the two rooms cannot see each other. A plane written
+  // in the course's own coordinates says "keep everything below -0.06",
+  // which is true of every fragment at -300 and clips precisely nothing.
+  // That is a silent failure: the planes are all present and correct and
+  // the reflection folds up through the deck exactly as before.
+  const plane = new Plane(new Vector3(0, -1, 0), floorY);
+  mat.clippingPlanes = [plane];
   clone.material = mat;
   // Share the live buffers; the count follows the source every frame.
   clone.instanceMatrix = src.instanceMatrix;
@@ -149,6 +161,14 @@ export function mirrorBank(bank: Bank, floorY: number, dim = 0.34): Group {
   clone.frustumCulled = false;
   clone.onBeforeRender = (): void => {
     clone.count = src.count;
+    // Where the floor has ended up this frame. Taking the point through the
+    // parent's world matrix rather than reading a translation keeps it
+    // right if the circuit is ever moved or scaled as a whole.
+    const p = g.parent;
+    if (p) {
+      _floor.set(0, floorY, 0).applyMatrix4(p.matrixWorld);
+      plane.constant = _floor.y;
+    }
   };
   const g = new Group();
   g.scale.y = -1;

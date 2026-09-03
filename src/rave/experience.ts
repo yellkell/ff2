@@ -33,7 +33,7 @@ import { conductor } from './course/conductor.js';
 import { course } from './course/state.js';
 import { installRaveDevHook } from './devHook.js';
 import { toLobby, toTour } from './game/flow.js';
-import { backToClub, enterPublicRoom, enterSoloFloor, inRoom, leaveRoom, net } from './net/session.js';
+import { backToClub, cancelPublicFloor, leaveRoom, net, openPublicFloor } from './net/session.js';
 import { ArcadeSystem } from './systems/ArcadeSystem.js';
 import { ArenaSystem } from './systems/ArenaSystem.js';
 import { AvatarSystem } from './systems/AvatarSystem.js';
@@ -86,23 +86,6 @@ const VOID = new Color(VOID_BG);
  * actually being alive. A relay that REFUSES is not waited on at all — the
  * error phase short-circuits below.
  */
-/**
- * How long the club waits for the relay before falling back to a room of
- * one. This was five seconds, which is fine against a warm host and wrong
- * against the one we actually have: ff2-room is on Render's free tier, and
- * a free instance SLEEPS when idle and takes the better part of a minute
- * to wake. Five seconds meant the first person into the club after a quiet
- * hour always got a solo floor — no room on the relay, so nobody could
- * join them and FFTV had nothing to peep at — and it never retried.
- *
- * Sixty seconds covers a cold start. Nothing is worse for the wait: the
- * hall is already up and you are standing in it, the only question is
- * whether the room you are in is shared. A relay that is genuinely down
- * still answers with an error, which drops to solo at once without
- * spending the patience.
- */
-const RELAY_PATIENCE_TICKS = 300;
-const RELAY_POLL_MS = 200;
 
 interface Pausable {
   play(): void;
@@ -156,26 +139,16 @@ export function mountRaveExperience(world: World, onLeaveToArena: () => void): R
 
   let active = false;
   let place: RavePlace | null = null;
-  let relayPoll = 0;
 
   /** Open the floor: the public room if the relay answers, the room of one
    *  if it doesn't (or says no). Either way the hall is up within a few
    *  seconds of the curtain lifting, and never a foyer you didn't ask for. */
   const openFloor = (): void => {
-    window.clearTimeout(relayPoll);
-    enterPublicRoom();
-    let ticks = 0;
-    const poll = (): void => {
-      relayPoll = 0;
-      if (!active || place !== 'club') return;
-      if (inRoom()) return;
-      if (net.phase === 'error' || ++ticks > RELAY_PATIENCE_TICKS) {
-        enterSoloFloor();
-        return;
-      }
-      relayPoll = window.setTimeout(poll, RELAY_POLL_MS);
-    };
-    relayPoll = window.setTimeout(poll, RELAY_POLL_MS);
+    // The patience, the retries and the room-of-one last resort all live in
+    // net/session.ts now, because the OTHER door onto this floor — the
+    // standalone page's own club button — needs exactly the same thing and
+    // used to have none of it.
+    openPublicFloor(() => active && place === 'club');
   };
 
   const experience: RaveExperience = {
@@ -210,8 +183,7 @@ export function mountRaveExperience(world: World, onLeaveToArena: () => void): R
       if (!active) return;
       active = false;
       place = null;
-      window.clearTimeout(relayPoll);
-      relayPoll = 0;
+      cancelPublicFloor();
       // Whatever was mid-flight goes quiet without a tail cut short: the
       // course's ride, the floor's record, a set on the decks.
       if (course.active) courseView.leave?.();
