@@ -18,10 +18,14 @@
  * presence belongs in Firestore at all.
  *
  * LEAVING is best-effort. A headset that crashes, sleeps or walks out of wifi
- * range never gets to say goodbye, so a stale record must expire on its own:
- * every write carries `expiresAt`, a Firestore TTL policy on that field sweeps
- * the document, and readers additionally ignore anything past its expiry so a
- * ghost never appears even in the minutes before the sweep catches up.
+ * range never gets to say goodbye, so a stale record has to stop counting on
+ * its own. Every write carries `expiresAt`, and the roster query filters on it
+ * SERVER-SIDE — an expired record is never returned, never shown, and never
+ * costs a read. That is what makes a ghost harmless.
+ *
+ * Actually removing them is housekeeping on top of that, and it is done by the
+ * clients (see `sweep`) rather than by a Firestore TTL policy, because TTL
+ * requires a billing plan and this project is on the free one.
  */
 
 import { cloud, cloudUid } from './firebase.js';
@@ -142,9 +146,50 @@ if (typeof window !== 'undefined') {
 /* ── reading the room ─────────────────────────────────────────────────── */
 
 /**
+ * THE SWEEP — take out expired records, once per session, a handful at a time.
+ *
+ * This is the job a Firestore TTL policy would do, done by the clients instead,
+ * because TTL requires a billing plan and this project is on the free one. It
+ * is not a workaround so much as the same arrangement the duel lobbies have
+ * always had: webrtcTransport reaps the ghosts it scans past, for the same
+ * reason and with the same caution.
+ *
+ * Worth being clear about what this is and isn't for. Nothing DEPENDS on it:
+ * the roster query filters on `expiresAt > now` server-side, so an expired
+ * record is never returned, never shown, and never costs a read. It is
+ * housekeeping — bytes, not correctness — which is why it is fine for it to be
+ * lazy, bounded and best-effort.
+ *
+ * Once per session and twenty at a time: a hundred headsets should not all
+ * grind the same collection, and the pile only grows at the rate people stop
+ * playing.
+ */
+let swept = false;
+
+async function sweep(): Promise<void> {
+  if (swept) return;
+  swept = true;
+  const c = await cloud();
+  if (!c) return;
+  try {
+    const { collection, deleteDoc, getDocs, limit, orderBy, query, where: whereFn } = c.fs;
+    const snap = await getDocs(
+      query(collection(c.db, 'presence'), whereFn('expiresAt', '<', new Date()), orderBy('expiresAt'), limit(20)),
+    );
+    // Firestore orders values by TYPE before value, and numbers sort below
+    // timestamps — so this one query also catches records written back when
+    // the lease was a number, which is convenient, because a TTL policy never
+    // could have.
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+  } catch {
+    // Denied, offline, or nothing to do. The roster is unaffected either way.
+  }
+}
+
+/**
  * Refresh the roster. Cheap to call repeatedly — a fetch inside the TTL is a
- * no-op. Records past their expiry are dropped on read, so a ghost never shows
- * even in the window before Firestore's own sweep catches up.
+ * no-op. Records past their expiry are dropped by the query itself, so a ghost
+ * never shows however long it sits there.
  */
 export async function fetchPresence(force = false): Promise<void> {
   if (!force && presence.state === 'ready' && Date.now() - fetchedAt < ROSTER_TTL_MS) return;
@@ -186,6 +231,7 @@ export async function fetchPresence(force = false): Promise<void> {
       };
     });
     presence.state = 'ready';
+    void sweep(); // once a session, after we know the cloud answers
   } catch {
     presence.state = 'off';
     roster = [];

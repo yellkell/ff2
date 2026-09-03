@@ -216,6 +216,35 @@ await check('an unknown room is refused', () =>
 
 await check('I can check myself out', () => assertSucceeds(deleteDoc(doc(me, 'presence', ME))));
 
+// THE SWEEP. TTL needs a billing plan, so the clients do the housekeeping —
+// which only works if anyone may bin a record that has already lapsed.
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'presence', 'stale'), {
+    name: 'GHOST', where: 'club', at: 1, expiresAt: new Date(Date.now() - 60_000),
+  });
+  await setDoc(doc(db, 'presence', 'live'), {
+    name: 'HERE', where: 'club', at: now(), expiresAt: new Date(now() + 150_000),
+  });
+  // Written back when the lease was a number — no TTL policy could ever have
+  // recognised it, so the sweep has to be able to.
+  await setDoc(doc(db, 'presence', 'legacy'), {
+    name: 'OLD', where: 'club', at: 1, expiresAt: Date.now() - 60_000,
+  });
+});
+
+await check('anyone may sweep an EXPIRED record', () =>
+  assertSucceeds(deleteDoc(doc(them, 'presence', 'stale'))),
+);
+
+await check('…and one whose lease is a leftover number', () =>
+  assertSucceeds(deleteDoc(doc(them, 'presence', 'legacy'))),
+);
+
+await check('but NOT a live one belonging to somebody else', () =>
+  assertFails(deleteDoc(doc(them, 'presence', 'live'))),
+);
+
 /* ── probes ─────────────────────────────────────────────────────────────── */
 
 console.log('\n=== probes: the clock probe, and only your own ===');

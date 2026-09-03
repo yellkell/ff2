@@ -199,7 +199,24 @@ service cloud.firestore {
         && str(request.resource.data.name, 16)
         && leased()
         && stamped();
-      allow delete: if mine(uid);
+
+      // YOUR OWN record — or ANY record that has already expired.
+      //
+      // Sweeping an expired record is not a privileged act: it is exactly what
+      // a TTL policy would have done, and TTL requires a billing plan. This
+      // project is on Spark, so the clients sweep instead, which is the same
+      // arrangement the duel lobbies have always had (webrtcTransport reaps
+      // ghosts it scans past). Nothing is lost — an expired record is one no
+      // reader will show either way.
+      //
+      // A lease that isn't a timestamp at all is also fair game. New writes
+      // cannot produce one (`leased()` above forbids it), so in practice this
+      // reaches exactly the records written before the lease was a timestamp —
+      // which no TTL policy could ever have swept, since it would not have
+      // recognised the field.
+      allow delete: if mine(uid)
+        || (signedIn()
+            && (!(resource.data.expiresAt is timestamp) || resource.data.expiresAt < request.time));
     }
 
     /* ── probes — the device clock-skew measurement ───────────────────── */

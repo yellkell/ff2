@@ -228,20 +228,23 @@ Two pieces of setup are not in this repo, because they cannot be:
   Anonymous). Every security rule identifies a row by its document name
   matching `request.auth.uid`, so with it off there is no uid, and every write
   in the game is denied — boards go quiet and matchmaking never pairs.
-- **A TTL policy on `expiresAt`**, for the `rooms` and `presence` collections.
-  It lives in the *Google Cloud* console rather than the Firebase one:
-  `console.cloud.google.com/firestore/databases/-default-/ttl`. Both
-  collections write the field already; the policy is what makes Firestore act
-  on it. Without it, abandoned rooms are hidden from players by the
-  client-side expiry check but are never actually deleted.
+- **Nothing else.** There WAS a second item here — a Firestore TTL policy on
+  `expiresAt` for `rooms` and `presence` — and it turned out not to be needed.
+  TTL requires the Blaze plan, and more to the point it was never load
+  bearing: both collections are queried with `where('expiresAt', '>', now)`,
+  so an expired record is filtered out SERVER-SIDE. It is never returned,
+  never shown, and never costs a read, which means a ghost cannot crowd a live
+  room out of a `limit()`ed scan — the failure the field exists to prevent.
 
-  > `expiresAt` is a **timestamp**, and has to be. A TTL policy only ever acts
-  > on a timestamp field — aim one at a number and Firestore accepts the
-  > policy, reports it as active, and sweeps nothing, silently, for ever.
-  > `firestore.rules` refuses a numeric lease for exactly that reason.
+  Removing the records is housekeeping on top of that, and the clients do it:
+  `net/presence.ts` sweeps a handful of lapsed records once per session, and
+  the rules let any signed-in player bin one that has already expired. That is
+  the same arrangement the duel lobbies have always had, where
+  `webrtcTransport` reaps the ghosts it scans past.
 
-  A collection with no documents in it does not appear in the console at all,
-  so if `rooms` is missing there simply hasn't been a lobby yet.
+  Turn TTL on if you move to Blaze for other reasons — the field is the right
+  type for it (a timestamp; a policy aimed at a number sweeps nothing and says
+  nothing about it) — but it buys tidiness, not correctness.
 
 Rules and indexes DO live here and ship with the repo:
 
