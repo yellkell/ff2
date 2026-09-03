@@ -271,21 +271,14 @@ const prof = await page.evaluate(() => ({
   name: document.getElementById('profile-name').textContent,
   rank: document.getElementById('profile-rank').textContent,
   chip: document.getElementById('profile-chip-text').textContent,
-  tapes: document.querySelectorAll('#profile-tape .tape-row').length,
-  tiles: document.getElementById('profile-tiles').textContent,
   hash: location.hash,
-  heat: [...document.querySelectorAll('#profile canvas.heat')].map((c) => {
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-    let lit = 0;
-    for (let p = 0; p < d.length / 4; p++) if (d[p * 4 + 3] >= 200 && d[p * 4] > 120) lit++;
-    return lit;
-  }),
+  // A profile is the service record: no tapes, no heatmaps, no lab bench.
+  lab: document.querySelectorAll('#profile .tape-row, #profile canvas.heat').length,
 }));
 check('tapping a name opens the profile over the rail', prof.shown && prof.railHidden, JSON.stringify({ shown: prof.shown, railHidden: prof.railHidden }));
 check('the profile names the player and a rank', prof.name === 'PROBE' && /BRONZE|SILVER|GOLD/.test(prof.rank), `${prof.name} / ${prof.rank}`);
 check('the address deep-links the player', /^#player=u1$/.test(prof.hash), prof.hash);
-check("the profile lists the player's tapes", prof.tapes === 2 && /Tapes/.test(prof.tiles), `${prof.tapes} tapes`);
-check("the player's three heatmaps are painted", prof.heat.length === 3 && prof.heat.every((n) => n > 50), prof.heat.join(','));
+check('the profile carries no lab data', prof.lab === 0, `${prof.lab} lab elements`);
 const back = await page.evaluate(() => {
   document.getElementById('profile-back').click();
   return { shown: !document.getElementById('profile').classList.contains('hidden'), rail: !document.getElementById('board-rail').classList.contains('hidden'), hash: location.hash };
@@ -335,6 +328,13 @@ const qrOk = await page.evaluate(async () => {
   };
   return { size: q.size, square: q.modules.every((r) => r.length === q.size), finders: finder(0, 0) && finder(q.size - 7, 0) && finder(0, q.size - 7), dark: q.modules[q.size - 8][8] };
 });
+const oct = await page.evaluate(async () => {
+  const src = await fetch('/src/config.ts').then((r) => r.text());
+  const n = (k) => Number(new RegExp(`export const ${k} = ([0-9.]+);`).exec(src)[1]);
+  return { cfg: [n('OCTAGON_HALF_WIDTH'), n('OCTAGON_HALF_DEPTH'), n('EDGE_HALF'), n('CHAMFER')], page: [HALF_W, HALF_D, EDGE_HALF, CHAMFER] };
+});
+check('the heatmap octagon is the platform the game stands you on', oct.cfg.join(',') === oct.page.join(','), `config ${oct.cfg.join(',')} vs page ${oct.page.join(',')}`);
+
 check('the QR is a square with three finder patterns and the dark module', qrOk.square && qrOk.finders && qrOk.dark && qrOk.size % 4 === 1, JSON.stringify(qrOk));
 
 await browser.close();

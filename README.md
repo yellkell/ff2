@@ -48,9 +48,10 @@ carried over verbatim: everything in it still applies to this code.
     the headset's card is — their PAINTING behind the name (the same bake
     the profile card uses, ported byte for byte from `avatar/paint.ts`),
     rank and points, honours, achievements, the note, what they wear —
-    then the record: their rank and best on every FIRE FIGHT board, every
-    rave chart they have danced, and their own tapes with their own
-    heatmaps (standing, LANDING, hit). `#player=<uid>` deep-links one.
+    then the record: their rank and best on every FIRE FIGHT board and
+    every rave chart they have danced. Tapes and heatmaps stay in THE LAB;
+    a profile is the service record, not a second lab bench.
+    `#player=<uid>` deep-links one.
   - **FFTV** — television. The headset RUNNING a bout (a bot
     bout's one player, a duel's host, the mesh authority, the raid host)
     casts a top-down frame five times a second to THE ROOM SERVER's `/tv`

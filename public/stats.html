@@ -1334,9 +1334,6 @@
       .record .row .rank {
         width: 54px;
       }
-      #profile .maps {
-        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      }
 
       .hidden { display: none !important; }
 
@@ -1503,19 +1500,6 @@
             </section>
           </div>
 
-          <section class="panel opening" style="animation-delay: 0.18s; margin-top: clamp(12px, 1.6vw, 18px)">
-            <i class="halo"></i><span class="sheen"></span>
-            <h2 class="panel-title">Their tape</h2>
-            <p class="panel-note" id="profile-tape-note">Every bout this player recorded.</p>
-            <section class="strip" id="profile-tiles" style="margin-top: 14px"></section>
-            <div class="maps">
-              <figure><canvas class="heat" id="pheat-stand" width="320" height="300"></canvas><figcaption>Standing<small>where they stand</small></figcaption></figure>
-              <figure><canvas class="heat" id="pheat-land" width="320" height="300"></canvas><figcaption>Landing<small>where they stand when they hit you</small></figcaption></figure>
-              <figure><canvas class="heat" id="pheat-hit" width="320" height="300"></canvas><figcaption>Hit<small>where they stand when they get hit</small></figcaption></figure>
-            </div>
-            <div id="profile-tape" style="margin-top: 12px"></div>
-            <div class="status hidden" id="profile-tape-status"><div class="line"></div><div class="hint"></div></div>
-          </section>
         </div>
       </section>
 
@@ -2108,9 +2092,16 @@
         renderTapeList(document.getElementById('lab-tape'), rows, lab, drawLab);
       }
 
-      /* The platform footprint (src/config.ts OCTAGON_*): 1.72 × 1.5 m,
-         chamfered. Drawn with −z UP, which is the way you face the fight. */
-      const HALF_W = 0.86, HALF_D = 0.75, EDGE_HALF = 0.55, CHAMFER = 0.44;
+      /* THE PLATFORM's own footprint, copied from src/config.ts: 1.72 m
+         across, 1.5 m deep, a 0.75 m straight edge front and back and
+         0.6 m chamfers on the corners. Drawn with −z UP, the way you face
+         the fight.
+
+         These four numbers were eyeballed once and were wrong — a 1.1 m
+         straight edge and shallow corners, which drew a rounded box where
+         the game stands you on a proper octagon. Take them from the
+         config, and take the vertex ORDER from OCTAGON_VERTICES too. */
+      const HALF_W = 0.86, HALF_D = 0.75, EDGE_HALF = 0.375, CHAMFER = 0.375;
       const OCT = [
         [-EDGE_HALF, -HALF_D], [EDGE_HALF, -HALF_D], [HALF_W, -CHAMFER], [HALF_W, CHAMFER],
         [EDGE_HALF, HALF_D], [-EDGE_HALF, HALF_D], [-HALF_W, CHAMFER], [-HALF_W, -CHAMFER],
@@ -2130,9 +2121,15 @@
           b.grid[key].forEach((v, i) => { acc[i] += Number(v) || 0; });
         }
         const max = Math.max(1, ...acc);
-        const pad = 26, pw = W - pad * 2, ph = H - pad * 2 - 12;
-        const X = (x) => pad + (x + HALF_W) * (pw / (HALF_W * 2));
-        const Z = (z) => pad + 12 + (z + HALF_D) * (ph / (HALF_D * 2));
+        // ONE scale for both axes — the platform is 1.72 by 1.5, and a
+        // box fitted per-axis quietly stretches it into the canvas's own
+        // proportion. Fit the wider constraint, then centre what's left.
+        const pad = 26, boxW = W - pad * 2, boxH = H - pad * 2 - 12;
+        const scale = Math.min(boxW / (HALF_W * 2), boxH / (HALF_D * 2));
+        const pw = HALF_W * 2 * scale, ph = HALF_D * 2 * scale;
+        const ox = (W - pw) / 2, oz = pad + 12 + (boxH - ph) / 2;
+        const X = (x) => ox + (x + HALF_W) * scale;
+        const Z = (z) => oz + (z + HALF_D) * scale;
         const path = () => {
           g.beginPath();
           OCT.forEach(([x, z], i) => (i ? g.lineTo(X(x), Z(z)) : g.moveTo(X(x), Z(z))));
@@ -2148,7 +2145,7 @@
             const v = acc[r * gw + c];
             if (!v) continue;
             g.fillStyle = heatColour(Math.log1p(v) / Math.log1p(max));
-            g.fillRect(pad + (c / gw) * pw, pad + 12 + (r / gh) * ph, pw / gw + 0.6, ph / gh + 0.6);
+            g.fillRect(ox + (c / gw) * pw, oz + (r / gh) * ph, pw / gw + 0.6, ph / gh + 0.6);
           }
         }
         g.restore();
@@ -2960,7 +2957,7 @@
         ['ff2-raid-time', 'Raid'], ['ff2-goopliath-time', 'Goopliath'],
       ];
 
-      const profile = { uid: '', name: '', open: false, tapes: [], tape: { open: null }, seq: 0 };
+      const profile = { uid: '', name: '', open: false, seq: 0 };
       window.__ffProfile = { open: (uid, name) => openProfile(uid, name), state: () => profile };
 
       /** A name, as a link to its owner. */
@@ -3000,7 +2997,6 @@
         profile.uid = uid;
         profile.name = name || '';
         profile.open = true;
-        profile.tape.open = null;
         if (face !== 'ff') showFace('ff');
         syncFfFace();
         try { history.replaceState(null, '', `#player=${encodeURIComponent(uid)}`); } catch {}
@@ -3036,8 +3032,6 @@
         document.getElementById('profile-rank').textContent = '';
         document.getElementById('profile-record').innerHTML = '';
         document.getElementById('profile-rave').innerHTML = '';
-        document.getElementById('profile-tape').innerHTML = '';
-        document.getElementById('profile-tiles').innerHTML = '';
         profileChip('PULLING THE RECORD', 'warn');
         setStatus('PULLING THE RECORD', 'warn');
 
@@ -3045,7 +3039,7 @@
         const ravePaths = [];
         for (const [track] of RR_TRACKS) for (const d of ['0', '1', '2', '3']) ravePaths.push(`boards/${raveBoard(track, d)}/rows/${uid}`);
         const runPaths = RUN_BOARD_NAMES.map(([id]) => `boards/${id}/rows/${uid}`);
-        let player = null, rows = new Map(), tapes = [];
+        let player = null, rows = new Map();
         try {
           const [p, r] = await Promise.all([getDoc(`players/${uid}`), batchGet([...runPaths, ...ravePaths])]);
           player = p;
@@ -3063,21 +3057,10 @@
 
         // THE RECORD: the player-doc boards, then the run boards — with each
         // one's rank, which needs the board (cached from the rail, or pulled).
+        // Tapes are THE LAB's business and stay there: a profile is the
+        // service record, not a second lab bench.
         void renderRecord(uid, pd, rows, seq);
         renderRave(rows);
-
-        // Their tapes: the cloud's, or — when it has none — whatever the LAB
-        // already holds for them (a fixture, an older pull).
-        try {
-          const docs = await runQuery('bouts', { where: { field: 'uid', value: uid }, limit: 100 });
-          tapes = docs.map(normBout).sort((a, b) => (b.at?.getTime() || 0) - (a.at?.getTime() || 0));
-        } catch {
-          tapes = [];
-        }
-        if (!tapes.length) tapes = lab.all.filter((b) => b.uid === uid);
-        if (seq !== profile.seq) return;
-        profile.tapes = tapes;
-        renderProfileTape();
         profileChip(player ? 'RECORD IS IN' : 'NO PROFILE ON THE BOARD', player ? 'live' : 'warn');
         setStatus(player ? 'RECORD IS IN' : 'NO PROFILE', player ? 'live' : 'warn');
       }
@@ -3193,36 +3176,10 @@
           `<span class="score">${num(c.score)}</span></li>`).join('');
       }
 
-      function renderProfileTape() {
-        const rows = profile.tapes;
-        const status = document.getElementById('profile-tape-status');
-        const n = rows.length || 1;
-        const sum = (f) => rows.reduce((a, b) => a + (Number(f(b)) || 0), 0);
-        const throws = sum((b) => b.thr.n), dealt = sum((b) => b.hits.dealt), heads = sum((b) => b.hits.head), wins = rows.filter((b) => b.win).length;
-        const tiles = [
-          { cap: 'Tapes', val: num(rows.length), sub: `${wins} won · ${rows.length - wins} lost` },
-          { cap: 'Win rate', val: pct(wins, rows.length), sub: '' },
-          { cap: 'Hit rate', val: pct(dealt, throws), sub: `${num(dealt)} of ${num(throws)}` },
-          { cap: 'Headshots', val: pct(heads, dealt), sub: `${num(heads)} found a head` },
-          { cap: 'Parries a bout', val: (sum((b) => b.par) / n).toFixed(1), sub: '' },
-        ];
-        document.getElementById('profile-tiles').innerHTML = rows.length
-          ? tiles.map((t) => `<div class="stat"><div class="cap">${t.cap}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`).join('')
-          : '';
-        for (const key of ['stand', 'land', 'hit']) drawHeat(document.getElementById(`pheat-${key}`), rows, key);
-        if (!rows.length) {
-          document.getElementById('profile-tape').innerHTML = '';
-          showStatus(status, 'NO TAPES FROM THIS PLAYER', 'A bout that lasts records itself.', true);
-          return;
-        }
-        status.classList.add('hidden');
-        renderTapeList(document.getElementById('profile-tape'), rows, profile.tape, renderProfileTape);
-      }
-
       /**
        * A list of tapes into `host`, one row each, the open one unfolded
-       * under its row. `st.open` is which; `rerender` is who to call when a
-       * row is tapped, so THE LAB and THE PROFILE can share the one painter.
+       * under its row. `st.open` is which; `rerender` is who to call when
+       * a row is tapped.
        */
       function renderTapeList(host, rows, st, rerender) {
         host.innerHTML = rows

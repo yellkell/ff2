@@ -604,8 +604,8 @@ hosting targets.
   page gains an FF2 board the same way.
 - **A PROFILE** behind every name (tap one anywhere): the painting
   behind the name, rank, honours, achievements, the note, the kit; then
-  every board's rank and best, every rave chart danced, and their own
-  tapes with their own heatmaps. `#player=<uid>` deep-links one.
+  every board's rank and best and every rave chart danced. The tapes stay
+  in THE LAB. `#player=<uid>` deep-links one.
 - **FFTV** (the third face): a live top-down broadcast of whatever is on —
   the headset running a bout casts frames to `server/tv.mjs` at `/tv`
   (`systems/BroadcastSystem.ts`, `net/tvCast.ts`); the page draws
