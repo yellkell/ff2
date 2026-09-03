@@ -1072,8 +1072,21 @@ export const VIDEO = {
   /** Refuse a frame bigger than this many base64 characters (~24 KiB of
    *  JPEG). A frame this big means the encoder mis-set, not a busy scene. */
   maxBytes: 32000,
-  /** No picture for this long and the page falls back to the diagram. */
-  staleMs: 2500,
+  /**
+   * No picture for this long and the page falls back to the diagram.
+   *
+   * SIX seconds, not the two and a half it started at. The caster aims for
+   * three frames a second, but that is what it ASKS for — the real rate is
+   * whatever the headset's render, readback and encode actually cost, and
+   * a busy frame can push the gap past two seconds. At the old window the
+   * picture expired between frames and the page flipped to the diagram and
+   * back, which reads as a fault rather than as television.
+   *
+   * A slightly old picture beats a strobing one. This only decides how
+   * long the LAST frame keeps its place; a caster that has genuinely
+   * stopped still hands the floor back to the map within a few seconds.
+   */
+  staleMs: 6000,
 } as const;
 
 export const TV = {

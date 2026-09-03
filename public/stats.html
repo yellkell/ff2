@@ -2990,9 +2990,23 @@
         img.src = 'data:image/jpeg;base64,' + d;
       }
 
-      /** A picture worth drawing: this channel's, and recent (VIDEO.staleMs). */
+      /**
+       * How long the last picture keeps its place before the page gives up
+       * and draws the diagram instead (src/config.ts VIDEO.staleMs).
+       *
+       * Six seconds rather than two and a half: three frames a second is
+       * what the caster ASKS for, not what a headset necessarily delivers,
+       * and at the shorter window a picture expired between frames — so the
+       * page flipped between video and diagram over and over, which reads
+       * as a fault rather than as television. A slightly old frame beats a
+       * strobing one, and a caster that has actually stopped still hands
+       * the floor back within a few seconds.
+       */
+      const PIC_STALE_MS = 6000;
+
+      /** A picture worth drawing: this channel's, and recent enough. */
       function tvHasPicture() {
-        return !!tv.pic && tv.picId === tv.watching && performance.now() - tv.picAt < 2500;
+        return !!tv.pic && tv.picId === tv.watching && performance.now() - tv.picAt < PIC_STALE_MS;
       }
 
       function tvBar() {
@@ -3330,7 +3344,7 @@
         // A render of the floor beats a map of it, when the room is sending
         // one (src/rave/systems/ClubCastSystem.ts). The map is what you get
         // when nobody in there can shoot a picture.
-        if (tv.clubPic && now - tv.clubPicAt < 2500) return drawClubPicture();
+        if (tv.clubPic && now - tv.clubPicAt < PIC_STALE_MS) return drawClubPicture();
         const room = tv.club.rooms.slice().sort((a, b) => b.members.length - a.members.length)[0];
         const placed = room.members.filter((m) => m.x != null && !m.away);
         const pts = placed.map((m) => [m.x, m.z]);
