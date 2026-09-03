@@ -301,6 +301,37 @@
           2px 0 0 rgba(176, 107, 255, 0.45),
           0 0 18px rgba(255, 176, 46, 0.85);
       }
+      /* RAVE RAID's own wordmark — green and magenta, off its own board. */
+      body[data-face='rr'] .wordmark .a {
+        color: #b9ffc4;
+        text-shadow:
+          -2px 0 0 rgba(255, 42, 213, 0.5),
+          2px 0 0 rgba(79, 183, 255, 0.42),
+          0 0 18px rgba(54, 224, 90, 0.75);
+      }
+      body[data-face='rr'] .wordmark .b {
+        color: #ffd9f6;
+        text-shadow:
+          -2px 0 0 rgba(54, 224, 90, 0.45),
+          2px 0 0 rgba(176, 107, 255, 0.45),
+          0 0 18px rgba(255, 42, 213, 0.85);
+      }
+      /* …and FFTV's, on air. */
+      body[data-face='tv'] .wordmark .a {
+        color: #ffe3de;
+        text-shadow:
+          -2px 0 0 rgba(255, 75, 62, 0.5),
+          2px 0 0 rgba(255, 122, 24, 0.4),
+          0 0 18px rgba(255, 75, 62, 0.8);
+      }
+      body[data-face='tv'] .wordmark .b {
+        color: #ff8a7d;
+        text-shadow:
+          -2px 0 0 rgba(255, 122, 24, 0.45),
+          2px 0 0 rgba(176, 107, 255, 0.35),
+          0 0 20px rgba(255, 75, 62, 0.9);
+      }
+
       .kicker {
         font-weight: 600;
         font-size: clamp(13px, 1.5vw, 17px);
@@ -1041,12 +1072,87 @@
       .tape-open canvas {
         display: block;
         width: 100%;
-        height: 96px;
+        height: 224px;
         border-radius: 10px;
         background: rgba(0, 0, 0, 0.35);
         border: 2px solid var(--line-faint);
         margin: 10px 0;
       }
+      .tl-key {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin: 2px 0 12px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .tl-key span {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tl-key i {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+      }
+      .tl-key i.tick {
+        width: 2px;
+        height: 12px;
+        border-radius: 1px;
+      }
+      .att-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 12px;
+      }
+      .att-row .cap {
+        width: 52px;
+        flex: none;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .att-pip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 4px 12px 4px 5px;
+        border-radius: 12px;
+        border: 1.5px solid currentColor;
+        background: rgba(0, 0, 0, 0.3);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+      }
+      .att-pip b {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: currentColor;
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 700;
+      }
+      .att-pip b span {
+        color: #0a0810;
+      }
+      .att-row .none {
+        color: var(--disabled);
+        font-size: 13px;
+        letter-spacing: 0.04em;
+      }
+
       .tape-open .pbp {
         max-height: 260px;
         overflow: auto;
@@ -1095,6 +1201,37 @@
         letter-spacing: 0.18em;
         text-transform: uppercase;
         color: var(--faint);
+      }
+      .lab-filter input[type='search'] {
+        appearance: none;
+        min-height: 44px;
+        min-width: 220px;
+        padding: 10px 18px;
+        border-radius: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.045);
+        color: var(--text);
+        font-family: var(--font);
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.08em;
+        transition: background-color 0.18s linear, border-color 0.18s linear;
+      }
+      .lab-filter input[type='search']::placeholder {
+        color: var(--disabled);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        font-size: 13px;
+      }
+      .lab-filter input[type='search']:hover {
+        background: var(--plate-hover);
+        border-color: var(--line-hover);
+        transition-duration: 0.1s;
+      }
+      .lab-filter input[type='search']:focus-visible {
+        outline: none;
+        border-color: var(--accent-edge);
+        box-shadow: 0 0 0 3px var(--accent-faint);
       }
       .lab-filter select {
         appearance: none;
@@ -1414,6 +1551,7 @@
         <div id="lab" class="hidden">
           <div class="lab-filter">
             <span class="cap">Player</span>
+            <input type="search" id="lab-search" placeholder="search a name" autocomplete="off" spellcheck="false" />
             <select id="lab-player"><option value="">Everyone</option></select>
             <span class="count" id="lab-count"></span>
           </div>
@@ -1549,10 +1687,6 @@
             </div>
             <canvas id="tv-canvas" width="960" height="540"></canvas>
             <div class="tv-guide" id="tv-guide"></div>
-            <p class="panel-note" style="margin-top: 14px">
-              FFTV: live bouts, brawls and raids as they happen, top-down from the headset
-              running them. Nothing on air and it peeps into the club instead.
-            </p>
           </section>
         </main>
       </section>
@@ -1943,7 +2077,7 @@
         '1v1': '1V1', '2v2': '2V2', ffa: 'FFA', raid: 'TITAN RAID',
         gauntlet: 'SPEEDRUN', solo: 'SOLO', club: 'THE CLUB',
       };
-      const lab = { all: [], player: '', open: null, loaded: false };
+      const lab = { all: [], player: '', query: '', open: null, loaded: false };
       window.__ffLab = {
         inject: (docs) => { lab.all = docs.map(normBout); lab.loaded = true; drawLab(); },
         state: () => lab,
@@ -1968,6 +2102,7 @@
           thr: b.thr || { n: 0, l: 0, r: 0, spd: 0 },
           hits: b.hits || {},
           par: Number(b.par) || 0,
+          att: b.att && typeof b.att === 'object' ? { mine: b.att.mine || [], theirs: b.att.theirs || [] } : null,
           grid: b.grid && b.grid.w ? b.grid : null,
           ev: Array.isArray(b.ev) ? b.ev : [],
           boss: b.boss || null,
@@ -1991,19 +2126,46 @@
         }
       }
 
-      /** The tapes the filter leaves standing. A tape belongs to whoever
-       *  recorded it, so filtering by player is filtering by author. */
+      /**
+       * The tapes the filter leaves standing.
+       *
+       * A PICK is an author: a tape belongs to whoever recorded it, so
+       * picking a name shows that player's own tapes. A SEARCH is looser
+       * and more useful when you don't know the spelling or only remember
+       * who somebody fought — it matches any name ON the tape, so typing
+       * "rook" finds the bouts against ROOK as well as ROOK's own.
+       */
       function labRows() {
-        return lab.player ? lab.all.filter((b) => b.name === lab.player) : lab.all;
+        if (lab.player) return lab.all.filter((b) => b.name === lab.player);
+        if (!lab.query) return lab.all;
+        const q = lab.query.toLowerCase();
+        return lab.all.filter(
+          (b) => b.name.toLowerCase().includes(q) || b.names.some((n) => n.toLowerCase().includes(q)),
+        );
       }
 
       function drawLab() {
-        // The picker lists everyone who has a tape of their own.
+        // The search narrows the picker as you type, so a long board of
+        // names is three letters away from the one you want rather than a
+        // scroll. Picking one then locks it to that author.
+        const search = document.getElementById('lab-search');
+        if (search.value !== lab.query) search.value = lab.query;
+        if (!search.dataset.wired) {
+          search.dataset.wired = '1';
+          search.addEventListener('input', () => {
+            lab.query = search.value.trim();
+            lab.player = '';
+            lab.open = null;
+            drawLab();
+          });
+        }
         const sel = document.getElementById('lab-player');
-        const names = [...new Set(lab.all.map((b) => b.name))].filter(Boolean).sort();
+        const all = [...new Set(lab.all.map((b) => b.name))].filter(Boolean).sort();
+        const q = lab.query.toLowerCase();
+        const names = q ? all.filter((n) => n.toLowerCase().includes(q)) : all;
         if (!names.includes(lab.player)) lab.player = '';
         sel.innerHTML =
-          '<option value="">Everyone</option>' +
+          '<option value="">' + (q ? 'Anyone matching' : 'Everyone') + '</option>' +
           names
             .map((n) => '<option value="' + esc(n) + '"' + (n === lab.player ? ' selected' : '') + '>' + esc(n) + '</option>')
             .join('');
@@ -2017,8 +2179,8 @@
         if (!rows.length) {
           showStatus(
             status,
-            lab.all.length ? 'NO TAPES FROM THIS PLAYER' : 'NO TAPES YET',
-            lab.all.length ? 'Pick another name, or everyone.' : 'Fight something for a quarter of a minute and it records itself.',
+            lab.all.length ? 'NOTHING MATCHES' : 'NO TAPES YET',
+            lab.all.length ? 'Try another name, or clear the search.' : 'Fight something for a quarter of a minute and it records itself.',
             true,
           );
         } else {
@@ -2193,6 +2355,7 @@
               case 2: return `${t} <span class="hit">landed ${e[3]}</span> with the ${hand(e[2])}${e[5] >= 0 ? ` to the ${PART[e[5]]}` : ''}${e[4] ? ' on the return' : ''}`;
               case 3: return `${t} <span class="pa">parried</span> with the ${hand(e[2])}`;
               case 4: return `${t} <span class="rd">ROUND ${e[2]} — ${OUTW[e[3]] || ''} by ${e[4] === 0 ? 'KO' : 'the clock'} · you ${e[5]} · them ${e[6]}</span>`;
+              case 5: return `${t} ${e[2] === 0 ? 'you' : 'they'} recalled the ${hand(e[3])} on <span style="color:${ATT_COLOUR[e[4]]};font-weight:600">${ATT_NAME[e[4]] || '?'}</span>`;
               default: return '';
             }
           })
@@ -2204,57 +2367,271 @@
           b.boss ? `vs ${b.boss.name}, stage ${(b.boss.stage || 0) + 1}` : '',
           `${b.ev.length} events`,
         ].filter(Boolean).join(' · ');
-        return `<p class="panel-note">${esc(meta)}</p>${rounds}<canvas width="900" height="96"></canvas>` +
+        // The attachments each side actually fired. `att` rides the tape;
+        // an older one without it simply shows nothing.
+        const attSide = (counts, cap) => {
+          const pips = (counts || []).map((n, code) =>
+            n > 0
+              ? `<span class="att-pip" style="color:${ATT_COLOUR[code]}"><b><span>${ATT_LETTER[code]}</span></b>${ATT_NAME[code]} ×${n}</span>`
+              : '').filter(Boolean);
+          return `<div class="att-row"><span class="cap">${cap}</span>${pips.length ? pips.join('') : '<span class="none">none fired</span>'}</div>`;
+        };
+        const att = b.att && (b.att.mine || b.att.theirs)
+          ? attSide(b.att.mine, 'You') + attSide(b.att.theirs, 'Them')
+          : '';
+        const key =
+          '<div class="tl-key">' +
+          '<span style="color:#ff7a18"><i></i>your pool</span>' +
+          '<span style="color:#4fb7ff"><i></i>their pool</span>' +
+          '<span style="color:#ff7a18"><i class="tick"></i>your throws</span>' +
+          '<span style="color:#6fc8ff"><i></i>parry</span>' +
+          '<span style="color:#ff5266"><i></i>hit you took</span>' +
+          '<span style="color:#ffb02e"><i></i>attachment</span>' +
+          '</div>';
+        return `<p class="panel-note">${esc(meta)}</p>${rounds}<canvas width="900" height="224"></canvas>` +
+          key + att +
           `<div class="pbp">${pbp || 'this tape carries no events'}</div>`;
       }
 
-      /** Both health lines over the bout, rebuilt from the tape's hits:
-       *  yours in ember, theirs in cool blue, refilled at every round. */
-      function drawHealthStrip(canvas, b) {
+      /* ── THE TIMELINE ──────────────────────────────────────────────────
+         One bout, end to end, on one canvas. The rounds are bands across
+         the top; both health pools are lines through the middle, rebuilt
+         from the hits the tape recorded; and under them two LANES — yours
+         and theirs — carry the acts: every throw a tick, every parry a
+         diamond, every attachment a lettered pip, every landed hit a
+         wedge sized by its damage.
+
+         The play-by-play under it is the same events as words. This is
+         the shape of the fight; that is the detail of it. */
+
+      const ATT_NAME = ['', 'SPLIT', 'GROW', 'SHRINK'];
+      const ATT_LETTER = ['', 'S', 'G', 'K'];
+      const ATT_COLOUR = ['', '#6fc8ff', '#ff7a18', '#ffb02e'];
+
+      function drawTimeline(canvas, b) {
         if (!canvas || !b) return;
         const g = canvas.getContext('2d');
-        const W = canvas.width, H = canvas.height;
+        const W = canvas.width;
+        const H = canvas.height;
         g.clearRect(0, 0, W, H);
         const T = Math.max(1, b.dur || (b.ev.length ? b.ev[b.ev.length - 1][0] : 1));
-        let me = 100, them = 100;
-        const mine = [[0, 100]], theirs = [[0, 100]];
-        for (const e of b.ev) {
-          if (e[1] === 1) { me = Math.max(0, me - e[5]); mine.push([e[0], me]); }
-          else if (e[1] === 2) { them = Math.max(0, them - e[3]); theirs.push([e[0], them]); }
-          else if (e[1] === 4) {
-            mine.push([e[0], me]); theirs.push([e[0], them]);
-            me = 100; them = 100;
-            mine.push([e[0] + 0.01, 100]); theirs.push([e[0] + 0.01, 100]);
-            g.strokeStyle = 'rgba(255,176,46,0.3)';
-            g.lineWidth = 1;
-            g.beginPath();
-            g.moveTo((e[0] / T) * W, 0);
-            g.lineTo((e[0] / T) * W, H);
-            g.stroke();
+        const L = 58;
+        const R = W - 14;
+        const x = (t) => L + (Math.max(0, Math.min(T, t)) / T) * (R - L);
+
+        /* THE ROUNDS, as bands. A round ends at its own event, so the bands
+           are the gaps between those times — and the last one runs to the
+           end of the tape. */
+        const ends = b.ev.filter((e) => e[1] === 4).map((e) => e[0]);
+        const inner = ends.filter((t) => t > 0 && t < T);
+        // A trailing band only if the last bell left more than a moment
+        // after it — otherwise the final round's own band runs to the end.
+        const tail = inner.length && T - inner[inner.length - 1] < Math.max(2, T * 0.02);
+        const edges = tail ? [0, ...inner.slice(0, -1), T] : [0, ...inner, T];
+        const bandY = 6;
+        const bandH = 17;
+        for (let i = 0; i + 1 < edges.length; i++) {
+          const x0 = x(edges[i]);
+          const x1 = x(edges[i + 1]);
+          g.fillStyle = i % 2 ? 'rgba(255,255,255,0.045)' : 'rgba(255,255,255,0.02)';
+          g.fillRect(x0, bandY, x1 - x0, bandH);
+          if (x1 - x0 > 34) {
+            g.fillStyle = 'rgba(243,240,234,0.52)';
+            g.font = '700 11px Rajdhani, system-ui, sans-serif';
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.fillText(`RD ${i + 1}`, (x0 + x1) / 2, bandY + bandH / 2 + 1);
           }
         }
-        mine.push([T, me]); theirs.push([T, them]);
-        const line = (pts, col) => {
-          g.strokeStyle = col;
-          g.lineWidth = 2.5;
+
+        /* THE POOLS. 100 down to 0 across the middle, refilled at each bell. */
+        const hy0 = 32;
+        const hy1 = 126;
+        const hy = (hp) => hy1 - (Math.max(0, Math.min(100, hp)) / 100) * (hy1 - hy0);
+        g.strokeStyle = 'rgba(255,255,255,0.06)';
+        g.lineWidth = 1;
+        for (const hp of [0, 25, 50, 75, 100]) {
           g.beginPath();
-          const y = (hp) => H - 8 - (hp / 100) * (H - 16);
+          g.moveTo(L, hy(hp));
+          g.lineTo(R, hy(hp));
+          g.stroke();
+        }
+        g.fillStyle = 'rgba(243,240,234,0.35)';
+        g.font = '600 10px Rajdhani, system-ui, sans-serif';
+        g.textAlign = 'right';
+        g.textBaseline = 'middle';
+        for (const hp of [0, 50, 100]) g.fillText(String(hp), L - 8, hy(hp));
+
+        // Round divisions, floor to ceiling.
+        for (const t of ends) {
+          if (t <= 0 || t >= T) continue;
+          g.strokeStyle = 'rgba(255,176,46,0.28)';
+          g.lineWidth = 1;
+          g.beginPath();
+          g.moveTo(x(t), bandY);
+          g.lineTo(x(t), H - 22);
+          g.stroke();
+        }
+
+        // Both series, and the damage wedges, in one walk of the events.
+        let me = 100;
+        let them = 100;
+        const mine = [[0, 100]];
+        const theirs = [[0, 100]];
+        const hitsOnMe = [];
+        const hitsOnThem = [];
+        for (const e of b.ev) {
+          if (e[1] === 1) {
+            me = Math.max(0, me - e[5]);
+            mine.push([e[0], me]);
+            hitsOnMe.push([e[0], e[5], me]);
+          } else if (e[1] === 2) {
+            them = Math.max(0, them - e[3]);
+            theirs.push([e[0], them]);
+            hitsOnThem.push([e[0], e[3], them]);
+          } else if (e[1] === 4) {
+            mine.push([e[0], me]);
+            theirs.push([e[0], them]);
+            me = 100;
+            them = 100;
+            mine.push([e[0] + 0.001, 100]);
+            theirs.push([e[0] + 0.001, 100]);
+          }
+        }
+        mine.push([T, me]);
+        theirs.push([T, them]);
+        const line = (pts, colour) => {
+          g.strokeStyle = colour;
+          g.lineWidth = 2.5;
+          g.lineJoin = 'round';
+          g.beginPath();
           pts.forEach(([t, hp], i) => {
-            const x = (t / T) * W;
-            if (i === 0) g.moveTo(x, y(hp));
-            else { g.lineTo(x, y(pts[i - 1][1])); g.lineTo(x, y(hp)); }
+            const px = x(t);
+            if (i === 0) g.moveTo(px, hy(hp));
+            else {
+              g.lineTo(px, hy(pts[i - 1][1]));
+              g.lineTo(px, hy(hp));
+            }
           });
           g.stroke();
         };
         line(theirs, '#4fb7ff');
         line(mine, '#ff7a18');
-        g.font = '700 11px Rajdhani, system-ui, sans-serif';
-        g.textAlign = 'left';
+
+        // A dot on each landed hit, so a big one is visible on the line.
+        const dot = (list, colour) => {
+          for (const [t, dmg, hp] of list) {
+            g.fillStyle = colour;
+            g.beginPath();
+            g.arc(x(t), hy(hp), Math.max(2, Math.min(5, 1.6 + dmg / 9)), 0, Math.PI * 2);
+            g.fill();
+          }
+        };
+        dot(hitsOnThem, '#4fb7ff');
+        dot(hitsOnMe, '#ff5266');
+
+        /* THE LANES. Yours over theirs, each with its own row of acts. */
+        const lanes = [
+          { y: 148, label: 'YOU', who: 0 },
+          { y: 182, label: 'THEM', who: 1 },
+        ];
+        for (const lane of lanes) {
+          g.strokeStyle = 'rgba(255,255,255,0.08)';
+          g.lineWidth = 1;
+          g.beginPath();
+          g.moveTo(L, lane.y);
+          g.lineTo(R, lane.y);
+          g.stroke();
+          g.fillStyle = 'rgba(243,240,234,0.52)';
+          g.font = '700 10px Rajdhani, system-ui, sans-serif';
+          g.textAlign = 'right';
+          g.textBaseline = 'middle';
+          g.fillText(lane.label, L - 8, lane.y);
+        }
+        const laneY = (who) => (who === 0 ? lanes[0].y : lanes[1].y);
+
+        for (const e of b.ev) {
+          const px = x(e[0]);
+          if (e[1] === 0) {
+            // A throw: a tick, up for the right fist and down for the left,
+            // so a two-handed flurry doesn't read as one thick smear.
+            const up = e[2] === 1 ? -1 : 1;
+            g.strokeStyle = 'rgba(255,122,24,0.55)';
+            g.lineWidth = 1.5;
+            g.beginPath();
+            g.moveTo(px, laneY(0));
+            g.lineTo(px, laneY(0) + up * 8);
+            g.stroke();
+          } else if (e[1] === 3) {
+            // A parry: a small diamond on your lane.
+            g.fillStyle = '#6fc8ff';
+            g.beginPath();
+            g.moveTo(px, laneY(0) - 6);
+            g.lineTo(px + 5, laneY(0));
+            g.lineTo(px, laneY(0) + 6);
+            g.lineTo(px - 5, laneY(0));
+            g.closePath();
+            g.fill();
+          } else if (e[1] === 5) {
+            // An attachment: a lettered pip on whichever lane fired it.
+            const y = laneY(e[2] === 0 ? 0 : 1);
+            const colour = ATT_COLOUR[e[4]] || 'var(--dim)';
+            g.fillStyle = colour;
+            g.beginPath();
+            g.arc(px, y, 7.5, 0, Math.PI * 2);
+            g.fill();
+            g.fillStyle = '#0a0810';
+            g.font = '700 10px Rajdhani, system-ui, sans-serif';
+            g.textAlign = 'center';
+            g.textBaseline = 'middle';
+            g.fillText(ATT_LETTER[e[4]] || '?', px, y + 1);
+          } else if (e[1] === 1) {
+            // A hit you took: a red wedge under THEIR lane, sized by damage.
+            const y = laneY(1);
+            const w = Math.max(3, Math.min(8, 2 + e[5] / 5));
+            g.fillStyle = 'rgba(255,82,102,0.9)';
+            g.beginPath();
+            g.moveTo(px - w / 2, y - 9);
+            g.lineTo(px + w / 2, y - 9);
+            g.lineTo(px, y - 1);
+            g.closePath();
+            g.fill();
+          } else if (e[1] === 2) {
+            // …and one you landed, over yours.
+            const y = laneY(0);
+            const w = Math.max(3, Math.min(8, 2 + e[3] / 5));
+            g.fillStyle = 'rgba(79,183,255,0.9)';
+            g.beginPath();
+            g.moveTo(px - w / 2, y + 9);
+            g.lineTo(px + w / 2, y + 9);
+            g.lineTo(px, y + 1);
+            g.closePath();
+            g.fill();
+          }
+        }
+
+        /* THE CLOCK, along the bottom: a mark every fifteen seconds while
+           they still have room to breathe, else every thirty. */
+        const step = (R - L) / T > 6 ? 15 : (R - L) / T > 3 ? 30 : 60;
+        g.fillStyle = 'rgba(243,240,234,0.4)';
+        g.font = '600 10px Rajdhani, system-ui, sans-serif';
+        g.textAlign = 'center';
         g.textBaseline = 'top';
+        for (let t = 0; t <= T; t += step) {
+          g.strokeStyle = 'rgba(255,255,255,0.08)';
+          g.lineWidth = 1;
+          g.beginPath();
+          g.moveTo(x(t), H - 22);
+          g.lineTo(x(t), H - 18);
+          g.stroke();
+          g.fillText(clock(t), x(t), H - 16);
+        }
+        g.textAlign = 'left';
+        g.font = '700 10px Rajdhani, system-ui, sans-serif';
         g.fillStyle = '#ff7a18';
-        g.fillText('YOU', 8, 6);
+        g.fillText('YOUR POOL', L, hy0 - 13);
         g.fillStyle = '#4fb7ff';
-        g.fillText('THEM', 40, 6);
+        g.fillText('THEIRS', L + 70, hy0 - 13);
       }
 
       /* ══ RAVE RAID ════════════════════════════════════════════════════ */
@@ -3204,7 +3581,7 @@
           }),
         );
         const c = host.querySelector('.tape-open canvas');
-        if (c && st.open) drawHealthStrip(c, rows.find((x) => x.id === st.open));
+        if (c && st.open) drawTimeline(c, rows.find((x) => x.id === st.open));
       }
 
       /* ══ THE FACES ════════════════════════════════════════════════════ */

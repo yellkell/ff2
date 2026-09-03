@@ -156,6 +156,7 @@ service cloud.firestore {
         && request.resource.data.ev is list
         && request.resource.data.ev.size() <= 600
         && request.resource.data.grid is map
+        && request.resource.data.att is map
         && num(request.resource.data.dur, 0, 86400)
         && stamped();
       allow update, delete: if false;

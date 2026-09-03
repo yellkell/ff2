@@ -427,6 +427,9 @@ export class FireballSystem extends createSystem({
         // leg connect again read as an awful instant double hit.
         ball.setValue(Fireball, 'returnHit', state === BallState.Dead ? 1 : 0);
         sfx.recall();
+        // THE TAPE: an attachment that actually fired, not the one the fist
+        // was loaded with — a dead ball comes home plain either way.
+        if (eff.att) telemetry.attach(0, hand, eff.att as 1 | 2 | 3);
         this.sendNet(
           eff.att
             ? { k: 'recall', hand, att: eff.att, dmg: eff.dmg, scl: eff.scl }

@@ -500,6 +500,7 @@ export class MeshSystem extends createSystem({
       }
       case 'recall':
         ballCommands.push({ type: 'recall', slot: oppIdx, hand: msg.hand, att: msg.att, dmg: msg.dmg, scl: msg.scl });
+        if (msg.att) telemetry.attach(1, msg.hand, msg.att as 1 | 2 | 3); // THE TAPE
         break;
       case 'hit': {
         // Their body reports my ball landed. Only the named attacker acts: burst

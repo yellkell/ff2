@@ -624,9 +624,12 @@ hosting targets.
   sub-rail; the lobby merges the three back into one ranked list.
 - **THE LAB** (a board of the FIRE FIGHT rail, not a tab of its own): THE TAPE — `net/telemetry.ts` records each bout
   (standing / throw-left / throw-right / LANDING / hit-taken heatmap
-  grids over the platform footprint, the timed play-by-play, the rounds) into the
-  `bouts` collection; the page aggregates the last 200 into tiles, four
-  heatmaps, a hands panel and an expandable tape with health lines.
+  grids over the platform footprint, the timed play-by-play including the
+  ATTACHMENTS both sides fired, the rounds) into the
+  `bouts` collection; the page aggregates the last 200 into tiles, five
+  heatmaps, a hands panel and an expandable tape that opens into THE
+  TIMELINE — rounds as bands, both pools as lines, and lanes of throws,
+  parries, attachments and landed hits.
 
 ---
 

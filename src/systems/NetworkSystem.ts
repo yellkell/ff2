@@ -195,6 +195,7 @@ export class NetworkSystem extends createSystem({
       }
       case 'recall':
         ballCommands.push({ type: 'recall', hand: msg.hand, att: msg.att, dmg: msg.dmg, scl: msg.scl });
+        if (msg.att) telemetry.attach(1, msg.hand, msg.att as 1 | 2 | 3); // THE TAPE
         break;
       case 'hit': {
         // Their client ruled our ball connected: damage them on our side and

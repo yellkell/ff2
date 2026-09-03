@@ -13,8 +13,12 @@
  *    the hand that threw it;
  *  - WHERE YOU LANDED IT: your standing spot at the moment one of yours
  *    connected — the LANDING heatmap, the throw grids' answer;
- *  - THE PLAY-BY-PLAY: every throw, hit taken, hit dealt, parry and round
- *    as a timed tuple, so the page can replay how the bout went;
+ *  - THE ATTACHMENTS: every SPLIT, GROW and SHRINK that actually FIRED,
+ *    on either side, at the moment it fired — what a fist was loaded with
+ *    matters far less than what it did, and a fired attachment is the one
+ *    the wire already carries for both players;
+ *  - THE PLAY-BY-PLAY: every throw, hit taken, hit dealt, parry, attachment
+ *    and round as a timed tuple, so the page can replay how the bout went;
  *  - THE ROUNDS: outcome, KO or the clock, both health pools at the bell.
  *
  * Everything is in YOUR frame — your platform at the origin, −z toward
@@ -39,7 +43,9 @@ export type RoundOutcome = 'win' | 'loss' | 'draw';
 export type RoundResult = 'ko' | 'time';
 
 /** Event codes — the first number after the time in every tuple. */
-export const EV = { throw: 0, hitTaken: 1, hitDealt: 2, parry: 3, round: 4 } as const;
+export const EV = { throw: 0, hitTaken: 1, hitDealt: 2, parry: 3, round: 4, attach: 5 } as const;
+/** Attachment codes, mirroring config.ts ATTACH: 1 split, 2 grow, 3 shrink. */
+export type AttachCode = 1 | 2 | 3;
 const PART_CODE: Record<HitPart, number> = { head: 0, chest: 1, pelvis: 2, body: 3 };
 const OUT_CODE: Record<RoundOutcome, number> = { win: 0, loss: 1, draw: 2 };
 const RES_CODE: Record<RoundResult, number> = { ko: 0, time: 1 };
@@ -80,6 +86,9 @@ interface Tape extends BoutContext {
   thr: { n: number; l: number; r: number; spdSum: number };
   hits: { dealt: number; taken: number; head: number; ret: number; dealtL: number; dealtR: number; takenHead: number };
   par: number;
+  /** How many of each attachment fired, per side, indexed by code (0 unused).
+   *  Counted even past the event cap, so the totals stay honest. */
+  att: { mine: number[]; theirs: number[] };
   boss: { name: string; stage: number } | null;
 }
 
@@ -142,6 +151,7 @@ export const telemetry = {
       thr: { n: 0, l: 0, r: 0, spdSum: 0 },
       hits: { dealt: 0, taken: 0, head: 0, ret: 0, dealtL: 0, dealtR: 0, takenHead: 0 },
       par: 0,
+      att: { mine: [0, 0, 0, 0], theirs: [0, 0, 0, 0] },
       boss: null,
     };
   },
@@ -195,6 +205,18 @@ export const telemetry = {
     push([now(), EV.hitDealt, hand, Math.round(dmg), ret ? 1 : 0, part ? PART_CODE[part] : -1]);
   },
 
+  /**
+   * An attachment FIRED on a live recall: `who` 0 = me, 1 = the other side,
+   * `hand` the fist it came home to, `att` the ATTACH code. Only a live
+   * recall carries one — a dead ball comes back plain — so this is exactly
+   * the moment the ball changed on its way home.
+   */
+  attach(who: 0 | 1, hand: 0 | 1, att: AttachCode): void {
+    if (!tape || att < 1 || att > 3) return;
+    (who === 0 ? tape.att.mine : tape.att.theirs)[att] += 1;
+    push([now(), EV.attach, who, hand, att]);
+  },
+
   /** I slapped a ball out of the air with `hand`'s ball. */
   parry(hand: 0 | 1): void {
     if (!tape) return;
@@ -233,6 +255,7 @@ export const telemetry = {
       thr: { n: t.thr.n, l: t.thr.l, r: t.thr.r, spd: t.thr.n ? Math.round((t.thr.spdSum / t.thr.n) * 10) / 10 : 0 },
       hits: t.hits,
       par: t.par,
+      att: t.att,
       grid: { w: TV.gridW, h: TV.gridH, stand: Array.from(t.stand), thrL: Array.from(t.thrL), thrR: Array.from(t.thrR), hit: Array.from(t.hit), land: Array.from(t.land) },
       ev: t.ev,
       dropped: t.dropped,
@@ -246,10 +269,10 @@ export const telemetry = {
   },
 
   /** Dev/probe: the rolling tape's counters. */
-  peek(): { kind: BoutKind; throws: number; taken: number; dealt: number; parries: number; rounds: number; events: number; stood: number } | null {
+  peek(): { kind: BoutKind; throws: number; taken: number; dealt: number; parries: number; rounds: number; events: number; stood: number; att: { mine: number[]; theirs: number[] } } | null {
     if (!tape) return null;
     let stood = 0;
     for (const n of tape.stand) stood += n;
-    return { kind: tape.kind, throws: tape.thr.n, taken: tape.hits.taken, dealt: tape.hits.dealt, parries: tape.par, rounds: tape.rounds.length, events: tape.ev.length, stood };
+    return { kind: tape.kind, throws: tape.thr.n, taken: tape.hits.taken, dealt: tape.hits.dealt, parries: tape.par, rounds: tape.rounds.length, events: tape.ev.length, stood, att: tape.att };
   },
 };

@@ -210,7 +210,8 @@ const fixture = (n, win, names) => ({
     rounds: [{ n: 1, out: 'win', res: 'ko', hp: [40, 0], dur: 30 }, { n: 2, out: 'loss', res: 'time', hp: [20, 45], dur: 60 }],
     thr: { n: 40, l: 15, r: 25, spd: 6.2 }, hits: { dealt: 14, taken: 11, head: 4, ret: 2, dealtL: 5, dealtR: 9, takenHead: 3 }, par: 3,
     grid: { w: 16, h: 14, stand: grid((i) => (i % 16 > 5 && i % 16 < 10 ? 8 : 1)), thrL: grid((i) => (i % 16 < 6 ? 3 : 0)), thrR: grid((i) => (i % 16 > 9 ? 3 : 0)), land: grid((i) => (i >= 160 ? 2 : 0)), hit: grid((i) => (i < 40 ? 2 : 0)) },
-    ev: [[0.5, 0, 1, 0.2, -0.3, 6.1, 0.1, 0.1], [2.1, 1, 0, 0.1, 0.1, 20, 1, 0, 0, -1], [3.0, 2, 1, 25, 0, 0], [4.2, 3, 0], [30, 4, 1, 0, 0, 40, 0], [90, 4, 2, 1, 1, 20, 45]],
+    ev: [[0.5, 0, 1, 0.2, -0.3, 6.1, 0.1, 0.1], [2.1, 1, 0, 0.1, 0.1, 20, 1, 0, 0, -1], [2.6, 5, 0, 1, 3], [3.0, 2, 1, 25, 0, 0], [4.2, 3, 0], [12, 5, 1, 0, 1], [30, 4, 1, 0, 0, 40, 0], [90, 4, 2, 1, 1, 20, 45]],
+    att: { mine: [0, 0, 0, 1], theirs: [0, 1, 0, 0] },
     dropped: 0,
   },
 });
@@ -247,6 +248,24 @@ const labState = await page.evaluate((bouts) => {
 check('the LAB tiles read the two tapes', /2/.test(labState.tiles) && /TAPES/i.test(labState.tiles), labState.tiles.replace(/\s+/g, ' ').slice(0, 120));
 check('the player picker names whoever kept a tape', labState.players.includes('PROBE'), labState.players.join(','));
 check('the count line reads the filter', /2 of 2 tapes/.test(labState.count), labState.count);
+// THE SEARCH: type a name and both the list and the picker narrow to it.
+const search = await page.evaluate(async () => {
+  const box = document.getElementById('lab-search');
+  box.value = 'vult';
+  box.dispatchEvent(new Event('input'));
+  await new Promise((r) => setTimeout(r, 50));
+  const hit = { rows: document.querySelectorAll('#lab-tape .tape-row').length, count: document.getElementById('lab-count').textContent, opts: [...document.getElementById('lab-player').options].length };
+  box.value = 'zzz';
+  box.dispatchEvent(new Event('input'));
+  await new Promise((r) => setTimeout(r, 50));
+  const miss = document.getElementById('lab-status').querySelector('.line').textContent;
+  box.value = '';
+  box.dispatchEvent(new Event('input'));
+  await new Promise((r) => setTimeout(r, 50));
+  return { hit, miss, back: document.querySelectorAll('#lab-tape .tape-row').length };
+});
+check('searching a name narrows the tapes', search.hit.rows === 1 && /1 of 2 tapes/.test(search.hit.count), JSON.stringify(search.hit));
+check('a search with no match says so, and clearing it comes back', /NOTHING MATCHES/.test(search.miss) && search.back === 2, JSON.stringify({ miss: search.miss, back: search.back }));
 check('all five heatmaps are painted', labState.heat.length === 5 && labState.heat.every((h) => h.lit > 50), labState.heat.map((h) => h.lit).join(','));
 // The fixture puts the left fist's throws left of centre and the right
 // fist's right of it, so those two maps must not share a centre of mass.
@@ -261,6 +280,22 @@ const play = await page.evaluate(() => {
   return document.querySelector('#lab-tape .tape-open')?.textContent ?? '';
 });
 check('a bout opens into its play-by-play and rounds', /KO/.test(play) && /throw|threw/i.test(play), play.replace(/\s+/g, ' ').slice(0, 120));
+check('the open tape names the attachments each side fired', /SHRINK ×1/.test(play) && /SPLIT ×1/.test(play), play.replace(/\s+/g, ' ').slice(0, 200));
+const tl = await page.evaluate(() => {
+  const c = document.querySelector('#lab-tape .tape-open canvas');
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  // The two pools are drawn in their own colours; the lanes carry the acts.
+  let ember = 0, cool = 0, amber = 0;
+  for (let p = 0; p < d.length / 4; p++) {
+    const r = d[p * 4], g2 = d[p * 4 + 1], b2 = d[p * 4 + 2], a = d[p * 4 + 3];
+    if (a < 200) continue;
+    if (r > 200 && g2 > 90 && g2 < 160 && b2 < 70) ember++;
+    else if (r < 130 && g2 > 150 && b2 > 200) cool++;
+    else if (r > 220 && g2 > 150 && g2 < 200 && b2 < 90) amber++;
+  }
+  return { h: c.height, ember, cool, amber };
+});
+check('the timeline draws both pools and the attachment pips', tl.h === 224 && tl.ember > 200 && tl.cool > 200 && tl.amber > 30, JSON.stringify(tl));
 
 console.log('\n=== stats.html: THE PROFILE ===');
 await page.evaluate(() => document.querySelector('#lab-tape .who-link').click());
@@ -315,6 +350,20 @@ check('boards are read per board, not as a collection group', wiring.boardParent
 check('no page errors', errors.length === 0, errors[0]);
 
 /* ── the QR encoder ──────────────────────────────────────────────────── */
+console.log('\n=== the faces wear their own colours ===');
+const faceInk = await page.evaluate(() => {
+  const ink = () => getComputedStyle(document.querySelector('#wordmark .a')).color;
+  document.getElementById('tab-ff').click();
+  const ff = ink();
+  document.getElementById('tab-rr').click();
+  const rr = ink();
+  document.getElementById('tab-tv').click();
+  const tv = ink();
+  document.getElementById('tab-ff').click();
+  return { ff, rr, tv };
+});
+check("each game wears its own wordmark, not FIRE FIGHT's everywhere", faceInk.rr !== faceInk.ff && faceInk.tv !== faceInk.ff && faceInk.rr === 'rgb(185, 255, 196)', JSON.stringify(faceInk));
+
 console.log('\n=== the lobby QR ===');
 const qrOk = await page.evaluate(async () => {
   const mod = await import('/src/ui/qr.ts');

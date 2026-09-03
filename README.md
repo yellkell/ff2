@@ -35,9 +35,16 @@ carried over verbatim: everything in it still applies to this code.
     Every bout that lasts keeps a TAPE (`src/net/telemetry.ts`, posted to
     the `bouts` collection at the final bell): platform HEATMAPS of where
     you stand, where each hand throws from and where you were when hit;
-    the play-by-play of every throw, hit taken, hit dealt, parry and round
-    as timed events; the rounds with both health pools at the bell. The
-    page aggregates the last two hundred, filtered by player, into stat
+    the play-by-play of every throw, hit taken, hit dealt, parry, round
+    and ATTACHMENT — every SPLIT, GROW and SHRINK that actually fired, on
+    either side, off the same wire the ball itself rides. Open a bout and
+    it draws THE TIMELINE: the rounds as bands, both health pools rebuilt
+    from the hits, and two lanes under them carrying the acts — a tick per
+    throw, a diamond per parry, a lettered pip per attachment, a wedge per
+    landed hit sized by its damage — with the attachments each side fired
+    tallied beneath and the play-by-play in words under that. The
+    page aggregates the last two hundred, filtered by player (a search
+    narrows the picker, or matches any name on a tape), into stat
     tiles, five heatmaps (standing, each fist's throws, LANDING — where
     you stood when yours connected — and hits taken), a hands panel, a
     damage panel, and the tape
