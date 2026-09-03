@@ -54,6 +54,30 @@ export const CLUB = {
    *  the club and the game share a centre of gravity. */
   floor: { x: 0, z: -4.2, r: 4.3 },
 
+  /**
+   * THE HOUSE CAMERA — what FFTV shows when it peeps in (rave/systems/
+   * ClubCastSystem.ts).
+   *
+   * It is bolted to the room, not to a person. The first cut of this rode
+   * three metres behind whoever held the room and turned with their head,
+   * which meant the shot swung every time they looked at something and the
+   * feed was really a portrait of one player. A club feed is a picture of
+   * the CLUB: mount it high on the east side, point it across the floor at
+   * the stage, and leave it there. Nobody's neck is driving the broadcast,
+   * the framing is the same every time you tune in, and it reads as a
+   * camera in the corner of the ceiling because that is what it is.
+   *
+   * `eye` sits under the main ceiling slab (ceilH 3.4) and inside the east
+   * wall (halfW 9), out over the open floor between the dance floor and the
+   * bar. `look` is the dance floor's own centre, a little past it toward
+   * the stage so the crescent and the sunburst sit in the back of frame,
+   * held at chest height so bodies fill the shot rather than the boards.
+   */
+  cctv: {
+    eye: { x: 4.6, y: 3.0, z: -0.6 },
+    look: { x: 0, y: 1.3, z: -5.0 },
+  },
+
   /** Where you arrive — the world origin, the same spot the raid puts your
    *  platform. (When a set books the room the rig simply drops back to
    *  identity, so no re-plant is needed: the origin IS the spawn.) */

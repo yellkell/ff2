@@ -18,6 +18,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import WebSocket from 'ws';
 
@@ -515,6 +516,58 @@ const faceInk = await page.evaluate(() => {
   return { ff, rr, tv };
 });
 check("each game wears its own wordmark, not FIRE FIGHT's everywhere", faceInk.rr !== faceInk.ff && faceInk.tv !== faceInk.ff && faceInk.rr === 'rgb(185, 255, 196)', JSON.stringify(faceInk));
+
+console.log('\n=== the club house camera ===');
+{
+  // FFTV's club feed is shot by a camera BOLTED TO THE ROOM, not carried by
+  // whoever holds it (rave/club/config.ts CLUB.cctv). The first cut rode
+  // three metres behind the host and turned with their head, so the shot
+  // swung whenever they looked at something and the feed was a portrait of
+  // one player rather than a picture of the club. These numbers are what
+  // make it a camera in the corner of the ceiling instead.
+  const src = (p) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+  const club = src('src/rave/club/config.ts');
+  const conf = src('src/config.ts');
+  const cast = src('src/rave/systems/ClubCastSystem.ts');
+  const num = (re, from) => Number(re.exec(from)?.[1]);
+  const halfW = num(/halfW: ([\d.]+)/, club);
+  const minZ = num(/minZ: (-?[\d.]+)/, club);
+  const maxZ = num(/maxZ: (-?[\d.]+)/, club);
+  const ceilH = num(/ceilH: ([\d.]+)/, club);
+  const [fx, fz, fr] = /floor: \{ x: (-?[\d.]+), z: (-?[\d.]+), r: ([\d.]+) \}/.exec(club).slice(1).map(Number);
+  const eye = /eye: \{ x: (-?[\d.]+), y: (-?[\d.]+), z: (-?[\d.]+) \}/.exec(club)?.slice(1).map(Number);
+  const look = /look: \{ x: (-?[\d.]+), y: (-?[\d.]+), z: (-?[\d.]+) \}/.exec(club)?.slice(1).map(Number);
+  check('the club declares a fixed house camera', Array.isArray(eye) && Array.isArray(look), eye ? `eye ${eye.join(',')} → look ${look.join(',')}` : 'no CLUB.cctv');
+
+  check('the shot does not follow whoever is holding the room',
+    !/playerHeadEntity|getWorldQuaternion/.test(cast),
+    'ClubCastSystem takes its position from CLUB.cctv alone');
+
+  check('it is mounted inside the hall and under the ceiling slab',
+    Math.abs(eye[0]) < halfW && eye[2] > minZ && eye[2] < maxZ && eye[1] > 2.2 && eye[1] < ceilH,
+    `y ${eye[1]} under ${ceilH}, x ${eye[0]} inside ±${halfW}`);
+
+  const standoff = Math.hypot(eye[0] - fx, eye[2] - fz) - fr;
+  check('it stands off the dance floor rather than hanging over it', standoff > 0.8, `${standoff.toFixed(2)} m clear of the circle`);
+
+  // Does the frame actually hold the floor it is pointed at?
+  const fov = num(/fov: ([\d.]+)/, conf);
+  const vw = num(/^  w: (\d+),$/m, conf);
+  const vh = num(/^  h: (\d+),$/m, conf);
+  const d = Math.hypot(eye[0] - fx, eye[1] - look[1], eye[2] - fz);
+  const hHalf = Math.atan(Math.tan((fov / 2) * (Math.PI / 180)) * (vw / vh));
+  const frameW = 2 * d * Math.tan(hHalf);
+  check('the whole dance floor is in frame', frameW >= fr * 2, `${frameW.toFixed(1)} m of frame across a ${(fr * 2).toFixed(1)} m floor`);
+
+  // …and are the people in it big enough to be people?
+  const pxPerM = vh / (2 * (d + fr) * Math.tan((fov / 2) * (Math.PI / 180)));
+  const tall = 1.7 * pxPerM;
+  check('a dancer at the far edge still reads as a person', tall > 12, `${tall.toFixed(0)} px tall in a ${vh} px frame`);
+
+  // The camera looks ACROSS the floor toward the stage, which is the north
+  // wall — so the stage sits behind the crowd rather than behind the lens.
+  check('it looks across the floor toward the stage', look[2] < eye[2] && look[2] <= fz, `aims to z ${look[2]} from z ${eye[2]}`);
+}
 
 console.log('\n=== the lobby QR ===');
 const qrOk = await page.evaluate(async () => {
