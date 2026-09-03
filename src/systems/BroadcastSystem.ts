@@ -2,22 +2,29 @@
  * THE BROADCAST — one system that watches a bout from the outside and does
  * the two things the stat page needs (DESIGN.md §9):
  *
- *  1. THE CHANNEL: while this headset RUNS a bout (a bot bout, a duel it
- *     hosts, a mesh room it holds authority in, a raid it hosts — or any
- *     solo run), build a small top-down FRAME a few times a second and
- *     hand it to net/tvCast.ts for the /tv relay: every fighter's head,
- *     hands, health and platform, the balls in the air, the round clock,
- *     the titan. Guests don't cast — one transmitter per match.
- *
- *  2. THE TAPE: open net/telemetry.ts at the bell, sample your standing
+ *  THE TAPE: open net/telemetry.ts at the bell, sample your standing
  *     spot, notice rounds ending and the final off the match state, and
  *     close the tape with the result. The combat systems stamp the
  *     throws, hits and parries themselves at the moments they own.
  *
  * It never touches the sim: reads only, and everything it reads already
  * exists for the HUD. Runs after GameStateSystem so the match state it
- * reads is this frame's. A watcher on the terrace casts and records
- * nothing — they didn't fight.
+ * reads is this frame's. A watcher on the terrace records nothing — they
+ * didn't fight.
+ *
+ * IT NO LONGER BROADCASTS. This used to open a channel on the /tv relay
+ * for every bout it ran — a pose frame five times a second and a rendered
+ * picture three times a second — and FFTV carried the fight. That is off:
+ * the channel FFTV shows is THE CLUB and nothing else now, which is a
+ * decision about what the station is for rather than a limit of what it
+ * can carry. The relay still understands channels and the stats page can
+ * still draw one, so this is a few lines to put back if the fights should
+ * be on television again.
+ *
+ * It also takes the broadcast's cost off the one person who could least
+ * afford it. The picture was an extra render pass and a GPU readback
+ * inside the frame of somebody being scored; the club's camera runs in a
+ * room where nobody is fighting.
  */
 
 import { createSystem, type Entity } from '@iwsdk/core';
@@ -32,20 +39,12 @@ import { BallState, Fireball } from '../components/Fireball.js';
 import { mesh } from '../net/mesh.js';
 import { myName, rival } from '../net/leaderboard.js';
 import { telemetry, type BoutKind } from '../net/telemetry.js';
-import { tvCast, type CastMeta } from '../net/tvCast.js';
-import { captureFrame, cameraBroken, releaseCamera, tvCamera } from '../net/tvVideo.js';
 import { titanView } from '../campaign/titanView.js';
-import { TV, VIDEO } from '../config.js';
+import { TV } from '../config.js';
 
 const _v = new Vector3();
 const _rig = new Vector3();
 const _q = new Quaternion();
-/** The cameraman's working room — a look-at point, an eye, and the axis
- *  between the fighters it stands square to. */
-const _eye = new Vector3();
-const _aim = new Vector3();
-const _axis = new Vector3();
-const _up = new Vector3(0, 1, 0);
 const HANDS = ['left', 'right'] as const;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -58,9 +57,6 @@ export class BroadcastSystem extends createSystem({
   private phaseAt = 0;
   private lastScore: [number, number] = [0, 0];
   private sampleT = 0;
-  private castT = 0;
-  /** The picture runs on its own slower clock than the pose frame. */
-  private shotT = 0;
   private tapeKind: BoutKind = 'solo';
 
   init(): void {
@@ -69,8 +65,6 @@ export class BroadcastSystem extends createSystem({
     if (hook) {
       hook.broadcast = {
         tape: () => telemetry.peek(),
-        channel: () => tvCast.channel,
-        live: () => tvCast.live,
         frame: () => this.buildFrame(),
       };
     }
@@ -92,103 +86,11 @@ export class BroadcastSystem extends createSystem({
       telemetry.sample(telemetry.head.x, telemetry.head.z);
     }
 
-    if (!this.iRunThis()) return;
-    this.castT -= delta;
-    if (this.castT <= 0) {
-      this.castT = 1 / TV.castHz;
-      const meta = this.meta();
-      if (meta) tvCast.open(meta);
-      tvCast.frame(this.buildFrame());
-    }
-
-    // THE PICTURE. Slower than the pose frame and entirely optional: it is
-    // fired and forgotten, and a headset that cannot render one keeps
-    // televising the diagram (net/tvVideo.ts).
-    if (cameraBroken()) return;
-    this.shotT -= delta;
-    if (this.shotT <= 0) {
-      this.shotT = 1 / VIDEO.hz;
-      void this.shoot();
-    }
-  }
-
-  /* ── the picture ────────────────────────────────────────────────────── */
-
-  /** Stand the broadcast camera where it can see the fight, shoot one
-   *  frame, and send it. Never awaited by the sim. */
-  private async shoot(): Promise<void> {
-    if (!tvCast.live) return;
-    this.placeCamera();
-    const d = await captureFrame(this.renderer, this.scene);
-    if (d) tvCast.video(d);
-  }
-
-  /**
-   * Where television stands. Ringside for a fight — square to the line
-   * between the fighters, so neither one hides the other and the platform
-   * reads as a platform — and over the shoulder for a solo run or a raid,
-   * where the thing worth seeing is what the player is facing.
-   */
-  private placeCamera(): void {
-    const cam = tvCamera();
-    const rig = this.playerEntity?.object3D;
-    if (rig) rig.getWorldPosition(_rig);
-    else _rig.set(0, 0, 0);
-
-    // Every head in world space: mine measured, theirs rig-local like the
-    // pose frame's.
-    const heads: Vector3[] = [];
-    const head = this.playerHeadEntity?.object3D;
-    if (head) heads.push(head.getWorldPosition(new Vector3()));
-    for (const pose of opponents) {
-      if (pose) heads.push(new Vector3().copy(pose.headPos).add(_rig));
-    }
-
-    if (heads.length >= 2) {
-      _aim.set(0, 0, 0);
-      for (const h of heads) _aim.add(h);
-      _aim.multiplyScalar(1 / heads.length);
-      _aim.y = 1.3;
-      // The spread of the fighters sets how far back to stand.
-      let spread = 0;
-      for (const h of heads) spread = Math.max(spread, h.distanceTo(_aim));
-      _axis.copy(heads[1]).sub(heads[0]).setY(0);
-      if (_axis.lengthSq() < 1e-4) _axis.set(1, 0, 0);
-      _axis.normalize().cross(_up).normalize(); // square to the line of fire
-      const back = Math.min(6, Math.max(2.6, spread * 1.7 + 1.9));
-      _eye.copy(_aim).addScaledVector(_axis, back);
-      _eye.y = _aim.y + 1.25;
-    } else {
-      // One fighter: stand behind and above their shoulder, looking the way
-      // they are — at the titan in a raid, down the platform in a run.
-      const me = heads[0] ?? _rig;
-      _aim.copy(me);
-      if (app.mode === 'campaign') {
-        _aim.set(titanView.x + _rig.x, Math.max(1.2, titanView.y + _rig.y), titanView.z + _rig.z);
-        _aim.lerp(me, 0.35);
-      }
-      _v.copy(_aim).sub(me).setY(0);
-      if (_v.lengthSq() < 1e-4) {
-        if (head) {
-          head.getWorldQuaternion(_q);
-          _v.set(0, 0, -1).applyQuaternion(_q).setY(0);
-        } else _v.set(0, 0, -1);
-        _aim.copy(me).addScaledVector(_v.clone().normalize(), 3);
-        _aim.y = 1.3;
-      }
-      _v.normalize();
-      _eye.copy(me).addScaledVector(_v, -2.5);
-      _eye.y = me.y + 1.0;
-    }
-    cam.position.copy(_eye);
-    cam.lookAt(_aim);
-    cam.updateMatrixWorld();
   }
 
   /* ── the bell and the final ─────────────────────────────────────────── */
 
   private begin(): void {
-    this.shotT = 0;
     this.tapeKind = this.kind();
     telemetry.begin({
       kind: this.tapeKind,
@@ -200,20 +102,15 @@ export class BroadcastSystem extends createSystem({
     this.phaseAt = performance.now();
     this.lastScore = [match.myScore, match.oppScore];
     this.sampleT = 0;
-    this.castT = 0;
   }
 
   private end(): void {
-    // Television is over: give the render target and its buffers back
-    // rather than holding a megabyte of VRAM open across the lobby.
-    releaseCamera();
     telemetry.setNames(this.names());
     if (app.mode === 'campaign') {
       if (titanView.name) telemetry.setBoss(titanView.name, titanView.stage);
       // A campaign bout that reached a verdict posts; a bail is no tape.
       if (titanView.outcome) telemetry.end(titanView.outcome === 'victory', []);
       else telemetry.abort();
-      tvCast.end(titanView.outcome ? `${titanView.name} ${titanView.outcome === 'victory' ? 'fell' : 'stands'}` : '');
       return;
     }
     if (match.phase === 'matchOver') {
@@ -221,11 +118,9 @@ export class BroadcastSystem extends createSystem({
       const win = duel ? match.myScore > match.oppScore : match.roundWinnerTeam === 0;
       const score = duel ? [match.myScore, match.oppScore] : match.teamScores.slice(0, 4);
       telemetry.end(win, score);
-      tvCast.end(duel ? `${this.names()[win ? 0 : 1]} ${Math.max(...score)}–${Math.min(...score)}` : `team ${match.roundWinnerTeam + 1} take it`);
     } else {
       telemetry.abort();
-      tvCast.end('');
-    }
+      }
   }
 
   /** Round ends and the final, read off the match state — works for the
@@ -258,25 +153,6 @@ export class BroadcastSystem extends createSystem({
     if (app.mode === 'campaign') return app.campaignMode === 'raid' ? 'raid' : app.campaignMode === 'gauntlet' || app.campaignMode === 'hardcore' ? 'gauntlet' : 'solo';
     if (app.mode === 'net') return app.arcade;
     return 'solo';
-  }
-
-  /** Only the headset that RUNS the bout transmits. */
-  private iRunThis(): boolean {
-    if (app.mode === 'bot') return true;
-    if (app.mode === 'campaign') return app.campaignMode !== 'raid' || mesh.isHost();
-    return classicDuel() ? app.side === 0 : mesh.isHost();
-  }
-
-  private meta(): CastMeta | null {
-    const names = this.names();
-    if (app.mode === 'campaign') {
-      const boss = titanView.name || 'THE TITAN';
-      const squad = app.campaignMode === 'raid' ? (names.length > 1 ? 'THE SQUAD' : names[0]) : names[0];
-      return { kind: app.campaignMode === 'raid' ? 'raid' : 'solo', title: `${squad} vs ${boss}`, names };
-    }
-    const kind: CastMeta['kind'] = app.mode === 'net' ? app.arcade : 'solo';
-    const title = names.length === 2 ? `${names[0]} vs ${names[1]}` : names.join(' · ');
-    return { kind, title, names };
   }
 
   /** Every fighter's callsign in slot order, me first — the HUD's law. */

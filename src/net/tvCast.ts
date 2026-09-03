@@ -1,15 +1,21 @@
 /**
  * THE CASTER — the headset's side of THE CHANNEL (server/tv.mjs).
  *
- * The headset RUNNING a bout opens a channel on the room server's /tv
- * relay and pushes a small top-down frame a few times a second while the
- * bout stands; when it ends it signs off with the result. Viewers on
- * public/stats.html's TV tab see what it sends, and the Discord bot calls
- * the match LIVE once it has held for a few seconds.
+ * ONLY THE CLUB IS BROADCAST. `clubVideo` is the live path and the club's
+ * camera (rave/systems/ClubCastSystem.ts) is its only caller: FFTV carries
+ * the floor and nothing else.
+ *
+ * The CHANNEL half below — open, frame, video, end — is what a bout used
+ * to do, and no longer does. It is kept rather than deleted because the
+ * decision is about what the station shows, not about what it can carry:
+ * the relay still brokers channels, public/stats.html still draws one, and
+ * the check suite still exercises both, so putting fights back on air is
+ * this module's existing API plus the handful of calls that were removed
+ * from BroadcastSystem. Deleting it would turn a policy back into a
+ * rebuild. Nothing in the game calls it today.
  *
  * Everything here is best-effort and silent: no relay, no channel, no
- * complaints — the bout never waits on television. BroadcastSystem drives
- * it; nothing else needs to know it exists.
+ * complaints — nothing ever waits on television.
  */
 
 import { tvServerUrl } from '../config.js';
@@ -86,7 +92,8 @@ export const tvCast = {
     return live;
   },
 
-  /** Go on air (or re-title: names arrive late over the wire). */
+  /** Go on air (or re-title: names arrive late over the wire). UNUSED —
+   *  see the note at the top: nothing broadcasts a bout. */
   open(m: CastMeta): void {
     meta = m;
     live = true;
