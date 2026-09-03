@@ -231,7 +231,7 @@ const labState = await page.evaluate((bouts) => {
   };
 }, [fixture(1, true, ['PROBE', 'ROOK']), fixture(2, false, ['PROBE', 'VULT'])]);
 check('the LAB tiles read the two tapes', /2/.test(labState.tiles) && /TAPES/i.test(labState.tiles), labState.tiles.replace(/\s+/g, ' ').slice(0, 120));
-check('the boxer picker names whoever kept a tape', labState.boxers.includes('PROBE'), labState.boxers.join(','));
+check('the player picker names whoever kept a tape', labState.boxers.includes('PROBE'), labState.boxers.join(','));
 check('the count line reads the filter', /2 of 2 tapes/.test(labState.count), labState.count);
 check('all four heatmaps are painted', labState.heat.length === 4 && labState.heat.every((h) => h.lit > 50), labState.heat.map((h) => h.lit).join(','));
 // The fixture puts the left fist's throws left of centre and the right
