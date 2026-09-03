@@ -407,11 +407,11 @@ const BUILDERS: Record<string, Builder> = {
     return g;
   },
   tail: (mat) => {
-    // A TAIL, where a dorsal ridge used to be. One tapered tube along a
-    // spline (the horns' own taperedTube): rooted in the small of the
-    // back, swept back and down under its own weight, and flicked UP at
-    // the tip so it reads as a tail rather than a hanging cable. Flat
-    // shaded, so the facets segment it like plate.
+    // A TAIL, where a dorsal ridge used to be. ONE tapered tube along a
+    // spline (the horns' own taperedTube), rooted INSIDE the small of the
+    // back so it grows out of the surface with no seam and no boss to
+    // mark the join, swept back and down, and tapering all the way to a
+    // POINT. Flat shaded, so the facets segment it like plate.
     //
     // The ridge it replaces was invisible in play. It sat a 24 mm strip
     // along the spine positioned from BODY_RINGS' half-depths alone —
@@ -423,20 +423,18 @@ const BUILDERS: Record<string, Builder> = {
     const faceted = mat.clone();
     faceted.flatShading = true;
     const pts = [
-      [0, 0.125, 0.074], // the root, small of the back
-      [0, 0.088, 0.185],
-      [0, 0.022, 0.276],
-      [0, -0.052, 0.336],
-      [0, -0.104, 0.376],
-      [0, -0.106, 0.428], // the flick
-      [0, -0.068, 0.462],
+      [0, 0.132, 0.040], // the root, sunk INSIDE the small of the back
+      [0, 0.116, 0.108],
+      [0, 0.076, 0.196],
+      [0, 0.016, 0.280],
+      [0, -0.054, 0.338],
+      [0, -0.104, 0.380],
+      [0, -0.108, 0.430], // the flick
+      [0, -0.072, 0.466],
     ].map(([x, y, z]) => new Vector3(x, y, z));
-    g.add(new Mesh(taperedTube(pts, 0.044, 0.009, 32, 7), faceted));
-    // A boss where it meets the back, so the root reads as seated.
-    const boss = new Mesh(new SphereGeometry(0.05, 10, 8), faceted);
-    boss.position.copy(pts[0]);
-    boss.scale.set(1, 0.92, 0.8);
-    g.add(boss);
+    // 1.5 mm at the tip: a point at any distance you will ever see it from,
+    // without the degenerate ring a true zero would leave for the normals.
+    g.add(new Mesh(taperedTube(pts, 0.046, 0.0015, 34, 7), faceted));
     return g;
   },
   belt: (mat) => {

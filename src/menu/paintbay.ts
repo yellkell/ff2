@@ -50,8 +50,9 @@ const RIGHT = M + HALF + 48;
  */
 export const bayFaceState = { kind: 'stripe' as PaintKind, turn: 0, version: 1 };
 
-/** The eight stops, named for the face they put in front of you. */
-const TURN_FACE = ['FRONT', 'FRONT-LEFT', 'LEFT SIDE', 'BACK-LEFT', 'BACK', 'BACK-RIGHT', 'RIGHT SIDE', 'FRONT-RIGHT'];
+/** The eight stops, named for the face they put in front of you. Short,
+ *  because the readout sits in a bottom-row slot beside the other verbs. */
+const TURN_FACE = ['FRONT', 'FRONT L', 'LEFT', 'BACK L', 'BACK', 'BACK R', 'RIGHT', 'FRONT R'];
 
 /** How far the blank is turned, in radians. */
 export function bayTurn(): number {
@@ -64,7 +65,7 @@ const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
 const CHIP = 4;
 const chipRect = (x0: number, i: number): { x: number; y: number; w: number; h: number } => {
   const w = (HALF - (CHIP - 1) * 14) / CHIP;
-  return { x: x0 + (i % CHIP) * (w + 14), y: 420 + Math.floor(i / CHIP) * (w + 26), w, h: w };
+  return { x: x0 + (i % CHIP) * (w + 14), y: 384 + Math.floor(i / CHIP) * (w + 26), w, h: w };
 };
 
 export interface BayFace {
@@ -90,46 +91,46 @@ export function bayFace(): BayFace {
       tone: KIT.accent,
     },
   ];
-  // TURN THE BLANK: the only way to reach its back. Left of the tray's
-  // caption, because it belongs to the body rather than to the paint.
-  buttons.push(
-    { id: 'pb:turn-', label: '◂', x: M, y: 262, w: 86, h: 74, px: 40 },
-    {
-      id: 'pb:turn',
-      label: TURN_FACE[bayFaceState.turn % TURN_FACE.length],
-      sub: 'turn the blank',
-      x: M + 94, y: 262, w: 260, h: 74,
-      display: true,
-      small: true,
-      tone: bayFaceState.turn === 0 ? undefined : KIT.accent,
-    },
-    { id: 'pb:turn+', label: '▸', x: M + 362, y: 262, w: 86, h: 74, px: 40 },
-  );
-
   // Ghost chips: tray (left) takes, rack (right) buys.
   PAINT.colours.forEach((_, i) => {
     if (PAINT.tierOf(i) === 2) return; // the top shelf arrives later
     buttons.push({ id: `pb:take-${i}`, label: '', ghost: true, ...chipRect(M, i) });
     buttons.push({ id: `pb:buy-${i}`, label: '', ghost: true, ...chipRect(RIGHT, i) });
   });
+  // TURN THE BLANK — the only way to reach its back, and the reason the
+  // bottom row now has three slots. It needs no caption: the arrows say
+  // what it does and the readout says where it has got to.
+  const ROW_Y = BAY_H - 236;
+  buttons.push(
+    { id: 'pb:turn-', label: '◂', x: M, y: ROW_Y, w: 74, h: 100, px: 40 },
+    {
+      id: 'pb:turn',
+      label: TURN_FACE[bayFaceState.turn % TURN_FACE.length],
+      x: M + 78, y: ROW_Y, w: 184, h: 100,
+      display: true,
+      small: true,
+      tone: bayFaceState.turn === 0 ? undefined : KIT.accent,
+    },
+    { id: 'pb:turn+', label: '▸', x: M + 266, y: ROW_Y, w: 74, h: 100, px: 40 },
+  );
   if (bay.held) {
     buttons.push({
       id: 'pb:return',
       label: 'RETURN TO TRAY',
       sub: `${bay.held.kind.toUpperCase()} in hand — or press B`,
-      x: M, y: BAY_H - 236, w: HALF + 100, h: 100,
+      x: M + 356, y: ROW_Y, w: 310, h: 100,
       tone: KIT.warn,
     });
   }
-  buttons.push({ id: 'paintbay-close', label: 'CLOSE', x: BAY_W - M - 300, y: BAY_H - 236, w: 300, h: 100, small: true });
+  buttons.push({ id: 'paintbay-close', label: 'CLOSE', x: BAY_W - M - 260, y: ROW_Y, w: 260, h: 100, small: true });
 
   const body = (g: CanvasRenderingContext2D): void => {
     g.textBaseline = 'middle';
     g.font = font(600, 30);
     g.fillStyle = KIT.dim;
     g.textAlign = 'left';
-    g.fillText('THE TRAY — yours, tap to take', M, 392);
-    g.fillText('THE RACK — buy with $', RIGHT, 392);
+    g.fillText('THE TRAY — yours, tap to take', M, 330);
+    g.fillText('THE RACK — buy with $', RIGHT, 330);
     // The chips themselves (ghost buttons hit-test; we paint).
     PAINT.colours.forEach((hex, i) => {
       if (PAINT.tierOf(i) === 2) return;
