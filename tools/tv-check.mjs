@@ -145,11 +145,11 @@ late.close();
 // A picture over the cap is dropped without touching the channel: the
 // pose frame is what keeps a bout on air, so television degrades to the
 // diagram rather than going dark.
-caster.send(JSON.stringify({ t: 'v', d: 'X'.repeat(50 * 1024) }));
+caster.send(JSON.stringify({ t: 'v', d: 'X'.repeat(100 * 1024) }));
 await sleep(220);
 const guideV = await fetch(`http://localhost:${PORT}/tv/guide`).then((r) => r.json());
 check('an oversized picture is dropped and the bout stays on air',
-  !seen.some((m) => m.t === 'v' && m.d.length > 50000) && guideV.channels.some((c) => c.title === 'PROBE vs ROOK'),
+  !seen.some((m) => m.t === 'v' && m.d.length > 99000) && guideV.channels.some((c) => c.title === 'PROBE vs ROOK'),
   `${seen.filter((m) => m.t === 'v').length} pictures through`);
 
 

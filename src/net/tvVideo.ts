@@ -101,14 +101,46 @@ async function toBase64(blob: Blob): Promise<string> {
   return btoa(s);
 }
 
+/**
+ * The shadow-lift curve, as a 256-entry table.
+ *
+ * Built once. A pow() per channel per pixel is 900k of them at 640x360,
+ * three times a second, on a device that is also running a fight; a table
+ * lookup is a table lookup.
+ */
+// Widened: VIDEO is `as const`, so the literal type would make every
+// comparison against 1 a type error rather than a runtime question.
+const LIFT_GAMMA: number = VIDEO.lift;
+const LIFTS = LIFT_GAMMA !== 1;
+const LIFT = (() => {
+  const t = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) {
+    t[i] = LIFTS ? Math.round(255 * Math.pow(i / 255, 1 / LIFT_GAMMA)) : i;
+  }
+  return t;
+})();
+
 async function encode(): Promise<string | null> {
   if (!flat || !ctx || !image || !pixels) return null;
-  // WebGL hands back rows bottom-up; the picture wants them top-down.
+  // WebGL hands back rows bottom-up; the picture wants them top-down. The
+  // shadow lift rides along on the same pass, so it costs a lookup per
+  // channel rather than a second walk of the buffer.
   const { w, h } = VIDEO;
   const dst = image.data;
+  const lift = LIFTS;
   for (let y = 0; y < h; y++) {
     const src = (h - 1 - y) * w * 4;
-    dst.set(pixels.subarray(src, src + w * 4), y * w * 4);
+    const row = y * w * 4;
+    if (!lift) {
+      dst.set(pixels.subarray(src, src + w * 4), row);
+      continue;
+    }
+    for (let x = 0; x < w * 4; x += 4) {
+      dst[row + x] = LIFT[pixels[src + x]];
+      dst[row + x + 1] = LIFT[pixels[src + x + 1]];
+      dst[row + x + 2] = LIFT[pixels[src + x + 2]];
+      dst[row + x + 3] = pixels[src + x + 3];
+    }
   }
   ctx.putImageData(image as ImageData, 0, 0);
   const blob =

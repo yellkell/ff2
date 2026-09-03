@@ -1058,20 +1058,43 @@ export const NET = {
  * the person actually fighting.
  */
 export const VIDEO = {
-  /** The postcard. 16:9, because every player's view is. */
-  w: 256,
-  h: 144,
+  /**
+   * The frame. 16:9, because every player's view is.
+   *
+   * This was 256x144, chosen to keep the cost off a headset, and it was
+   * the wrong trade: stretched across a broadcast panel it is mush, and a
+   * picture nobody can read is not cheaper than no picture — it is just
+   * cheaper AND useless. 640x360 is six times the pixels for about four
+   * times the bytes (measured on the club: 6.9 KB against 27 KB of base64
+   * at the same quality), and it is the difference between "there is a
+   * fight happening somewhere in there" and being able to see who is
+   * winning it.
+   */
+  w: 640,
+  h: 360,
   /** Frames a second. Three reads as motion without competing with the
    *  bout for GPU time; the pose frame still runs at TV.castHz. */
   hz: 3,
   /** JPEG quality. Under about 0.4 the paint goes muddy, which is the one
    *  thing the picture exists to show. */
-  quality: 0.45,
+  quality: 0.62,
+  /**
+   * SHADOW LIFT, as a gamma. The venues are dark by design — the club is
+   * black glass and neon, the void is darkness given shape by light — and
+   * a camera that reproduces them faithfully sends a black rectangle with
+   * a few bright lines in it. The renderer's own exposure control cannot
+   * help: tone mapping is off, so toneMappingExposure does nothing at all.
+   * So the lift happens in the encoder, on the pixels, as a curve that
+   * raises the darks and leaves the neon where it is. 1 is off.
+   */
+  lift: 1.5,
   /** A wide ringside lens: the whole platform and both players in frame. */
   fov: 58,
-  /** Refuse a frame bigger than this many base64 characters (~24 KiB of
-   *  JPEG). A frame this big means the encoder mis-set, not a busy scene. */
-  maxBytes: 32000,
+  /** Refuse a frame bigger than this many base64 characters (~67 KiB of
+   *  JPEG). A full 640x360 frame of the club measures about 27 KB, so this
+   *  is generous headroom — a frame past it means the encoder mis-set, not
+   *  a busy scene. */
+  maxBytes: 90000,
   /**
    * No picture for this long and the page falls back to the diagram.
    *

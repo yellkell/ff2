@@ -48,10 +48,10 @@ const PORT = Number(process.env.PORT || 8790);
 const CHANNEL_TTL_MS = 6000;
 /** Frames are small; anything bigger is a mistake or an attack. */
 const FRAME_MAX = 12 * 1024;
-/** A PICTURE is a 256x144 JPEG in base64 (src/config.ts VIDEO) — a few
- *  kilobytes in practice. The cap is generous enough for a busy scene and
- *  mean enough that nobody streams video of something else through here. */
-const VIDEO_MAX = 48 * 1024;
+/** A PICTURE is a 640x360 JPEG in base64 (src/config.ts VIDEO) — around
+ *  27 KB in practice. The cap is generous enough for a busy scene and mean
+ *  enough that nobody streams video of something else through here. */
+const VIDEO_MAX = 96 * 1024;
 /** No picture for this long and the channel is a diagram again. */
 const VIDEO_TTL_MS = 4000;
 
