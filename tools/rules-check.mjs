@@ -154,7 +154,7 @@ const room = (over = {}) => ({
   host: ME,
   open: true,
   at: now(),
-  expiresAt: now() + 90_000,
+  expiresAt: new Date(now() + 90_000),
   ...over,
 });
 
@@ -164,6 +164,12 @@ await check('a signed-in player can open a room', () =>
 
 await check('a room WITHOUT expiresAt is refused — a leaked room is the outage', () =>
   assertFails(setDoc(doc(me, 'rooms', 'r2'), { mode: 'duel', visibility: 'public', host: ME, at: now() })),
+);
+
+// The type is the feature: a TTL policy ignores a numeric field entirely, so a
+// room whose lease is a number is a room that can never be swept.
+await check('a NUMERIC expiresAt is refused — a TTL policy would ignore it', () =>
+  assertFails(setDoc(doc(me, 'rooms', 'r2b'), room({ expiresAt: Date.now() + 90_000 }))),
 );
 
 await check('an unknown mode is refused', () =>
@@ -192,19 +198,19 @@ console.log('\n=== presence: your own record, and it expires ===');
 
 await check('I can check in', () =>
   assertSucceeds(
-    setDoc(doc(me, 'presence', ME), { name: 'IRON', where: 'club', look: '', at: now(), expiresAt: now() + 150_000 }),
+    setDoc(doc(me, 'presence', ME), { name: 'IRON', where: 'club', look: '', at: now(), expiresAt: new Date(now() + 150_000) }),
   ),
 );
 
 await check('I cannot check someone else in', () =>
   assertFails(
-    setDoc(doc(them, 'presence', ME), { name: 'IRON', where: 'club', at: now(), expiresAt: now() + 150_000 }),
+    setDoc(doc(them, 'presence', ME), { name: 'IRON', where: 'club', at: now(), expiresAt: new Date(now() + 150_000) }),
   ),
 );
 
 await check('an unknown room is refused', () =>
   assertFails(
-    setDoc(doc(me, 'presence', ME), { name: 'IRON', where: 'moon', at: now(), expiresAt: now() + 150_000 }),
+    setDoc(doc(me, 'presence', ME), { name: 'IRON', where: 'moon', at: now(), expiresAt: new Date(now() + 150_000) }),
   ),
 );
 

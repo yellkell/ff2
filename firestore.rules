@@ -148,12 +148,23 @@ service cloud.firestore {
     // dead room. Signed-in plus a shape check is the honest boundary here.
     // `expiresAt` is required so a Firestore TTL policy on that field can
     // sweep abandoned rooms — without it a crashed host leaks a room for ever.
+    //
+    // AND IT MUST BE A TIMESTAMP. A TTL policy only ever acts on a timestamp
+    // field: aim one at a number and Firestore accepts the policy, shows it as
+    // active, and sweeps nothing, silently, for ever. That is the worst kind of
+    // failure — the thing that was supposed to stop rooms leaking looks like it
+    // is working. So the type is checked here, where a bad write is refused
+    // outright rather than accumulating until a scan window fills with ghosts.
+
+    function leased() {
+      return request.resource.data.expiresAt is timestamp;
+    }
 
     function validRoom() {
       return request.resource.data.mode in ['duel', 'ranked', 'arcade', 'raid', 'rave', 'pub']
         && request.resource.data.visibility in ['public', 'private']
         && str(request.resource.data.host, 128)
-        && request.resource.data.expiresAt is number
+        && leased()
         && stamped();
     }
 
@@ -177,15 +188,16 @@ service cloud.firestore {
     /* ── presence — who is around, and where ──────────────────────────── */
     // The social layer's heartbeat: one doc per player, rewritten as you move
     // between the club, the pub, the arena and a rave set. Owner-writable,
-    // world-readable, and TTL-swept on `expiresAt` so a headset that drops
-    // off the network stops haunting the room a minute later.
+    // world-readable, and TTL-swept on `expiresAt` (a timestamp — see the note
+    // on rooms above) so a headset that drops off the network stops haunting
+    // the room a minute later.
 
     match /presence/{uid} {
       allow read: if signedIn();
       allow create, update: if mine(uid)
         && request.resource.data.where in ['club', 'pub', 'arena', 'rave', 'menu']
         && str(request.resource.data.name, 16)
-        && request.resource.data.expiresAt is number
+        && leased()
         && stamped();
       allow delete: if mine(uid);
     }

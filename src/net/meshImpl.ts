@@ -25,6 +25,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { cloud, currentIdToken, firebaseConfig, type Cloud } from './firebase.js';
+import { expiryMs } from './rooms.js';
 import { serverNow } from './serverClock.js';
 import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
@@ -113,7 +114,8 @@ function roomFields(format: ArcadeMode, visibility: 'public' | 'private') {
     visibility,
     host: live?.uid ?? '',
     at: now,
-    expiresAt: now + LEASE_MS,
+    // A TIMESTAMP: a TTL policy ignores a numeric field entirely (net/rooms.ts).
+    expiresAt: new Date(now + LEASE_MS),
   };
 }
 
@@ -214,7 +216,7 @@ export class MeshImpl {
           // abandoned by a crash — and the lease is what frees those, rather
           // than the code being burnt for ever.
           const held = await txn.get(ref);
-          if (held.exists() && Date.now() < ((held.data()?.expiresAt as number | undefined) ?? 0)) {
+          if (held.exists() && Date.now() < expiryMs(held.data()?.expiresAt)) {
             throw new Error('taken');
           }
           txn.set(ref, {
@@ -346,7 +348,7 @@ export class MeshImpl {
       // TTL policy reads to actually remove it. A room that beat without
       // renewing its lease would vanish underneath a lobby full of people.
       const now = Date.now();
-      void updateDoc(this.roomRef, { beat: serverTimestamp(), at: now, expiresAt: now + LEASE_MS }).catch(() => {});
+      void updateDoc(this.roomRef, { beat: serverTimestamp(), at: now, expiresAt: new Date(now + LEASE_MS) }).catch(() => {});
     };
     tick();
     this.beatTimer = setInterval(tick, 30_000);
@@ -503,7 +505,7 @@ export class MeshImpl {
       'at',
       now,
       'expiresAt',
-      now + LEASE_MS,
+      new Date(now + LEASE_MS),
     ).catch(() => {
       /* room reaped while we slept — the next snapshot / join tells the tale */
     });

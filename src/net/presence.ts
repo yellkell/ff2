@@ -82,7 +82,9 @@ async function beat(): Promise<void> {
       where: mine.where,
       look: mine.look.slice(0, 128),
       at: now,
-      expiresAt: now + TTL_MS,
+      // A TIMESTAMP, not a number: a TTL policy pointed at a numeric field
+      // sweeps nothing at all, and says nothing about it. See net/rooms.ts.
+      expiresAt: new Date(now + TTL_MS),
     });
   } catch {
     // A missed beat is survivable — the next one is 45 seconds away and the
@@ -166,7 +168,7 @@ export async function fetchPresence(force = false): Promise<void> {
     const snap = await getDocs(
       query(
         collection(c.db, 'presence'),
-        whereFn('expiresAt', '>', now),
+        whereFn('expiresAt', '>', new Date(now)),
         orderBy('expiresAt', 'desc'),
         limit(200),
       ),

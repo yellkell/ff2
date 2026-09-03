@@ -114,6 +114,32 @@ function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
   ]);
 }
 
+/**
+ * Is this an automated browser rather than a person in a headset?
+ *
+ * The check tools (tools/*.mjs) boot the REAL app against the REAL project,
+ * because that is the point of them — they are meant to exercise the thing
+ * that ships. What was not intended is that they also WRITE to it: every run
+ * filed a presence record and a player profile into the live database, and
+ * twenty stale presence documents turned up in the console before anyone had
+ * played a single session.
+ *
+ * `navigator.webdriver` is set by Playwright, Selenium and every other
+ * automation harness, and by nothing else — a Quest browser never sets it. So
+ * a probe gets no cloud, plays local-only, and leaves the database alone.
+ *
+ * `?cloud=1` opts back in, for the day something genuinely needs to test the
+ * cloud path headlessly (against the emulator, ideally).
+ */
+function isProbe(): boolean {
+  try {
+    if (typeof navigator === 'undefined' || !navigator.webdriver) return false;
+    return new URLSearchParams(location.search).get('cloud') !== '1';
+  } catch {
+    return false;
+  }
+}
+
 /** Failures worth giving up on for good, rather than retrying all session. */
 function isPermanent(code: string): boolean {
   return (
@@ -134,6 +160,7 @@ function isPermanent(code: string): boolean {
  */
 export function cloud(): Promise<Cloud | null> {
   if (!FIREBASE_ENABLED) return Promise.resolve(null);
+  if (isProbe()) return Promise.resolve(null);
   if (live) return Promise.resolve(live);
   if (dead) return Promise.resolve(null);
   if (opening) return opening;

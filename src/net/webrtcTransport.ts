@@ -45,6 +45,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { cloud, type Cloud } from './firebase.js';
+import { expiryMs } from './rooms.js';
 import { clockConfident, serverNow, syncServerClock } from './serverClock.js';
 import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
@@ -165,7 +166,8 @@ function roomFields(mode: 'duel' | 'ranked', visibility: 'public' | 'private') {
     visibility,
     host: uid(),
     at: now,
-    expiresAt: now + (visibility === 'private' ? PRIVATE_FRESH_MS : PUBLIC_LEASE_MS),
+    // A TIMESTAMP: a TTL policy ignores a numeric field entirely (net/rooms.ts).
+    expiresAt: new Date(now + (visibility === 'private' ? PRIVATE_FRESH_MS : PUBLIC_LEASE_MS)),
   };
 }
 
@@ -175,7 +177,7 @@ function beatFields(visibility: 'public' | 'private') {
   return {
     seen: serverTimestamp(),
     at: now,
-    expiresAt: now + (visibility === 'private' ? PRIVATE_FRESH_MS : PUBLIC_LEASE_MS),
+    expiresAt: new Date(now + (visibility === 'private' ? PRIVATE_FRESH_MS : PUBLIC_LEASE_MS)),
   };
 }
 
@@ -383,8 +385,7 @@ export class WebRtcTransport implements Transport {
           if (snap.exists()) {
             // A code is TAKEN while its room is still leased, whatever kind of
             // room that is — the lease is the one clock every room keeps.
-            const expires = (snap.data()?.expiresAt as number | undefined) ?? 0;
-            if (Date.now() < expires) throw new Error('taken');
+            if (Date.now() < expiryMs(snap.data()?.expiresAt)) throw new Error('taken');
           }
           txn.set(ref, { open: true, createdAt: serverTimestamp(), ...roomFields('duel', 'private') });
         });

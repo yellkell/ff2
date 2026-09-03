@@ -72,7 +72,16 @@ export interface RoomDoc {
   /** Still accepting joiners? A claimed duel flips this false. */
   open?: boolean;
   at: number;
-  expiresAt: number;
+  /**
+   * When this room's lease runs out — a Firestore TIMESTAMP, not a number.
+   *
+   * That distinction is the whole feature. A TTL policy only ever acts on a
+   * timestamp field; point one at a numeric field and Firestore accepts the
+   * policy, reports it as active, and silently sweeps nothing, for ever. The
+   * rules insist on the type (`is timestamp`) so a write that would have been
+   * un-sweepable is refused at the door rather than rotting quietly.
+   */
+  expiresAt: Date;
 }
 
 /** A room as read back, with its id. */
@@ -116,14 +125,27 @@ export function candidatesCol(c: Cloud, roomId: string, pair: string, side: 'cal
 export function stamps(visibility: RoomVisibility, now = Date.now()) {
   return {
     at: now,
-    expiresAt: now + (visibility === 'private' ? PRIVATE_TTL_MS : ROOM_TTL_MS),
+    expiresAt: new Date(now + (visibility === 'private' ? PRIVATE_TTL_MS : ROOM_TTL_MS)),
   };
 }
 
 /** Is this room still alive, by its own clock? Readers apply this so a ghost
  *  is invisible in the window before Firestore's TTL sweep catches up. */
 export function alive(data: Partial<RoomDoc> | undefined, now = Date.now()): boolean {
-  return typeof data?.expiresAt === 'number' && data.expiresAt > now;
+  return expiryMs(data?.expiresAt) > now;
+}
+
+/**
+ * A lease as milliseconds, whatever shape it arrives in. Firestore hands back
+ * a Timestamp; a document written by an older client — or read straight off
+ * the REST API — may still carry a raw number. 0 means "no lease", which reads
+ * as expired everywhere, and expired is the safe way for a malformed room to
+ * fail.
+ */
+export function expiryMs(v: unknown): number {
+  if (typeof v === 'number') return v;
+  const ms = (v as { toMillis?: () => number } | undefined)?.toMillis?.();
+  return typeof ms === 'number' ? ms : 0;
 }
 
 /* ── opening and holding a room ───────────────────────────────────────── */
@@ -225,7 +247,7 @@ export async function listRooms(mode: RoomMode, max = 20): Promise<Room[]> {
         roomsCol(c),
         where('mode', '==', mode),
         where('visibility', '==', 'public'),
-        where('expiresAt', '>', Date.now()),
+        where('expiresAt', '>', new Date()),
         orderBy('expiresAt', 'desc'),
         limit(max),
       ),
