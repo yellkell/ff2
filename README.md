@@ -202,6 +202,43 @@ shipped this bug once. `npm run build && npm run check:pages` serves the
 build under `/ff2/` in a real browser and fails on any 404; the deploy
 workflow runs a fast static version of the same guard.
 
+### The room server
+
+Three relays, one process, one host: `server/room.mjs` mounts the duel relay at
+`/ff`, the Iron Balls pub at `/pub` and the rave's room relay at `/rave`. The
+client resolves all three off one `ROOM_SERVER` constant (`src/config.ts`).
+
+On a free plan that consolidation matters more than tidiness — a sleeping
+service takes the best part of a minute to wake, and one service means everyone
+arriving anywhere in the town wakes the same one.
+
+`render.yaml` is a Blueprint: **Render → New → Blueprint → this repo** creates
+the service and prompts for the secrets. Setting one up by hand instead, the
+four things that matter are:
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `server` |
+| Build Command | `npm install` |
+| Start Command | `npm start` |
+| Health Check Path | `/` |
+
+`server/` is self-contained — node built-ins, `ws`, and its own files — so
+Render never builds the client to run the relay.
+
+**The env vars do not travel with the code.** `LIVEKIT_URL`,
+`LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` live on whichever service used to
+run the pub; without them the pub still works and nobody can hear each other.
+`DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` (the bar TV) and `ADMIN_TOKEN` (the
+ban panel) are optional.
+
+You can tell by eye which build a host is running — the room server answers `/`
+with `{"room":"fire-fight-2","relays":[…]}`, where a single old relay answers
+with its own name.
+
+> If the host's name changes, `ROOM_SERVER` in `src/config.ts` has to change
+> with it. It is one constant, and it is the only place the hostname appears.
+
 ### The Firebase project
 
 Everything server-side — boards, matchmaking, presence, the gazette — lives in
