@@ -14,7 +14,9 @@ import { launchXR, SessionMode, World } from '@iwsdk/core';
 import { installCrashTrap } from './debug/crashTrap.js';
 import { installTownExperienceManager } from './experience/ClubExperienceManager.js';
 import { requestArenaReturn, requestVenueEntry } from './experience/clubNavigation.js';
-import { initLeaderboard } from './net/leaderboard.js';
+import { initLeaderboard, myName } from './net/leaderboard.js';
+import { enter as enterRoom } from './net/presence.js';
+import { myPackedLook } from './avatar/paint.js';
 import { initGazette } from './net/gazette.js';
 import { enterMenuMusic, preloadMenuMusic } from './audio/menuMusic.js';
 import { runBootIntro } from './experience/BootIntro.js';
@@ -136,6 +138,9 @@ World.create(container, {
 
   initLeaderboard(); // anonymous profile + first board fetch
   initGazette(); // pull the day's Gasket Gazette for the lobby paper button
+  // Check in. The doors (experience/clubNavigation.ts) hand presence on from
+  // here as you move between the arena, the venue and the rave.
+  enterRoom('arena', myName(), myPackedLook());
   setupEnvironment(world);
   buildArena(world);
   setupCombatants(world);

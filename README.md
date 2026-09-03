@@ -185,9 +185,13 @@ dev plugin provides a WebXR emulator (WASD + mouse).
 
 ## Deploying
 
-The live site is **GitHub Pages, published by GitHub Actions**
-(`.github/workflows/deploy.yml` → https://yellkell.github.io/ff2/). A push
-builds `dist/` and uploads it; no Firebase involved.
+The live site is **https://ff2.web.app**, published by GitHub Actions
+(`.github/workflows/firebase-deploy.yml`). A push to `main` goes live; a pull
+request gets a temporary preview channel so a change can be walked around in a
+headset before it is merged.
+
+A **GitHub Pages** mirror still builds from `.github/workflows/deploy.yml`
+(https://yellkell.github.io/ff2/).
 
 Pages serves the game from a **subpath** (`/ff2/`), not a domain root, so
 every reference to a file in `public/` must be written **relatively**
@@ -198,7 +202,89 @@ shipped this bug once. `npm run build && npm run check:pages` serves the
 build under `/ff2/` in a real browser and fails on any 404; the deploy
 workflow runs a fast static version of the same guard.
 
-> Firebase is still used for **Firestore** (leaderboards, matchmaking, the
-> gazette) — only hosting moved. `firebase-deploy.yml` remains parked on
-> manual dispatch and still points at FIRE FIGHT 1's project, so it must
-> not be run from this repo.
+### The room server
+
+Three relays, one process, one host: `server/room.mjs` mounts the duel relay at
+`/ff`, the Iron Balls pub at `/pub` and the rave's room relay at `/rave`. The
+client resolves all three off one `ROOM_SERVER` constant (`src/config.ts`).
+
+On a free plan that consolidation matters more than tidiness — a sleeping
+service takes the best part of a minute to wake, and one service means everyone
+arriving anywhere in the town wakes the same one.
+
+`render.yaml` is a Blueprint: **Render → New → Blueprint → this repo** creates
+the service and prompts for the secrets. Setting one up by hand instead, the
+four things that matter are:
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `server` |
+| Build Command | `npm install` |
+| Start Command | `npm start` |
+| Health Check Path | `/` |
+
+`server/` is self-contained — node built-ins, `ws`, and its own files — so
+Render never builds the client to run the relay.
+
+**The env vars do not travel with the code.** `LIVEKIT_URL`,
+`LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` live on whichever service used to
+run the pub; without them the pub still works and nobody can hear each other.
+`DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` (the bar TV) and `ADMIN_TOKEN` (the
+ban panel) are optional.
+
+You can tell by eye which build a host is running — the room server answers `/`
+with `{"room":"fire-fight-2","relays":[…]}`, where a single old relay answers
+with its own name.
+
+> If the host's name changes, `ROOM_SERVER` in `src/config.ts` has to change
+> with it. It is one constant, and it is the only place the hostname appears.
+
+### The Firebase project
+
+Everything server-side — boards, matchmaking, presence, the gazette — lives in
+**one Firestore**, the project behind ff2.web.app, shared by FIRE FIGHT 2, RAVE
+RAID and the club.
+
+It did not use to. FF2 talked to `arfi-b68f9`, inherited from the ARFI era and
+also **FIRE FIGHT 1's live hosting** — which is why this workflow sat parked on
+manual dispatch, since an automatic deploy from this repo would have
+overwritten the live FF1 site. RAVE RAID kept its world board in a project of
+its own, and the pub's arcade board was a single document wedged into FF2's.
+One player had three identities and a board in one game could not see a name
+from another.
+
+> The project id reads `flappy-ff9f6`, which is where the `ff2` hosting site
+> was reserved. A `.web.app` name is globally unique, so prising it loose to
+> rename the project would mean releasing `ff2` into the pool where anyone
+> could take it. The id is invisible to players — treat it as **the FF2
+> project**.
+
+Two pieces of setup are not in this repo, because they cannot be:
+
+- **Anonymous sign-in must be ON** (Authentication → Sign-in method →
+  Anonymous). Every security rule identifies a row by its document name
+  matching `request.auth.uid`, so with it off there is no uid, and every write
+  in the game is denied — boards go quiet and matchmaking never pairs.
+- **Nothing else.** There WAS a second item here — a Firestore TTL policy on
+  `expiresAt` for `rooms` and `presence` — and it turned out not to be needed.
+  TTL requires the Blaze plan, and more to the point it was never load
+  bearing: both collections are queried with `where('expiresAt', '>', now)`,
+  so an expired record is filtered out SERVER-SIDE. It is never returned,
+  never shown, and never costs a read, which means a ghost cannot crowd a live
+  room out of a `limit()`ed scan — the failure the field exists to prevent.
+
+  Removing the records is housekeeping on top of that, and the clients do it:
+  `net/presence.ts` sweeps a handful of lapsed records once per session, and
+  the rules let any signed-in player bin one that has already expired. That is
+  the same arrangement the duel lobbies have always had, where
+  `webrtcTransport` reaps the ghosts it scans past.
+
+  Turn TTL on if you move to Blaze for other reasons — the field is the right
+  type for it (a timestamp; a policy aimed at a number sweeps nothing and says
+  nothing about it) — but it buys tidiness, not correctness.
+
+Rules and indexes DO live here and ship with the repo:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```

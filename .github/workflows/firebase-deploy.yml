@@ -1,18 +1,27 @@
 name: Deploy to Firebase Hosting
 
-# Builds FIRE FIGHT and publishes dist/ to Firebase Hosting (project
-# arfi-b68f9 → https://arfi-b68f9.web.app). Pushes to main go LIVE; pull
-# requests get an ephemeral preview channel so you can test before merging.
+# Builds FIRE FIGHT 2 and publishes dist/ to https://ff2.web.app.
+# Pushes to main go LIVE; pull requests get an ephemeral preview channel so a
+# change can be walked around in a headset before it is merged.
 #
-# One-time setup: add a repo secret named FIREBASE_SERVICE_ACCOUNT containing
-# the JSON key of a service account with the "Firebase Hosting Admin" role
+# THIS FILE WAS PARKED ON MANUAL DISPATCH until FF2 had its own Firebase
+# project, because it pointed at arfi-b68f9 — which is FIRE FIGHT 1's LIVE
+# hosting, and an automatic deploy from this repo would have overwritten the
+# live FF1 site. FF2 has its own home now (the project behind ff2.web.app), so
+# the handbrake comes off.
+#
+# ONE-TIME SETUP: the repo secret FIREBASE_SERVICE_ACCOUNT must hold the JSON
+# key of a service account ON THE FF2 PROJECT with the "Firebase Hosting Admin"
+# role. If that secret still holds an arfi-b68f9 key from the FF1 era, REPLACE
+# it — a key for the wrong project fails the deploy rather than doing anything
+# dangerous, but it fails every time until it is swapped.
 # (Firebase console → Project settings → Service accounts → Generate new
-# private key, then paste the whole JSON into the secret).
+# private key, then paste the whole JSON into the secret.)
 
-# FF2: parked on manual dispatch until FF2 has its OWN Firebase project —
-# this file still points at FIRE FIGHT 1's live hosting (arfi-b68f9), and an
-# automatic deploy from this repo would overwrite the live FF1 site.
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -36,5 +45,6 @@ jobs:
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: arfi-b68f9
+          projectId: flappy-ff9f6
+          target: ff2
           channelId: ${{ github.ref == 'refs/heads/main' && 'live' || '' }}

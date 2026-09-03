@@ -35,17 +35,22 @@ export function startRaidWatch(onCount: CountListener): void {
 
   void (async () => {
     try {
-      const { getApp, getApps, initializeApp } = await import('firebase/app');
-      const { collection, getFirestore, onSnapshot, query, where } = await import('firebase/firestore');
-      const { firebaseConfig } = await import('./firebaseConfig.js');
-      const apps = getApps();
-      const appFb = apps.length ? getApp() : initializeApp(firebaseConfig);
-      const rooms = collection(getFirestore(appFb), 'arcadeRooms');
+      // The shared connection (net/firebase.ts) — the same app, sign-in and uid
+      // the boards and the club use. A watch is a READ, and rooms are readable
+      // by anyone signed in, so this needs the sign-in as much as any write.
+      const { cloud } = await import('./firebase.js');
+      const c = await cloud();
+      if (!c) {
+        onCount(-1);
+        return;
+      }
+      const { collection, onSnapshot, query, where } = c.fs;
+      const rooms = collection(c.db, 'rooms');
 
       // Awaited so the first count never judges beats on a raw skewed clock.
       await syncServerClock();
       const unsub = onSnapshot(
-        query(rooms, where('mode', '==', 'raid'), where('open', '==', true)),
+        query(rooms, where('format', '==', 'raid'), where('visibility', '==', 'public'), where('open', '==', true)),
         (snap) => {
           const now = serverNow();
           let count = 0;

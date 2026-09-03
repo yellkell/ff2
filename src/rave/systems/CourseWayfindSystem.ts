@@ -24,7 +24,7 @@ import { conductor } from '../course/conductor.js';
 import { Bank, shadedBoxGeometry } from '../course/banks.js';
 import { registerDim } from '../course/dimmer.js';
 import { endpointsOf, homeward, HOME_INDEX, INDEX, PLATFORMS, ROUTE, sqOffset } from '../course/score.js';
-import { course, G } from '../course/state.js';
+import { course, G, platformSoundAt } from '../course/state.js';
 import { courseRoot } from '../course/world.js';
 import { courseView } from './CourseSystem.js';
 
@@ -167,7 +167,7 @@ export class CourseWayfindSystem extends createSystem({}) {
     if (G.tracked !== this.lastTracked) {
       if (G.tracked === HOME_INDEX && this.lastTracked === INDEX['runner-home']) {
         course.laps++;
-        conductor.bell(course.laps);
+        conductor.bell(course.laps, platformSoundAt(HOME_INDEX));
         this.closedAt = G.transport.bars;
       }
       this.lastTracked = G.tracked;

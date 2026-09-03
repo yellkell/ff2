@@ -33,7 +33,7 @@ import { createSystem } from '@iwsdk/core';
 import { COURSE_ORIGIN, GRID, RIG, SLIP_FLASH } from '../course/config.js';
 import { conductor } from '../course/conductor.js';
 import { anchorAt, PLATFORMS, sqOffset, v3 } from '../course/score.js';
-import { course, G } from '../course/state.js';
+import { course, G, platformSoundAt } from '../course/state.js';
 
 export class CourseFrameSystem extends createSystem({}) {
   private candidate = -1;
@@ -117,7 +117,7 @@ export class CourseFrameSystem extends createSystem({}) {
       G.tracked = owner;
       G.handovers++;
       G.flow++;
-      conductor.chime(G.flow);
+      conductor.chime(G.flow, platformSoundAt(owner));
       this.candidate = -1;
       this.candidateFrames = 0;
       return;
@@ -151,7 +151,7 @@ export class CourseFrameSystem extends createSystem({}) {
       G.flow = 0;
       G.slipAt = owner;
       G.slipFlash = SLIP_FLASH;
-      conductor.thud();
+      conductor.thud(platformSoundAt(owner));
     }
   }
 }

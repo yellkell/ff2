@@ -28,7 +28,7 @@ merged (every painted fighter read as blank for a while).
  scheduled Claude task (daily)
    └─ /daily-gazette  (.claude/commands/daily-gazette.md)
         1. node scripts/ladder-brief.mjs    → reads Firestore `players`,
-           diffs `newspaper/_snapshot`, pulls the RAID WIRE (`runRaid` +
+           diffs `gazette/_snapshot`, pulls the RAID WIRE (`runRaid` +
            `runGoopliath` clears since the last edition — victories only, the
            game never records a beaten squad), prints a JSON "wire report"
            (climbers + busiest only — never who fell; the paper won't punch down).
@@ -36,11 +36,11 @@ merged (every painted fighter read as blank for a while).
            player's `tone` + most-used paint `colours`, so Cole can describe
            a champion by their war paint ("the EMBER-and-CYAN machine")
         2. Claude writes the editorial in Sheriff Cole Ironside's voice
-        3. node scripts/publish-gazette.mjs → writes `newspaper/latest`
+        3. node scripts/publish-gazette.mjs → writes `gazette/latest`
            (edition bumped, publish timestamp) + rolls `_snapshot` forward
 
  game client (lobby)
-   └─ src/net/gazette.ts   reads `newspaper/latest`, tracks unread vs a
+   └─ src/net/gazette.ts   reads `gazette/latest`, tracks unread vs a
                            localStorage "seen edition"
    └─ src/menu/menu.ts     the round paper button (red dot) + the front page
    └─ src/systems/MenuSystem.ts  opens/closes it, marks read, refreshes
@@ -52,31 +52,60 @@ edition appears the next time a player lands in the lobby — no rebuild/redeplo
 
 ## Firestore data
 
-- `newspaper/latest` — the live edition the game reads:
+- `gazette/latest` — the live edition the game reads:
   `{ edition, dateline, headline, subhead, body, byline, mood, wanted?,
   notice?, weather?, publishedAt }`.
-- `newspaper/_snapshot` — internal generator state: the ladder standings as of
+- `gazette/_snapshot` — internal generator state: the ladder standings as of
   the last published edition, used to compute "what changed" for the next one.
 
-### Required security rules
+### Credentials
 
-These collections must be reachable from the scheduled task:
+The two halves of the task authenticate differently, and deliberately so.
+
+**`ladder-brief.mjs` reads, and needs nothing.** Everything it touches is
+world-readable under the shipped rules: `players`, `gazette/_snapshot`, and the
+two raid boards. It runs on the public web config.
+
+**`publish-gazette.mjs` writes, and needs a service account.** `gazette/latest`
+is what every player reads off the lobby wall, so the rules make it read-only
+to clients (`allow write: if false`) — a web API key will not get past that,
+which is the point. The publisher uses the Admin SDK instead, which service
+accounts run under and the rules do not apply to.
+
+Point it at a key with either:
+
+```bash
+export FIREBASE_SERVICE_ACCOUNT='{"type":"service_account", ...}'
+```
+
+or
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
+```
+
+Generate one in the Firebase console under **Project settings → Service
+accounts → Generate new private key**. It is a real credential — never commit
+it, and prefer the env var over a file on a shared machine.
+
+### The rules it relies on
+
+Shipped in `firestore.rules`; nothing extra to add.
 
 ```
-// The scheduled task reads the ladder to write the editorial.
-match /players/{doc} {
-  allow read: if true;
-}
+// The paper reads the ladder to write the editorial. World-readable.
+match /players/{uid} { allow read: if true; }
+
 // The edition the game reads + the generator's snapshot state.
-match /newspaper/{doc} {
-  allow read, write: if true;
+// Admin-written, client-read-only.
+match /gazette/{doc} {
+  allow read: if true;
+  allow write: if false;
 }
-// The raid wire — cleared runs the editorial reports on. Already open for
-// the in-game boards; runGoopliath shipped WITHOUT a rule (see
-// firestore.rules), so deploy the updated rules or the tide's fells stay
-// invisible to the game and the paper alike.
-match /runRaid/{run}      { allow read, create: if true; }
-match /runGoopliath/{run} { allow read, create: if true; }
+
+// The raid wire — the boards the editorial reports on. World-readable;
+// a player may only write their OWN row, and only to improve it.
+match /boards/{board}/rows/{uid} { allow read: if true; ... }
 ```
 
 (Hackathon-grade, matching the existing `lobbies` / `arcadeRooms` rules —

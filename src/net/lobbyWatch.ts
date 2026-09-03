@@ -1,7 +1,7 @@
 /**
  * Live list of open arcade LOBBIES for the lobby browser — 2v2, ffa or raid.
  *
- * A host creates an OPEN room doc in `arcadeRooms` (tagged with its `mode` and
+ * A host creates an OPEN room doc in `rooms` (tagged with its `format` and
  * the squad's callsigns); this watcher subscribes to the rooms of ONE mode and
  * reports the fresh, still-open, not-yet-started ones so the browser can list
  * them (each shows the host's name, the head-count and the raid hardcore flag).
@@ -24,14 +24,14 @@ import { clockConfident, serverNow, syncServerClock } from './serverClock.js';
 const BEAT_STALE_MS = 75 * 1000;
 
 /** A room silent for THIS long gets deleted by whoever's browsing — zombie
- *  shells otherwise pile up in `arcadeRooms` for ever (nothing client-side
+ *  shells otherwise pile up in `rooms` for ever (nothing client-side
  *  runs after a crash), and the quick-match outage taught us where unbounded
  *  ghost growth ends. Far beyond any live pause, so a skewed-but-unsynced
  *  clock can't reap a real lobby. */
 const ROOM_REAP_MS = 30 * 60 * 1000;
 
 export interface LobbyRoom {
-  /** The `arcadeRooms` doc id — passed to mesh.joinLobby to claim a seat. */
+  /** The room's doc id — passed to mesh.joinLobby to claim a seat. */
   id: string;
   /** The host's callsign, shown in the list. */
   host: string;
@@ -68,12 +68,17 @@ export function startLobbyWatch(mode: ArcadeMode, onRooms: ListListener): void {
 
   void (async () => {
     try {
-      const { getApp, getApps, initializeApp } = await import('firebase/app');
-      const { collection, deleteDoc, getFirestore, onSnapshot, query, where } = await import('firebase/firestore');
-      const { firebaseConfig } = await import('./firebaseConfig.js');
-      const apps = getApps();
-      const appFb = apps.length ? getApp() : initializeApp(firebaseConfig);
-      const rooms = collection(getFirestore(appFb), 'arcadeRooms');
+      // The shared connection (net/firebase.ts) — the same app, sign-in and uid
+      // the boards and the club use. A watch is a READ, and rooms are readable
+      // by anyone signed in, so this needs the sign-in as much as any write.
+      const { cloud } = await import('./firebase.js');
+      const c = await cloud();
+      if (!c) {
+        onRooms([]);
+        return;
+      }
+      const { collection, deleteDoc, onSnapshot, query, where } = c.fs;
+      const rooms = collection(c.db, 'rooms');
 
       // Correct for device clock skew BEFORE judging beats: this watch used to
       // trust Date.now(), so a headset clock >2 min fast saw EVERY live room as
@@ -84,7 +89,7 @@ export function startLobbyWatch(mode: ArcadeMode, onRooms: ListListener): void {
       // opened the browser ("I host, nobody ever sees my server").
       await syncServerClock();
       const unsub = onSnapshot(
-        query(rooms, where('mode', '==', mode), where('open', '==', true)),
+        query(rooms, where('format', '==', mode), where('visibility', '==', 'public'), where('open', '==', true)),
         (snap) => {
           const now = serverNow();
           const list: LobbyRoom[] = [];

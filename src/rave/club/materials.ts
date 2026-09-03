@@ -230,9 +230,10 @@ export function terrazzoTexture(repeat: [number, number] = [6, 6]): CanvasTextur
   });
 }
 
-/** Black QUILTED VINYL — a satin nap, and with `channels` the diamond
- *  quilting of a fight-club banquette, each pad crowned and buttoned.
- *  (Was: oxblood velvet.) */
+/** DEEP RED QUILTED VELVET — a satin nap, and with `channels` the diamond
+ *  quilting of a fight-club banquette, each pad crowned and buttoned. Dark
+ *  enough to sit inside the club's black register; red enough to read as
+ *  fabric rather than as a hole in the room. */
 export function velvetTexture(repeat: [number, number] = [2, 1], channels = 0): CanvasTexture {
   return cached(`velvet${repeat}|${channels}`, () => {
     const [c, g] = canvas(256);

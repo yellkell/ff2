@@ -24,6 +24,7 @@ import { initFirePools } from '../fx/fire.js';
 import * as sfx from '../audio/sfx.js';
 import { customization, myPackedGear } from '../menu/customization.js';
 import { myPackedLook } from '../avatar/paint.js';
+import { enter as enterRoom } from '../net/presence.js';
 import { PUB, pubServerUrl } from './config.js';
 import { buildPub } from './environment.js';
 import { pubConnect } from './net.js';
@@ -146,6 +147,10 @@ World.create(container, {
   bus.on('full', () => showFullNotice(world));
 
   // Your arena cosmetics walk in with you — paint included.
+  // …and so does your name on the town's roster: the pub is a separate PAGE,
+  // so it never crosses the doors in experience/clubNavigation.ts and has to
+  // check itself in.
+  enterRoom('pub', pub.myName, myPackedLook());
   pubConnect(pubServerUrl(), pub.myName, customization.avatar, customization.platform, customization.colorHue, customization.colorLight, myPackedLook(), myPackedGear());
 
   // Browser-only moderation: hold Z+A+P to open the admin ban panel.

@@ -17,6 +17,7 @@ import { createSystem, InputComponent } from '@iwsdk/core';
 import { CanvasTexture, MeshBasicMaterial, Quaternion, Raycaster, SRGBColorSpace, Vector3 } from 'three';
 import { huntEscape, huntHit, huntOver, huntShot, uiClick } from '../../audio/sfx.js';
 import { pubSendEvent, pubSendRaw } from '../net.js';
+import { BOARD, boardRows, fetchBoard, postScore } from '../../net/boards.js';
 import { bus, pub } from '../state.js';
 
 const W = 384;
@@ -148,6 +149,9 @@ export class DroneHuntSystem extends createSystem({}) {
 
     this.drawAttract();
     this.renderBoard();
+    // Pull the all-time board on the way in, so walking into the pub shows the
+    // real record rather than only whoever happens to be standing here.
+    void this.pullAllTime();
   }
 
   update(delta: number): void {
@@ -346,6 +350,18 @@ export class DroneHuntSystem extends createSystem({}) {
     this.deadTimer = 0;
     this.cross = null;
     this.drawGame(true);
+    // THE ALL-TIME BOARD is a Firestore board like every other one in the app
+    // now, posted from here under your own uid. It used to be mirrored to the
+    // cloud BY THE PUB RELAY, as a single whole-board document, because
+    // Render's disk is ephemeral and a redeploy silently wiped the wall — a
+    // board that lives where every other board lives has no such problem, and
+    // the rules keep your row yours whichever pub region you played in.
+    //
+    // Posted whether or not the relay is up: a solo session in an empty pub
+    // still counts, which it never did before.
+    void postScore(BOARD.octaHunt, this.score, pub.myName || 'YOU').then((landed) => {
+      if (landed) void this.pullAllTime();
+    });
     if (pub.online) {
       this.streamState(true);
       pubSendEvent({ e: 'SNAKE_OVER', score: this.score });
@@ -359,11 +375,23 @@ export class DroneHuntSystem extends createSystem({}) {
     }
   }
 
+  /** Pull the all-time board and repaint the wall when it lands. */
+  private async pullAllTime(force = false): Promise<void> {
+    await fetchBoard(BOARD.octaHunt, force);
+    this.renderBoard();
+  }
+
   /** Repaint the wall poster: OCTA HUNT — all-time top 15, one row per player. */
   private renderBoard(): void {
     const panel = pub.refs?.octaBoard;
     if (!panel) return;
-    const rows = pub.snakeBoard.slice(0, 15);
+    // The Firestore board is the all-time record and wins when it has
+    // anything. `pub.snakeBoard` — the relay's view, which only knows the
+    // people currently in this region's pub — is the fallback for a headset
+    // that can't reach the cloud, so the wall is never blank when it could
+    // say something.
+    const cloudRows = boardRows(BOARD.octaHunt).map((r) => ({ name: r.name, score: r.value }));
+    const rows = (cloudRows.length ? cloudRows : pub.snakeBoard).slice(0, 15);
     panel.draw((ctx, w, h) => {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';

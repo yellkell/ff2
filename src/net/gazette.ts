@@ -4,17 +4,17 @@
  * "Clankers" tearing up his quiet streets (and who is, of course, a Clanker
  * himself — he just won't admit it). A scheduled Claude task reads the ladder
  * every day, works out who fought and who rose or fell, and writes Cole's
- * editorial in character, dropping it into Firestore at `newspaper/latest`.
+ * editorial in character, dropping it into Firestore at `gazette/latest`.
  *
  * This module is the lobby's reader: it pulls the latest edition, and tracks
  * whether THIS player has read it yet so the lobby's paper button can wear a
  * red notification dot until they do. Rides the same Firestore project as
  * matchmaking + the leaderboard; loads firebase lazily like leaderboard.ts so
  * offline lobby players never pay for the bundle. Needs a Firestore rule
- * opening the `newspaper` collection for read (the scheduled task writes it).
+ * opening the `gazette` collection for read (the scheduled task writes it).
  */
 
-import { FIREBASE_ENABLED, firebaseConfig } from './firebaseConfig.js';
+import { FIREBASE_ENABLED, cloud, type Cloud } from './firebase.js';
 
 export interface GazetteArticle {
   /** Monotonic edition number — drives the unread dot. */
@@ -54,30 +54,16 @@ function seenEdition(): number {
   }
 }
 
-type FirestoreMod = typeof import('firebase/firestore');
-interface Handle {
-  fs: FirestoreMod;
-  db: import('firebase/firestore').Firestore;
-}
-
-let handlePromise: Promise<Handle | null> | null = null;
-
-function firestore(): Promise<Handle | null> {
-  if (!FIREBASE_ENABLED) return Promise.resolve(null);
-  handlePromise ??= (async () => {
-    try {
-      const appMod = await import('firebase/app');
-      const fs = await import('firebase/firestore');
-      // Share the app instance the leaderboard / WebRTC transport may already
-      // have spun up rather than double-initialising.
-      const fbApp = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebaseConfig);
-      return { fs, db: fs.getFirestore(fbApp) };
-    } catch {
-      gazette.status = 'gazette offline';
-      return null;
-    }
-  })();
-  return handlePromise;
+/**
+ * The shared connection (net/firebase.ts). The paper is world-readable, so this
+ * would work without a sign-in — but sharing the one app and the one uid keeps
+ * a single connection for the whole session rather than a second one just to
+ * read the front page.
+ */
+async function firestore(): Promise<Cloud | null> {
+  const c = await cloud();
+  if (!c) gazette.status = 'gazette offline';
+  return c;
 }
 
 /** A string field off the doc, capped — the page lays these out at fixed sizes. */
@@ -102,7 +88,7 @@ export async function refreshGazette(force = false): Promise<void> {
   const h = await firestore();
   if (!h) return;
   try {
-    const snap = await h.fs.getDoc(h.fs.doc(h.db, 'newspaper', 'latest'));
+    const snap = await h.fs.getDoc(h.fs.doc(h.db, 'gazette', 'latest'));
     if (!snap.exists()) {
       gazette.status = 'the presses are quiet';
       return;

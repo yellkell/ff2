@@ -14,9 +14,9 @@
  * resolved, not a pending null), and record serverMillis − localMillis. From
  * then on `serverNow()` returns the device clock corrected onto server time, so
  * freshness windows mean what they say regardless of how wrong the local clock
- * is. The probe doc is `open:false`, so it never shows up as a queue lobby; it's
- * deleted right after. If the probe fails we fall back to a zero offset — i.e.
- * exactly the old behaviour, never worse.
+ * is. The probe lives at `probes/{uid}` — its own collection, one doc per
+ * player, deleted right after. If the probe fails we fall back to a zero
+ * offset — i.e. exactly the old behaviour, never worse.
  */
 
 let offset: number | null = null;
@@ -46,14 +46,20 @@ export function syncServerClock(): Promise<void> {
   if (!syncing) {
     syncing = (async () => {
       try {
-        const { getApp, getApps, initializeApp } = await import('firebase/app');
-        const { addDoc, collection, deleteDoc, getDocFromServer, getFirestore, serverTimestamp } =
-          await import('firebase/firestore');
-        const { firebaseConfig } = await import('./firebaseConfig.js');
-        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
-        const dbi = getFirestore(app);
-        // open:false → invisible to the matchmaking query and the queue counter.
-        const ref = await addDoc(collection(dbi, 'lobbies'), { open: false, probe: true, t: serverTimestamp() });
+        const { cloud } = await import('./firebase.js');
+        const c = await cloud();
+        if (!c) {
+          offset = 0; // no cloud — assume no skew (status quo, never worse)
+          return;
+        }
+        const { deleteDoc, doc, getDocFromServer, serverTimestamp, setDoc } = c.fs;
+        // The probe has its OWN collection, one document per player. It used to
+        // be written into the matchmaking collection as a fake lobby marked
+        // `open: false` — invisible to the queue, but still a room-shaped
+        // document sitting in with the real rooms, and one that would now have
+        // to lie about being a room to get past the rules at all.
+        const ref = doc(c.db, 'probes', c.uid);
+        await setDoc(ref, { t: serverTimestamp() });
         const snap = await getDocFromServer(ref); // server read → the stamp is resolved
         const sv = (snap.data()?.t as { toMillis?: () => number } | undefined)?.toMillis?.();
         if (typeof sv === 'number') {

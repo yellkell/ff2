@@ -1,0 +1,55 @@
+# THE ROOM SERVER on Render — one service for the whole town.
+#
+# FIRE FIGHT 2 runs three relays and they are one process (server/room.mjs),
+# told apart by path: /ff the duel relay, /pub the Iron Balls pub, /rave the
+# rave's room relay. They used to be three separate Render services, which
+# meant three cold starts to sit through, three free-tier hosts to keep warm,
+# and three URLs to keep in step with the client.
+#
+# On a free plan the consolidation is worth more than tidiness: a sleeping
+# service takes the best part of a minute to wake, and one service means
+# everybody arriving anywhere in the town wakes the SAME one. The pub warms
+# the rave; the rave warms the duel relay.
+#
+# TO USE THIS: Render dashboard → New → Blueprint → pick this repo. Render
+# reads this file, creates the service, and asks for the secrets below (they
+# are marked `sync: false`, which is what keeps them out of the repo).
+#
+# Editing an existing service by hand instead? The four things that matter are
+# rootDir, buildCommand, startCommand and the env vars — see README.
+services:
+  - type: web
+    name: ff2-room
+    runtime: node
+    plan: free
+    # server/ has its own package.json and is self-contained: node built-ins,
+    # `ws`, and its own files. Nothing reaches up into the game's source, so
+    # Render never has to build the client to run the relay.
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    # room.mjs answers / with the list of mounted relays, which doubles as a
+    # health check and as the quickest way to tell by eye that a host is
+    # running the room server rather than one of the old single relays.
+    healthCheckPath: /
+    envVars:
+      # VOICE in the pub. The relay mints LiveKit join tokens at /pub/token;
+      # without these the pub still works and nobody can hear each other.
+      # These currently live on the OLD pub service — copy them across, they
+      # do not travel with the code.
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false
+      # The bar TV's chat relay. Optional — the pub logs that it is off and
+      # carries on.
+      - key: DISCORD_BOT_TOKEN
+        sync: false
+      - key: DISCORD_CHANNEL_ID
+        sync: false
+      # Moderation: the ban panel's shared secret. Optional, but a pub with no
+      # ADMIN_TOKEN is a pub nobody can be thrown out of.
+      - key: ADMIN_TOKEN
+        sync: false

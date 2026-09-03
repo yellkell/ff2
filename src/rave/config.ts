@@ -21,6 +21,7 @@
  */
 
 import type { Vector2Tuple } from 'three';
+import { ROOM_SERVER, roomServerHost } from '../config.js';
 
 export const GAME_TITLE = 'GOOPLIATH: DANCE RAID';
 
@@ -1068,10 +1069,10 @@ export const NET = {
   path: '/rave',
 };
 
-/** The hosted room relay (deploy server/index.mjs here — same Render-style
- *  arrangement as Iron Balls Boxing's pub relay). Override per-session with
- *  ?server=wss://… or by setting localStorage 'gdr-server'. */
-export const DEFAULT_RELAY = 'wss://rave-raid-relay.onrender.com';
+/** The hosted room relay: THE ROOM SERVER's /rave mount (server/room.mjs,
+ *  deployed once and serving the duel relay and the pub alongside this).
+ *  Override per-session with ?server=wss://… or localStorage 'gdr-server'. */
+export const DEFAULT_RELAY = `${ROOM_SERVER}${NET.path}`;
 
 /** Resolve the relay URL: ?server= param > localStorage > a local dev
  *  relay when the page itself is local > the hosted relay (raveraid.web.app
@@ -1085,11 +1086,7 @@ export function serverUrl(): string {
   } catch {
     /* storage may be unavailable */
   }
-  // A plain-http page is a dev serve (vite on this machine or its LAN IP,
-  // reached from a headset) — talk to the relay running beside it. Https
-  // means a real deploy (raveraid.web.app), which needs the hosted relay.
-  if (location.protocol !== 'https:') {
-    return `ws://${location.hostname}:${NET.defaultPort}${NET.path}`;
-  }
-  return DEFAULT_RELAY;
+  // roomServerHost() sorts out dev-vs-deployed; the rave just asks for its
+  // own mount on whichever room server that turns out to be.
+  return `${roomServerHost()}${NET.path}`;
 }

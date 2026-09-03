@@ -43,3 +43,28 @@ export const clubPoses = new Map<number, RemotePose>();
 export function clearClubPoses(): void {
   clubPoses.clear();
 }
+
+/**
+ * VOIDSTEP poses — head + hands in COURSE world space, keyed by relay member
+ * idx, exactly like {@link clubPoses} but for the place through the club's
+ * west door.
+ *
+ * World space is enough, and that is worth saying because it looks like it
+ * shouldn't be. Out on the course each rider's play area is pinned to
+ * whatever platform currently owns them, so two people are standing in two
+ * different moving frames — which sounds like a pose has to say WHICH frame
+ * it is in before anyone can place it. It doesn't: the circuit is authored,
+ * not generated, so every client builds the identical course at the identical
+ * coordinates, and a rider's head in course world space means the same thing
+ * on every headset. The moving frames cancel out the moment you stop
+ * describing a body relative to its own floor.
+ *
+ * What that DOES require is one shared clock — a platform has to be in the
+ * same place at the same moment everywhere, or a rider reads as standing
+ * beside their deck rather than on it. See `courseBars()` in net/session.ts.
+ */
+export const coursePoses = new Map<number, RemotePose>();
+
+export function clearCoursePoses(): void {
+  coursePoses.clear();
+}
