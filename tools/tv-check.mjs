@@ -151,6 +151,14 @@ const railLabels = await page.evaluate(() =>
 );
 check('the rail names SPEEDRUN, not GAUNTLET', railLabels.includes('Speedrun') && !railLabels.some((l) => /gauntlet/i.test(l)), railLabels.join(', '));
 check('THE LAB is a board of the FIRE FIGHT rail', railLabels.includes('The Lab'), railLabels.join(', '));
+// The boards lost their descriptions: the title and the column caps say
+// what a board is, and a sentence under each said it a second time.
+const noNotes = await page.evaluate(() => ({
+  gone: !document.getElementById('ff-note'),
+  caps: document.getElementById('ff-caps').textContent,
+}));
+check('no description sits under a board', noNotes.gone, JSON.stringify(noNotes));
+check('the board caps say PLAYER, not BOXER', /Player/.test(noNotes.caps) && !/Boxer/i.test(noNotes.caps), noNotes.caps);
 
 const tiers = await page.evaluate(() => {
   const tab = [...document.querySelectorAll('#board-rail .rail-tab')].find((b) => b.textContent.trim() === 'Speedrun');
@@ -166,9 +174,12 @@ const tierSwitch = await page.evaluate(async () => {
   const tab = [...document.querySelectorAll('#tier-rail .rail-tab')].find((b) => b.textContent.trim() === 'Blazing');
   tab.click();
   await new Promise((r) => setTimeout(r, 400));
-  return { title: document.getElementById('ff-title').textContent, note: document.getElementById('ff-note').textContent };
+  return {
+    title: document.getElementById('ff-title').textContent,
+    selected: [...document.querySelectorAll('#tier-rail .rail-tab')].find((b) => b.getAttribute('aria-selected') === 'true')?.textContent.trim(),
+  };
 });
-check('picking a tier retitles the board', /blazing/i.test(tierSwitch.title) && /blazing/i.test(tierSwitch.note), tierSwitch.title);
+check('picking a tier retitles the board', /blazing/i.test(tierSwitch.title) && tierSwitch.selected === 'Blazing', JSON.stringify(tierSwitch));
 const otherRail = await page.evaluate(async () => {
   const tab = [...document.querySelectorAll('#board-rail .rail-tab')].find((b) => b.textContent.trim() === 'Ranked');
   tab.click();
@@ -205,7 +216,7 @@ const labState = await page.evaluate((bouts) => {
   window.__ffLab.inject(bouts);
   return {
     tiles: document.getElementById('lab-tiles').textContent,
-    boxers: [...document.getElementById('lab-boxer').options].map((o) => o.value),
+    players: [...document.getElementById('lab-player').options].map((o) => o.value),
     count: document.getElementById('lab-count').textContent,
     tape: document.getElementById('lab-tape').textContent,
     // A signature per map: how much is painted, and where it sits. Two maps
@@ -231,7 +242,7 @@ const labState = await page.evaluate((bouts) => {
   };
 }, [fixture(1, true, ['PROBE', 'ROOK']), fixture(2, false, ['PROBE', 'VULT'])]);
 check('the LAB tiles read the two tapes', /2/.test(labState.tiles) && /TAPES/i.test(labState.tiles), labState.tiles.replace(/\s+/g, ' ').slice(0, 120));
-check('the player picker names whoever kept a tape', labState.boxers.includes('PROBE'), labState.boxers.join(','));
+check('the player picker names whoever kept a tape', labState.players.includes('PROBE'), labState.players.join(','));
 check('the count line reads the filter', /2 of 2 tapes/.test(labState.count), labState.count);
 check('all four heatmaps are painted', labState.heat.length === 4 && labState.heat.every((h) => h.lit > 50), labState.heat.map((h) => h.lit).join(','));
 // The fixture puts the left fist's throws left of centre and the right

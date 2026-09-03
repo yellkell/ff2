@@ -737,7 +737,7 @@
       .board-caps .c-score { flex: none; min-width: 92px; text-align: right; }
       .board-caps .c-grade { flex: none; width: 30px; text-align: center; }
 
-      /* THE PAINT: a boxer's most-used colours ride beside their name. */
+      /* THE PAINT: a player's most-used colours ride beside their name. */
       .paint {
         display: inline-flex;
         gap: 3px;
@@ -1196,7 +1196,6 @@
                 <h2 id="ff-title">Ranked</h2>
                 <span class="meta" id="ff-meta"></span>
               </div>
-              <p class="panel-note" id="ff-note"></p>
               <div class="col-caps board-caps" id="ff-caps"></div>
               <ul class="rows" id="ff-rows"></ul>
               <div class="status hidden" id="ff-status"><div class="line"></div><div class="hint"></div></div>
@@ -1208,7 +1207,7 @@
         <div id="lab" class="hidden">
           <div class="lab-filter">
             <span class="cap">Player</span>
-            <select id="lab-boxer"><option value="">Everyone</option></select>
+            <select id="lab-player"><option value="">Everyone</option></select>
             <span class="count" id="lab-count"></span>
           </div>
           <section class="strip" id="lab-tiles" aria-label="Tape totals"></section>
@@ -1435,7 +1434,7 @@
         '#d8b24a','#e9e2f2','#050507','#c9d2dd',
       ];
       /** A row's paint chips: decode the packed look (base64; one format byte
-       *  then eight bytes a unit, byte 1 = palette index) into the boxer's
+       *  then eight bytes a unit, byte 1 = palette index) into the player's
        *  most-used colours, heaviest first. Malformed or absent, no chips. */
       function paintChips(wire, max = 4) {
         if (typeof wire !== 'string' || !wire || wire.length > 1024) return '';
@@ -1509,24 +1508,15 @@
        *   'lab'     THE TAPE, which is not a board at all
        */
       const FF_BOARDS = [
-        { id: 'ranked', label: 'Ranked', kind: 'player', field: () => `score_s${seasonIndex()}`,
-          col: 'Points', note: () => `Season ${seasonIndex()} ladder points. A real win banks twenty; a loss costs nothing.` },
-        { id: 'xp', label: 'XP', kind: 'player', field: () => 'xp', col: 'XP',
-          note: () => 'Lifetime experience, every mode, since the first bell.' },
-        { id: 'aim', label: 'Aim', kind: 'player', field: () => 'training', col: 'Score',
-          note: () => 'Best aim-training run — the octa drones in the last thirty seconds pay three hundred a piece.' },
-        { id: 'duo', label: '2v2', kind: 'player', field: () => 'duo', col: 'Wins',
-          note: () => 'Brawl wins, two a side.' },
-        { id: 'ffa', label: 'FFA', kind: 'player', field: () => 'ffa', col: 'Wins',
-          note: () => 'Free-for-all wins, four in the pit.' },
-        { id: 'speedrun', label: 'Speedrun', kind: 'run', tiers: true, col: 'Time',
-          note: (tier) => `All five titans back to back on a fight-time clock, ${tier} grade. Fastest cumulative time wins.` },
-        { id: 'raid', label: 'Raid', kind: 'run', board: 'ff2-raid-time', col: 'Time',
-          note: () => 'Squad titan raids. The whole crew ranks on one row, under whoever posted it.' },
-        { id: 'goopliath', label: 'Goopliath', kind: 'run', board: 'ff2-goopliath-time', col: 'Time',
-          note: () => 'The tide raid: one long fight, one clock.' },
-        { id: 'lab', label: 'The Lab', kind: 'lab', col: '',
-          note: () => 'Every recorded bout, and what they add up to.' },
+        { id: 'ranked', label: 'Ranked', kind: 'player', field: () => `score_s${seasonIndex()}`, col: 'Points' },
+        { id: 'xp', label: 'XP', kind: 'player', field: () => 'xp', col: 'XP' },
+        { id: 'aim', label: 'Aim', kind: 'player', field: () => 'training', col: 'Score' },
+        { id: 'duo', label: '2v2', kind: 'player', field: () => 'duo', col: 'Wins' },
+        { id: 'ffa', label: 'FFA', kind: 'player', field: () => 'ffa', col: 'Wins' },
+        { id: 'speedrun', label: 'Speedrun', kind: 'run', tiers: true, col: 'Time' },
+        { id: 'raid', label: 'Raid', kind: 'run', board: 'ff2-raid-time', col: 'Time' },
+        { id: 'goopliath', label: 'Goopliath', kind: 'run', board: 'ff2-goopliath-time', col: 'Time' },
+        { id: 'lab', label: 'The Lab', kind: 'lab', col: '' },
       ];
 
       const ff = { board: 'speedrun', tier: 'normal', rows: [], players: [], cache: new Map(), loaded: false };
@@ -1546,9 +1536,8 @@
         const rowsEl = document.getElementById('ff-rows');
         const key = def.kind === 'player' ? `p:${def.field()}` : `b:${ffBoardId(def, ff.tier)}`;
         document.getElementById('ff-title').textContent = def.label + (def.tiers ? ` · ${ff.tier}` : '');
-        document.getElementById('ff-note').textContent = def.note(ff.tier);
         document.getElementById('ff-caps').innerHTML =
-          `<span class="c-rank">#</span><span class="c-name">${def.kind === 'run' ? 'Run' : 'Boxer'}</span>` +
+          `<span class="c-rank">#</span><span class="c-name">${def.kind === 'run' ? 'Run' : 'Player'}</span>` +
           `<span class="c-score">${esc(def.col)}</span>`;
 
         if (!force && ff.cache.has(key)) return paintFf(def, ff.cache.get(key));
@@ -1684,7 +1673,7 @@
         '1v1': '1V1', '2v2': '2V2', ffa: 'FFA', raid: 'TITAN RAID',
         gauntlet: 'SPEEDRUN', solo: 'SOLO', club: 'THE CLUB',
       };
-      const lab = { all: [], boxer: '', open: null, loaded: false };
+      const lab = { all: [], player: '', open: null, loaded: false };
       window.__ffLab = {
         inject: (docs) => { lab.all = docs.map(normBout); lab.loaded = true; drawLab(); },
         state: () => lab,
@@ -1732,22 +1721,22 @@
       }
 
       /** The tapes the filter leaves standing. A tape belongs to whoever
-       *  recorded it, so filtering by boxer is filtering by author. */
+       *  recorded it, so filtering by player is filtering by author. */
       function labRows() {
-        return lab.boxer ? lab.all.filter((b) => b.name === lab.boxer) : lab.all;
+        return lab.player ? lab.all.filter((b) => b.name === lab.player) : lab.all;
       }
 
       function drawLab() {
         // The picker lists everyone who has a tape of their own.
-        const sel = document.getElementById('lab-boxer');
+        const sel = document.getElementById('lab-player');
         const names = [...new Set(lab.all.map((b) => b.name))].filter(Boolean).sort();
-        if (!names.includes(lab.boxer)) lab.boxer = '';
+        if (!names.includes(lab.player)) lab.player = '';
         sel.innerHTML =
           '<option value="">Everyone</option>' +
           names
-            .map((n) => '<option value="' + esc(n) + '"' + (n === lab.boxer ? ' selected' : '') + '>' + esc(n) + '</option>')
+            .map((n) => '<option value="' + esc(n) + '"' + (n === lab.player ? ' selected' : '') + '>' + esc(n) + '</option>')
             .join('');
-        sel.onchange = () => { lab.boxer = sel.value; lab.open = null; drawLab(); };
+        sel.onchange = () => { lab.player = sel.value; lab.open = null; drawLab(); };
 
         const rows = labRows();
         document.getElementById('lab-count').textContent = lab.all.length
