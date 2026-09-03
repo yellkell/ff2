@@ -43,11 +43,19 @@ services:
         sync: false
       - key: LIVEKIT_API_SECRET
         sync: false
-      # The bar TV's chat relay. Optional — the pub logs that it is off and
-      # carries on.
+      # THE DISCORD BOT, both directions (server/discord.mjs). The same
+      # token READS the channel for the pub's bar TV and now POSTS to it:
+      # the bell's join link when a ball goes up, the lobby's SHARE card,
+      # and THE CHANNEL's LIVE and FINAL. The bot needs Send Messages and
+      # Embed Links on the channel to post, and the Message Content Intent
+      # to read. Optional — everything logs that it is off and carries on.
       - key: DISCORD_BOT_TOKEN
         sync: false
       - key: DISCORD_CHANNEL_ID
+        sync: false
+      # Where the game is served, for the links the bot posts. Without it
+      # they point at https://ff2.web.app.
+      - key: PUBLIC_URL
         sync: false
       # Moderation: the ban panel's shared secret. Optional, but a pub with no
       # ADMIN_TOKEN is a pub nobody can be thrown out of.
