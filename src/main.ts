@@ -37,6 +37,7 @@ import { FireballSystem } from './systems/FireballSystem.js';
 import { CollisionSystem } from './systems/CollisionSystem.js';
 import { BoundarySystem } from './systems/BoundarySystem.js';
 import { GameStateSystem } from './systems/GameStateSystem.js';
+import { BroadcastSystem } from './systems/BroadcastSystem.js';
 import { CountdownSystem } from './systems/CountdownSystem.js';
 import { MenuSystem } from './systems/MenuSystem.js';
 import { PromotionSystem } from './systems/PromotionSystem.js';
@@ -71,6 +72,14 @@ if (crashesParam) {
         ? stash.join('\n\n')
         : 'no stored crashes';
   document.body.append(pre);
+}
+
+// A JOIN LINK (DESIGN §8.1): one scheme for every code. A four-digit code
+// is a club room — the rave page's floor answers it; a five-digit arena
+// code is picked up by the lobby once you're in (MenuSystem's boot join).
+{
+  const join = new URLSearchParams(location.search).get('join') ?? '';
+  if (/^\d{4}$/.test(join)) location.replace(`rave.html?room=${join}`);
 }
 
 const container = document.getElementById('scene-container') as HTMLDivElement;
@@ -161,6 +170,8 @@ World.create(container, {
   // Rim barrier damage, then the match brain + scoreboards.
   world.registerSystem(BoundarySystem);
   world.registerSystem(GameStateSystem);
+  // THE BROADCAST: THE CHANNEL's frames + THE TAPE, read off this frame's match state.
+  world.registerSystem(BroadcastSystem);
   // The big in-world 3-2-1-FIGHT hanging between the platforms.
   world.registerSystem(CountdownSystem);
   // Lobby menu, promotion celebration, hit vignette, gloves, transient FX.
@@ -192,6 +203,7 @@ World.create(container, {
     world.getSystem(CollisionSystem)!,
     world.getSystem(BoundarySystem)!,
     world.getSystem(GameStateSystem)!,
+    world.getSystem(BroadcastSystem)!,
     world.getSystem(CountdownSystem)!,
     world.getSystem(MenuSystem)!,
     world.getSystem(PromotionSystem)!,

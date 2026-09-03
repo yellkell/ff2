@@ -33,6 +33,7 @@ import { pulseHand } from '../input/haptics.js';
 import * as sfx from '../audio/sfx.js';
 import { ARENA_BOUNDS, ARENA_GAP, ATTACH, CURL, curlRateFor, FIREBALL, NET } from '../config.js';
 import { recordThrow } from '../debug/throwProbe.js';
+import { telemetry } from '../net/telemetry.js';
 import { classicDuel } from '../combat/layout.js';
 
 const HANDS = ['left', 'right'] as const;
@@ -485,6 +486,8 @@ export class FireballSystem extends createSystem({
     v[0] = _dir.x * speed;
     v[1] = _dir.y * speed;
     v[2] = _dir.z * speed;
+    // THE TAPE: which fist let go, from where on the slab, and how hard.
+    telemetry.throw(hand, obj.position.x, obj.position.z, speed);
 
     // Curveball: when this fist's ARC toggle is on, read the punch's curvature
     // and store it as the curl axis*rate; the flight integrator banks the ball

@@ -577,6 +577,14 @@ FF2 makes the link the front door:
 3. Later: Discord Rich Presence via the packaged app, and slash-commands
    (`/firefight host 2v2`) minting rooms from Discord itself.
 
+*(Shipped, first pass: `?join=CODE` on the arena page — MenuSystem's boot
+join types the code and walks in; a four-digit code hops to the rave
+page's `?room=`. The squad room's invite band: code + link + QR
+(`src/ui/qr.ts`) + SHARE ON DISCORD for the host. The bot's write path is
+`server/discord.mjs` — the bell posts from the rave relay, SHARE posts
+through `/tv/invite`, THE CHANNEL posts LIVE and FINAL. Not yet: the
+countdown's "1 seat left" edits, Rich Presence, slash commands.)*
+
 ---
 
 ## 9 · stats.html — the web leaderboard
@@ -594,6 +602,18 @@ hosting targets.
 - Reads FF1's `players`/`run*` collections and RAVE RAID's `scores`
   ratchet board directly; when FF2 gets its own Firestore project the
   page gains an FF2 board the same way.
+- **THE CHANNEL** (`#tv`): a live top-down broadcast of whatever is on —
+  the headset running a bout casts frames to `server/tv.mjs` at `/tv`
+  (`systems/BroadcastSystem.ts`, `net/tvCast.ts`); the page draws
+  platforms, fighters, balls, clock, titan; falls back to the rave
+  relay's public club floor, then to a dark test card. The relay ranks
+  people over raids over solo bouts and expires a silent channel in six
+  seconds. The Discord bot announces LIVE / FINAL for online matches.
+- **THE LAB** (`#lab`): THE TAPE — `net/telemetry.ts` records each bout
+  (standing / throw-left / throw-right / hit-taken heatmap grids over the
+  platform footprint, the timed play-by-play, the rounds) into the
+  `bouts` collection; the page aggregates the last 200 into tiles, four
+  heatmaps, a hands panel and an expandable tape with health lines.
 
 ---
 
@@ -757,6 +777,13 @@ Each phase is shippable; nothing waits on everything.
    bone (§6.1). Next: the same treatment for the salt flats and factory.)*
 10. **Links & Discord** — `?join=` everywhere, QR on the lobby, bot write
     path.
+    *(First pass shipped: the join link and boot join, the invite band's
+    QR + SHARE, the bot's write path (bell, invite, LIVE/FINAL), THE
+    CHANNEL and THE LAB on stats.html — see §8 and §9. Open: the
+    countdown edits, Rich Presence, slash commands, and where THE ROOM
+    SERVER lives in production — `config.TV.defaultRelay` names the rave
+    relay's host; that service must run `npm run server` (room.mjs) for
+    `/tv` to answer.)*
 
 Session-zero decisions still open (flagged, not blocking): FF2's own
 Firebase project + hosting target; whether FF2 ships as an update to the

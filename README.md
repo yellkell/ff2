@@ -20,6 +20,52 @@ carried over verbatim: everything in it still applies to this code.
 
 - `public/stats.html` — the web leaderboard: FIRE FIGHT boards first,
   RAVE RAID as a separate-but-equal tab. Standalone, read-only, no SDK.
+  Two more doors on it now:
+  - **THE CHANNEL** (`#tv`) — television. The headset RUNNING a bout (a
+    bot bout's one player, a duel's host, the mesh authority, the raid
+    host) casts a top-down frame five times a second to THE ROOM
+    SERVER's `/tv` relay (`server/tv.mjs`, mounted by `room.mjs`;
+    `systems/BroadcastSystem.ts` → `net/tvCast.ts` on the headset), and
+    the page draws it: every platform, head, hands and health, the balls
+    in the air, the round clock, the titan. Nothing on? It peeps into
+    THE CLUB — the rave relay's public floor (who's dancing where, the
+    ball if one hangs). Club dark too? It says so. Live people rank over
+    raids over solo bouts; pin a channel from the guide strip or leave it
+    on AUTO. `?tv=ws://…` points the page at another relay.
+  - **THE LAB** (`#lab`) — the stat nerd's desk. Every bout that lasts
+    keeps a TAPE (`net/telemetry.ts`, posted to the `bouts` collection
+    at the final): platform HEATMAPS of where you stand, where each hand
+    throws from, and where you were when hit; the play-by-play of every
+    throw, hit taken, hit dealt, parry and round as timed events; the
+    rounds with both health pools at the bell. The page aggregates the
+    last two hundred tapes — filter by boxer and mode — into tiles (hit
+    rate, headshots, left-hand share, parries, KO rate, swing speed…),
+    the four heatmaps, a hands panel (throws, landings and accuracy per
+    hand) and THE TAPE itself: tap a bout for its rounds, both health
+    lines rebuilt from the hits, and the play-by-play. Needs the `bouts`
+    rule in `firestore.rules` deployed. Probe: `npm run check:tv`
+    (needs `npm run dev` up).
+- **THE JOIN LINK + THE BOT'S WRITE PATH** (DESIGN.md §8, phase 10, first
+  pass) — every hosted room mints `?join=CODE`: a five-digit arena code
+  booted with it walks the lobby into whatever the host opened (the
+  keypad types itself; `rave.html?room=` still answers a four-digit club
+  code, and `?join=` with four digits hops there). The squad room's
+  invite band shows the code, the link, a QR a phone reads off the
+  screen mirror (`src/ui/qr.ts`, byte mode, level M, verified against a
+  third-party decoder) and, for the host, SHARE ON DISCORD. The Discord
+  bot that has polled the bar-TV channel for years now POSTS
+  (`server/discord.mjs`, one paced queue): THE BELL in the club posts
+  the game and its join link when the ball goes up; SHARE posts a room
+  card through `/tv/invite`; THE CHANNEL posts LIVE once a match has
+  held eight seconds and the final when it ends (bot bouts never make
+  the paper). `DISCORD_BOT_TOKEN` arms it; `PUBLIC_URL` sets the links;
+  `DISCORD_BELL=off` quiets the bell.
+- **THE HORNS** re-cut: the gear shop's HORNS are a ram's pair now — one
+  tapered tube per side along a spline, rooted thick on the temple, up
+  and back over the ear, down behind the jaw and forward to a point
+  level with the eye, flat-shaded like the rest of the kit. You never see
+  your own: `applyGear` skips the head slot on a rig flagged
+  first-person, and the arena never draws the local head anyway.
 - **THE WRAP** — the wrap-around three-panel lobby (DESIGN.md §2, phase 2),
   now TABBED (MENUS 2, the Overwatch / Fortnite grammar): every panel wears
   a strip of horizontal tabs across its top. The center slab is FIGHT ·

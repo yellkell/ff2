@@ -36,6 +36,10 @@ export class PlayerBodySystem extends createSystem({
     // PlayerGloveSystem on the controllers, and your own head stays unseen.
     this.rig = buildBoxer(0);
     this.rig.torso.name = 'player-torso';
+    // The wearer's own head: never in the scene, and flagged first-person
+    // so head GEAR (the horns, the crest) is never even built on it —
+    // avatar/gear.ts applyGear reads this. Rivals see the pair; you don't.
+    this.rig.head.userData.firstPerson = true;
     this.rig.torso.visible = false;
     applyAvatarSkin(this.rig.torso, myAvatarSkin());
     this.scene.add(this.rig.torso);

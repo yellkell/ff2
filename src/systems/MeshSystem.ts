@@ -31,6 +31,7 @@ import { app, saveStats } from '../menu/appState.js';
 import { crowd } from '../audio/crowd.js';
 import { mesh } from '../net/mesh.js';
 import { myElo, myName } from '../net/leaderboard.js';
+import { telemetry } from '../net/telemetry.js';
 import { customization, myPackedGear } from '../menu/customization.js';
 import { myPackedLook } from '../avatar/paint.js';
 import { packPose } from '../net/client.js';
@@ -512,6 +513,7 @@ export class MeshSystem extends createSystem({
         }
         sfx.hitDealt();
         app.stats.hitsLanded += 1;
+        telemetry.hitDealt(msg.hand, msg.dmg, !!msg.ret); // THE TAPE (their body ruled it — no part)
         break;
       }
       default:

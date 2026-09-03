@@ -659,6 +659,28 @@ export function reportRun(tab: RunTab, seconds: number, names: string[], difficu
   })();
 }
 
+/** My anonymous id — the doc id of my row, and THE TAPE's author stamp. */
+export function myUid(): string {
+  return localId();
+}
+
+/**
+ * THE TAPE (net/telemetry.ts): one immutable `bouts` doc per recorded bout
+ * — the heatmap grids, the timed events, the rounds. Fire-and-forget like
+ * a run post; the LAB on stats.html reads them back.
+ */
+export function reportBout(doc: Record<string, unknown>): void {
+  void (async () => {
+    const h = await firestore();
+    if (!h) return;
+    try {
+      await h.fs.addDoc(h.fs.collection(h.db, 'bouts'), { ...doc, at: h.fs.serverTimestamp() });
+    } catch {
+      /* unreachable — this tape stays in the headset */
+    }
+  })();
+}
+
 /** Clear-badge tier per difficulty (easy earns nothing — same as ranking). */
 const CLEAR_TIER: Record<Difficulty, number> = { easy: 0, normal: 1, hard: 2, blazing: 3 };
 

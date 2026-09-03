@@ -36,6 +36,18 @@ import { match } from '../combat/matchState.js';
 import { net } from '../net/client.js';
 import * as sfx from '../audio/sfx.js';
 import { FIREBALL } from '../config.js';
+import { telemetry, type HitPart } from '../net/telemetry.js';
+import { BodyPart, PlayerBodyPart } from '../components/PlayerBodyPart.js';
+
+/** Which part of a body a hitbox is, for THE TAPE: your own IK segments
+ *  name themselves; anyone else's is head or body by hitbox kind. */
+function partOf(hitbox: Entity): HitPart {
+  if (hitbox.hasComponent(PlayerBodyPart)) {
+    const p = hitbox.getValue(PlayerBodyPart, 'part') ?? 0;
+    return p === BodyPart.Head ? 'head' : p === BodyPart.Chest ? 'chest' : 'pelvis';
+  }
+  return (hitbox.getValue(Hitbox, 'kind') ?? HitboxKind.Body) === HitboxKind.Head ? 'head' : 'body';
+}
 
 const _ballPos = new Vector3();
 const _otherPos = new Vector3();
@@ -165,6 +177,12 @@ export class CollisionSystem extends createSystem({
       const me = (hitbox.getValue(Hitbox, 'owner') as Entity | null) ?? hitbox;
       if ((me.getValue(Health, 'current') ?? 1) <= 0) return; // already down — ignore
       this.applyDamage(me, actualDamage);
+      {
+        // THE TAPE: what took it, whose fist threw it, where it came from.
+        const bv = ball.getVectorView(Fireball, 'velocity');
+        const bl = Math.hypot(bv[0], bv[2]) || 1;
+        telemetry.hitTaken(partOf(hitbox), (ball.getValue(Fireball, 'hand') ?? 0) as 0 | 1, actualDamage, returning, bv[0] / bl, bv[2] / bl);
+      }
       // Taking a hit is the loudest moment in the game: oversized burst,
       // extra spark spray, plate-clink sound, hard double-hand buzz. The damage
       // NUMBER is the attacker's read-out, not ours — they spawn it on landing
@@ -258,12 +276,18 @@ export class CollisionSystem extends createSystem({
       const actualDamage = Math.round(this.damageFor(hitbox, damage) * bestScale);
       const victim = (hitbox.getValue(Hitbox, 'owner') as Entity | null) ?? hitbox;
       this.applyDamage(victim, actualDamage);
+      const bHand = (ball.getValue(Fireball, 'hand') ?? 0) as 0 | 1;
 
       const victimIsMe = (victim.getValue(Combatant, 'slot') ?? -1) === 0;
       if (victimIsMe) {
         spawnFireImpact(this.world, _ballPos, 1, 1.7);
         emberBurst(_ballPos, 18, true);
         sfx.hitTaken();
+        {
+          const bv = ball.getVectorView(Fireball, 'velocity');
+          const bl = Math.hypot(bv[0], bv[2]) || 1;
+          telemetry.hitTaken(partOf(hitbox), bHand, actualDamage, returning, bv[0] / bl, bv[2] / bl);
+        }
         feedback.playerHitFlash = 1;
         const v = ball.getVectorView(Fireball, 'velocity');
         const len = Math.hypot(v[0], v[1], v[2]) || 1;
@@ -277,7 +301,10 @@ export class CollisionSystem extends createSystem({
         spawnDamagePopup(this.world, _ballPos, actualDamage);
         if (bestScale > 1) sfx.coreHit(); // a titan weak point, rung loud
         else sfx.hitDealt();
-        if (owner === 0) app.stats.hitsLanded += 1;
+        if (owner === 0) {
+          app.stats.hitsLanded += 1;
+          telemetry.hitDealt(bHand, actualDamage, returning, partOf(hitbox));
+        }
       }
 
       if (returning) ball.setValue(Fireball, 'returnHit', 1);
@@ -362,6 +389,7 @@ export class CollisionSystem extends createSystem({
       sfx.deflect();
       const hand = mine.getValue(Fireball, 'hand') === 0 ? 'left' : 'right';
       pulseHand(this.world.session, hand, 0.9, 120);
+      telemetry.parry(hand === 'left' ? 0 : 1);
       this.spendBall(enemyBall);
       if (app.mode === 'net' && app.state === 'playing') {
         net.send({ k: 'deflect', hand: (enemyBall.getValue(Fireball, 'hand') ?? 0) as 0 | 1 });

@@ -60,6 +60,20 @@ service cloud.firestore {
     match /runRaid/{run}         { allow read, create: if true; }
     match /runRaidHardcore/{run} { allow read, create: if true; }
     match /runGoopliath/{run}    { allow read, create: if true; }
+    // THE TAPE (stats.html's LAB) — one immutable doc per recorded bout:
+    // the heatmap grids, the play-by-play, the rounds. Append-only like the
+    // run boards; shape-checked so a stray client can't park a novel here.
+    match /bouts/{bout} {
+      allow read: if true;
+      allow create: if request.resource.data.v == 1
+                    && request.resource.data.kind is string
+                    && request.resource.data.names is list
+                    && request.resource.data.names.size() <= 6
+                    && request.resource.data.ev is list
+                    && request.resource.data.ev.size() <= 600
+                    && request.resource.data.grid is map;
+      allow update, delete: if false;
+    }
     // The Gasket Gazette — `latest` (the live edition the lobby reads) and
     // `_snapshot` (the generator's ladder state). The game reads; the
     // scheduled task reads + writes.

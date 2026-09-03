@@ -81,6 +81,8 @@ export type MenuAction =
   | 'lobby-goopliath'
   | 'lobby-start'
   | 'lobby-leave'
+  /** SHARE: the Discord bot posts this room's join link (DESIGN §8.2). */
+  | 'lobby-discord'
   | `lobby-join-${string}`
   /** Take a WATCHER seat in a listed lobby — travel with the squad and
    *  stand on the audience ground (DESIGN §3.2). */

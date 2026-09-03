@@ -53,6 +53,7 @@
 
 import { WebSocketServer } from 'ws';
 import { isMain, serve } from './mount.mjs';
+import { bellCard, discordConfigured, postDiscord } from './discord.mjs';
 
 const PORT = Number(process.env.PORT || 8788);
 const BALL_MS = Number(process.env.BALL_MS || 60_000);
@@ -105,6 +106,63 @@ const SERVE_RETRY_MS = 900; // every glass out on the floor — bide, try again
  * groupie won names nobody, and a mid-set bail carries no field at all.
  */
 const rooms = new Map();
+
+/** THE BELL on Discord: every fight or record the ball calls is posted with
+ *  its join link (DESIGN §8.2). DISCORD_BELL=off keeps the bot quiet. */
+const BELL_POSTS = (process.env.DISCORD_BELL || 'on') !== 'off';
+/** A floor pose older than this is a dancer who stopped streaming (a set,
+ *  a stall) — THE CHANNEL draws them parked rather than mid-stride. */
+const POSE_FRESH_MS = 4000;
+
+/**
+ * THE CHANNEL's peep into the club (server/tv.mjs): every PUBLIC floor,
+ * who is on it and where they last stood, the ball if one hangs, who is
+ * away on a set, who wears the crown. Private rooms are private — a
+ * friends' code never shows on television. Positions are the club's
+ * world space as the members streamed them ('cp': head x/y/z + yaw).
+ */
+export function clubSnapshot() {
+  const now = Date.now();
+  const out = [];
+  for (const [code, room] of rooms) {
+    if (!room.isPublic) continue;
+    const members = [...room.members.values()]
+      .sort((a, b) => a.idx - b.idx)
+      .map((m) => {
+        const p = m.pose && now - (m.poseAt ?? 0) < POSE_FRESH_MS ? m.pose : null;
+        return {
+          idx: m.idx,
+          name: m.name,
+          hue: m.hue ?? null,
+          x: p ? p[0] : null,
+          y: p ? p[1] : null,
+          z: p ? p[2] : null,
+          yaw: p ? p[3] : 0,
+          lx: p ? p[4] : null, ly: p ? p[5] : null, lz: p ? p[6] : null,
+          rx: p ? p[7] : null, ry: p ? p[8] : null, rz: p ? p[9] : null,
+          away: room.playing.has(m.idx),
+          crown: room.crown === m.idx,
+        };
+      });
+    out.push({
+      code,
+      members,
+      ball: room.ball
+        ? {
+            caller: room.ball.caller,
+            name: memberByIdx(room, room.ball.caller)?.[1].name ?? '',
+            mode: room.ball.mode,
+            track: room.ball.track,
+            ms: Math.max(0, room.ball.deadline - now),
+            joins: room.ball.joins.size,
+            pos: room.ball.pos,
+          }
+        : null,
+      playing: room.playing.size,
+    });
+  }
+  return { rooms: out, at: now };
+}
 
 export function handleHttp(req, res) {
   res.writeHead(200, { 'content-type': 'application/json' });
@@ -612,6 +670,10 @@ wss.on('connection', (ws) => {
         console.log(
           `[dance-raid] room ${code}: ${info.name} sent the ball up (${mode === 'rave' ? track || 'shuffle' : `${mode} → ${roomCode}`})`,
         );
+        // THE BELL rings on Discord too: the game, the link, the clock.
+        if (BELL_POSTS && discordConfigured()) {
+          void postDiscord(bellCard({ name: info.name, mode, code: roomCode, clubCode: code, seconds: Math.round(BALL_MS / 1000), floor: room.members.size }));
+        }
         break;
       }
 
@@ -701,6 +763,12 @@ wss.on('connection', (ws) => {
         if (!room) break;
         const info = room.members.get(ws);
         if (!info) break;
+        // Remembered for THE CHANNEL's peep (clubSnapshot): the head and
+        // hands, twelve numbers at most, nothing the relay reads itself.
+        if (Array.isArray(msg.d) && msg.d.length >= 4 && msg.d.length <= 12 && msg.d.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+          info.pose = msg.d;
+          info.poseAt = Date.now();
+        }
         broadcast(room, { t: 'cp', idx: info.idx, d: msg.d }, ws);
         break;
       }

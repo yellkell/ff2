@@ -117,6 +117,8 @@ import { glowSprite } from '../materials/glow.js';
 import { pulseHand } from '../input/haptics.js';
 import * as sfx from '../audio/sfx.js';
 import { createCampaignHud, type CampaignHud } from '../ui/campaignHud.js';
+import { titanView } from '../campaign/titanView.js';
+import { telemetry } from '../net/telemetry.js';
 import {
   ARENA_GAP,
   BOSS_STUN,
@@ -421,6 +423,7 @@ export class CampaignSystem extends createSystem({
       return;
     }
     if (this.phase === 'idle') this.begin();
+    this.publishView();
 
     this.t += delta;
     if (this.raid()) this.raidNet(delta);
@@ -707,8 +710,23 @@ export class CampaignSystem extends createSystem({
     }
   }
 
+  /** THE TITAN, READABLE (campaign/titanView.ts): what THE CHANNEL draws
+   *  and THE TAPE stamps — name plate, health, phase, where it stands. */
+  private publishView(): void {
+    titanView.active = true;
+    titanView.name = this.def.name;
+    titanView.hp = this.bossHpFrac();
+    titanView.phase = this.phase;
+    titanView.stage = app.campaignStage;
+    const p = this.bossRootPos();
+    titanView.x = p.x;
+    titanView.y = p.y;
+    titanView.z = p.z;
+  }
+
   private begin(): void {
     this.installTitanHook();
+    titanView.outcome = '';
     this.runClock = 0;
     this.p2 = false;
     this.lastTarget = -1;
@@ -965,6 +983,7 @@ export class CampaignSystem extends createSystem({
 
   private teardown(): void {
     this.phase = 'idle';
+    titanView.active = false; // the outcome stays for the tape's final read
     this.disposeAttack();
     this.disposeShots();
     for (const s of this.strikes) s.dispose();
@@ -2666,6 +2685,8 @@ export class CampaignSystem extends createSystem({
     feedback.srcX = _v.x;
     feedback.srcY = _v.y;
     feedback.srcZ = _v.z;
+    // THE TAPE: a titan's strike is a body hit from its side of the pit.
+    telemetry.hitTaken('body', 0, amount, false, -_v.x, -_v.z);
     pulseHand(this.world.session, 'left', 0.9, 140);
     pulseHand(this.world.session, 'right', 0.9, 140);
   }
@@ -3560,6 +3581,7 @@ export class CampaignSystem extends createSystem({
 
   private toVictory(): void {
     this.phase = 'victory';
+    titanView.outcome = 'victory';
     this.t = 0;
     this.outroStep = 0;
     this.fellX = this.rig?.root.position.x ?? 0; // die where it stood, mid-sway included
@@ -3730,6 +3752,7 @@ export class CampaignSystem extends createSystem({
 
   private toDefeat(): void {
     this.phase = 'defeat';
+    titanView.outcome = 'defeat';
     this.t = 0;
     match.phase = 'matchOver';
     this.disposeAttack();

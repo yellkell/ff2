@@ -22,6 +22,17 @@ import { app } from './appState.js';
 import { mesh } from '../net/mesh.js';
 import { DIFFICULTY, DIFFICULTY_ORDER, type ArcadeMode } from '../config.js';
 import { difficultyUnlocked } from '../campaign/campaignState.js';
+import { drawQr } from '../ui/qr.js';
+
+/** SHARE's state, for the button's label: MenuSystem drives it. */
+export const inviteShare = { code: '', state: '' as '' | 'sending' | 'posted' | 'failed', reason: '' };
+
+/** THE JOIN LINK for a room code (DESIGN §8.1): this page's own address
+ *  with ?join=CODE — the same scheme the bot posts. */
+export function inviteLink(code: string): string {
+  const base = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}`;
+  return `${base}?join=${code}`;
+}
 
 export const LOBBY_W = 896;
 export const LOBBY_H = 896;
@@ -195,14 +206,16 @@ function squadLayout(cap: number, raid: boolean, hasCode: boolean): {
   const stackBottom = raid ? breakerY + BREAKER_H : seatsBottom;
   // The footer sits at the bottom of the panel when the stack clears it, and
   // slides down under the stack when it doesn't.
-  const footY = Math.max(stackBottom + (hasCode ? 104 : 68), LOBBY_H - 196);
+  // With a code the band under the stack carries the QR, the link and
+  // SHARE, so it asks for more room than one line of digits did.
+  const footY = Math.max(stackBottom + (hasCode ? 146 : 68), LOBBY_H - 196);
   return {
     seatH,
     seatGap,
     diffLabelY,
     diffY,
     breakerY,
-    codeY: footY - 76,
+    codeY: footY - 122,
     statusY: footY - 34,
     footY,
   };
@@ -262,6 +275,26 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
     );
   }
 
+  if (code && host) {
+    if (inviteShare.code !== code) {
+      inviteShare.code = code;
+      inviteShare.state = '';
+    }
+    const st = inviteShare.state;
+    buttons.push({
+      id: 'lobby-discord',
+      label: st === 'posted' ? 'POSTED' : st === 'sending' ? 'POSTING…' : st === 'failed' ? 'TRY AGAIN' : 'SHARE ON DISCORD',
+      sub: st === 'failed' ? inviteShare.reason.slice(0, 28) : undefined,
+      x: LOBBY_W - M - 250,
+      y: L.codeY + 26,
+      w: 250,
+      h: 50,
+      small: true,
+      disabled: st === 'sending' || st === 'posted',
+      tone: st === 'posted' ? KIT.positive : undefined,
+    });
+  }
+
   if (shortReady && host) {
     buttons.push(
       { id: 'lobby-start', label: 'START NOW', x: M, y: L.footY, w: (INNER - 20) / 2, h: FOOT_H, primary: true },
@@ -315,27 +348,34 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
         g.letterSpacing = '0px';
       }
 
-      // The invite code, kept up for the whole lobby so a host can read it
-      // out — one line, so it never needs a band of its own.
+      // THE INVITE BAND (DESIGN §8.1): the QR a phone reads off the screen
+      // mirror, the code a host reads out, the link under it, and SHARE
+      // (the button, host only) for the Discord bot to post it.
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       if (code) {
+        const bandY = L.codeY;
+        const qrPx = 96;
+        try {
+          drawQr(g, inviteLink(code), M, bandY, qrPx);
+        } catch {
+          /* a link too long for the encoder — the code and the text still stand */
+        }
+        const x0 = M + qrPx + 22;
         const digits = code.split('').join(' ');
-        g.font = font(700, 34);
-        g.letterSpacing = '4px';
-        const dw = g.measureText(digits).width;
+        g.textAlign = 'left';
         g.font = font(600, 20);
         g.letterSpacing = '3px';
-        const lw = g.measureText('INVITE CODE').width;
-        const x0 = LOBBY_W / 2 - (lw + 22 + dw) / 2;
-        g.textAlign = 'left';
         g.fillStyle = KIT.faint;
-        g.fillText('INVITE CODE', x0, L.codeY);
+        g.fillText('INVITE CODE', x0, bandY + 16);
         g.font = font(700, 34);
         g.letterSpacing = '4px';
         g.fillStyle = KIT.info;
-        g.fillText(digits, x0 + lw + 22, L.codeY);
+        g.fillText(digits, x0, bandY + 50);
         g.letterSpacing = '0px';
+        g.font = font(500, 17);
+        g.fillStyle = KIT.faint;
+        g.fillText(inviteLink(code).replace(/^https?:\/\//, ''), x0, bandY + 84, INNER - qrPx - 22 - 262);
         g.textAlign = 'center';
       }
 

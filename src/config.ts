@@ -1031,6 +1031,51 @@ export const NET = {
   defaultPort: 8787,
 };
 
+/**
+ * THE CHANNEL and THE TAPE (public/stats.html's TV and LAB tabs): what a
+ * bout broadcasts while it runs and what it records when it ends.
+ *
+ * A running bout casts a small top-down FRAME to THE ROOM SERVER's /tv
+ * relay a few times a second (systems/BroadcastSystem.ts → net/tvCast.ts)
+ * so the web page can show it live; and it keeps a TAPE (net/telemetry.ts)
+ * — where you stood, where each hand threw from, where you were when hit,
+ * every throw / hit / parry / round as a timed event — posted to the
+ * `bouts` collection at the final bell for the stat nerds.
+ */
+export const TV = {
+  /** Frames a second to the transmitter. Five reads as motion on a 2D
+   *  board and costs ~1 KB/s; the relay caps a frame at 12 KiB. */
+  castHz: 5,
+  /** How often the tape bins your standing spot. */
+  sampleHz: 4,
+  /** Heatmap bins across the platform footprint (1.72 × 1.5 m → ~11 cm cells). */
+  gridW: 16,
+  gridH: 14,
+  /** Most timed events one tape keeps — a 5-round duel is ~150. Past the
+   *  cap the tape keeps counting but stops listing (the grids still fill). */
+  eventCap: 600,
+  /** Shorter bouts are never posted: a mis-tap, a forfeit at the bell. */
+  minBoutSeconds: 15,
+  /** THE ROOM SERVER's home in production (room.mjs answers /tv there;
+   *  the rave relay, the pub and the duel relay share the port). */
+  defaultRelay: 'wss://rave-raid-relay.onrender.com',
+};
+
+/** THE CHANNEL's transmitter: ?tv= > localStorage 'ff-tv-server' > the
+ *  room server beside a dev page > the hosted room server's /tv. */
+export function tvServerUrl(): string {
+  const param = new URLSearchParams(location.search).get('tv');
+  if (param) return param;
+  try {
+    const stored = localStorage.getItem('ff-tv-server');
+    if (stored) return stored;
+  } catch {
+    /* storage may be unavailable */
+  }
+  if (location.protocol !== 'https:') return `ws://${location.hostname}:${NET.defaultPort}/tv`;
+  return `${TV.defaultRelay}/tv`;
+}
+
 /** Resolve the relay server URL: ?server= param > localStorage > same host. */
 export function serverUrl(): string {
   const param = new URLSearchParams(location.search).get('server');

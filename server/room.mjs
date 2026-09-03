@@ -9,6 +9,8 @@
  *   /ff     the FIRE FIGHT duel relay: quick-match + message relay
  *           (index.mjs) — also answered at / for clients from before
  *           the paths existed
+ *   /tv     THE CHANNEL: match casters in, web viewers out, the club's
+ *           public floor when nothing is on, the bot's invite post (tv.mjs)
  *
  * Nothing about a relay changes by being mounted here: each keeps its
  * own rooms, clocks and heartbeat, and each still runs alone under its
@@ -22,6 +24,8 @@ import { isMain, serve } from './mount.mjs';
 import { handleHttp as ffHttp, wss as ffWss } from './index.mjs';
 import { handleHttp as pubHttp, wss as pubWss } from './pub.mjs';
 import { handleHttp as raveHttp, wss as raveWss } from './rave.mjs';
+import { handleHttp as tvHttp, wss as tvWss } from './tv.mjs';
+import { discordWriteStatus } from './discord.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 
@@ -29,6 +33,7 @@ const RELAYS = [
   { path: '/rave', name: 'dance-raid', http: raveHttp, wss: raveWss },
   { path: '/pub', name: 'iron-balls-pub', http: pubHttp, wss: pubWss },
   { path: '/ff', name: 'fire-fight', http: ffHttp, wss: ffWss },
+  { path: '/tv', name: 'the-channel', http: tvHttp, wss: tvWss },
 ];
 
 /** Which relay a URL belongs to, and the URL with its prefix stripped
@@ -52,7 +57,7 @@ function handleHttp(req, res) {
     return;
   }
   res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ room: 'fire-fight-2', relays: RELAYS.map((r) => ({ path: r.path, name: r.name })) }));
+  res.end(JSON.stringify({ room: 'fire-fight-2', relays: RELAYS.map((r) => ({ path: r.path, name: r.name })), discord: discordWriteStatus() }));
 }
 
 if (isMain(import.meta.url)) {

@@ -9,7 +9,8 @@
 <link rel="icon" href="firefightfavicon.png">
 <style>
   /* ── FIRE FIGHT industrial: gunmetal plate, hazard amber, riveted glass.
-     The RAVE RAID face flips the accent to void neon — separate but equal. ── */
+     The RAVE RAID face flips the accent to void neon — separate but equal.
+     THE CHANNEL burns on-air red; THE LAB reads in cool steel. ── */
   :root {
     --bg: #0d0f12;
     --plate: #16191e;
@@ -21,12 +22,18 @@
     --accent-dim: #7a5516;
     --me: #ffb02e;
     --hc: #ff4b3e;
+    --ember: #ff7a18;
+    --cool: #4fb7ff;
+    --venom: #57e389;
+    --violet: #b06bff;
   }
   .rr {
     --accent: #ff3df0;          /* void magenta */
     --accent-dim: #6d1a66;
     --me: #3dfff0;
   }
+  .tv { --accent: #ff4b3e; --accent-dim: #6d1f1a; }
+  .lab { --accent: #4fb7ff; --accent-dim: #1f4a6d; }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
@@ -46,12 +53,13 @@
   .mark span { color: var(--accent); }
   .sub { color: var(--dim); letter-spacing: .3em; font-size: 11px; text-transform: uppercase; margin-top: 8px; }
 
-  /* Two equal game tabs — the hazard strip belongs to whichever is live. */
-  .games { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 22px 0 14px; }
+  /* Four equal doors — the hazard strip belongs to whichever is live. */
+  .games { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 22px 0 14px; }
+  @media (max-width: 640px) { .games { grid-template-columns: 1fr 1fr; } }
   .game-tab {
     appearance: none; border: 1px solid var(--line); background: var(--plate);
     color: var(--dim); font: inherit; font-weight: 800; letter-spacing: .18em;
-    text-transform: uppercase; font-size: clamp(13px, 2.6vw, 16px);
+    text-transform: uppercase; font-size: clamp(12px, 2.2vw, 15px);
     padding: 16px 8px 13px; cursor: pointer; position: relative; border-radius: 4px;
   }
   .game-tab::after {
@@ -64,6 +72,10 @@
   }
   #tab-rr.on { border-color: #6d1a66; }
   #tab-rr.on::after { background: repeating-linear-gradient(-45deg, #ff3df0 0 10px, #16191e 10px 20px); }
+  #tab-tv.on { border-color: #6d1f1a; }
+  #tab-tv.on::after { background: repeating-linear-gradient(-45deg, #ff4b3e 0 10px, #16191e 10px 20px); }
+  #tab-lab.on { border-color: #1f4a6d; }
+  #tab-lab.on::after { background: repeating-linear-gradient(-45deg, #4fb7ff 0 10px, #16191e 10px 20px); }
 
   .boards { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
   .board-tab {
@@ -78,7 +90,7 @@
     background: var(--plate-hi); color: var(--text); border: 1px solid var(--line);
     font: inherit; font-size: 13px; letter-spacing: .06em; padding: 8px 10px; border-radius: 3px;
   }
-  .seg { display: flex; gap: 4px; }
+  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
   .seg button {
     appearance: none; border: 1px solid var(--line); background: transparent; color: var(--dim);
     font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .1em;
@@ -136,18 +148,76 @@
   .state { padding: 26px 18px; color: var(--dim); font-size: 13px; letter-spacing: .08em; }
   .hidden { display: none; }
   footer { text-align: center; color: #565b64; font-size: 11px; letter-spacing: .12em; margin-top: 26px; text-transform: uppercase; }
+
+  /* ── THE CHANNEL ── */
+  .tv-bar {
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px 8px;
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
+  }
+  .onair {
+    font-weight: 900; padding: 3px 8px; border-radius: 2px; background: #2a2f37; color: var(--dim); letter-spacing: .18em;
+  }
+  .onair.live { background: var(--hc); color: #fff; animation: blink 1.6s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .55; } }
+  #tv-title { color: var(--text); font-weight: 800; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tv-canvas { display: block; width: 100%; aspect-ratio: 16 / 9; background: #07080a; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .tv-guide { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 4px; }
+  .tv-guide button {
+    appearance: none; border: 1px solid var(--line); background: transparent; color: var(--dim);
+    font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .08em; padding: 6px 10px; cursor: pointer; border-radius: 3px;
+    display: inline-flex; align-items: center; gap: 7px;
+  }
+  .tv-guide button.on { color: var(--text); border-color: var(--accent); }
+  .tv-guide .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hc); box-shadow: 0 0 8px var(--hc); }
+  .tv-guide .dot.club { background: #ff3df0; box-shadow: 0 0 8px #ff3df0; }
+  .tv-guide .dot.solo { background: var(--dim); box-shadow: none; }
+
+  /* ── THE LAB ── */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 0 0 14px; }
+  .tile { background: var(--plate); border: 1px solid var(--line); border-radius: 5px; padding: 12px 12px 10px; }
+  .tile b { display: block; font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--text); letter-spacing: .02em; }
+  .tile span { display: block; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); margin-top: 4px; }
+  .tile small { display: block; font-size: 11px; color: var(--accent); margin-top: 3px; }
+  .maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 0 0 14px; }
+  .maps figure { margin: 0; background: var(--plate); border: 1px solid var(--line); border-radius: 5px; padding: 10px; }
+  .maps canvas { display: block; width: 100%; aspect-ratio: 16 / 15; }
+  .maps figcaption { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); font-weight: 800; margin-top: 8px; }
+  .maps figcaption small { display: block; color: var(--dim); font-weight: 500; letter-spacing: .06em; text-transform: none; margin-top: 2px; }
+  .hands { padding: 4px 18px 14px; display: grid; gap: 10px; }
+  .bar { position: relative; height: 22px; background: #0d0f12; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+  .bar i { position: absolute; top: 0; bottom: 0; }
+  .bar i.l { left: 0; background: var(--ember); }
+  .bar i.r { right: 0; background: var(--cool); }
+  .bar em { position: absolute; inset: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 8px; font: 800 11px/1 "Segoe UI", system-ui, sans-serif; letter-spacing: .1em; color: #fff; font-style: normal; text-shadow: 0 1px 2px #000; }
+  .bar-label { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
+  .tape-row { display: grid; grid-template-columns: 74px 56px 1fr 62px 52px 60px; gap: 8px; align-items: center; padding: 9px 18px; border-bottom: 1px solid rgba(42,47,55,.55); cursor: pointer; font-size: 13px; }
+  .tape-row:hover { background: var(--plate-hi); }
+  .tape-row .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tape-row .who b { color: var(--text); }
+  .tape-row .w { color: var(--venom); font-weight: 800; } .tape-row .l { color: var(--hc); font-weight: 800; }
+  .tape-row .k { font-size: 10px; letter-spacing: .12em; color: var(--accent); font-weight: 800; }
+  .tape-row .d, .tape-row .t { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .tape-open { padding: 6px 18px 16px; border-bottom: 1px solid var(--line); background: #111418; }
+  .tape-open canvas { display: block; width: 100%; height: 90px; background: #0a0c0f; border: 1px solid var(--line); border-radius: 3px; margin: 8px 0; }
+  .tape-open .pbp { max-height: 240px; overflow: auto; font: 12px/1.7 ui-monospace, Consolas, monospace; color: var(--dim); }
+  .tape-open .pbp b { color: var(--text); font-weight: 600; }
+  .tape-open .pbp .hit { color: var(--ember); } .tape-open .pbp .tk { color: var(--hc); } .tape-open .pbp .rd { color: var(--accent); font-weight: 800; } .tape-open .pbp .pa { color: var(--cool); }
+  .tape-open table { font-size: 12px; margin-top: 6px; }
+  @media (max-width: 560px) { .tape-row { grid-template-columns: 62px 1fr 50px 48px; } .tape-row .k, .tape-row .t { display: none; } }
 </style>
 </head>
 <body>
 <div class="wrap" id="page">
   <header>
     <div class="mark">FIRE <span>FIGHT</span></div>
-    <div class="sub">World Leaderboards</div>
+    <div class="sub" id="sub">World Leaderboards</div>
   </header>
 
   <div class="games">
     <button class="game-tab on" id="tab-ff">🔥 Fire Fight</button>
     <button class="game-tab" id="tab-rr">⚡ Rave Raid</button>
+    <button class="game-tab" id="tab-tv">📺 The Channel</button>
+    <button class="game-tab" id="tab-lab">🧪 The Lab</button>
   </div>
 
   <!-- ══ FIRE FIGHT face ══ -->
@@ -175,6 +245,46 @@
     </div>
   </section>
 
+  <!-- ══ THE CHANNEL ══ -->
+  <section id="face-tv" class="tv hidden">
+    <div class="panel">
+      <div class="tv-bar">
+        <span class="onair" id="tv-onair">OFF AIR</span>
+        <span id="tv-title">tuning…</span>
+        <span id="tv-clock"></span>
+      </div>
+      <canvas id="tv-canvas" width="960" height="540"></canvas>
+      <div class="tv-guide" id="tv-guide"></div>
+      <div class="board-note" id="tv-note">Live bouts, brawls and raids as they happen — top-down, from the headset running them. Nothing on? The channel peeps into the club.</div>
+    </div>
+  </section>
+
+  <!-- ══ THE LAB ══ -->
+  <section id="face-lab" class="lab hidden">
+    <div class="pickers">
+      <select id="lab-boxer"><option value="">EVERY BOXER</option></select>
+      <div class="seg" id="lab-kind"></div>
+      <span id="lab-count" style="color:var(--dim);font-size:12px;letter-spacing:.1em"></span>
+    </div>
+    <div class="tiles" id="lab-tiles"></div>
+    <div class="maps" id="lab-maps">
+      <figure><canvas class="heat" id="heat-stand" width="320" height="300"></canvas><figcaption>Standing<small>where the head is, sampled all bout</small></figcaption></figure>
+      <figure><canvas class="heat" id="heat-thrL" width="320" height="300"></canvas><figcaption>Throws · left<small>where the left fist let go</small></figcaption></figure>
+      <figure><canvas class="heat" id="heat-thrR" width="320" height="300"></canvas><figcaption>Throws · right<small>where the right fist let go</small></figcaption></figure>
+      <figure><canvas class="heat" id="heat-hit" width="320" height="300"></canvas><figcaption>Hits taken<small>where you stood when it landed</small></figcaption></figure>
+    </div>
+    <div class="panel" style="margin-bottom:14px">
+      <div class="board-title">Hands</div>
+      <div class="hands" id="lab-hands"></div>
+    </div>
+    <div class="panel">
+      <div class="board-title">The Tape</div>
+      <div class="board-note">Every recorded bout, newest first. Tap one for the rounds, the health lines and the play-by-play.</div>
+      <div id="lab-tape"></div>
+      <div class="state hidden" id="lab-state"></div>
+    </div>
+  </section>
+
   <footer>Fire Fight × Rave Raid — boards refresh on every visit</footer>
 </div>
 
@@ -184,6 +294,9 @@
  * Shapes mirror the games' own code:
  *   Fire Fight  src/net/leaderboard.ts  (players + runGauntlet/runRaid/runGoopliath)
  *   Rave Raid   src/net/scores.ts       (scores: one doc per player per chart)
+ *   THE TAPE    src/net/telemetry.ts    (bouts: one doc per recorded bout)
+ * THE CHANNEL is live, not stored: a WebSocket to the room server's /tv relay
+ * (server/tv.mjs) — the headset running a bout casts frames, this page draws them.
  */
 const FF = { projectId: 'arfi-b68f9',    key: 'AIzaSyA0NYO_w6uU0Fcc6nuVPitRQaGW3B6518E' };
 const RR = { projectId: 'raveraid-bc866', key: 'AIzaSyBqsUcpCKzs2bANP0db6J4Nz_SkKe4wXzI' };
@@ -426,25 +539,550 @@ async function loadRr() {
   }
 }
 
+/* ── THE CHANNEL ────────────────────────────────────────────────────────── */
+
+/* The platform footprint (src/config.ts OCTAGON_*): 1.72 × 1.5 m, chamfered.
+ * Drawn top-down with −z UP — the caster's own frame, its platform at the
+ * origin, the fight ahead of it. */
+const HALF_W = 0.86, HALF_D = 0.75, EDGE_HALF = 0.55, CHAMFER = 0.44;
+const OCT = [[-EDGE_HALF, -HALF_D], [EDGE_HALF, -HALF_D], [HALF_W, -CHAMFER], [HALF_W, CHAMFER], [EDGE_HALF, HALF_D], [-EDGE_HALF, HALF_D], [-HALF_W, CHAMFER], [-HALF_W, -CHAMFER]];
+const TEAM_HEX = ['#ff7a18', '#4fb7ff', '#57e389', '#b06bff'];
+const KIND_LABEL = { '1v1': '1V1', '2v2': '2V2', ffa: 'FFA', raid: 'TITAN RAID', solo: 'SOLO BOUT', club: 'THE CLUB' };
+
+/* The transmitter: ?tv= > the room server beside a dev page > the hosted
+ * room server (src/config.ts TV.defaultRelay). */
+function tvUrl() {
+  const p = new URLSearchParams(location.search).get('tv');
+  if (p) return p;
+  if (location.protocol !== 'https:') return `ws://${location.hostname}:8787/tv`;
+  return 'wss://rave-raid-relay.onrender.com/tv';
+}
+
+const tv = {
+  ws: null, wanted: false, retryT: 0,
+  guide: { channels: [], featured: null, club: { rooms: 0, people: 0 } },
+  watching: null,            // channel id, 'club', or null (nothing yet)
+  frame: null, prev: null, frameAt: 0, prevAt: 0,
+  club: null, clubAt: 0,
+  pinned: null,
+  connected: false,
+  raf: 0,
+  lastDraw: 0,
+};
+window.__ffTv = { state: () => ({ watching: tv.watching, frame: tv.frame, club: tv.club, guide: tv.guide, connected: tv.connected }) };
+
+function tvConnect() {
+  if (tv.ws || !tv.wanted) return;
+  let ws;
+  try { ws = new WebSocket(tvUrl()); } catch { tvRetry(); return; }
+  tv.ws = ws;
+  ws.onopen = () => { tv.connected = true; ws.send(JSON.stringify({ t: 'watch' })); if (tv.pinned) ws.send(JSON.stringify({ t: 'tune', id: tv.pinned })); tvBar(); };
+  ws.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    if (m.t === 'guide') {
+      tv.guide = { channels: m.channels || [], featured: m.featured ?? null, club: m.club || { rooms: 0, people: 0 } };
+      if (tv.pinned && !tv.guide.channels.some((c) => c.id === tv.pinned)) tv.pinned = null;
+      tvGuide(); tvBar();
+    } else if (m.t === 'f') {
+      if (tv.watching !== m.id) { tv.prev = null; tv.watching = m.id; }
+      else { tv.prev = tv.frame; tv.prevAt = tv.frameAt; }
+      tv.frame = m.f; tv.frame.kind = m.kind; tv.frameAt = performance.now();
+      tvBar();
+    } else if (m.t === 'club') {
+      tv.club = m.f; tv.clubAt = performance.now();
+      if (tv.watching !== 'club') { tv.watching = 'club'; tv.frame = null; tv.prev = null; tvBar(); }
+    }
+  };
+  ws.onclose = () => { if (tv.ws === ws) tv.ws = null; tv.connected = false; tvBar(); tvRetry(); };
+  ws.onerror = () => {};
+}
+function tvRetry() {
+  if (!tv.wanted) return;
+  clearTimeout(tv.retryT);
+  tv.retryT = setTimeout(tvConnect, 4000);
+}
+function tvOpen() {
+  tv.wanted = true;
+  tvConnect();
+  if (!tv.raf) tvLoop();
+}
+function tvClose() {
+  tv.wanted = false;
+  clearTimeout(tv.retryT);
+  try { tv.ws?.close(); } catch {}
+  tv.ws = null;
+  cancelAnimationFrame(tv.raf); tv.raf = 0;
+}
+function tvTune(id) {
+  tv.pinned = id;
+  if (tv.ws && tv.ws.readyState === 1) tv.ws.send(JSON.stringify({ t: 'tune', id }));
+  tvGuide();
+}
+
+function tvBar() {
+  const badge = document.getElementById('tv-onair');
+  const title = document.getElementById('tv-title');
+  const clockEl = document.getElementById('tv-clock');
+  const live = tv.watching && tv.watching !== 'club' && tv.frame && performance.now() - tv.frameAt < 6000;
+  if (!tv.connected) {
+    badge.className = 'onair'; badge.textContent = 'NO SIGNAL';
+    title.textContent = 'the room server is not answering'; clockEl.textContent = '';
+    return;
+  }
+  if (live) {
+    const ch = tv.guide.channels.find((c) => c.id === tv.watching);
+    badge.className = 'onair live'; badge.textContent = 'LIVE';
+    title.textContent = `${KIND_LABEL[tv.frame.kind] || ''} · ${ch ? ch.title : ''}`;
+    clockEl.textContent = tv.frame.tm != null ? `RD ${tv.frame.rd || 1} · ${clock(tv.frame.tm)}` : (tv.frame.boss ? `${tv.frame.boss.n}` : '');
+  } else {
+    badge.className = 'onair'; badge.textContent = tv.guide.club.people ? 'THE CLUB' : 'OFF AIR';
+    title.textContent = tv.guide.club.people ? `THE CLUB · ${tv.guide.club.people} on the floor` : 'nothing on — the club is dark';
+    clockEl.textContent = '';
+  }
+}
+
+function tvGuide() {
+  const host = document.getElementById('tv-guide');
+  const auto = `<button class="${tv.pinned ? '' : 'on'}" data-id="">AUTO</button>`;
+  const chans = tv.guide.channels.map((c) =>
+    `<button class="${tv.pinned === c.id ? 'on' : ''}" data-id="${esc(c.id)}"><i class="dot ${c.kind === 'solo' ? 'solo' : ''}"></i>${esc(KIND_LABEL[c.kind] || c.kind)} · ${esc(c.title)}</button>`).join('');
+  const club = `<button disabled><i class="dot club"></i>THE CLUB · ${tv.guide.club.people} on the floor</button>`;
+  host.innerHTML = auto + chans + club;
+  host.querySelectorAll('button[data-id]').forEach((b) => b.addEventListener('click', () => tvTune(b.dataset.id || null)));
+}
+
+/* ── drawing ── */
+const cv = document.getElementById('tv-canvas');
+const cx = cv.getContext('2d');
+function tvLoop() {
+  tv.raf = requestAnimationFrame(tvLoop);
+  const now = performance.now();
+  if (now - tv.lastDraw < 33) return;
+  tv.lastDraw = now;
+  drawTv(now);
+}
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerp3 = (a, b, t) => (a && b ? [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)] : b || a);
+
+function drawTv(now) {
+  const W = cv.width, H = cv.height;
+  cx.fillStyle = '#07080a'; cx.fillRect(0, 0, W, H);
+  if (!tv.connected) return drawCard('NO SIGNAL', tvUrl().replace(/^wss?:\/\//, ''), '#8b8f98', true);
+  const live = tv.watching && tv.watching !== 'club' && tv.frame && now - tv.frameAt < 6000;
+  if (live) return drawMatch(now);
+  if (tv.club && tv.club.rooms.length) return drawClub(now);
+  drawCard('THE CLUB IS DARK', 'nobody on the floor · nothing on air', '#ff3df0', true);
+}
+
+function drawCard(big, small, colour, noise) {
+  const W = cv.width, H = cv.height;
+  if (noise) {
+    for (let i = 0; i < 900; i++) {
+      cx.fillStyle = `rgba(255,255,255,${Math.random() * 0.05})`;
+      cx.fillRect(Math.random() * W, Math.random() * H, 3, 2);
+    }
+  }
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.fillStyle = colour; cx.font = '900 44px "Segoe UI", system-ui, sans-serif';
+  cx.fillText(big, W / 2, H / 2 - 14);
+  cx.fillStyle = '#8b8f98'; cx.font = '600 15px "Segoe UI", system-ui, sans-serif';
+  cx.fillText(small, W / 2, H / 2 + 30);
+}
+
+/* Fit the frame's platforms (and the titan) into the screen, −z up. */
+function fitView(points, margin) {
+  const W = cv.width, H = cv.height;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const [x, z] of points) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
+  const spanX = Math.max(3, maxX - minX), spanZ = Math.max(3, maxZ - minZ);
+  const scale = Math.min((W - margin * 2) / spanX, (H - margin * 2) / spanZ);
+  const midX = (minX + maxX) / 2, midZ = (minZ + maxZ) / 2;
+  return { scale, sx: (x) => W / 2 + (x - midX) * scale, sz: (z) => H / 2 + (z - midZ) * scale };
+}
+
+function octPath(v, px, pz, yaw) {
+  cx.beginPath();
+  OCT.forEach(([ox, oz], i) => {
+    const c = Math.cos(yaw), s = Math.sin(yaw);
+    const x = px + ox * c + oz * s, z = pz - ox * s + oz * c;
+    if (i === 0) cx.moveTo(v.sx(x), v.sz(z)); else cx.lineTo(v.sx(x), v.sz(z));
+  });
+  cx.closePath();
+}
+
+function hpBar(x, y, w, frac, colour, label) {
+  cx.fillStyle = '#0d0f12'; cx.fillRect(x, y, w, 7);
+  cx.fillStyle = frac < 0.25 ? '#ff4b3e' : colour; cx.fillRect(x, y, w * Math.max(0, Math.min(1, frac)), 7);
+  cx.strokeStyle = 'rgba(255,255,255,.25)'; cx.lineWidth = 1; cx.strokeRect(x + 0.5, y + 0.5, w - 1, 6);
+  if (label) {
+    cx.fillStyle = '#e8e4da'; cx.font = '800 13px "Segoe UI", system-ui, sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'bottom';
+    cx.fillText(label, x + w / 2, y - 3);
+  }
+}
+
+function drawMatch(now) {
+  const f = tv.frame, p0 = tv.prev;
+  const t = p0 ? Math.min(1, (now - tv.frameAt) / Math.max(60, tv.frameAt - tv.prevAt)) : 1;
+  const W = cv.width, H = cv.height;
+  const pts = [];
+  for (const p of f.p) for (const [ox, oz] of OCT) pts.push([p.pl[0] + ox * 1.2, p.pl[1] + oz * 1.2]);
+  if (f.boss) { pts.push([f.boss.x - 1.6, f.boss.z - 1.6]); pts.push([f.boss.x + 1.6, f.boss.z + 1.6]); }
+  const v = fitView(pts, 70);
+  // floor grid
+  cx.strokeStyle = 'rgba(255,255,255,.035)'; cx.lineWidth = 1;
+  for (let x = -12; x <= 12; x++) { cx.beginPath(); cx.moveTo(v.sx(x), 0); cx.lineTo(v.sx(x), H); cx.stroke(); }
+  for (let z = -12; z <= 12; z++) { cx.beginPath(); cx.moveTo(0, v.sz(z)); cx.lineTo(W, v.sz(z)); cx.stroke(); }
+  // platforms
+  f.p.forEach((p) => {
+    const col = TEAM_HEX[p.t % 4];
+    octPath(v, p.pl[0], p.pl[1], p.pl[2]);
+    cx.fillStyle = '#16191e'; cx.fill();
+    cx.strokeStyle = col; cx.lineWidth = 2.5; cx.stroke();
+    cx.save(); cx.globalAlpha = 0.18; cx.strokeStyle = col; cx.lineWidth = 9; cx.stroke(); cx.restore();
+  });
+  // the titan
+  if (f.boss) {
+    const bx = v.sx(f.boss.x), bz = v.sz(f.boss.z), r = 0.9 * v.scale;
+    const g = cx.createRadialGradient(bx, bz, r * 0.2, bx, bz, r * 1.6);
+    g.addColorStop(0, 'rgba(255,75,62,.55)'); g.addColorStop(1, 'rgba(255,75,62,0)');
+    cx.fillStyle = g; cx.beginPath(); cx.arc(bx, bz, r * 1.6, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = '#2a1512'; cx.strokeStyle = '#ff4b3e'; cx.lineWidth = 3;
+    cx.beginPath(); cx.arc(bx, bz, r, 0, Math.PI * 2); cx.fill(); cx.stroke();
+    hpBar(bx - r * 1.4, bz - r - 18, r * 2.8, f.boss.hp, '#ff4b3e', f.boss.n || 'THE TITAN');
+  }
+  // balls
+  const prevBalls = p0 ? p0.b : null;
+  (f.b || []).forEach((b, i) => {
+    const q = prevBalls && prevBalls[i] && prevBalls[i][0] === b[0] ? prevBalls[i] : null;
+    const x = q ? lerp(q[1], b[1], t) : b[1], z = q ? lerp(q[3], b[3], t) : b[3];
+    const owner = f.p[b[0]];
+    const col = owner ? TEAM_HEX[owner.t % 4] : '#ffb02e';
+    const rr = Math.max(4, (b[5] || 0.09) * v.scale * 1.8);
+    const g = cx.createRadialGradient(v.sx(x), v.sz(z), 0, v.sx(x), v.sz(z), rr * 3);
+    g.addColorStop(0, col); g.addColorStop(0.35, col + '88'); g.addColorStop(1, col + '00');
+    cx.fillStyle = g; cx.beginPath(); cx.arc(v.sx(x), v.sz(z), rr * 3, 0, Math.PI * 2); cx.fill();
+    cx.fillStyle = b[4] === 2 ? '#fff3cf' : col; cx.beginPath(); cx.arc(v.sx(x), v.sz(z), rr, 0, Math.PI * 2); cx.fill();
+  });
+  // fighters
+  f.p.forEach((p, i) => {
+    const q = p0 && p0.p[i] ? p0.p[i] : null;
+    const h = lerp3(q && q.h, p.h, t), l = lerp3(q && q.l, p.l, t), r = lerp3(q && q.r, p.r, t);
+    const col = TEAM_HEX[p.t % 4];
+    const hx = v.sx(h[0]), hz = v.sz(h[2]);
+    // hands
+    for (const hand of [l, r]) {
+      cx.strokeStyle = col + 'aa'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(hx, hz); cx.lineTo(v.sx(hand[0]), v.sz(hand[2])); cx.stroke();
+      cx.fillStyle = col; cx.beginPath(); cx.arc(v.sx(hand[0]), v.sz(hand[2]), 0.06 * v.scale, 0, Math.PI * 2); cx.fill();
+    }
+    // head + facing
+    const hr = 0.16 * v.scale;
+    cx.fillStyle = p.hp > 0 ? '#e8e4da' : '#3a3d46'; cx.strokeStyle = col; cx.lineWidth = 3;
+    cx.beginPath(); cx.arc(hx, hz, hr, 0, Math.PI * 2); cx.fill(); cx.stroke();
+    cx.strokeStyle = col; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(hx, hz);
+    cx.lineTo(hx - Math.sin(p.yaw) * hr * 1.6, hz - Math.cos(p.yaw) * hr * 1.6); cx.stroke();
+    // name + health over the platform's back edge
+    const bw = 1.3 * v.scale;
+    hpBar(v.sx(p.pl[0]) - bw / 2, v.sz(p.pl[1]) + HALF_D * v.scale * 1.05 + 16, bw, p.hp, col, p.n || '');
+  });
+  // header: score + clock; centre: the message
+  cx.textAlign = 'left'; cx.textBaseline = 'top';
+  cx.fillStyle = '#8b8f98'; cx.font = '800 13px "Segoe UI", system-ui, sans-serif';
+  const sc = (f.sc || []).map((s, i) => `${'●'.repeat(s)}${'○'.repeat(Math.max(0, 3 - s))}`).join('   ');
+  if (sc) { cx.fillStyle = '#e8e4da'; cx.font = '700 16px "Segoe UI", system-ui, sans-serif'; cx.fillText(sc, 16, 12); }
+  if (f.tm != null) { cx.textAlign = 'right'; cx.fillStyle = f.ph === 'playing' && f.tm <= 10 ? '#ff4b3e' : '#e8e4da'; cx.font = '900 26px "Segoe UI", system-ui, sans-serif'; cx.fillText(clock(f.tm), W - 16, 10); }
+  if (f.msg) {
+    cx.textAlign = 'center'; cx.textBaseline = 'middle';
+    cx.fillStyle = 'rgba(0,0,0,.35)'; cx.fillRect(0, H / 2 - 44, W, 88);
+    cx.fillStyle = f.msg.includes('KO') || f.msg.includes('DEFEAT') ? '#ff4b3e' : '#ffb02e';
+    cx.font = '900 56px "Segoe UI", system-ui, sans-serif'; cx.fillText(f.msg, W / 2, H / 2);
+  }
+  cx.textAlign = 'left'; cx.textBaseline = 'bottom'; cx.fillStyle = '#565b64'; cx.font = '700 11px "Segoe UI", system-ui, sans-serif';
+  cx.fillText('TOP-DOWN · THE FIGHT IS UP THE SCREEN', 16, H - 10);
+}
+
+function drawClub(now) {
+  const W = cv.width, H = cv.height;
+  const room = tv.club.rooms.slice().sort((a, b) => b.members.length - a.members.length)[0];
+  const placed = room.members.filter((m) => m.x != null && !m.away);
+  const pts = placed.map((m) => [m.x, m.z]);
+  if (room.ball) pts.push([room.ball.pos[0], room.ball.pos[2]]);
+  if (!pts.length) pts.push([-3, -3], [3, 3]);
+  pts.push([pts[0][0] - 3, pts[0][1] - 3], [pts[0][0] + 3, pts[0][1] + 3]);
+  const v = fitView(pts, 80);
+  // the floor: a dark disco checker
+  cx.strokeStyle = 'rgba(255,61,240,.08)'; cx.lineWidth = 1;
+  for (let x = -20; x <= 20; x++) { cx.beginPath(); cx.moveTo(v.sx(x), 0); cx.lineTo(v.sx(x), H); cx.stroke(); }
+  for (let z = -20; z <= 20; z++) { cx.beginPath(); cx.moveTo(0, v.sz(z)); cx.lineTo(W, v.sz(z)); cx.stroke(); }
+  if (room.ball) {
+    const bx = v.sx(room.ball.pos[0]), bz = v.sz(room.ball.pos[2]);
+    const spin = (now / 400) % (Math.PI * 2);
+    for (let i = 0; i < 10; i++) {
+      const a = spin + (i / 10) * Math.PI * 2;
+      cx.fillStyle = `rgba(255,255,255,${0.15 + 0.5 * Math.abs(Math.sin(a * 3 + now / 300))})`;
+      cx.beginPath(); cx.arc(bx + Math.cos(a) * 16, bz + Math.sin(a) * 16, 3, 0, Math.PI * 2); cx.fill();
+    }
+    cx.fillStyle = '#e8e4da'; cx.beginPath(); cx.arc(bx, bz, 10, 0, Math.PI * 2); cx.fill();
+    cx.strokeStyle = '#ff3df0'; cx.lineWidth = 3; cx.beginPath(); cx.arc(bx, bz, 24, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * (room.ball.ms / 60000))); cx.stroke();
+    cx.textAlign = 'center'; cx.textBaseline = 'top'; cx.fillStyle = '#ff3df0'; cx.font = '800 12px "Segoe UI", system-ui, sans-serif';
+    cx.fillText(`${(KIND_LABEL[room.ball.mode] || room.ball.mode).toUpperCase()} · ${room.ball.name} · ${Math.ceil(room.ball.ms / 1000)}s · ${room.ball.joins + 1} in`, bx, bz + 30);
+  }
+  placed.forEach((m) => {
+    const col = m.hue == null ? '#c9ced6' : `hsl(${Math.round(m.hue * 360)} 80% 62%)`;
+    const x = v.sx(m.x), z = v.sz(m.z);
+    if (m.lx != null) for (const [hx, hz] of [[m.lx, m.lz], [m.rx, m.rz]]) {
+      cx.strokeStyle = col + 'aa'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(x, z); cx.lineTo(v.sx(hx), v.sz(hz)); cx.stroke();
+      cx.fillStyle = col; cx.beginPath(); cx.arc(v.sx(hx), v.sz(hz), 4, 0, Math.PI * 2); cx.fill();
+    }
+    const hr = Math.max(7, 0.16 * v.scale);
+    cx.fillStyle = '#e8e4da'; cx.strokeStyle = col; cx.lineWidth = 3;
+    cx.beginPath(); cx.arc(x, z, hr, 0, Math.PI * 2); cx.fill(); cx.stroke();
+    cx.beginPath(); cx.moveTo(x, z); cx.lineTo(x - Math.sin(m.yaw) * hr * 1.6, z - Math.cos(m.yaw) * hr * 1.6); cx.stroke();
+    cx.textAlign = 'center'; cx.textBaseline = 'bottom'; cx.fillStyle = col; cx.font = '800 12px "Segoe UI", system-ui, sans-serif';
+    cx.fillText((m.crown ? '👑 ' : '') + m.name, x, z - hr - 4);
+  });
+  const away = room.members.filter((m) => m.away).map((m) => m.name);
+  cx.textAlign = 'left'; cx.textBaseline = 'top'; cx.fillStyle = '#ff3df0'; cx.font = '900 16px "Segoe UI", system-ui, sans-serif';
+  cx.fillText(`THE CLUB · ROOM ${room.code} · ${room.members.length} IN`, 16, 12);
+  if (away.length) { cx.fillStyle = '#8b8f98'; cx.font = '700 12px "Segoe UI", system-ui, sans-serif'; cx.fillText(`AWAY ON A SET: ${away.join(' · ')}`, 16, 36); }
+  cx.textAlign = 'left'; cx.textBaseline = 'bottom'; cx.fillStyle = '#565b64'; cx.font = '700 11px "Segoe UI", system-ui, sans-serif';
+  cx.fillText('PEEPING INTO THE PUBLIC FLOOR — NOTHING ON AIR', 16, H - 10);
+}
+
+/* ── THE LAB ────────────────────────────────────────────────────────────── */
+
+const LAB_KINDS = [['', 'ALL'], ['1v1', '1V1'], ['2v2', '2V2'], ['ffa', 'FFA'], ['raid', 'RAID'], ['gauntlet', 'GAUNTLET'], ['solo', 'SOLO']];
+const lab = { all: [], boxer: '', kind: '', loaded: false, open: null };
+const PART = ['head', 'chest', 'pelvis', 'body'];
+const OUTW = ['WIN', 'LOSS', 'DRAW'];
+window.__ffLab = { inject: (docs) => { lab.all = docs.map(normBout); lab.loaded = true; drawLab(); }, state: () => lab };
+
+function normBout(d) {
+  const b = d.data || d;
+  return {
+    id: d.id, kind: b.kind || 'solo', net: !!b.net, quick: !!b.quick, ranked: !!b.ranked,
+    me: b.me && b.me.name ? String(b.me.name) : '???', names: Array.isArray(b.names) ? b.names.map(String) : [],
+    win: !!b.win, score: Array.isArray(b.score) ? b.score : [], dur: Number(b.dur) || 0,
+    at: b.at ? new Date(b.at) : null,
+    rounds: Array.isArray(b.rounds) ? b.rounds : [],
+    thr: b.thr || { n: 0, l: 0, r: 0, spd: 0 }, hits: b.hits || {}, par: Number(b.par) || 0,
+    grid: b.grid && b.grid.w ? b.grid : null, ev: Array.isArray(b.ev) ? b.ev : [], boss: b.boss || null,
+  };
+}
+
+async function loadLab() {
+  if (lab.loaded) { drawLab(); return; }
+  const state = document.getElementById('lab-state');
+  state.classList.remove('hidden'); state.textContent = 'PULLING THE TAPES…';
+  try {
+    const docs = await runQuery(FF, { from: [{ collectionId: 'bouts' }], orderBy: [orderBy('at', 'DESCENDING')], limit: 200 });
+    lab.all = docs.map(normBout);
+    lab.loaded = true;
+    state.classList.add('hidden');
+    drawLab();
+  } catch {
+    state.textContent = 'THE TAPES ARE UNREACHABLE — TRY AGAIN IN A MINUTE.';
+  }
+}
+
+function labRows() {
+  return lab.all.filter((b) => (!lab.kind || b.kind === lab.kind) && (!lab.boxer || b.me === lab.boxer));
+}
+
+function drawLab() {
+  const sel = document.getElementById('lab-boxer');
+  const names = [...new Set(lab.all.flatMap((b) => [b.me, ...b.names]))].filter(Boolean).sort();
+  sel.innerHTML = `<option value="">EVERY BOXER</option>` + names.map((n) => `<option value="${esc(n)}"${n === lab.boxer ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  sel.onchange = () => { lab.boxer = sel.value; drawLab(); };
+  const seg = document.getElementById('lab-kind');
+  seg.innerHTML = LAB_KINDS.map(([id, label]) => `<button class="${id === lab.kind ? 'on' : ''}" data-id="${id}">${label}</button>`).join('');
+  seg.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { lab.kind = b.dataset.id; drawLab(); }));
+
+  const rows = labRows();
+  document.getElementById('lab-count').textContent = `${rows.length} of ${lab.all.length} tapes`;
+  const state = document.getElementById('lab-state');
+  if (!lab.all.length && lab.loaded) { state.classList.remove('hidden'); state.textContent = 'NO TAPES YET — FIGHT SOMETHING AND COME BACK.'; }
+  else if (lab.loaded) state.classList.add('hidden');
+
+  // the tiles
+  const sum = (f) => rows.reduce((a, b) => a + (f(b) || 0), 0);
+  const n = rows.length || 1;
+  const throws = sum((b) => b.thr.n), dealt = sum((b) => b.hits.dealt), taken = sum((b) => b.hits.taken);
+  const heads = sum((b) => b.hits.head), par = sum((b) => b.par), dur = sum((b) => b.dur);
+  const rounds = rows.flatMap((b) => b.rounds);
+  const kos = rounds.filter((r) => r.res === 'ko').length;
+  const wins = rows.filter((b) => b.win).length;
+  const left = sum((b) => b.thr.l), right = sum((b) => b.thr.r);
+  const spd = rows.length ? sum((b) => b.thr.spd * b.thr.n) / (throws || 1) : 0;
+  const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '—');
+  const tiles = [
+    [rows.length, 'bouts', `${wins}W · ${rows.length - wins}L`],
+    [pct(wins, rows.length), 'win rate', ''],
+    [(throws / n).toFixed(1), 'throws / bout', dur ? `${(throws / (dur / 60)).toFixed(1)} a minute` : ''],
+    [pct(dealt, throws), 'hit rate', `${dealt} landed of ${throws}`],
+    [pct(heads, dealt), 'headshots', `${heads} to the head`],
+    [pct(left, left + right), 'left hand', `${left} L · ${right} R`],
+    [(taken / n).toFixed(1), 'hits taken / bout', `${sum((b) => b.hits.takenHead)} to your head`],
+    [(par / n).toFixed(1), 'parries / bout', `${par} balls slapped down`],
+    [pct(kos, rounds.length), 'rounds by KO', `${kos} of ${rounds.length}`],
+    [rounds.length ? clock(rounds.reduce((a, r) => a + (r.dur || 0), 0) / rounds.length) : '—', 'avg round', ''],
+    [spd ? `${spd.toFixed(1)}` : '—', 'm/s swing', 'average release speed'],
+    [rows.length ? clock(Math.max(...rows.map((b) => b.dur))) : '—', 'longest bout', ''],
+  ];
+  document.getElementById('lab-tiles').innerHTML = tiles.map(([v, l, s]) => `<div class="tile"><b>${esc(v)}</b><span>${esc(l)}</span>${s ? `<small>${esc(s)}</small>` : ''}</div>`).join('');
+
+  // the heatmaps
+  for (const key of ['stand', 'thrL', 'thrR', 'hit']) drawHeat(document.getElementById(`heat-${key}`), rows, key);
+
+  // the hands
+  const dl = sum((b) => b.hits.dealtL), dr = sum((b) => b.hits.dealtR);
+  const bar = (label, a, b, la, lb) => {
+    const t = a + b || 1;
+    return `<div><div class="bar-label">${label}</div><div class="bar"><i class="l" style="width:${(a / t) * 100}%"></i><i class="r" style="width:${(b / t) * 100}%"></i><em><span>LEFT ${la}</span><span>RIGHT ${lb}</span></em></div></div>`;
+  };
+  document.getElementById('lab-hands').innerHTML =
+    bar('Throws by hand', left, right, left, right) +
+    bar('Hits landed by hand', dl, dr, dl, dr) +
+    bar('Accuracy by hand', left ? dl / left : 0, right ? dr / right : 0, pct(dl, left), pct(dr, right));
+
+  // the tape
+  const host = document.getElementById('lab-tape');
+  host.innerHTML = rows.map((b, i) => {
+    const others = b.names.filter((x) => x !== b.me);
+    const who = `<b>${esc(b.me)}</b>${others.length ? ' vs ' + others.map(esc).join(' · ') : ''}${b.boss ? ` <span class="k">${esc(b.boss.name)}</span>` : ''}`;
+    const when = b.at ? b.at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + b.at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '';
+    return `<div class="tape-row" data-i="${i}"><span class="d">${esc(when)}</span><span class="k">${esc(KIND_LABEL[b.kind] || b.kind.toUpperCase())}</span><span class="who">${who}</span><span class="${b.win ? 'w' : 'l'}">${b.win ? 'WIN' : 'LOSS'} ${b.score.length ? b.score.join('–') : ''}</span><span class="t">${clock(b.dur)}</span><span class="d">${b.thr.n} thr</span></div>` +
+      (lab.open === b.id ? `<div class="tape-open">${tapeOpen(b)}</div>` : '');
+  }).join('');
+  host.querySelectorAll('.tape-row').forEach((r) => r.addEventListener('click', () => {
+    const b = rows[Number(r.dataset.i)];
+    lab.open = lab.open === b.id ? null : b.id;
+    drawLab();
+    const openEl = document.querySelector('#lab-tape .tape-open canvas');
+    if (openEl) drawHealthStrip(openEl, rows.find((x) => x.id === lab.open));
+  }));
+}
+
+/* An octagon of cells, brightest where the count peaks (log-scaled so one
+ * hot corner doesn't black out the rest). The fight is UP the screen. */
+function drawHeat(canvas, rows, key) {
+  const g = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  g.fillStyle = '#0d0f12'; g.fillRect(0, 0, W, H);
+  const gw = 16, gh = 14;
+  const acc = new Float32Array(gw * gh);
+  for (const b of rows) {
+    if (!b.grid || !b.grid[key] || b.grid.w !== gw) continue;
+    b.grid[key].forEach((v, i) => { acc[i] += v; });
+  }
+  const max = Math.max(1, ...acc);
+  const pad = 26, pw = W - pad * 2, ph = H - pad * 2 - 12;
+  const sx = pw / (HALF_W * 2), sz = ph / (HALF_D * 2);
+  const X = (x) => pad + (x + HALF_W) * sx, Z = (z) => pad + 12 + (z + HALF_D) * sz;
+  g.save();
+  g.beginPath(); OCT.forEach(([x, z], i) => (i ? g.lineTo(X(x), Z(z)) : g.moveTo(X(x), Z(z)))); g.closePath(); g.clip();
+  g.fillStyle = '#16191e'; g.fillRect(0, 0, W, H);
+  for (let r = 0; r < gh; r++) for (let c = 0; c < gw; c++) {
+    const v = acc[r * gw + c];
+    if (!v) continue;
+    const t = Math.log1p(v) / Math.log1p(max);
+    g.fillStyle = heatColour(t);
+    g.fillRect(pad + (c / gw) * pw, pad + 12 + (r / gh) * ph, pw / gw + 0.5, ph / gh + 0.5);
+  }
+  g.restore();
+  g.beginPath(); OCT.forEach(([x, z], i) => (i ? g.lineTo(X(x), Z(z)) : g.moveTo(X(x), Z(z)))); g.closePath();
+  g.strokeStyle = '#ffb02e'; g.lineWidth = 2; g.stroke();
+  g.fillStyle = '#8b8f98'; g.font = '800 10px "Segoe UI", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
+  g.fillText('▲ THE FIGHT', W / 2, 4);
+  g.textBaseline = 'bottom'; g.fillText(max > 1 ? `peak ${Math.round(max)}` : 'no data', W / 2, H - 4);
+}
+function heatColour(t) {
+  // gunmetal → ember → amber → white-hot
+  const stops = [[0, [29, 33, 39]], [0.35, [140, 29, 24]], [0.7, [255, 122, 24]], [0.9, [255, 176, 46]], [1, [255, 243, 207]]];
+  for (let i = 1; i < stops.length; i++) {
+    if (t <= stops[i][0]) {
+      const [t0, a] = stops[i - 1], [t1, b] = stops[i];
+      const k = (t - t0) / (t1 - t0);
+      return `rgb(${a.map((x, j) => Math.round(x + (b[j] - x) * k)).join(',')})`;
+    }
+  }
+  return 'rgb(255,243,207)';
+}
+
+/* The open tape: the rounds, the health strip, the play-by-play. */
+function tapeOpen(b) {
+  const rounds = b.rounds.length ? `<table><tr><th>RD</th><th>RESULT</th><th>HOW</th><th>YOU</th><th>THEM</th><th>TIME</th></tr>` +
+    b.rounds.map((r) => `<tr><td>${r.n}</td><td class="${r.out === 'win' ? 'w' : r.out === 'loss' ? 'l' : ''}">${esc(String(r.out).toUpperCase())}</td><td>${r.res === 'ko' ? 'KO' : 'TIME'}</td><td>${r.hp[0]}</td><td>${r.hp[1]}</td><td>${clock(r.dur)}</td></tr>`).join('') + `</table>` : '';
+  const pbp = b.ev.map((e) => {
+    const t = `<b>${clock(e[0])}</b>`;
+    const hand = (h) => (h === 0 ? 'left' : 'right');
+    switch (e[1]) {
+      case 0: return `${t} threw ${hand(e[2])} from (${e[3]}, ${e[4]}) at ${e[5]} m/s`;
+      case 1: return `${t} <span class="tk">took ${e[5]} to the ${PART[e[6]] || 'body'}</span> off their ${hand(e[2])}${e[7] ? ' on the return' : ''}, standing at (${e[3]}, ${e[4]})`;
+      case 2: return `${t} <span class="hit">landed ${e[3]}</span> with the ${hand(e[2])}${e[5] >= 0 ? ` to the ${PART[e[5]]}` : ''}${e[4] ? ' on the return' : ''}`;
+      case 3: return `${t} <span class="pa">parried</span> with the ${hand(e[2])}`;
+      case 4: return `${t} <span class="rd">ROUND ${e[2]} — ${OUTW[e[3]] || ''} by ${e[4] === 0 ? 'KO' : 'the clock'} · you ${e[5]} · them ${e[6]}</span>`;
+      default: return '';
+    }
+  }).filter(Boolean).join('<br>');
+  const meta = [`${b.net ? 'online' : 'offline'}`, b.ranked ? 'ranked' : b.quick ? 'quick' : '', b.boss ? `vs ${b.boss.name} (stage ${b.boss.stage + 1})` : '', b.ev.length ? `${b.ev.length} events` : 'no play-by-play'].filter(Boolean).join(' · ');
+  return `<div class="board-note" style="padding:6px 0">${esc(meta)}</div>${rounds}<canvas width="800" height="90"></canvas><div class="pbp">${pbp || 'this tape has no events'}</div>`;
+}
+
+/* Both health lines over the bout, rebuilt from the tape's hits: yours in
+ * ember, theirs in cool blue, refilled at every round. */
+function drawHealthStrip(canvas, b) {
+  if (!canvas || !b) return;
+  const g = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  g.fillStyle = '#0a0c0f'; g.fillRect(0, 0, W, H);
+  const T = Math.max(1, b.dur || (b.ev.length ? b.ev[b.ev.length - 1][0] : 1));
+  let me = 100, them = 100;
+  const mine = [[0, 100]], theirs = [[0, 100]];
+  for (const e of b.ev) {
+    if (e[1] === 1) { me = Math.max(0, me - e[5]); mine.push([e[0], me]); }
+    else if (e[1] === 2) { them = Math.max(0, them - e[3]); theirs.push([e[0], them]); }
+    else if (e[1] === 4) { mine.push([e[0], me]); theirs.push([e[0], them]); me = 100; them = 100; mine.push([e[0] + 0.01, 100]); theirs.push([e[0] + 0.01, 100]);
+      g.strokeStyle = 'rgba(255,176,46,.35)'; g.beginPath(); g.moveTo((e[0] / T) * W, 0); g.lineTo((e[0] / T) * W, H); g.stroke(); }
+  }
+  mine.push([T, me]); theirs.push([T, them]);
+  const line = (pts, col) => {
+    g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
+    pts.forEach(([t, hp], i) => { const x = (t / T) * W, y = H - 6 - (hp / 100) * (H - 12); if (i) g.lineTo(x, pts[i - 1][1] === hp ? y : H - 6 - (pts[i - 1][1] / 100) * (H - 12)); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  };
+  line(theirs, '#4fb7ff'); line(mine, '#ff7a18');
+  g.fillStyle = '#8b8f98'; g.font = '800 10px "Segoe UI", system-ui, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'top';
+  g.fillText('YOU', 6, 4); g.fillStyle = '#4fb7ff'; g.fillText('THEM', 34, 4);
+  g.fillStyle = '#ff7a18'; g.fillText('YOU', 6, 4);
+}
+
 /* ── Faces ──────────────────────────────────────────────────────────────── */
 
-const tabFf = document.getElementById('tab-ff');
-const tabRr = document.getElementById('tab-rr');
-function showFace(rr) {
-  tabFf.classList.toggle('on', !rr);
-  tabRr.classList.toggle('on', rr);
-  document.getElementById('face-ff').classList.toggle('hidden', rr);
-  document.getElementById('face-rr').classList.toggle('hidden', !rr);
-  const mark = document.querySelector('.mark');
-  mark.innerHTML = rr ? 'RAVE <span style="color:#ff3df0">RAID</span>' : 'FIRE <span>FIGHT</span>';
-  try { history.replaceState(null, '', rr ? '#raveraid' : '#firefight'); } catch {}
+const FACES = {
+  ff:  { tab: 'tab-ff',  face: 'face-ff',  hash: '#firefight', mark: 'FIRE <span>FIGHT</span>', sub: 'World Leaderboards', on: () => {} },
+  rr:  { tab: 'tab-rr',  face: 'face-rr',  hash: '#raveraid',  mark: 'RAVE <span style="color:#ff3df0">RAID</span>', sub: 'World Leaderboards', on: () => { if (!rrCache.size) void loadRr(); } },
+  tv:  { tab: 'tab-tv',  face: 'face-tv',  hash: '#tv',        mark: 'THE <span style="color:#ff4b3e">CHANNEL</span>', sub: 'Live from the arena', on: tvOpen },
+  lab: { tab: 'tab-lab', face: 'face-lab', hash: '#lab',       mark: 'THE <span style="color:#4fb7ff">LAB</span>', sub: 'The stat nerd\'s desk', on: loadLab },
+};
+let faceId = 'ff';
+function showFace(id) {
+  if (faceId === 'tv' && id !== 'tv') tvClose();
+  faceId = id;
+  for (const [k, f] of Object.entries(FACES)) {
+    document.getElementById(f.tab).classList.toggle('on', k === id);
+    document.getElementById(f.face).classList.toggle('hidden', k !== id);
+  }
+  document.querySelector('.mark').innerHTML = FACES[id].mark;
+  document.getElementById('sub').textContent = FACES[id].sub;
+  try { history.replaceState(null, '', FACES[id].hash); } catch {}
+  FACES[id].on();
 }
-tabFf.addEventListener('click', () => { showFace(false); });
-tabRr.addEventListener('click', () => { showFace(true); if (!rrCache.size) void loadRr(); });
+for (const [k, f] of Object.entries(FACES)) document.getElementById(f.tab).addEventListener('click', () => showFace(k));
 
 drawFfTabs();
 drawRrPickers();
-if (location.hash === '#raveraid') { showFace(true); void loadRr(); }
+const startFace = Object.entries(FACES).find(([, f]) => f.hash === location.hash)?.[0] || 'ff';
+if (startFace !== 'ff') showFace(startFace);
 void loadFf();
 </script>
 </body>

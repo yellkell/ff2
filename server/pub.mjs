@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { isMain, serve } from './mount.mjs';
+import { DISCORD_CHANNEL_ID, DISCORD_TOKEN } from './discord.mjs';
 
 const PORT = Number(process.env.PORT || 8788);
 const MAX_PLAYERS = 12;
@@ -505,8 +506,8 @@ function livekitToken(identity, name, room) {
 //   DISCORD_BOT_TOKEN   a bot token. The bot must be in the channel's server
 //                       with the View Channel + Read Message History perms.
 //   DISCORD_CHANNEL_ID  (optional) overrides the default channel below.
-const DISCORD_TOKEN = process.env.DISCORD_BOT_TOKEN || '';
-const DISCORD_CHANNEL_ID = process.env.DISCORD_CHANNEL_ID || '1515843357060894762';
+// The token and channel live in discord.mjs now (shared with the bot's
+// WRITE path — the bell, the invites, THE CHANNEL's live cards).
 const DISCORD_POLL_MS = 7000; // well within Discord's REST rate limits
 const DISCORD_CACHE_MAX = 25; // recent history handed to each joiner
 let discordCache = []; // chronological (oldest first)

@@ -100,6 +100,8 @@ import { localLayout } from '../combat/layout.js';
 import { mesh } from '../net/mesh.js';
 import { UI } from '../ui/industrial.js';
 import { net } from '../net/client.js';
+import { tvServerUrl } from '../config.js';
+import { inviteShare } from '../menu/lobbyFace.js';
 import { startQueueWatch, stopQueueWatch } from '../net/queueWatch.js';
 import { startRaidWatch, stopRaidWatch } from '../net/raidWatch.js';
 import { startRankedWatch, stopRankedWatch } from '../net/rankedWatch.js';
@@ -387,7 +389,64 @@ export class MenuSystem extends createSystem({}) {
     this.applyState();
   }
 
+  /** A five-digit `?join=` code from the boot URL — taken once the lobby is
+   *  standing, then dropped from the address so a reload doesn't rejoin. */
+  private bootJoin = ((): string => {
+    try {
+      const j = new URLSearchParams(location.search).get('join') ?? '';
+      return /^\d{5}$/.test(j) ? j : '';
+    } catch {
+      return '';
+    }
+  })();
+
+  /** THE JOIN LINK (DESIGN §8.1): booted with ?join=CODE, the lobby types
+   *  the code itself and walks into whatever the host opened. */
+  private takeBootJoin(): void {
+    if (!this.bootJoin || app.state !== 'menu') return;
+    const code = this.bootJoin;
+    this.bootJoin = '';
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete('join');
+      history.replaceState(null, '', u.toString());
+    } catch {
+      /* the address stays — harmless */
+    }
+    app.codeEntry = code;
+    app.duelView = 'keypad';
+    app.netStatus = `joining room ${code}…`;
+    this.joinByCode(code);
+  }
+
+  /** THE BOT's write path (DESIGN §8.2): POST this room's code to the room
+   *  server's /tv/invite; the bot posts a card with the join link. */
+  private postInvite(): void {
+    const code = app.privateCode;
+    if (!code || inviteShare.state === 'sending') return;
+    inviteShare.code = code;
+    inviteShare.state = 'sending';
+    const http = tvServerUrl().replace(/^ws/, 'http').replace(/\/tv\/?$/, '') + '/tv/invite';
+    const cap = mesh.capacity || 2;
+    const open = Math.max(0, cap - mesh.occupants.slice(0, cap).filter(Boolean).length);
+    void fetch(http, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code, mode: app.lobbyMode ?? '1v1', name: myStats().name, open }),
+    })
+      .then((r) => r.json() as Promise<{ posted?: boolean; reason?: string }>)
+      .then((r) => {
+        inviteShare.state = r.posted ? 'posted' : 'failed';
+        inviteShare.reason = r.reason ?? '';
+      })
+      .catch(() => {
+        inviteShare.state = 'failed';
+        inviteShare.reason = 'unreachable';
+      });
+  }
+
   update(delta: number): void {
+    this.takeBootJoin();
     if (app.state !== this.lastState) this.applyState();
     this.applyOwnSkins();
     this.pulseBannerGlow();
@@ -840,6 +899,11 @@ export class MenuSystem extends createSystem({}) {
         mesh.cancel();
         app.lobbyView = 'browser';
         app.privateCode = '';
+        break;
+      case 'lobby-discord':
+        // SHARE (DESIGN §8.2): the bot posts this room's join link. Once
+        // per room — the relay refuses a repeat, and the button says so.
+        this.postInvite();
         break;
       case 'campaign-speedrun':
       case 'campaign-hardcore':

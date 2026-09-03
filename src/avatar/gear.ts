@@ -24,7 +24,7 @@
  * toward −z, the cuff toward +z.
  */
 
-import { BoxGeometry, BufferGeometry, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, type Object3D, SphereGeometry, TorusGeometry } from 'three';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, type Object3D, SphereGeometry, TorusGeometry, Vector3 } from 'three';
 import { BODY_IK } from '../config.js';
 import type { BlankTone } from './mannequin.js';
 
@@ -46,7 +46,7 @@ export const GEAR: GearDef[] = [
   // ── head ──────────────────────────────────────────────────────────────
   { id: 'crest', name: 'CREST', slot: 'head', price: 60, blurb: 'a dorsal fin, nose to nape' },
   { id: 'antennae', name: 'ANTENNAE', slot: 'head', price: 60, blurb: 'twin whips off the temples' },
-  { id: 'horns', name: 'HORNS', slot: 'head', price: 90, blurb: 'a bull\'s pair, swept back' },
+  { id: 'horns', name: 'HORNS', slot: 'head', price: 90, blurb: 'a ram\'s pair, curled round' },
   { id: 'halo', name: 'HALO', slot: 'head', price: 150, blurb: 'a ring that floats, no wire' },
   { id: 'mohawk', name: 'MOHAWK', slot: 'head', price: 120, blurb: 'a row of spikes over the crown' },
   { id: 'visorband', name: 'VISOR BAND', slot: 'head', price: 80, blurb: 'a wraparound band across the eyes' },
@@ -122,6 +122,66 @@ function asTrim<T extends Mesh>(m: T): T {
   return m;
 }
 
+/**
+ * A tube along a spline whose radius tapers from `r0` at the first point to
+ * `r1` at the last — the shape of a horn, a tusk, a whip. three's own
+ * TubeGeometry is constant-radius, so this walks a Catmull-Rom curve
+ * through `pts`, builds a ring of `sides` vertices at each of `segs`
+ * stations (Frenet frames, so the rings follow the bend), caps both ends,
+ * and lays UVs u = round the ring, v = along the length so THE PAINT's
+ * stripes and dots wrap it like any other piece.
+ */
+function taperedTube(pts: Vector3[], r0: number, r1: number, segs: number, sides: number): BufferGeometry {
+  const curve = new CatmullRomCurve3(pts, false, 'centripetal', 0.5);
+  const frames = curve.computeFrenetFrames(segs, false);
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const idx: number[] = [];
+  const p = new Vector3();
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    curve.getPointAt(t, p);
+    // Ease the taper: fat for the first half, then thinning to the point.
+    const k = t < 0.5 ? (t / 0.5) * 0.22 : 0.22 + ((t - 0.5) / 0.5) * 0.78;
+    const r = r0 + (r1 - r0) * k;
+    const n = frames.normals[i];
+    const b = frames.binormals[i];
+    for (let j = 0; j <= sides; j++) {
+      const a = (j / sides) * Math.PI * 2;
+      const cx = Math.cos(a) * r;
+      const cy = Math.sin(a) * r;
+      pos.push(p.x + n.x * cx + b.x * cy, p.y + n.y * cx + b.y * cy, p.z + n.z * cx + b.z * cy);
+      uv.push(j / sides, t);
+    }
+  }
+  const ring = sides + 1;
+  for (let i = 0; i < segs; i++) {
+    for (let j = 0; j < sides; j++) {
+      const a = i * ring + j;
+      const c = a + ring;
+      idx.push(a, c, a + 1, a + 1, c, c + 1);
+    }
+  }
+  // Caps: a centre vertex at each end fanned to its ring.
+  const capRoot = pos.length / 3;
+  curve.getPointAt(0, p);
+  pos.push(p.x, p.y, p.z);
+  uv.push(0.5, 0);
+  for (let j = 0; j < sides; j++) idx.push(capRoot, j + 1, j);
+  const capTip = pos.length / 3;
+  curve.getPointAt(1, p);
+  pos.push(p.x, p.y, p.z);
+  uv.push(0.5, 1);
+  const last = segs * ring;
+  for (let j = 0; j < sides; j++) idx.push(capTip, last + j, last + j + 1);
+  const geo = new BufferGeometry();
+  geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
 const R = BODY_IK.headRadius;
 
 type Builder = (mat: MeshStandardMaterial, side: 1 | -1, trim: MeshStandardMaterial) => Group;
@@ -163,35 +223,39 @@ const BUILDERS: Record<string, Builder> = {
     return g;
   },
   horns: (mat) => {
+    // THE RAM'S CURL. Each horn is ONE tapered tube along a spline: it
+    // roots thick at the temple, climbs out and up, rolls BACK over the
+    // ear, drops behind the jaw and sweeps FORWARD again so the point
+    // ends level with the eye, just wide of the cheek — the full curl of
+    // a ram seen side-on. Seven flat-shaded facets round, so it reads as
+    // carved plate like the rest of the kit, not a smooth banana. (The
+    // old pair were three stubby cylinders bent back like a bull's.)
+    //
+    // The wearer never SEES their own: applyGear skips the head slot on a
+    // rig flagged first-person (below), and the arena never renders the
+    // local head at all — a curl this size would otherwise hang in the
+    // corner of both eyes for the whole bout.
     const g = new Group();
+    const faceted = mat.clone();
+    faceted.flatShading = true;
     for (const s of [-1, 1]) {
-      const horn = new Group();
-      // Three tapering segments, each bent a little further back and out.
-      let r0 = R * 0.16;
-      let len = R * 0.42;
-      const seg = new Group();
-      horn.add(seg);
-      let cur: Object3D = seg;
-      for (let i = 0; i < 3; i++) {
-        const m = new Mesh(new CylinderGeometry(r0 * 0.7, r0, len, 12), mat);
-        m.position.y = len / 2;
-        cur.add(m);
-        const next = new Group();
-        next.position.y = len;
-        next.rotation.z = -s * 0.35;
-        next.rotation.x = 0.3;
-        cur.add(next);
-        cur = next;
-        r0 *= 0.7;
-        len *= 0.85;
-      }
-      const tip = new Mesh(new ConeGeometry(r0, len * 0.9, 12), mat);
-      tip.position.y = len * 0.45;
-      cur.add(tip);
-      horn.position.set(s * R * 0.72, R * 0.62, -R * 0.05);
-      horn.rotation.z = -s * 0.9;
-      horn.rotation.x = -0.35;
-      g.add(horn);
+      const pts = [
+        [0.7, 0.42, -0.02], // the root, on the temple
+        [1.22, 0.92, 0.14], // out and up, thick
+        [1.66, 1.02, 0.7], // rolling back over the ear
+        [1.9, 0.5, 1.12], // the back of the curl, well wide of the skull
+        [1.92, -0.22, 1.02], // dropping behind the jaw
+        [1.82, -0.62, 0.5], // the low turn
+        [1.8, -0.66, -0.2], // sweeping forward past the cheek
+        [1.96, -0.48, -0.74], // the point, forward of the face, wide
+        [2.08, -0.36, -1.02], // the tip lifting a hair
+      ].map(([x, y, z]) => new Vector3(s * x * R, y * R, z * R));
+      g.add(new Mesh(taperedTube(pts, R * 0.44, R * 0.05, 34, 7), faceted));
+      // A boss where the horn meets the skull, so the root reads as seated.
+      const boss = new Mesh(new SphereGeometry(R * 0.46, 9, 7), faceted);
+      boss.position.copy(pts[0]);
+      boss.scale.set(1, 0.9, 1.05);
+      g.add(boss);
     }
     return g;
   },
@@ -476,7 +540,11 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
   root.traverse((o) => {
     const slot = SLOT_OF_NAME[o.name];
     if (!slot) return;
-    const id = want.get(slot) ?? '';
+    // THE WEARER'S OWN HEAD: gear on the head slot of a first-person rig
+    // (userData.firstPerson — the arena's PlayerBodySystem flags its own
+    // head) is never built. Your horns are for everyone else to see; from
+    // inside the skull they would only sit in the edge of your vision.
+    const id = slot === 'head' && o.userData.firstPerson ? '' : (want.get(slot) ?? '');
     const key = `${id}|${tone}`;
     if (o.userData.gearKey === key) return;
     o.userData.gearKey = key;
