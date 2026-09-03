@@ -15,6 +15,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -115,6 +116,25 @@ const floor = await page.waitForFunction(
   { timeout: 8000 },
 ).then(() => true).catch(() => false);
 const netState = await page.evaluate(() => ({ solo: window.__gdr.net.state.solo, phase: window.__gdr.net.state.phase, screen: window.__gdr.match.screen, myIdx: window.__gdr.net.state.myIdx }));
+// THE DEFAULT PATIENCE, which is the one that shipped broken. Number(null)
+// is ZERO, not NaN, so reading a MISSING ?floorPatience straight into
+// Number() made the default one tick — a fifth of a second — and the club
+// opened a room of one every single time. Every check here passed, because
+// every check passes the parameter explicitly: the only configuration that
+// was broken was the one nobody tested. So test the absent one.
+{
+  // Proved at RUNTIME rather than by reading the source: a page with no
+  // parameter at all must come up with the full minute of patience.
+  const plain = await browser.newPage();
+  await plain.goto(base, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => {});
+  const ticks = await plain.evaluate(async () => {
+    const s = await import('/src/rave/net/session.ts');
+    return s.__floorPatienceTicks ?? null;
+  }).catch(() => null);
+  await plain.close();
+  check('a missing ?floorPatience gives the full minute, not zero ticks', ticks === 300, ticks === null ? 'could not read it' : ticks + ' ticks');
+}
+
 check('the floor falls back to a ROOM OF ONE once the patience is spent', floor && netState.solo && netState.screen === 'lobby' && netState.myIdx === 0, JSON.stringify(netState));
 await page.waitForTimeout(800);
 let read = await sceneRead();

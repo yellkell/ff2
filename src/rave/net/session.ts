@@ -661,10 +661,22 @@ const FLOOR_POLL_MS = 200;
  * through a whole wake-up.
  */
 const FLOOR_PATIENCE_TICKS = (() => {
-  const ms = Number(new URLSearchParams(location.search).get('floorPatience'));
+  // Number(null) is ZERO, not NaN. Reading the missing parameter straight
+  // into Number() therefore made the DEFAULT patience one tick — a fifth
+  // of a second — so the club gave up on the relay instantly and opened a
+  // room of one every single time, which is the exact failure the whole
+  // function exists to prevent. The venue check never caught it because
+  // the check passes ?floorPatience= explicitly: the only configuration
+  // that was broken was the one nobody was testing. Ask for the string
+  // first, and only then ask what number it is.
+  const raw = new URLSearchParams(location.search).get('floorPatience');
+  const ms = raw === null || raw === '' ? NaN : Number(raw);
   if (Number.isFinite(ms) && ms >= 0) return Math.max(1, Math.round(ms / FLOOR_POLL_MS));
   return 300;
 })();
+/** Readable by the venue check: the default is the case that shipped broken. */
+export const __floorPatienceTicks = FLOOR_PATIENCE_TICKS;
+
 /** How many ticks between attempts on a relay that refused. */
 const FLOOR_RETRY_TICKS = 15;
 let floorTimer = 0;
