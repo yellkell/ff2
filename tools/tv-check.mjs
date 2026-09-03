@@ -9,11 +9,12 @@
  * /tv relay (a duel's frames, then a sign-off), watches it back through a
  * viewer socket and the /guide endpoint, and asks the bot's invite path
  * to refuse what it should. Then it opens public/stats.html in headless
- * Chromium pointed at that relay and checks the TV tab draws the channel
- * and falls back to the club when the caster leaves; feeds the LAB two
- * fixture tapes and checks the tiles, the heatmaps and the play-by-play
- * render. Finally it round-trips the lobby's QR encoder against the
- * module's own shape rules (finder patterns, a square, an odd size).
+ * Chromium pointed at that relay and checks THE CHANNEL draws the match
+ * and falls back to the club when the caster leaves; walks the FIRE FIGHT
+ * rail onto SPEEDRUN and its difficulty sub-rail, then onto THE LAB, and
+ * feeds it fixture tapes to check the tiles, the heatmaps, the filter and
+ * the play-by-play. Finally it round-trips the lobby's QR encoder against
+ * the module's own shape rules (finder patterns, a square, an odd size).
  */
 
 import { spawn } from 'node:child_process';
@@ -119,7 +120,7 @@ page.on('pageerror', (e) => errors.push(e.message));
 await page.goto(`${base}/stats.html?tv=ws://localhost:${PORT}/tv#tv`, { waitUntil: 'domcontentloaded', timeout: 30000 });
 await page.waitForTimeout(1500);
 const tvOpen = await page.evaluate(() => !document.getElementById('face-tv').classList.contains('hidden'));
-check('#tv opens the TV face', tvOpen);
+check('#tv opens THE CHANNEL', tvOpen);
 const onair = await page.evaluate(() => ({ badge: document.getElementById('tv-onair').textContent, title: document.getElementById('tv-title').textContent, guide: document.getElementById('tv-guide').textContent }));
 check('the TV shows the duel on air', /LIVE/.test(onair.badge) && /PROBE vs ROOK/.test(onair.title), JSON.stringify(onair));
 check('the guide strip lists the channel', /PROBE vs ROOK/.test(onair.guide), onair.guide.slice(0, 80));
@@ -140,14 +141,58 @@ await sleep(900);
 const after = await page.evaluate(() => ({ badge: document.getElementById('tv-onair').textContent, title: document.getElementById('tv-title').textContent }));
 check('when the caster signs off the TV peeps into the club', !/LIVE/.test(after.badge) && /CLUB/i.test(after.title), JSON.stringify(after));
 
+console.log('\n=== stats.html: the FIRE FIGHT rail ===');
+// Back to FIRE FIGHT, and onto SPEEDRUN — which is the board that used to
+// be called GAUNTLET, and the only one with a difficulty rail under it.
+await page.evaluate(() => document.getElementById('tab-ff').click());
+await page.waitForTimeout(400);
+const railLabels = await page.evaluate(() =>
+  [...document.querySelectorAll('#board-rail .rail-tab')].map((b) => b.textContent.trim()),
+);
+check('the rail names SPEEDRUN, not GAUNTLET', railLabels.includes('Speedrun') && !railLabels.some((l) => /gauntlet/i.test(l)), railLabels.join(', '));
+check('THE LAB is a board of the FIRE FIGHT rail', railLabels.includes('The Lab'), railLabels.join(', '));
+
+const tiers = await page.evaluate(() => {
+  const tab = [...document.querySelectorAll('#board-rail .rail-tab')].find((b) => b.textContent.trim() === 'Speedrun');
+  tab.click();
+  return {
+    shown: !document.getElementById('tier-rail').classList.contains('hidden'),
+    labels: [...document.querySelectorAll('#tier-rail .rail-tab')].map((b) => b.textContent.trim()),
+  };
+});
+await page.waitForTimeout(500);
+check('SPEEDRUN opens a difficulty sub-rail', tiers.shown && tiers.labels.join(',') === 'Normal,Hard,Blazing', tiers.labels.join(','));
+const tierSwitch = await page.evaluate(async () => {
+  const tab = [...document.querySelectorAll('#tier-rail .rail-tab')].find((b) => b.textContent.trim() === 'Blazing');
+  tab.click();
+  await new Promise((r) => setTimeout(r, 400));
+  return { title: document.getElementById('ff-title').textContent, note: document.getElementById('ff-note').textContent };
+});
+check('picking a tier retitles the board', /blazing/i.test(tierSwitch.title) && /blazing/i.test(tierSwitch.note), tierSwitch.title);
+const otherRail = await page.evaluate(async () => {
+  const tab = [...document.querySelectorAll('#board-rail .rail-tab')].find((b) => b.textContent.trim() === 'Ranked');
+  tab.click();
+  await new Promise((r) => setTimeout(r, 200));
+  return document.getElementById('tier-rail').classList.contains('hidden');
+});
+check('a board with no tiers hides the sub-rail', otherRail === true);
+
 console.log('\n=== stats.html: THE LAB ===');
-await page.evaluate(() => document.getElementById('tab-lab').click());
-await page.waitForTimeout(300);
+await page.evaluate(() => {
+  const tab = [...document.querySelectorAll('#board-rail .rail-tab')].find((b) => b.textContent.trim() === 'The Lab');
+  tab.click();
+});
+await page.waitForTimeout(400);
+const labShown = await page.evaluate(() => ({
+  lab: !document.getElementById('lab').classList.contains('hidden'),
+  stage: document.getElementById('ff-stage').classList.contains('hidden'),
+}));
+check('THE LAB replaces the board stage inside FIRE FIGHT', labShown.lab && labShown.stage, JSON.stringify(labShown));
 const grid = (fill) => Array.from({ length: 16 * 14 }, (_, i) => fill(i));
 const fixture = (n, win, names) => ({
   id: `fx${n}`,
   data: {
-    v: 1, kind: '1v1', net: true, quick: false, ranked: false, me: { uid: 'u1', name: 'PROBE' }, names, win,
+    v: 1, kind: '1v1', net: true, quick: false, ranked: false, uid: 'u1', name: names[0], names, win,
     score: win ? [3, 1] : [1, 3], dur: 150 + n, at: new Date(Date.now() - n * 3600e3).toISOString(),
     rounds: [{ n: 1, out: 'win', res: 'ko', hp: [40, 0], dur: 30 }, { n: 2, out: 'loss', res: 'time', hp: [20, 45], dur: 60 }],
     thr: { n: 40, l: 15, r: 25, spd: 6.2 }, hits: { dealt: 14, taken: 11, head: 4, ret: 2, dealtL: 5, dealtR: 9, takenHead: 3 }, par: 3,
@@ -161,18 +206,39 @@ const labState = await page.evaluate((bouts) => {
   return {
     tiles: document.getElementById('lab-tiles').textContent,
     boxers: [...document.getElementById('lab-boxer').options].map((o) => o.value),
+    count: document.getElementById('lab-count').textContent,
     tape: document.getElementById('lab-tape').textContent,
+    // A signature per map: how much is painted, and where it sits. Two maps
+    // drawing the same grid would match on all three.
+    //
+    // ALPHA FIRST. getImageData hands back UNMULTIPLIED channels, so the
+    // faint white wash the octagon's floor is filled with — 3% alpha —
+    // reads as red 255 and counts as blazing hot if you only look at the
+    // colour. It fooled an earlier version of this check into passing four
+    // identical maps. A cell the heat actually painted is opaque; the wash
+    // never is.
     heat: [...document.querySelectorAll('canvas.heat')].map((c) => {
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-      let lit = 0;
-      for (let i = 0; i < d.length; i += 16) if (d[i] > 120) lit++;
-      return lit;
+      let lit = 0, sx = 0, sy = 0;
+      for (let p = 0; p < d.length / 4; p++) {
+        if (d[p * 4 + 3] < 200 || d[p * 4] <= 120) continue;
+        lit++;
+        sx += p % c.width;
+        sy += Math.floor(p / c.width);
+      }
+      return { lit, cx: lit ? Math.round(sx / lit) : 0, cy: lit ? Math.round(sy / lit) : 0 };
     }),
   };
 }, [fixture(1, true, ['PROBE', 'ROOK']), fixture(2, false, ['PROBE', 'VULT'])]);
-check('the LAB tiles read the two tapes', /2\s*BOUTS/i.test(labState.tiles.replace(/\s+/g, ' ')) || /BOUTS/.test(labState.tiles), labState.tiles.slice(0, 120));
-check('the boxer picker names everyone on the tapes', labState.boxers.includes('PROBE') && labState.boxers.includes('ROOK'), labState.boxers.join(','));
-check('all four heatmaps are painted', labState.heat.length === 4 && labState.heat.every((n) => n > 50), labState.heat.join(','));
+check('the LAB tiles read the two tapes', /2/.test(labState.tiles) && /TAPES/i.test(labState.tiles), labState.tiles.replace(/\s+/g, ' ').slice(0, 120));
+check('the boxer picker names whoever kept a tape', labState.boxers.includes('PROBE'), labState.boxers.join(','));
+check('the count line reads the filter', /2 of 2 tapes/.test(labState.count), labState.count);
+check('all four heatmaps are painted', labState.heat.length === 4 && labState.heat.every((h) => h.lit > 50), labState.heat.map((h) => h.lit).join(','));
+// The fixture puts the left fist's throws left of centre and the right
+// fist's right of it, so those two maps must not share a centre of mass.
+const sigs = new Set(labState.heat.map((h) => `${h.lit}:${h.cx}:${h.cy}`));
+check('each heatmap draws its own grid, not the same one four times', sigs.size === 4, [...sigs].join(' | '));
+check('the left fist throws left of the right fist', labState.heat[1].cx < labState.heat[2].cx, `L cx ${labState.heat[1].cx} vs R cx ${labState.heat[2].cx}`);
 check('THE TAPE lists both bouts', /ROOK/.test(labState.tape) && /VULT/.test(labState.tape), labState.tape.slice(0, 100));
 const play = await page.evaluate(() => {
   const row = document.querySelector('#lab-tape .tape-row');
@@ -180,6 +246,20 @@ const play = await page.evaluate(() => {
   return document.querySelector('#lab-tape .tape-open')?.textContent ?? '';
 });
 check('a bout opens into its play-by-play and rounds', /KO/.test(play) && /throw|threw/i.test(play), play.replace(/\s+/g, ' ').slice(0, 120));
+
+// The page must read the NEW project, and read boards the way the rules
+// allow — per board, never as a collection group.
+const wiring = await page.evaluate(async () => {
+  const src = await fetch('/stats.html').then((r) => r.text());
+  return {
+    project: /flappy-ff9f6/.test(src),
+    old: /arfi-b68f9|raveraid-bc866/.test(src),
+    boardParent: /parent: `boards\//.test(src),
+    speedrun: /ff2-speedrun-/.test(src),
+  };
+});
+check('the page reads the ff2.web.app project', wiring.project && !wiring.old, JSON.stringify(wiring));
+check('boards are read per board, not as a collection group', wiring.boardParent && wiring.speedrun, JSON.stringify(wiring));
 check('no page errors', errors.length === 0, errors[0]);
 
 /* ── the QR encoder ──────────────────────────────────────────────────── */

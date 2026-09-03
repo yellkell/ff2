@@ -131,7 +131,10 @@ interface ClubPuppet {
   live: boolean;
 }
 
-function nameTagTexture(text: string, colorCss: string): CanvasTexture {
+/** A name over a head, in their own colour. Exported because VOIDSTEP's
+ *  riders wear the same tag as the club's dancers — one place they came
+ *  from, one look. */
+export function nameTagTexture(text: string, colorCss: string): CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = 128;

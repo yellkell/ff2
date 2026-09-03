@@ -29,7 +29,7 @@
  */
 
 import { OCTAGON_HALF_DEPTH, OCTAGON_HALF_WIDTH, TV } from '../config.js';
-import { myName, myUid, reportBout } from './leaderboard.js';
+import { myName, reportBout } from './leaderboard.js';
 
 export type BoutKind = '1v1' | '2v2' | 'ffa' | 'raid' | 'gauntlet' | 'solo';
 export type HitPart = 'head' | 'chest' | 'pelvis' | 'body';
@@ -217,7 +217,9 @@ export const telemetry = {
       net: t.net,
       quick: t.quick,
       ranked: t.ranked,
-      me: { uid: myUid(), name: myName().slice(0, 16) },
+      // `name` is whose tape this is; `names` is everyone who fought. Both
+      // are top-level and both are shape-checked by firestore.rules.
+      name: myName().slice(0, 16),
       names: t.names.length ? t.names : [myName().slice(0, 16)],
       win,
       score: score.slice(0, 4).map((n) => Math.round(n)),

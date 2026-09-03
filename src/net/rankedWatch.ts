@@ -2,7 +2,7 @@
  * Live list of open RANKED rooms for the server browser.
  *
  * Ranked hosting is serverless (see webrtcTransport.ts `hostRanked`): a boxer
- * with no challenger yet creates an OPEN doc in the `rankedRooms` collection,
+ * with no challenger yet creates an OPEN doc in `rooms` (mode 'ranked'),
  * tagged with their name and heartbeated. This watcher subscribes to that
  * collection and reports the fresh, still-open rooms so the browser can list
  * them (each shows "1/2" — the host is in, one seat free).
@@ -25,7 +25,7 @@ const FRESH_MS = 40 * 1000;
 const ROOM_REAP_MS = 10 * 60 * 1000;
 
 export interface RankedRoom {
-  /** The `rankedRooms` doc id — passed to net.joinRanked to claim it. */
+  /** The room's doc id — passed to net.joinRanked to claim it. */
   id: string;
   /** The host's callsign, shown in the list. */
   host: string;
@@ -51,18 +51,23 @@ export function startRankedWatch(onRooms: ListListener): void {
 
   void (async () => {
     try {
-      const { getApp, getApps, initializeApp } = await import('firebase/app');
-      const { collection, deleteDoc, getFirestore, onSnapshot, query, where } = await import('firebase/firestore');
-      const { firebaseConfig } = await import('./firebaseConfig.js');
-      const apps = getApps();
-      const appFb = apps.length ? getApp() : initializeApp(firebaseConfig);
-      const rooms = collection(getFirestore(appFb), 'rankedRooms');
+      // The shared connection (net/firebase.ts) — the same app, sign-in and uid
+      // the boards and the club use. A watch is a READ, and rooms are readable
+      // by anyone signed in, so this needs the sign-in as much as any write.
+      const { cloud } = await import('./firebase.js');
+      const c = await cloud();
+      if (!c) {
+        onRooms([]);
+        return;
+      }
+      const { collection, deleteDoc, onSnapshot, query, where } = c.fs;
+      const rooms = collection(c.db, 'rooms');
 
       // AWAITED so the first snapshot never judges (or reaps) rooms on a raw
       // skewed device clock — see lobbyWatch for the failure this caused.
       await syncServerClock();
       const unsub = onSnapshot(
-        query(rooms, where('open', '==', true)),
+        query(rooms, where('mode', '==', 'ranked'), where('visibility', '==', 'public'), where('open', '==', true)),
         (snap) => {
           const now = serverNow();
           const list: RankedRoom[] = [];
@@ -79,7 +84,10 @@ export function startRankedWatch(onRooms: ListListener): void {
               return;
             }
             if (now - seen <= FRESH_MS) {
-              list.push({ id: docSnap.id, host: typeof data.host === 'string' ? data.host : 'BOXER' });
+              // `host` is the uid the rules check ownership against; the name
+              // the browser shows is `hostName`. They used to be the same
+              // field, which worked only while nothing checked who a host was.
+              list.push({ id: docSnap.id, host: typeof data.hostName === 'string' ? data.hostName : 'BOXER' });
             }
           });
           // Stable order so rows don't jump around between snapshots.

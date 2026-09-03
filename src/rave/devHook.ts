@@ -36,7 +36,7 @@ import {
   setDancerName,
   startBall,
 } from './net/session.js';
-import { clubPoses } from './net/poses.js';
+import { clubPoses, coursePoses } from './net/poses.js';
 
 declare global {
   interface Window {
@@ -67,6 +67,8 @@ declare global {
         setHue: typeof setDancerHue;
         state: typeof net;
         poses: typeof clubPoses;
+        /** VOIDSTEP poses — who is out on the course, in course space. */
+        coursePoses: typeof coursePoses;
       };
       /** THE BALL, drivable headlessly: call one, touch in, call it off. */
       club: { call: typeof callBall; touch: typeof joinBall; cancel: typeof cancelBall; go: typeof startBall };
@@ -126,6 +128,7 @@ export function installRaveDevHook(getWorld: () => World | null): void {
       setHue: setDancerHue,
       state: net,
       poses: clubPoses,
+      coursePoses,
     },
     club: { call: callBall, touch: joinBall, cancel: cancelBall, go: startBall },
     intro: introView,

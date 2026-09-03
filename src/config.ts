@@ -1032,58 +1032,95 @@ export const NET = {
 };
 
 /**
+/**
  * THE CHANNEL and THE TAPE (public/stats.html's TV and LAB tabs): what a
- * bout broadcasts while it runs and what it records when it ends.
+ * bout broadcasts while it runs, and what it records when it ends.
  *
  * A running bout casts a small top-down FRAME to THE ROOM SERVER's /tv
- * relay a few times a second (systems/BroadcastSystem.ts → net/tvCast.ts)
+ * relay a few times a second (systems/BroadcastSystem.ts and net/tvCast.ts)
  * so the web page can show it live; and it keeps a TAPE (net/telemetry.ts)
- * — where you stood, where each hand threw from, where you were when hit,
- * every throw / hit / parry / round as a timed event — posted to the
- * `bouts` collection at the final bell for the stat nerds.
+ * of where you stood, where each hand threw from, where you were when hit,
+ * and every throw, hit, parry and round as a timed event — posted to the
+ * `bouts` collection at the final bell for THE LAB to read back.
  */
 export const TV = {
   /** Frames a second to the transmitter. Five reads as motion on a 2D
-   *  board and costs ~1 KB/s; the relay caps a frame at 12 KiB. */
+   *  board and costs about a kilobyte a second; the relay caps a frame
+   *  at 12 KiB. */
   castHz: 5,
   /** How often the tape bins your standing spot. */
   sampleHz: 4,
-  /** Heatmap bins across the platform footprint (1.72 × 1.5 m → ~11 cm cells). */
+  /** Heatmap bins across the platform footprint: 1.72 by 1.5 m, so the
+   *  cells land near 11 cm square. */
   gridW: 16,
   gridH: 14,
-  /** Most timed events one tape keeps — a 5-round duel is ~150. Past the
-   *  cap the tape keeps counting but stops listing (the grids still fill). */
+  /** Most timed events one tape lists — a five-round duel is about 150.
+   *  Past the cap it keeps counting but stops listing; the grids still fill. */
   eventCap: 600,
   /** Shorter bouts are never posted: a mis-tap, a forfeit at the bell. */
   minBoutSeconds: 15,
-  /** THE ROOM SERVER's home in production (room.mjs answers /tv there;
-   *  the rave relay, the pub and the duel relay share the port). */
-  defaultRelay: 'wss://rave-raid-relay.onrender.com',
 };
 
-/** THE CHANNEL's transmitter: ?tv= > localStorage 'ff-tv-server' > the
- *  room server beside a dev page > the hosted room server's /tv. */
-export function tvServerUrl(): string {
-  const param = new URLSearchParams(location.search).get('tv');
-  if (param) return param;
+/**
+ * THE ROOM SERVER — one hosted process for the whole town.
+ *
+ * FIRE FIGHT 2 runs FOUR relays (server/room.mjs): the duel relay at /ff,
+ * the Iron Balls pub at /pub, the rave's room relay at /rave, and THE
+ * CHANNEL at /tv. They used to be three separate hosts, which meant three
+ * cold starts, three free-tier services to keep warm, and three URLs to
+ * keep in step. They are one process on one port, told apart by path — so
+ * one host serves all of it.
+ *
+ * A free-tier host SLEEPS when idle and takes a while to wake. That is the
+ * strongest practical argument for one service rather than three: everyone
+ * arriving anywhere in the town wakes the same one, so the pub warms the rave
+ * and the rave warms the duel relay. It is also why THE CHANNEL lives here
+ * and not on a host of its own: the club peep reads the rave relay's rooms
+ * out of memory, which only works inside the same process.
+ *
+ * Override per-session with ?server=wss://host (no path — the path is added
+ * per relay) or by setting `ibb-room-server` in localStorage.
+ */
+export const ROOM_SERVER = 'wss://ff2-room.onrender.com';
+
+/** Where the room server lives, without a relay path. */
+export function roomServerHost(): string {
+  const param = new URLSearchParams(location.search).get('server');
+  if (param) return param.replace(/\/(ff|pub|rave|tv)$/, '');
   try {
-    const stored = localStorage.getItem('ff-tv-server');
+    const stored = localStorage.getItem('ibb-room-server');
     if (stored) return stored;
   } catch {
     /* storage may be unavailable */
   }
-  if (location.protocol !== 'https:') return `ws://${location.hostname}:${NET.defaultPort}/tv`;
-  return `${TV.defaultRelay}/tv`;
+  // A plain-http page is a dev serve (vite on this machine, or its LAN IP as
+  // reached from a headset) — talk to the room server running beside it.
+  if (location.protocol !== 'https:') return `ws://${location.hostname}:${NET.defaultPort}`;
+  return ROOM_SERVER;
 }
 
-/** Resolve the relay server URL: ?server= param > localStorage > same host. */
+/** THE CHANNEL's transmitter: the room server's /tv, wherever that is.
+ *  `?tv=` overrides it outright, for pointing one page at another relay. */
+export function tvServerUrl(): string {
+  const param = new URLSearchParams(location.search).get('tv');
+  if (param) return param;
+  return `${roomServerHost()}/tv`;
+}
+
+/** Resolve the DUEL relay's URL (server/index.mjs, mounted at /ff). */
 export function serverUrl(): string {
+  // A `?server=` or a saved `ibb-server` that already names a full URL wins
+  // outright — that is the escape hatch for pointing one client at a relay on
+  // a laptop, and it must not have a path bolted onto it.
   const param = new URLSearchParams(location.search).get('server');
   if (param) return param;
-  const stored = localStorage.getItem('ibb-server');
-  if (stored) return stored;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  return `${proto}://${location.hostname}:${NET.defaultPort}`;
+  try {
+    const stored = localStorage.getItem('ibb-server');
+    if (stored) return stored;
+  } catch {
+    /* storage may be unavailable */
+  }
+  return `${roomServerHost()}/ff`;
 }
 
 /**

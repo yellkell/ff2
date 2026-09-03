@@ -5,30 +5,66 @@
  *
  * Takes Sheriff Cole Ironside's finished article (written by the scheduled
  * Claude task from the ladder brief) and:
- *   1. writes it to Firestore `newspaper/latest` with a bumped edition number
+ *   1. writes it to Firestore `gazette/latest` with a bumped edition number
  *      and a publish timestamp — the lobby reads this and lights the red dot;
- *   2. rolls `newspaper/_snapshot` forward to the CURRENT standings, so the
+ *   2. rolls `gazette/_snapshot` forward to the CURRENT standings, so the
  *      next `ladder-brief.mjs` run diffs against today, not last week.
  *
  * The article JSON must have: headline, subhead, body, mood. Optional:
  * byline (defaults to Sheriff Cole Ironside), dateline (auto-built if absent).
  *
- * Needs a Firestore rule allowing writes to the `newspaper` collection — see
- * docs/gasket-gazette.md.
+ * WRITES AS AN ADMIN, and has to. `gazette/latest` is what every player reads
+ * on the lobby wall, so the security rules make it read-only to clients —
+ * `allow write: if false` — and no web API key will get past that, by design.
+ * The front page is not a thing a player gets to edit.
+ *
+ * So this script authenticates with a SERVICE ACCOUNT, which the Admin SDK
+ * runs under and which the rules do not apply to. Point it at one with either:
+ *
+ *   GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json   (a file), or
+ *   FIREBASE_SERVICE_ACCOUNT='{"type":"service_account",...}'  (the JSON
+ *                                                    itself — for CI secrets)
+ *
+ * Generate one in the Firebase console under Project settings → Service
+ * accounts → Generate new private key. Never commit it.
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { initializeApp } from 'firebase/app';
-import { collection, doc, getDoc, getDocs, getFirestore, limit, orderBy, query, serverTimestamp, setDoc } from 'firebase/firestore';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 
-const firebaseConfig = {
-  apiKey: 'AIzaSyA0NYO_w6uU0Fcc6nuVPitRQaGW3B6518E',
-  authDomain: 'arfi-b68f9.firebaseapp.com',
-  projectId: 'arfi-b68f9',
-  storageBucket: 'arfi-b68f9.firebasestorage.app',
-  messagingSenderId: '188374608574',
-  appId: '1:188374608574:web:108250406138b5a5988cef',
-};
+const PROJECT_ID = 'flappy-ff9f6';
+
+/** Resolve a service account from either supported source, or explain what's
+ *  missing rather than failing with a bare PERMISSION_DENIED at the write. */
+function credentials() {
+  const inline = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (inline) {
+    try {
+      return cert(JSON.parse(inline));
+    } catch {
+      console.error('FIREBASE_SERVICE_ACCOUNT is set but is not valid JSON.');
+      process.exit(1);
+    }
+  }
+  const path = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (path) {
+    try {
+      return cert(JSON.parse(readFileSync(path, 'utf8')));
+    } catch {
+      console.error(`GOOGLE_APPLICATION_CREDENTIALS points at ${path}, which could not be read as JSON.`);
+      process.exit(1);
+    }
+  }
+  console.error(
+    [
+      'No service account. The gazette is admin-written by design — the rules make',
+      'gazette/latest read-only to clients. Set FIREBASE_SERVICE_ACCOUNT (the JSON)',
+      'or GOOGLE_APPLICATION_CREDENTIALS (a path to it). See docs/gasket-gazette.md.',
+    ].join('\n'),
+  );
+  process.exit(1);
+}
 
 const file = process.argv[2];
 if (!file) {
@@ -66,11 +102,13 @@ if (/\b(ELO|XP|players?|gamers?|the game|servers?)\b/i.test(article.body)) {
   process.exit(1);
 }
 
-const db = getFirestore(initializeApp(firebaseConfig));
+const db = getFirestore(
+  getApps().length ? getApps()[0] : initializeApp({ credential: credentials(), projectId: PROJECT_ID }),
+);
 
 // Bump the edition off whatever's currently live.
-const latestSnap = await getDoc(doc(db, 'newspaper', 'latest'));
-const edition = ((latestSnap.exists() && latestSnap.data().edition) || 0) + 1;
+const latestSnap = await db.doc('gazette/latest').get();
+const edition = ((latestSnap.exists && latestSnap.data().edition) || 0) + 1;
 
 const today = new Date();
 // Just the date — the page template already prints "GASKET TERRITORY" in the
@@ -79,7 +117,7 @@ const dateline =
   article.dateline ||
   today.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
 
-await setDoc(doc(db, 'newspaper', 'latest'), {
+await db.doc('gazette/latest').set({
   edition,
   dateline,
   headline: article.headline,
@@ -90,7 +128,7 @@ await setDoc(doc(db, 'newspaper', 'latest'), {
   wanted,
   notice,
   weather,
-  publishedAt: serverTimestamp(),
+  publishedAt: FieldValue.serverTimestamp(),
 });
 
 // Archive a copy to the repo (gazette-archive/) — Firestore only keeps `latest`,
@@ -120,7 +158,7 @@ await setDoc(doc(db, 'newspaper', 'latest'), {
 }
 
 // Roll the snapshot forward to today's standings for tomorrow's diff.
-const playersSnap = await getDocs(query(collection(db, 'players'), orderBy('xp', 'desc'), limit(80)));
+const playersSnap = await db.collection('players').orderBy('xp', 'desc').limit(80).get();
 const standings = playersSnap.docs.map((d) => {
   const x = d.data();
   return {
@@ -133,9 +171,9 @@ const standings = playersSnap.docs.map((d) => {
     ffa: x.ffa ?? 0,
   };
 });
-await setDoc(doc(db, 'newspaper', '_snapshot'), {
+await db.doc('gazette/_snapshot').set({
   edition,
-  capturedAt: serverTimestamp(),
+  capturedAt: FieldValue.serverTimestamp(),
   players: standings,
 });
 

@@ -23,14 +23,17 @@ import {
   stopAmbient,
   stopSet,
 } from '../audio/music.js';
-import { pickRaidTrack, trackById, tracksFor } from '../audio/tracks.js';
+import { pickRaidTrack, trackById, tracksFor, voidstepShelf, type Track } from '../audio/tracks.js';
 import { actOfBeat } from '../choreo/setlist.js';
 import { clubMusicOn } from '../club/social.js';
 import { campaignComplete, match, menuMusic, phraseBeats } from '../game/state.js';
 import { inRoom } from '../net/session.js';
+import { course } from '../course/state.js';
 
 export class MusicSystem extends createSystem({}) {
   private generation = -1;
+  /** This headset's VOIDSTEP order, shuffled once and kept. */
+  private voidShelf: Track[] | null = null;
   private stoppedFor: typeof match.screen | '' = '';
   private warmed = false;
 
@@ -84,6 +87,28 @@ export class MusicSystem extends createSystem({}) {
         match.playing = false;
         this.generation = -1; // the next countdown always re-drops
       }
+      // VOIDSTEP takes the decks off the club the moment you cross. You are
+      // still nominally in the lobby out there (the course only runs from a
+      // club room), so without this the hall's record would follow you
+      // through the door into a place it has nothing to do with.
+      //
+      // The rotation is this headset's own shuffle (voidstepShelf) and it is
+      // built ONCE, on the first crossing: rebuilding it per entry would
+      // reshuffle every time you stepped back through the door, and a shelf
+      // that reorders itself whenever you glance away is not a shelf.
+      // startAmbient no-ops while its rotation is already spinning, so this
+      // survives lap after lap and only changes record when one runs out.
+      if (course.active) {
+        this.voidShelf ??= voidstepShelf();
+        setAmbientMuted(!clubMusicOn());
+        // Quieter than the club's own record. Out here the sound that
+        // MATTERS is the floor counting itself out, and a record is company
+        // rather than the main event — it must never be the loudest thing
+        // between you and a deck about to leave.
+        if (this.voidShelf.length) startAmbient(this.voidShelf, 0.42);
+        return;
+      }
+
       if (screen === 'lobby' || screen === 'tour') {
         // The house sound: the foyer runs its ROTATION (SWAG opens, ECLIPSE
         // follows, and they trade all night); the moment a room has the

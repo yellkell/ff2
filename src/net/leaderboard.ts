@@ -15,7 +15,8 @@
  * the `players` collection (same hackathon-grade shape as `lobbies`).
  */
 
-import { FIREBASE_ENABLED, firebaseConfig } from './firebaseConfig.js';
+import { FIREBASE_ENABLED, cloud, cloudNote, cloudUid, type Cloud } from './firebase.js';
+import { BOARD, boardRows, fetchBoard, postScore, RANKED_TIERS, speedrunBoard, type BoardRow } from './boards.js';
 import { xpForArcade, xpForBot, xpForCampaign, xpForMatch, xpForTraining, xpForTutorial } from '../menu/progression.js';
 import { myPackedLook } from '../avatar/paint.js';
 import { customization, myPackedGear } from '../menu/customization.js';
@@ -87,15 +88,26 @@ type DataTab = 'ranked' | 'xp' | 'training' | 'duo' | 'ffa';
  *  runs never rank at all. */
 export type RunTab = 'gauntlet' | 'raid' | 'goopliath';
 const RUN_TABS: RunTab[] = ['gauntlet', 'raid', 'goopliath'];
-/** Firestore collection per run board (separate collections keep the query a
- *  plain single-field orderBy — no composite index needed). The old
- *  runHardcore / runRaidHardcore collections are retired — hardcore runs now
- *  post here with their `hardcore` flag. */
-const RUN_COLLECTION: Record<RunTab, string> = {
-  gauntlet: 'runGauntlet',
-  raid: 'runRaid',
-  goopliath: 'runGoopliath',
-};
+/**
+ * The board id per run tab. These are `-time` boards, which is not cosmetic:
+ * firestore.rules reads that suffix to decide which way the ratchet turns, so
+ * a run board named without it would let a SLOWER clear overwrite a faster one.
+ *
+ * (Replaces the old `runGauntlet` / `runRaid` / `runGoopliath` collections —
+ * append-only logs of every attempt ever made, plus the retired `runHardcore`
+ * and `runRaidHardcore` pair. See pullRuns for what that shape cost on read.)
+ */
+/**
+ * The board (or boards) behind a run tab. SPEEDRUN is three — one per
+ * ranking difficulty (boards.ts speedrunBoard) — so a tier's best is its
+ * own row rather than one row per player across every tier. The lobby's
+ * board reads all three and shows them as one ranked list wearing their
+ * difficulty symbols; stats.html splits them back out into sub-tabs.
+ */
+function runBoards(tab: RunTab): string[] {
+  if (tab === 'gauntlet') return RANKED_TIERS.map((tier) => speedrunBoard(tier));
+  return [tab === 'raid' ? BOARD.raid : BOARD.goopliath];
+}
 
 /** One entry on a run board: the whole squad (one name for a solo gauntlet,
  *  up to five for a raid), the run's cumulative fight-time clock, and the
@@ -336,30 +348,19 @@ export function setPlayerName(raw: string): void {
   void refreshLeaderboard(true);
 }
 
-type FirestoreMod = typeof import('firebase/firestore');
-interface Handle {
-  fs: FirestoreMod;
-  db: import('firebase/firestore').Firestore;
-}
-
-let handlePromise: Promise<Handle | null> | null = null;
-
-function firestore(): Promise<Handle | null> {
-  if (!FIREBASE_ENABLED) return Promise.resolve(null);
-  handlePromise ??= (async () => {
-    try {
-      const appMod = await import('firebase/app');
-      const fs = await import('firebase/firestore');
-      // The WebRTC transport may have initialised the app already (or will
-      // after us) — share the instance instead of double-initialising.
-      const fbApp = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(firebaseConfig);
-      return { fs, db: fs.getFirestore(fbApp) };
-    } catch {
-      leaderboard.status = 'leaderboard offline';
-      return null;
-    }
-  })();
-  return handlePromise;
+/**
+ * The connection is no longer this module's to open. `net/firebase.ts` holds
+ * the one app, the one anonymous sign-in and the one uid, shared with RAVE
+ * RAID and the club — which is what lets a security rule say "this row is
+ * yours" instead of the old `allow read, write: if true`.
+ *
+ * The shape (`fs` + `db`) is unchanged, so every call site below still reads
+ * the same; what moved is who opens it and under whose name.
+ */
+async function firestore(): Promise<Cloud | null> {
+  const c = await cloud();
+  if (!c) leaderboard.status = cloudNote() || 'leaderboard offline';
+  return c;
 }
 
 // Becomes true once the boot load has settled (doc fetched, created, or the
@@ -389,6 +390,13 @@ export function initLeaderboard(): void {
       loaded = true; // no cloud — local-only play, baseline off the current XP
       return;
     }
+    // ADOPT THE AUTH UID as the player id. The localStorage uuid above is a
+    // placeholder that keeps offline play working and gives the derived
+    // callsign something to chew on; once the cloud is open, the anonymous
+    // uid is who you are. It has to be: the security rules identify a row by
+    // its document name matching request.auth.uid, so a doc keyed by a
+    // client-invented uuid is a doc nobody is allowed to write.
+    profile.id = h.uid;
     try {
       const ref = h.fs.doc(h.db, 'players', profile.id);
       const snap = await h.fs.getDoc(ref);
@@ -566,42 +574,44 @@ export async function refreshLeaderboard(force = false): Promise<void> {
         // points now — per-season, and raw ELO stays hidden for matchmaking.)
         .filter((r) => r.value > 0);
     };
-    // RUN boards: each is its own collection of finished runs, ranked by the
-    // lowest cumulative fight time. A row is a whole squad, so "me" is my
-    // callsign appearing anywhere in the run's name list.
-    // Each run board is pulled in its OWN try so a missing collection or a
-    // rules gap on the run boards degrades THEM alone — the score boards
-    // (which hit the known-open `players` collection) keep working.
+    // RUN boards: fastest clears, one row per player. Each is pulled in its
+    // OWN try so a rules gap or a cold board degrades THOSE alone — the score
+    // boards, which hit the `players` collection, keep working regardless.
     const pullRuns = async (tab: RunTab): Promise<RunRow[]> => {
       try {
-        const col = fs.collection(db, RUN_COLLECTION[tab]);
-        const snap = await fs.getDocs(fs.query(col, fs.orderBy('seconds', 'asc'), fs.limit(LEADERBOARD_FETCH_LIMIT)));
-        const rows = snap.docs.map((d) => {
-          const names = Array.isArray(d.data().names) ? (d.data().names as unknown[]).map(String) : [];
-          return {
-            names,
-            seconds: (d.data().seconds as number) ?? 0,
-            difficulty: ((d.data().difficulty as Difficulty) ?? 'normal') as Difficulty,
-            hardcore: !!d.data().hardcore,
-            me: names.includes(profile.name),
-          };
-        });
-        // Every finished run is stored, but only a squad's BEST time PER FEAT
-        // ranks — the same squad's normal, hard, blazing and hardcore clears
-        // are different achievements, so each keeps its own best row. Rows
-        // arrive fastest-first, so the first per key is its best.
+        // Run boards are now `boards/ff2-<tab>-time/rows/{uid}` — ONE ROW PER
+        // PLAYER, holding their fastest clear, rather than the old append-only
+        // collection holding every attempt anyone ever made.
         //
-        // EASY never ranks. reportRun refuses easy runs at write time, but
-        // rows posted before that guard existed are immortal (the run
-        // collections are append-only by rule), so the board filters them on
-        // read too — belt and braces, one line each side.
-        const seen = new Set<string>();
-        return rows.filter((r) => r.difficulty !== 'easy').filter((r) => {
-          const key = `${r.names.map((n) => n.toLowerCase()).sort().join('|')}|${r.difficulty}|${r.hardcore ? 'hc' : ''}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
+        // The old shape needed all of the dedup work below it on READ: it kept
+        // every run for ever, so the client pulled fifty rows and sifted them
+        // for each squad's best. Now a better run overwrites its own row and
+        // the RULES refuse a write that isn't actually faster, so the board
+        // arrives already deduplicated and already honest. The dedup pass, the
+        // easy-run filter and the immortal-legacy-row apology all go with it.
+        //
+        // DIFFICULTY no longer splits the board. Your row is your fastest
+        // clear whatever you cleared it on, with the difficulty carried in
+        // `meta` for the row symbols. Nothing is lost by that: which
+        // difficulties you have BEATEN is a separate fact, banked on your
+        // profile by reportRunClear() as the clear-badge tier, and that is
+        // what the badge on your card has always read from.
+        const ids = runBoards(tab);
+        await Promise.all(ids.map((id) => fetchBoard(id, force)));
+        // SPEEDRUN arrives as three boards; the lobby wants one ranked list,
+        // so they are merged and re-sorted by the clock. Each board is
+        // already one row per player, so nothing needs deduplicating.
+        return ids
+          .flatMap((id) => boardRows(id))
+          .sort((a, b) => a.value - b.value)
+          .slice(0, LEADERBOARD_FETCH_LIMIT)
+          .map((r: BoardRow) => ({
+            names: Array.isArray(r.meta.names) ? (r.meta.names as unknown[]).map(String) : [r.name],
+            seconds: r.value,
+            difficulty: ((r.meta.difficulty as Difficulty) ?? 'normal') as Difficulty,
+            hardcore: !!r.meta.hardcore,
+            me: r.isMe,
+          }));
       } catch {
         return leaderboard[tab]; // keep whatever we last had
       }
@@ -632,36 +642,45 @@ export async function refreshLeaderboard(force = false): Promise<void> {
 }
 
 /**
- * Post a finished RUN to its board: one entry per completed run, ranked by the
- * lowest cumulative fight-time clock. `names` is the whole squad (one name for
- * a solo gauntlet/hardcore, up to four for a raid — the raid HOST posts it once
- * for the group so the squad ranks together on their run). No-op offline.
+ * Post a finished RUN to its board, ranked by the lowest cumulative fight-time
+ * clock. `names` is the whole squad (one name for a solo gauntlet, up to five
+ * for a raid) and rides along as row detail — a run-time board is about who
+ * you did it with as much as how fast.
+ *
+ * EVERY MEMBER POSTS, not just the host. Under the old append-only shape one
+ * document was the squad's shared row, so the host filed it for the group and
+ * anyone who ran with a host on a bad connection got nothing. A board of
+ * personal bests has no such thing as a shared row: the run goes on YOUR row,
+ * under your own uid, which is also the only row the rules will let you write.
+ *
+ * The write is unconditional — the RULES hold the ratchet, refusing anything
+ * that doesn't beat your current best, so a slower run is quietly declined
+ * rather than checked for first. No-op offline.
  */
 export function reportRun(tab: RunTab, seconds: number, names: string[], difficulty: Difficulty, hardcore: boolean): void {
   if (difficulty === 'easy') return; // easy runs play, but never rank
   const clean = names.map((n) => String(n).slice(0, 12)).filter(Boolean).slice(0, 5);
   if (!clean.length) return;
   void (async () => {
-    const h = await firestore();
-    if (!h) return;
-    try {
-      await h.fs.addDoc(h.fs.collection(h.db, RUN_COLLECTION[tab]), {
-        names: clean,
-        seconds: Math.max(0, Math.round(seconds * 10) / 10),
-        difficulty,
-        hardcore,
-        at: h.fs.serverTimestamp(),
-      });
-      await refreshLeaderboard(true);
-    } catch {
-      /* unreachable — the board just won't carry this run */
-    }
+    // SPEEDRUN posts to its DIFFICULTY's board; raid and goopliath to their one.
+    const board = tab === 'gauntlet' ? speedrunBoard(difficulty) : runBoards(tab)[0];
+    const landed = await postScore(board, Math.max(0, Math.round(seconds * 10) / 10), profile.name, {
+      names: clean,
+      difficulty,
+      hardcore,
+    });
+    // Only re-read the board when something actually changed on it. A run
+    // that didn't beat your best leaves the board exactly as it was.
+    if (landed) await refreshLeaderboard(true);
   })();
 }
 
-/** My anonymous id — the doc id of my row, and THE TAPE's author stamp. */
+/** My anonymous id. The CLOUD's uid once it has opened — that is the one
+ *  the rules check and the one every board row is named after — falling
+ *  back to the local id offline, so a tape written before sign-in still
+ *  carries something stable. */
 export function myUid(): string {
-  return localId();
+  return cloudUid() || localId();
 }
 
 /**
@@ -674,7 +693,10 @@ export function reportBout(doc: Record<string, unknown>): void {
     const h = await firestore();
     if (!h) return;
     try {
-      await h.fs.addDoc(h.fs.collection(h.db, 'bouts'), { ...doc, at: h.fs.serverTimestamp() });
+      // `uid` and `at` are the rules' business, not the caller's: the tape
+      // must be stamped with the uid that is actually signed in, and `at`
+      // must be a NUMBER (firestore.rules stamped()), not a server timestamp.
+      await h.fs.addDoc(h.fs.collection(h.db, 'bouts'), { ...doc, uid: h.uid, at: Date.now() });
     } catch {
       /* unreachable — this tape stays in the headset */
     }
@@ -744,7 +766,11 @@ function writeMine(fields: Record<string, unknown>): void {
     try {
       await h.fs.setDoc(
         h.fs.doc(h.db, 'players', profile.id),
-        { name: profile.name, updatedAt: h.fs.serverTimestamp(), ...fields },
+        // `at` is a plain client clock and the rules insist on it — a
+        // serverTimestamp() arrives as a sentinel, not a number, so it cannot
+        // satisfy a type check written at the door. `updatedAt` stays as the
+        // trustworthy one for anything that actually needs ordering.
+        { name: profile.name, at: Date.now(), updatedAt: h.fs.serverTimestamp(), ...fields },
         { merge: true },
       );
     } catch {
@@ -883,7 +909,10 @@ export async function sendReport(text: string): Promise<void> {
     await h.fs.addDoc(h.fs.collection(h.db, 'reports'), {
       text: trimmed,
       from: profile.name,
-      uid: profile.id,
+      // The rules check this against request.auth.uid, so it must be the
+      // signed-in uid — profile.id still holds the local placeholder until
+      // the cloud has finished opening.
+      uid: h.uid,
       at: h.fs.serverTimestamp(),
     });
   } catch {
@@ -909,7 +938,7 @@ export async function sendPaintReport(about: string, look: string): Promise<void
       about: name,
       look: look.slice(0, 1024),
       from: profile.name,
-      uid: profile.id,
+      uid: h.uid,
       at: h.fs.serverTimestamp(),
     });
   } catch {

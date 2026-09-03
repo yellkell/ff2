@@ -1,1089 +1,2638 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>FIRE FIGHT — LEADERBOARDS</title>
-<!-- Relative: public/ is copied verbatim (Vite only rewrites its rollup
-     inputs), so a rooted href 404s when served from a subpath. -->
-<link rel="icon" href="firefightfavicon.png">
-<style>
-  /* ── FIRE FIGHT industrial: gunmetal plate, hazard amber, riveted glass.
-     The RAVE RAID face flips the accent to void neon — separate but equal.
-     THE CHANNEL burns on-air red; THE LAB reads in cool steel. ── */
-  :root {
-    --bg: #0d0f12;
-    --plate: #16191e;
-    --plate-hi: #1d2127;
-    --line: #2a2f37;
-    --text: #e8e4da;
-    --dim: #8b8f98;
-    --accent: #ffb02e;          /* hazard amber */
-    --accent-dim: #7a5516;
-    --me: #ffb02e;
-    --hc: #ff4b3e;
-    --ember: #ff7a18;
-    --cool: #4fb7ff;
-    --venom: #57e389;
-    --violet: #b06bff;
-  }
-  .rr {
-    --accent: #ff3df0;          /* void magenta */
-    --accent-dim: #6d1a66;
-    --me: #3dfff0;
-  }
-  .tv { --accent: #ff4b3e; --accent-dim: #6d1f1a; }
-  .lab { --accent: #4fb7ff; --accent-dim: #1f4a6d; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    min-height: 100vh;
-    background-image:
-      repeating-linear-gradient(45deg, transparent 0 34px, rgba(255,255,255,.012) 34px 36px),
-      repeating-linear-gradient(-45deg, transparent 0 34px, rgba(255,255,255,.012) 34px 36px);
-  }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FIRE FIGHT 2 — WORLDWIDE LEADERBOARD</title>
+    <meta
+      name="description"
+      content="Every board in FIRE FIGHT 2 — the ladder, the speedruns, the raids, the rave charts, live television from the arena, and the tape room."
+    />
+    <meta name="theme-color" content="#0a0810" />
+    <meta property="og:title" content="FIRE FIGHT 2 — WORLDWIDE LEADERBOARD" />
+    <meta property="og:description" content="Every board, the live channel, and the tape room." />
+    <meta property="og:type" content="website" />
+    <!-- Relative: public/ is copied verbatim (Vite only rewrites references in
+         its rollup inputs), so a rooted href 404s when served from a subpath. -->
+    <link rel="icon" href="firefightfavicon.png" />
 
-  header { text-align: center; margin-bottom: 18px; }
-  .mark {
-    font-size: clamp(28px, 6vw, 44px); font-weight: 900; letter-spacing: .14em;
-    color: var(--text); text-transform: uppercase; line-height: 1;
-  }
-  .mark span { color: var(--accent); }
-  .sub { color: var(--dim); letter-spacing: .3em; font-size: 11px; text-transform: uppercase; margin-top: 8px; }
+    <!-- Rajdhani — the house face, the same one the headset menus wear.
+         The Arial Black fallback keeps a first paint from being blank. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
 
-  /* Four equal doors — the hazard strip belongs to whichever is live. */
-  .games { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 22px 0 14px; }
-  @media (max-width: 640px) { .games { grid-template-columns: 1fr 1fr; } }
-  .game-tab {
-    appearance: none; border: 1px solid var(--line); background: var(--plate);
-    color: var(--dim); font: inherit; font-weight: 800; letter-spacing: .18em;
-    text-transform: uppercase; font-size: clamp(12px, 2.2vw, 15px);
-    padding: 16px 8px 13px; cursor: pointer; position: relative; border-radius: 4px;
-  }
-  .game-tab::after {
-    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
-    border-radius: 0 0 4px 4px; background: transparent;
-  }
-  .game-tab.on { color: var(--text); background: var(--plate-hi); border-color: var(--accent-dim); }
-  .game-tab.on::after {
-    background: repeating-linear-gradient(-45deg, var(--accent) 0 10px, #16191e 10px 20px);
-  }
-  #tab-rr.on { border-color: #6d1a66; }
-  #tab-rr.on::after { background: repeating-linear-gradient(-45deg, #ff3df0 0 10px, #16191e 10px 20px); }
-  #tab-tv.on { border-color: #6d1f1a; }
-  #tab-tv.on::after { background: repeating-linear-gradient(-45deg, #ff4b3e 0 10px, #16191e 10px 20px); }
-  #tab-lab.on { border-color: #1f4a6d; }
-  #tab-lab.on::after { background: repeating-linear-gradient(-45deg, #4fb7ff 0 10px, #16191e 10px 20px); }
+    <style>
+      /* ═══════════════════════════════════════════════════════════════════
+         FIRE FIGHT 2 — THE WORLDWIDE LEADERBOARD, ON A SCREEN
 
-  .boards { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
-  .board-tab {
-    appearance: none; border: 1px solid var(--line); background: transparent; color: var(--dim);
-    font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-    padding: 7px 12px; cursor: pointer; border-radius: 3px;
-  }
-  .board-tab.on { color: #0d0f12; background: var(--accent); border-color: var(--accent); }
+         The surface language is RAVE RAID's stats page, whole: quiet
+         near-black glass, white-alpha hairlines, corner brackets, and ONE
+         accent that only ever marks what matters. The motion is ported
+         constant-for-constant from the panel kit, not eyeballed —
 
-  .pickers { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; align-items: center; }
-  select {
-    background: var(--plate-hi); color: var(--text); border: 1px solid var(--line);
-    font: inherit; font-size: 13px; letter-spacing: .06em; padding: 8px 10px; border-radius: 3px;
-  }
-  .seg { display: flex; gap: 4px; flex-wrap: wrap; }
-  .seg button {
-    appearance: none; border: 1px solid var(--line); background: transparent; color: var(--dim);
-    font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .1em;
-    padding: 7px 10px; cursor: pointer; border-radius: 3px;
-  }
-  .seg button.on { color: #0d0f12; background: var(--accent); border-color: var(--accent); }
+             hover in            0.10s   HOVER_IN_S
+             hover out           0.18s   HOVER_OUT_S
+             press flash         0.15s   FLASH_S,  easeOutCubic decay
+             panel open          0.26s   OPEN_S,   easeOutQuint scale
+             rail marker         τ 0.09s MenuSystem.update()
 
-  .panel {
-    background: var(--plate); border: 1px solid var(--line); border-radius: 6px;
-    padding: 4px 0; overflow: hidden; position: relative;
-  }
-  .panel::before {  /* riveted corners */
-    content: ""; position: absolute; inset: 6px; pointer-events: none;
-    background:
-      radial-gradient(circle 2.5px, #3a4048 98%, transparent) 0 0 / 6px 6px no-repeat,
-      radial-gradient(circle 2.5px, #3a4048 98%, transparent) 100% 0 / 6px 6px no-repeat,
-      radial-gradient(circle 2.5px, #3a4048 98%, transparent) 0 100% / 6px 6px no-repeat,
-      radial-gradient(circle 2.5px, #3a4048 98%, transparent) 100% 100% / 6px 6px no-repeat;
-  }
-  .board-title {
-    padding: 12px 18px 6px; font-size: 12px; font-weight: 800; letter-spacing: .22em;
-    text-transform: uppercase; color: var(--accent);
-  }
-  .board-note { padding: 0 18px 8px; font-size: 12px; color: var(--dim); }
+         What changes per face is the ACCENT and the pools on the floor.
+         FIRE FIGHT burns hazard amber, RAVE RAID keeps its void magenta,
+         and THE CHANNEL runs on-air red. Nothing else moves.
+         ═══════════════════════════════════════════════════════════════════ */
 
-  .scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th {
-    text-align: left; font-size: 10px; letter-spacing: .18em; text-transform: uppercase;
-    color: var(--dim); font-weight: 700; padding: 8px 10px; border-bottom: 1px solid var(--line);
-  }
-  td { padding: 9px 10px; border-bottom: 1px solid rgba(42,47,55,.55); white-space: nowrap; }
-  td.names { white-space: normal; }
-  tr:last-child td { border-bottom: 0; }
-  .rank { color: var(--dim); width: 44px; font-variant-numeric: tabular-nums; }
-  tr.top1 .rank { color: #ffd700; font-weight: 800; }
-  tr.top2 .rank { color: #c9ced6; font-weight: 800; }
-  tr.top3 .rank { color: #cd7f32; font-weight: 800; }
-  .val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); padding-right: 18px; }
-  .badge {
-    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: .1em;
-    padding: 2px 6px; border-radius: 2px; margin-left: 6px; vertical-align: 1px;
-  }
-  .b-hard    { background: #4a3208; color: #ffb02e; }
-  .b-blazing { background: #4a1508; color: #ff6a3d; }
-  .b-hc      { background: #3d0e0a; color: var(--hc); }
-  /* THE PAINT: a boxer's most-used paint colours ride beside their name. */
-  .chip {
-    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-    margin-left: 5px; vertical-align: -1px; border: 1px solid rgba(255,255,255,.25);
-  }
-  .grade { font-weight: 900; width: 40px; text-align: center; }
-  .g-S { color: #ffd700; } .g-A { color: #3dfff0; } .g-B { color: #7ee081; }
-  .g-C { color: #c9ced6; } .g-F { color: #ff4b3e; }
-  .state { padding: 26px 18px; color: var(--dim); font-size: 13px; letter-spacing: .08em; }
-  .hidden { display: none; }
-  footer { text-align: center; color: #565b64; font-size: 11px; letter-spacing: .12em; margin-top: 26px; text-transform: uppercase; }
+      :root {
+        color-scheme: dark;
 
-  /* ── THE CHANNEL ── */
-  .tv-bar {
-    display: flex; align-items: center; gap: 12px; padding: 10px 14px 8px;
-    font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim);
-  }
-  .onair {
-    font-weight: 900; padding: 3px 8px; border-radius: 2px; background: #2a2f37; color: var(--dim); letter-spacing: .18em;
-  }
-  .onair.live { background: var(--hc); color: #fff; animation: blink 1.6s steps(2) infinite; }
-  @keyframes blink { 50% { opacity: .55; } }
-  #tv-title { color: var(--text); font-weight: 800; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  #tv-canvas { display: block; width: 100%; aspect-ratio: 16 / 9; background: #07080a; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-  .tv-guide { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 4px; }
-  .tv-guide button {
-    appearance: none; border: 1px solid var(--line); background: transparent; color: var(--dim);
-    font: inherit; font-size: 12px; font-weight: 700; letter-spacing: .08em; padding: 6px 10px; cursor: pointer; border-radius: 3px;
-    display: inline-flex; align-items: center; gap: 7px;
-  }
-  .tv-guide button.on { color: var(--text); border-color: var(--accent); }
-  .tv-guide .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hc); box-shadow: 0 0 8px var(--hc); }
-  .tv-guide .dot.club { background: #ff3df0; box-shadow: 0 0 8px #ff3df0; }
-  .tv-guide .dot.solo { background: var(--dim); box-shadow: none; }
+        /* Surfaces */
+        --panel: rgba(10, 9, 14, 0.92);
+        --well: rgba(0, 0, 0, 0.32);
+        --rail-well: rgba(0, 0, 0, 0.26);
+        --plate: rgba(255, 255, 255, 0.045);
+        --plate-hover: rgba(255, 255, 255, 0.09);
+        /* Hairlines */
+        --line: rgba(255, 255, 255, 0.14);
+        --line-hover: rgba(255, 255, 255, 0.34);
+        --line-faint: rgba(255, 255, 255, 0.1);
+        /* Text */
+        --text: #ffffff;
+        --dim: rgba(243, 240, 234, 0.74);
+        --faint: rgba(243, 240, 234, 0.52);
+        --disabled: rgba(243, 240, 234, 0.36);
+        /* The accent — identity, selection, primacy. Nothing else.
+           FIRE FIGHT's hazard amber is the page default. */
+        --accent: #ffb02e;
+        --accent-dim: rgba(255, 176, 46, 0.55);
+        --accent-faint: rgba(255, 176, 46, 0.1);
+        --accent-edge: rgba(255, 176, 46, 0.9);
+        --on-accent: #1a1003;
+        --cta-a: #ffc258;
+        --cta-b: #e08a10;
+        /* Semantic roles (text + dots, never chrome) */
+        --positive: #2be28a;
+        --info: #6fc8ff;
+        --warn: #ffb454;
+        --danger: #ff5266;
+        /* The fire palette (config.ts PALETTE) — your fire, their fire. */
+        --ember: #ff7a18;
+        --cool: #4fb7ff;
+        --venom: #57e389;
+        --violet: #b06bff;
+        /* The letters (RAVE RAID's GRADE.colors) */
+        --g-s: #ffd75e;
+        --g-a: #b9ffc4;
+        --g-b: #4fb7ff;
+        --g-c: #b06bff;
+        --g-f: #ff5040;
+        /* The floor's pools, per face. */
+        --pool-1: rgba(255, 122, 24, 0.18);
+        --pool-2: rgba(255, 176, 46, 0.14);
+        --pool-3: rgba(232, 53, 42, 0.12);
 
-  /* ── THE LAB ── */
-  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 0 0 14px; }
-  .tile { background: var(--plate); border: 1px solid var(--line); border-radius: 5px; padding: 12px 12px 10px; }
-  .tile b { display: block; font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--text); letter-spacing: .02em; }
-  .tile span { display: block; font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); margin-top: 4px; }
-  .tile small { display: block; font-size: 11px; color: var(--accent); margin-top: 3px; }
-  .maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 0 0 14px; }
-  .maps figure { margin: 0; background: var(--plate); border: 1px solid var(--line); border-radius: 5px; padding: 10px; }
-  .maps canvas { display: block; width: 100%; aspect-ratio: 16 / 15; }
-  .maps figcaption { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); font-weight: 800; margin-top: 8px; }
-  .maps figcaption small { display: block; color: var(--dim); font-weight: 500; letter-spacing: .06em; text-transform: none; margin-top: 2px; }
-  .hands { padding: 4px 18px 14px; display: grid; gap: 10px; }
-  .bar { position: relative; height: 22px; background: #0d0f12; border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
-  .bar i { position: absolute; top: 0; bottom: 0; }
-  .bar i.l { left: 0; background: var(--ember); }
-  .bar i.r { right: 0; background: var(--cool); }
-  .bar em { position: absolute; inset: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 8px; font: 800 11px/1 "Segoe UI", system-ui, sans-serif; letter-spacing: .1em; color: #fff; font-style: normal; text-shadow: 0 1px 2px #000; }
-  .bar-label { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
-  .tape-row { display: grid; grid-template-columns: 74px 56px 1fr 62px 52px 60px; gap: 8px; align-items: center; padding: 9px 18px; border-bottom: 1px solid rgba(42,47,55,.55); cursor: pointer; font-size: 13px; }
-  .tape-row:hover { background: var(--plate-hi); }
-  .tape-row .who { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tape-row .who b { color: var(--text); }
-  .tape-row .w { color: var(--venom); font-weight: 800; } .tape-row .l { color: var(--hc); font-weight: 800; }
-  .tape-row .k { font-size: 10px; letter-spacing: .12em; color: var(--accent); font-weight: 800; }
-  .tape-row .d, .tape-row .t { color: var(--dim); font-variant-numeric: tabular-nums; font-size: 12px; }
-  .tape-open { padding: 6px 18px 16px; border-bottom: 1px solid var(--line); background: #111418; }
-  .tape-open canvas { display: block; width: 100%; height: 90px; background: #0a0c0f; border: 1px solid var(--line); border-radius: 3px; margin: 8px 0; }
-  .tape-open .pbp { max-height: 240px; overflow: auto; font: 12px/1.7 ui-monospace, Consolas, monospace; color: var(--dim); }
-  .tape-open .pbp b { color: var(--text); font-weight: 600; }
-  .tape-open .pbp .hit { color: var(--ember); } .tape-open .pbp .tk { color: var(--hc); } .tape-open .pbp .rd { color: var(--accent); font-weight: 800; } .tape-open .pbp .pa { color: var(--cool); }
-  .tape-open table { font-size: 12px; margin-top: 6px; }
-  @media (max-width: 560px) { .tape-row { grid-template-columns: 62px 1fr 50px 48px; } .tape-row .k, .tape-row .t { display: none; } }
-</style>
-</head>
-<body>
-<div class="wrap" id="page">
-  <header>
-    <div class="mark">FIRE <span>FIGHT</span></div>
-    <div class="sub" id="sub">World Leaderboards</div>
-  </header>
+        --font: 'Rajdhani', 'Arial Black', system-ui, sans-serif;
+      }
 
-  <div class="games">
-    <button class="game-tab on" id="tab-ff">🔥 Fire Fight</button>
-    <button class="game-tab" id="tab-rr">⚡ Rave Raid</button>
-    <button class="game-tab" id="tab-tv">📺 The Channel</button>
-    <button class="game-tab" id="tab-lab">🧪 The Lab</button>
-  </div>
+      /* RAVE RAID keeps its own neon — separate but equal, as the boards are. */
+      body[data-face='rr'] {
+        --accent: #ff2ad5;
+        --accent-dim: rgba(255, 42, 213, 0.55);
+        --accent-faint: rgba(255, 42, 213, 0.1);
+        --accent-edge: rgba(255, 42, 213, 0.9);
+        --on-accent: #16040f;
+        --cta-a: #ff3fdb;
+        --cta-b: #df19b5;
+        --pool-1: rgba(255, 42, 213, 0.18);
+        --pool-2: rgba(54, 224, 90, 0.16);
+        --pool-3: rgba(79, 183, 255, 0.12);
+      }
+      /* THE CHANNEL burns on-air red for as long as you are watching it. */
+      body[data-face='tv'] {
+        --accent: #ff4b3e;
+        --accent-dim: rgba(255, 75, 62, 0.55);
+        --accent-faint: rgba(255, 75, 62, 0.1);
+        --accent-edge: rgba(255, 75, 62, 0.9);
+        --on-accent: #1a0503;
+        --cta-a: #ff6152;
+        --cta-b: #cc2418;
+        --pool-1: rgba(255, 75, 62, 0.2);
+        --pool-2: rgba(255, 122, 24, 0.12);
+        --pool-3: rgba(176, 107, 255, 0.1);
+      }
 
-  <!-- ══ FIRE FIGHT face ══ -->
-  <section id="face-ff">
-    <div class="boards" id="ff-boards"></div>
-    <div class="panel">
-      <div class="board-title" id="ff-title">RANKED</div>
-      <div class="board-note" id="ff-note"></div>
-      <div class="scroll"><table id="ff-table"></table></div>
-      <div class="state hidden" id="ff-state"></div>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100%;
+        padding: clamp(16px, 3vw, 40px) clamp(12px, 3vw, 40px) 0;
+        font-family: var(--font);
+        font-weight: 500;
+        color: var(--text);
+        background: #0a0810;
+        overflow-x: hidden;
+      }
+
+      /* The room behind the glass — pools sweeping the way the landing
+         floor does, in whichever fire the live face burns. */
+      .floor {
+        position: fixed;
+        inset: -20%;
+        z-index: -2;
+        pointer-events: none;
+        background:
+          radial-gradient(circle at 30% 20%, var(--pool-1), transparent 30rem),
+          radial-gradient(circle at 75% 70%, var(--pool-2), transparent 26rem),
+          radial-gradient(circle at 60% 90%, var(--pool-3), transparent 24rem);
+        filter: blur(10px);
+        animation: sweep 41s linear infinite;
+        transition: background 0.4s linear;
+      }
+      .floor::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(circle at 70% 30%, rgba(176, 107, 255, 0.12), transparent 22rem),
+          radial-gradient(circle at 25% 80%, rgba(255, 176, 0, 0.1), transparent 20rem);
+        animation: sweep 67s linear infinite reverse;
+      }
+      @keyframes sweep {
+        from { transform: rotate(0deg) scale(1.05); }
+        to { transform: rotate(360deg) scale(1.05); }
+      }
+      body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -3;
+        background: linear-gradient(135deg, #07060a 0%, #150d08 52%, #0a0710 100%);
+      }
+
+      .shell {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding-bottom: clamp(28px, 5vw, 56px);
+      }
+
+      /* ── THE PANEL ──────────────────────────────────────────────────────
+         Base glass, a top sheen, a hairline frame, and the corner brackets:
+         top-left and bottom-right arms, 24px, 2.5px, accentDim — exactly the
+         two the canvas painter strokes. */
+      .panel {
+        position: relative;
+        border-radius: 30px;
+        background: var(--panel);
+        border: 2px solid var(--line);
+        padding: clamp(18px, 2.4vw, 30px);
+        overflow: hidden;
+        isolation: isolate;
+      }
+      .panel::before,
+      .panel::after {
+        content: '';
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        border: 2.5px solid var(--accent-dim);
+        pointer-events: none;
+        z-index: 3;
+      }
+      .panel::before {
+        top: 12px;
+        left: 12px;
+        border-right-color: transparent;
+        border-bottom-color: transparent;
+      }
+      .panel::after {
+        right: 12px;
+        bottom: 12px;
+        border-left-color: transparent;
+        border-top-color: transparent;
+      }
+      .panel > .sheen {
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 180px;
+        background: linear-gradient(rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+        pointer-events: none;
+        z-index: 0;
+      }
+      .panel > * {
+        position: relative;
+        z-index: 1;
+      }
+
+      /* THE UNDER-HALO — the panel's presence in a dark room. It holds
+         still: on a flat silent screen the headset's beat envelope reads as
+         a strobe, so 0.16 is that animation's own time-average instead. */
+      .halo {
+        position: absolute;
+        left: -21%;
+        top: -28%;
+        width: 142%;
+        height: 156%;
+        border-radius: 26%;
+        background: var(--accent);
+        filter: blur(46px);
+        opacity: 0.16;
+        mix-blend-mode: plus-lighter;
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      /* PANEL OPEN — 260ms. Scale 0.96 → 1 on easeOutQuint, opacity on
+         easeOutCubic, sampled every 10% because the two run on different
+         clocks. */
+      @keyframes panel-open {
+        0% { opacity: 0; transform: scale(0.96); }
+        10% { opacity: 0.37; transform: scale(0.976); }
+        20% { opacity: 0.636; transform: scale(0.987); }
+        30% { opacity: 0.813; transform: scale(0.993); }
+        40% { opacity: 0.921; transform: scale(0.997); }
+        50% { opacity: 0.977; transform: scale(0.999); }
+        60% { opacity: 0.997; transform: scale(1); }
+        100% { opacity: 1; transform: scale(1); }
+      }
+      .opening {
+        animation: panel-open 0.26s linear both;
+      }
+
+      /* ── THE HEADER ───────────────────────────────────────────────────── */
+      header.top {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: clamp(12px, 2vw, 24px);
+        padding: 4px 6px clamp(14px, 2vw, 20px);
+      }
+      .wordmark {
+        margin: 0;
+        line-height: 0.9;
+        font-weight: 700;
+        font-size: clamp(30px, 5.4vw, 52px);
+        letter-spacing: 0.1em;
+        text-indent: 0.1em;
+        user-select: none;
+      }
+      /* The one glowing text on the board, in the landing page's
+         chromatic split. */
+      .wordmark .a {
+        color: #ffe9c4;
+        text-shadow:
+          -2px 0 0 rgba(232, 53, 42, 0.5),
+          2px 0 0 rgba(79, 183, 255, 0.42),
+          0 0 18px rgba(255, 122, 24, 0.75);
+      }
+      .wordmark .b {
+        color: #ffd9a8;
+        text-shadow:
+          -2px 0 0 rgba(255, 176, 46, 0.45),
+          2px 0 0 rgba(176, 107, 255, 0.45),
+          0 0 18px rgba(255, 176, 46, 0.85);
+      }
+      .kicker {
+        font-weight: 600;
+        font-size: clamp(13px, 1.5vw, 17px);
+        letter-spacing: 0.34em;
+        text-indent: 0.34em;
+        color: var(--dim);
+        margin: 6px 0 0;
+      }
+      .top-right {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      /* The status chip: a pill, a hairline, a dot that glows only when it
+         has something to say. */
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        height: 44px;
+        padding: 0 22px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 2px solid var(--line-faint);
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: 0.14em;
+        color: var(--dim);
+        white-space: nowrap;
+      }
+      .chip .dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--faint);
+        flex: none;
+      }
+      .chip[data-tone='live'] .dot {
+        background: var(--positive);
+        box-shadow: 0 0 8px var(--positive);
+      }
+      .chip[data-tone='warn'] .dot {
+        background: var(--warn);
+        box-shadow: 0 0 8px var(--warn);
+      }
+      .chip[data-tone='danger'] .dot {
+        background: var(--danger);
+        box-shadow: 0 0 8px var(--danger);
+      }
+      .chip[data-tone='onair'] .dot {
+        background: var(--danger);
+        box-shadow: 0 0 10px var(--danger);
+        animation: blink 1.6s steps(2) infinite;
+      }
+      @keyframes blink {
+        50% { opacity: 0.35; }
+      }
+
+      /* ── PLATES ─────────────────────────────────────────────────────────
+         The neutral button: fill 0.045 → 0.09, border 0.10 → 0.30, and the
+         edge tick — the accent's whole job on a resting screen. */
+      .plate {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-height: 44px;
+        padding: 10px 22px 10px 26px;
+        border-radius: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.045);
+        color: var(--text);
+        font-family: var(--font);
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        cursor: pointer;
+        overflow: hidden;
+        transition:
+          background-color 0.18s linear,
+          border-color 0.18s linear,
+          box-shadow 0.18s linear,
+          color 0.18s linear;
+      }
+      .plate::before {
+        content: '';
+        position: absolute;
+        left: 7px;
+        top: 12px;
+        bottom: 12px;
+        width: 5px;
+        border-radius: 2.5px;
+        background: var(--accent);
+        opacity: 0;
+        transition: opacity 0.18s linear;
+      }
+      .plate:hover,
+      .plate:focus-visible {
+        background: var(--plate-hover);
+        border-color: var(--line-hover);
+        transition-duration: 0.1s;
+      }
+      .plate:hover::before,
+      .plate:focus-visible::before {
+        opacity: 1;
+        transition-duration: 0.1s;
+      }
+      .plate:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-faint);
+      }
+      .plate[aria-pressed='true'],
+      .plate.selected {
+        background: var(--accent-faint);
+        border-color: var(--accent-edge);
+      }
+      .plate[aria-pressed='true']::before,
+      .plate.selected::before {
+        opacity: 1;
+      }
+      .plate[disabled] {
+        cursor: default;
+        color: var(--disabled);
+        background: rgba(255, 255, 255, 0.02);
+        border-color: rgba(255, 255, 255, 0.05);
+      }
+      .plate[disabled]::before {
+        opacity: 0;
+      }
+      .plate.primary {
+        background: linear-gradient(var(--cta-a), var(--cta-b));
+        border-color: transparent;
+        color: var(--on-accent);
+        font-weight: 700;
+        box-shadow: 0 0 18px var(--accent-dim);
+      }
+      .plate.primary::before {
+        display: none;
+      }
+      .plate.primary:hover,
+      .plate.primary:focus-visible {
+        box-shadow: 0 0 28px var(--accent-dim);
+      }
+
+      /* THE PRESS FLASH — 150ms, holding bright then dropping off a cliff. */
+      .flash-layer {
+        position: absolute;
+        inset: 0;
+        background: var(--accent-faint);
+        opacity: 0;
+        pointer-events: none;
+      }
+      .primary .flash-layer {
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .flashing .flash-layer {
+        animation: press-flash 0.15s linear;
+      }
+      @keyframes press-flash {
+        0% { opacity: 1; }
+        25% { opacity: 0.984; }
+        50% { opacity: 0.875; }
+        75% { opacity: 0.578; }
+        100% { opacity: 0; }
+      }
+
+      /* ── THE STAT STRIP ───────────────────────────────────────────────── */
+      .strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: clamp(10px, 1.4vw, 16px);
+        margin-bottom: clamp(14px, 2vw, 20px);
+      }
+      .stat {
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 2px solid var(--line-faint);
+        padding: 16px 20px;
+      }
+      .stat .cap {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        color: var(--faint);
+        text-transform: uppercase;
+      }
+      .stat .val {
+        font-weight: 700;
+        font-size: clamp(26px, 3vw, 34px);
+        letter-spacing: 0.04em;
+        line-height: 1.15;
+        margin-top: 4px;
+        font-variant-numeric: tabular-nums;
+      }
+      .stat .sub {
+        font-size: 14px;
+        color: var(--dim);
+        letter-spacing: 0.03em;
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      @media (max-width: 760px) {
+        .stat.minor { display: none; }
+      }
+
+      /* ── THE RAIL ───────────────────────────────────────────────────────
+         A recessed well, tabs as text, and one eased marker. In the headset
+         it stands on the left of the board and slides vertically; here it
+         lies down under the header and the 5×66 tick becomes a 66×5 one. */
+      .rail {
+        position: relative;
+        display: flex;
+        gap: 4px;
+        padding: 8px;
+        border-radius: 22px;
+        background: var(--rail-well);
+        border: 2px solid var(--line-faint);
+        margin-bottom: clamp(14px, 2vw, 20px);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .rail::-webkit-scrollbar { display: none; }
+      .rail-tab {
+        position: relative;
+        flex: 1 1 0;
+        min-width: 104px;
+        appearance: none;
+        border: 0;
+        background: transparent;
+        border-radius: 14px;
+        padding: 16px 12px 24px;
+        font-family: var(--font);
+        font-weight: 600;
+        font-size: clamp(15px, 1.7vw, 19px);
+        letter-spacing: 0.13em;
+        color: var(--dim);
+        cursor: pointer;
+        text-transform: uppercase;
+        white-space: nowrap;
+        transition:
+          background-color 0.18s linear,
+          color 0.18s linear;
+      }
+      .rail-tab:hover {
+        background: rgba(255, 255, 255, 0.04);
+        color: #f6f3ee;
+        transition-duration: 0.1s;
+      }
+      .rail-tab:focus-visible {
+        outline: none;
+        background: rgba(255, 255, 255, 0.04);
+        box-shadow: 0 0 0 3px var(--accent-faint);
+      }
+      .rail-tab[aria-selected='true'] {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--text);
+        font-weight: 700;
+      }
+      .rail-marker {
+        position: absolute;
+        bottom: 12px;
+        left: 0;
+        width: 66px;
+        height: 5px;
+        border-radius: 2.5px;
+        background: var(--accent);
+        transition: transform 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+        pointer-events: none;
+      }
+      /* The board rail sits a step quieter than the face rail above it, and
+         the difficulty rail a step quieter again — three levels of "where am
+         I" that never compete for the same weight. */
+      .rail.sub .rail-tab {
+        padding: 11px 10px 18px;
+        font-size: clamp(13px, 1.4vw, 15px);
+        min-width: 88px;
+        letter-spacing: 0.16em;
+      }
+      .rail.sub .rail-marker {
+        bottom: 9px;
+        height: 4px;
+      }
+      .rail.tier {
+        max-width: 460px;
+      }
+
+      /* ── THE BOARD LAYOUT ─────────────────────────────────────────────── */
+      .stage {
+        display: grid;
+        gap: clamp(12px, 1.6vw, 18px);
+        align-items: start;
+      }
+      .stage.split {
+        grid-template-columns: minmax(0, 380px) minmax(0, 1fr);
+      }
+      .after {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
+        gap: clamp(12px, 1.6vw, 18px);
+        margin-top: clamp(12px, 1.6vw, 18px);
+      }
+      @media (max-width: 760px) {
+        .stage.split { grid-template-columns: minmax(0, 1fr); }
+      }
+
+      .panel-title {
+        margin: 0 0 2px;
+        font-weight: 700;
+        font-size: clamp(20px, 2.2vw, 26px);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .panel-note {
+        margin: 4px 0 0;
+        font-size: 14px;
+        color: var(--dim);
+        letter-spacing: 0.03em;
+      }
+      .col-caps {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+        padding: 0 12px 8px;
+        border-bottom: 2px solid var(--line-faint);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        color: var(--faint);
+        text-transform: uppercase;
+      }
+
+      /* THE WELL — the recessed box a board lives in. */
+      .well {
+        border-radius: 22px;
+        background: var(--well);
+        border: 2px solid var(--line-faint);
+        padding: clamp(14px, 1.8vw, 22px);
+      }
+      .well-head {
+        display: flex;
+        align-items: baseline;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+      }
+      .well-head h2 {
+        margin: 0;
+        font-weight: 700;
+        font-size: clamp(22px, 2.6vw, 30px);
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .well-head .meta {
+        margin-left: auto;
+        font-size: 14px;
+        color: var(--dim);
+        letter-spacing: 0.05em;
+        white-space: nowrap;
+      }
+
+      /* THE ROWS — rank, name, value, and whatever the board's last column
+         is, with your own row findable at a glance. */
+      .rows {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 620px;
+        overflow-y: auto;
+      }
+      .row {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px 9px 16px;
+        border-radius: 8px;
+        font-variant-numeric: tabular-nums;
+        transition: background-color 0.18s linear;
+      }
+      .row:hover {
+        background: rgba(255, 255, 255, 0.04);
+        transition-duration: 0.1s;
+      }
+      .row .rank {
+        flex: none;
+        width: 38px;
+        text-align: right;
+        font-weight: 600;
+        font-size: 15px;
+        color: var(--faint);
+      }
+      .row.top1 .rank { color: var(--g-s); }
+      .row.top3 .rank { color: var(--text); }
+      .row .name {
+        flex: 1 1 auto;
+        font-weight: 600;
+        font-size: 17px;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .row .when {
+        flex: none;
+        font-size: 12.5px;
+        color: var(--faint);
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      .row .score {
+        flex: none;
+        min-width: 92px;
+        text-align: right;
+        font-weight: 700;
+        font-size: 18px;
+        letter-spacing: 0.02em;
+      }
+      .row .grade {
+        flex: none;
+        width: 30px;
+        text-align: center;
+        font-weight: 700;
+        font-size: 19px;
+      }
+      .board-caps .c-rank { flex: none; width: 38px; text-align: right; }
+      .board-caps .c-name { flex: 1 1 auto; }
+      .board-caps .c-score { flex: none; min-width: 92px; text-align: right; }
+      .board-caps .c-grade { flex: none; width: 30px; text-align: center; }
+
+      /* THE PAINT: a boxer's most-used colours ride beside their name. */
+      .paint {
+        display: inline-flex;
+        gap: 3px;
+        margin-left: 8px;
+        vertical-align: 1px;
+      }
+      .paint i {
+        display: block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+      }
+      /* Feat symbols: what a run was cleared on. */
+      .diff-chip {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 9px;
+        border: 1.5px solid var(--line-faint);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        color: var(--faint);
+        margin-left: 6px;
+      }
+      .diff-chip.hard { color: var(--warn); border-color: rgba(255, 180, 84, 0.4); }
+      .diff-chip.blazing { color: var(--ember); border-color: rgba(255, 122, 24, 0.45); }
+      .diff-chip.hc { color: var(--danger); border-color: rgba(255, 82, 102, 0.45); }
+
+      /* What a board says instead of rows. */
+      .status { padding: 26px 12px 30px; }
+      .status .line { font-size: 18px; color: var(--dim); letter-spacing: 0.04em; }
+      .status .hint { margin-top: 10px; font-size: 15px; color: var(--faint); letter-spacing: 0.03em; }
+      .status .line::after {
+        content: '';
+        animation: dots 1.29s steps(1) infinite;
+      }
+      .status[data-quiet] .line::after { content: none; }
+      @keyframes dots {
+        0% { content: ''; }
+        33% { content: '·'; }
+        66% { content: '··'; }
+        100% { content: '···'; }
+      }
+
+      /* ── THE RECORD LIST (the rave face) ──────────────────────────────── */
+      .songs {
+        position: relative;
+        list-style: none;
+        margin: 6px 0 0;
+        padding: 0;
+        max-height: min(620px, 70vh);
+        overflow-y: auto;
+      }
+      .song {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 11px 14px 11px 22px;
+        margin-bottom: 4px;
+        border: 2px solid transparent;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--text);
+        font-family: var(--font);
+        text-align: left;
+        cursor: pointer;
+        overflow: hidden;
+        transition:
+          background-color 0.18s linear,
+          border-color 0.18s linear;
+      }
+      .song:hover { background: rgba(255, 255, 255, 0.08); transition-duration: 0.1s; }
+      .song[aria-current='true'] {
+        background: var(--accent-faint);
+        border-color: var(--accent-edge);
+      }
+      .song .title {
+        flex: 1 1 auto;
+        font-weight: 600;
+        font-size: 16px;
+        letter-spacing: 0.06em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .song .runs {
+        font-size: 13px;
+        color: var(--faint);
+        font-variant-numeric: tabular-nums;
+        flex: none;
+        width: 46px;
+        text-align: right;
+      }
+      .song .best { flex: none; width: 30px; text-align: center; font-weight: 700; font-size: 18px; }
+      @media (max-width: 760px) {
+        .songs { max-height: clamp(160px, 38vh, 340px); }
+      }
+
+      /* ── THE CHANNEL ──────────────────────────────────────────────────── */
+      .tv-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+      .onair {
+        font-weight: 700;
+        font-size: 13px;
+        letter-spacing: 0.2em;
+        padding: 5px 12px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 2px solid var(--line-faint);
+        color: var(--faint);
+        flex: none;
+      }
+      .onair.live {
+        background: var(--danger);
+        border-color: transparent;
+        color: #fff;
+        animation: blink 1.6s steps(2) infinite;
+      }
+      #tv-title {
+        font-weight: 700;
+        font-size: clamp(17px, 2vw, 22px);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      #tv-clock {
+        font-weight: 700;
+        font-size: 16px;
+        letter-spacing: 0.1em;
+        color: var(--dim);
+        font-variant-numeric: tabular-nums;
+        flex: none;
+      }
+      #tv-canvas {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        border-radius: 18px;
+        background: #06050a;
+        border: 2px solid var(--line-faint);
+      }
+      .tv-guide {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 14px;
+      }
+      .tv-guide button {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 2px solid var(--line-faint);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--dim);
+        font-family: var(--font);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        padding: 8px 14px;
+        border-radius: 14px;
+        cursor: pointer;
+        transition: background-color 0.18s linear, border-color 0.18s linear, color 0.18s linear;
+      }
+      .tv-guide button:hover { background: var(--plate-hover); color: var(--text); transition-duration: 0.1s; }
+      .tv-guide button[aria-pressed='true'] {
+        background: var(--accent-faint);
+        border-color: var(--accent-edge);
+        color: var(--text);
+      }
+      .tv-guide button[disabled] { cursor: default; color: var(--disabled); }
+      .tv-guide .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--danger);
+        box-shadow: 0 0 8px var(--danger);
+        flex: none;
+      }
+      .tv-guide .dot.club { background: #ff2ad5; box-shadow: 0 0 8px #ff2ad5; }
+      .tv-guide .dot.solo { background: var(--faint); box-shadow: none; }
+
+      /* ── THE LAB ──────────────────────────────────────────────────────── */
+      .maps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+        gap: clamp(10px, 1.4vw, 16px);
+      }
+      .maps figure {
+        margin: 0;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 2px solid var(--line-faint);
+        padding: 12px;
+      }
+      .maps canvas { display: block; width: 100%; aspect-ratio: 16 / 15; }
+      .maps figcaption {
+        margin-top: 10px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .maps figcaption small {
+        display: block;
+        margin-top: 3px;
+        font-weight: 500;
+        font-size: 13px;
+        letter-spacing: 0.03em;
+        text-transform: none;
+        color: var(--faint);
+      }
+      .hands { display: grid; gap: 14px; margin-top: 6px; }
+      .bar-label {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--faint);
+        margin-bottom: 6px;
+      }
+      .bar {
+        position: relative;
+        height: 26px;
+        border-radius: 13px;
+        overflow: hidden;
+        background: rgba(0, 0, 0, 0.32);
+        border: 2px solid var(--line-faint);
+        display: flex;
+      }
+      .bar i { display: block; height: 100%; }
+      .bar i.l { background: linear-gradient(var(--ember), #d95f0c); }
+      .bar i.r { background: linear-gradient(var(--cool), #2b8fd6); }
+      .bar em {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 12px;
+        font-style: normal;
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+      }
+      .tape-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background-color 0.18s linear;
+      }
+      .tape-row:hover { background: rgba(255, 255, 255, 0.04); transition-duration: 0.1s; }
+      .tape-row .when { flex: none; width: 96px; }
+      .tape-row .kind {
+        flex: none;
+        width: 76px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        color: var(--accent);
+      }
+      .tape-row .who {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tape-row .verdict { flex: none; width: 96px; text-align: right; font-weight: 700; }
+      .tape-row .verdict.w { color: var(--positive); }
+      .tape-row .verdict.l { color: var(--danger); }
+      .tape-row .clock { flex: none; width: 58px; text-align: right; color: var(--faint); font-variant-numeric: tabular-nums; }
+      .tape-open {
+        border-radius: 18px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 2px solid var(--line-faint);
+        padding: 14px 16px 16px;
+        margin: 4px 0 10px;
+      }
+      .tape-open canvas {
+        display: block;
+        width: 100%;
+        height: 96px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.35);
+        border: 2px solid var(--line-faint);
+        margin: 10px 0;
+      }
+      .tape-open .pbp {
+        max-height: 260px;
+        overflow: auto;
+        font-size: 13.5px;
+        line-height: 1.75;
+        color: var(--dim);
+        letter-spacing: 0.02em;
+      }
+      .tape-open .pbp b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+      .tape-open .pbp .hit { color: var(--ember); font-weight: 600; }
+      .tape-open .pbp .tk { color: var(--danger); font-weight: 600; }
+      .tape-open .pbp .pa { color: var(--cool); font-weight: 600; }
+      .tape-open .pbp .rd { color: var(--accent); font-weight: 700; }
+      .tape-rounds {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      .tape-rounds th {
+        text-align: left;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--faint);
+        padding: 4px 8px;
+        border-bottom: 2px solid var(--line-faint);
+      }
+      .tape-rounds td { padding: 6px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+      .tape-rounds .w { color: var(--positive); font-weight: 700; }
+      .tape-rounds .l { color: var(--danger); font-weight: 700; }
+
+      /* THE LAB's filter: whose tapes. A select rather than a rail — the
+         list is as long as the boards are deep, and it grows on its own. */
+      .lab-filter {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: clamp(14px, 2vw, 20px);
+      }
+      .lab-filter .cap {
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .lab-filter select {
+        appearance: none;
+        min-height: 44px;
+        padding: 10px 18px;
+        border-radius: 18px;
+        border: 2px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.045);
+        color: var(--text);
+        font-family: var(--font);
+        font-weight: 600;
+        font-size: 15px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: background-color 0.18s linear, border-color 0.18s linear;
+      }
+      .lab-filter select:hover {
+        background: var(--plate-hover);
+        border-color: var(--line-hover);
+        transition-duration: 0.1s;
+      }
+      .lab-filter select:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px var(--accent-faint);
+      }
+      .lab-filter .count {
+        margin-left: auto;
+        font-size: 14px;
+        color: var(--dim);
+        letter-spacing: 0.05em;
+      }
+
+      .hidden { display: none !important; }
+
+      ::-webkit-scrollbar { width: 10px; height: 10px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 5px; }
+      ::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
+
+      /* VR comfort discipline, kept on the flat screen. */
+      @media (prefers-reduced-motion: reduce) {
+        .floor,
+        .status .line::after,
+        .onair.live,
+        .chip[data-tone='onair'] .dot {
+          animation: none;
+        }
+        .opening { animation-duration: 0.01s; }
+        .rail-marker { transition-duration: 0.01s; }
+      }
+    </style>
+  </head>
+
+  <body data-face="ff">
+    <div class="floor"></div>
+
+    <div class="shell">
+      <header class="top">
+        <div>
+          <h1 class="wordmark" id="wordmark"><span class="a">FIRE</span> <span class="b">FIGHT</span></h1>
+          <p class="kicker" id="kicker">WORLDWIDE LEADERBOARD</p>
+        </div>
+        <div class="top-right">
+          <span class="chip" id="status-chip" data-tone="warn">
+            <span class="dot"></span><span id="status-text">READING THE BOARD</span>
+          </span>
+          <button class="plate primary" id="refresh" type="button">
+            <span class="flash-layer"></span>REFRESH
+          </button>
+        </div>
+      </header>
+
+      <!-- THE FACES: one town, three doors. -->
+      <nav class="rail" id="face-rail" role="tablist" aria-label="Board">
+        <button class="rail-tab" id="tab-ff" role="tab" type="button" aria-selected="true">Fire Fight</button>
+        <button class="rail-tab" id="tab-rr" role="tab" type="button" aria-selected="false">Rave Raid</button>
+        <button class="rail-tab" id="tab-tv" role="tab" type="button" aria-selected="false">The Channel</button>
+        <div class="rail-marker" id="face-marker"></div>
+      </nav>
+
+      <!-- ══ FIRE FIGHT ══ -->
+      <section id="face-ff">
+        <section class="strip" id="ff-strip" aria-label="Board totals"></section>
+
+        <nav class="rail sub" id="board-rail" role="tablist" aria-label="Fire Fight boards">
+          <div class="rail-marker" id="board-marker"></div>
+        </nav>
+
+        <nav class="rail sub tier hidden" id="tier-rail" role="tablist" aria-label="Difficulty">
+          <div class="rail-marker" id="tier-marker"></div>
+        </nav>
+
+        <main class="stage" id="ff-stage">
+          <section class="panel opening" id="ff-panel">
+            <i class="halo"></i><span class="sheen"></span>
+            <div class="well">
+              <div class="well-head">
+                <h2 id="ff-title">Ranked</h2>
+                <span class="meta" id="ff-meta"></span>
+              </div>
+              <p class="panel-note" id="ff-note"></p>
+              <div class="col-caps board-caps" id="ff-caps"></div>
+              <ul class="rows" id="ff-rows"></ul>
+              <div class="status hidden" id="ff-status"><div class="line"></div><div class="hint"></div></div>
+            </div>
+          </section>
+        </main>
+
+        <!-- THE LAB, a board of the FIRE FIGHT rail like any other. -->
+        <div id="lab" class="hidden">
+          <div class="lab-filter">
+            <span class="cap">Boxer</span>
+            <select id="lab-boxer"><option value="">Everyone</option></select>
+            <span class="count" id="lab-count"></span>
+          </div>
+          <section class="strip" id="lab-tiles" aria-label="Tape totals"></section>
+          <section class="panel opening" style="animation-delay: 0.03s">
+            <i class="halo"></i><span class="sheen"></span>
+            <h2 class="panel-title">The platform</h2>
+            <p class="panel-note">
+              Every tape's grid, laid over the octagon. The fight is up the screen, and the
+              hotter the cell the more it happened there.
+            </p>
+            <div class="maps" style="margin-top: 16px">
+              <figure><canvas class="heat" id="heat-stand" width="320" height="300"></canvas><figcaption>Standing<small>where the head is, sampled all bout</small></figcaption></figure>
+              <figure><canvas class="heat" id="heat-thrL" width="320" height="300"></canvas><figcaption>Throws · left<small>where the left fist let go</small></figcaption></figure>
+              <figure><canvas class="heat" id="heat-thrR" width="320" height="300"></canvas><figcaption>Throws · right<small>where the right fist let go</small></figcaption></figure>
+              <figure><canvas class="heat" id="heat-hit" width="320" height="300"></canvas><figcaption>Hits taken<small>where you stood when it landed</small></figcaption></figure>
+            </div>
+          </section>
+          <div class="after">
+            <section class="panel opening" style="animation-delay: 0.09s">
+              <i class="halo"></i><span class="sheen"></span>
+              <h2 class="panel-title">Hands</h2>
+              <p class="panel-note">Which fist does the work, and which one lands.</p>
+              <div class="hands" id="lab-hands" style="margin-top: 14px"></div>
+            </section>
+            <section class="panel opening" style="animation-delay: 0.15s">
+              <i class="halo"></i><span class="sheen"></span>
+              <h2 class="panel-title">Damage</h2>
+              <p class="panel-note">Where it lands on a body, dealt and taken.</p>
+              <div class="hands" id="lab-parts" style="margin-top: 14px"></div>
+            </section>
+          </div>
+          <section class="panel opening" style="animation-delay: 0.21s; margin-top: clamp(12px, 1.6vw, 18px)">
+            <i class="halo"></i><span class="sheen"></span>
+            <h2 class="panel-title">The tape</h2>
+            <p class="panel-note">Every recorded bout, newest first. Open one for its rounds, both health lines and the play-by-play.</p>
+            <div id="lab-tape" style="margin-top: 12px"></div>
+            <div class="status hidden" id="lab-status"><div class="line"></div><div class="hint"></div></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ══ RAVE RAID ══ -->
+      <section id="face-rr" class="hidden">
+        <nav class="rail sub" id="rr-rail" role="tablist" aria-label="Difficulty">
+          <div class="rail-marker" id="rr-marker"></div>
+        </nav>
+        <main class="stage split">
+          <section class="panel opening">
+            <i class="halo"></i><span class="sheen"></span>
+            <h2 class="panel-title">Records</h2>
+            <div class="col-caps">
+              <span style="flex: 1 1 auto">RECORD</span>
+              <span style="width: 46px; text-align: right">RUNS</span>
+              <span style="width: 30px; text-align: center">BEST</span>
+            </div>
+            <ul class="songs" id="rr-songs"></ul>
+          </section>
+          <section class="panel opening" style="animation-delay: 0.09s">
+            <i class="halo"></i><span class="sheen"></span>
+            <div class="well">
+              <div class="well-head">
+                <h2 id="rr-title">World board</h2>
+                <span class="meta" id="rr-meta"></span>
+              </div>
+              <div class="col-caps board-caps">
+                <span class="c-rank">#</span><span class="c-name">Raider</span>
+                <span class="c-score">Score</span><span class="c-grade">·</span>
+              </div>
+              <ul class="rows" id="rr-rows"></ul>
+              <div class="status hidden" id="rr-status"><div class="line"></div><div class="hint"></div></div>
+            </div>
+          </section>
+        </main>
+      </section>
+
+      <!-- ══ THE CHANNEL ══ -->
+      <section id="face-tv" class="hidden">
+        <main class="stage">
+          <section class="panel opening">
+            <i class="halo"></i><span class="sheen"></span>
+            <div class="tv-head">
+              <span class="onair" id="tv-onair">OFF AIR</span>
+              <span id="tv-title">tuning</span>
+              <span id="tv-clock"></span>
+            </div>
+            <canvas id="tv-canvas" width="960" height="540"></canvas>
+            <div class="tv-guide" id="tv-guide"></div>
+            <p class="panel-note" style="margin-top: 14px">
+              Live bouts, brawls and raids as they happen, top-down from the headset running
+              them. Nothing on air and the channel peeps into the club instead.
+            </p>
+          </section>
+        </main>
+      </section>
     </div>
-  </section>
 
-  <!-- ══ RAVE RAID face ══ -->
-  <section id="face-rr" class="rr hidden">
-    <div class="pickers">
-      <select id="rr-track"></select>
-      <div class="seg" id="rr-diff"></div>
-    </div>
-    <div class="panel">
-      <div class="board-title" id="rr-title">WORLD BOARD</div>
-      <div class="board-note">Personal bests, one row per raider — records stand.</div>
-      <div class="scroll"><table id="rr-table"></table></div>
-      <div class="state hidden" id="rr-state"></div>
-    </div>
-  </section>
+    <script>
+      /* ══════════════════════════════════════════════════════════════════
+         THE DATA — the same project the headset writes to.
 
-  <!-- ══ THE CHANNEL ══ -->
-  <section id="face-tv" class="tv hidden">
-    <div class="panel">
-      <div class="tv-bar">
-        <span class="onair" id="tv-onair">OFF AIR</span>
-        <span id="tv-title">tuning…</span>
-        <span id="tv-clock"></span>
-      </div>
-      <canvas id="tv-canvas" width="960" height="540"></canvas>
-      <div class="tv-guide" id="tv-guide"></div>
-      <div class="board-note" id="tv-note">Live bouts, brawls and raids as they happen — top-down, from the headset running them. Nothing on? The channel peeps into the club.</div>
-    </div>
-  </section>
+         Firestore, straight over its REST API: no SDK, no bundle, no build
+         step, one file you can drop on any host. Everything here is public
+         by RULE (firestore.rules: `allow read: if true` on players, boards
+         and bouts), so an unauthenticated request with the web app's own
+         key is all it takes. The key is public by design; the rules are the
+         security boundary, not this.
 
-  <!-- ══ THE LAB ══ -->
-  <section id="face-lab" class="lab hidden">
-    <div class="pickers">
-      <select id="lab-boxer"><option value="">EVERY BOXER</option></select>
-      <div class="seg" id="lab-kind"></div>
-      <span id="lab-count" style="color:var(--dim);font-size:12px;letter-spacing:.1em"></span>
-    </div>
-    <div class="tiles" id="lab-tiles"></div>
-    <div class="maps" id="lab-maps">
-      <figure><canvas class="heat" id="heat-stand" width="320" height="300"></canvas><figcaption>Standing<small>where the head is, sampled all bout</small></figcaption></figure>
-      <figure><canvas class="heat" id="heat-thrL" width="320" height="300"></canvas><figcaption>Throws · left<small>where the left fist let go</small></figcaption></figure>
-      <figure><canvas class="heat" id="heat-thrR" width="320" height="300"></canvas><figcaption>Throws · right<small>where the right fist let go</small></figcaption></figure>
-      <figure><canvas class="heat" id="heat-hit" width="320" height="300"></canvas><figcaption>Hits taken<small>where you stood when it landed</small></figcaption></figure>
-    </div>
-    <div class="panel" style="margin-bottom:14px">
-      <div class="board-title">Hands</div>
-      <div class="hands" id="lab-hands"></div>
-    </div>
-    <div class="panel">
-      <div class="board-title">The Tape</div>
-      <div class="board-note">Every recorded bout, newest first. Tap one for the rounds, the health lines and the play-by-play.</div>
-      <div id="lab-tape"></div>
-      <div class="state hidden" id="lab-state"></div>
-    </div>
-  </section>
+         Shapes mirror the game's own code:
+           players/{uid}            src/net/leaderboard.ts   (ladder, xp, aim, 2v2, ffa)
+           boards/{board}/rows/{uid} src/net/boards.ts       (the timed boards, the rave charts)
+           bouts/{id}               src/net/telemetry.ts     (THE TAPE)
 
-  <footer>Fire Fight × Rave Raid — boards refresh on every visit</footer>
-</div>
+         THE CHANNEL is not stored at all: it is a WebSocket to the room
+         server's /tv relay (server/tv.mjs), live while you watch.
+         ══════════════════════════════════════════════════════════════════ */
 
-<script>
-/* Both games keep their boards in world-readable Firestore. This page reads
- * them over the plain REST API — no SDK, no auth, nothing writable from here.
- * Shapes mirror the games' own code:
- *   Fire Fight  src/net/leaderboard.ts  (players + runGauntlet/runRaid/runGoopliath)
- *   Rave Raid   src/net/scores.ts       (scores: one doc per player per chart)
- *   THE TAPE    src/net/telemetry.ts    (bouts: one doc per recorded bout)
- * THE CHANNEL is live, not stored: a WebSocket to the room server's /tv relay
- * (server/tv.mjs) — the headset running a bout casts frames, this page draws them.
- */
-const FF = { projectId: 'arfi-b68f9',    key: 'AIzaSyA0NYO_w6uU0Fcc6nuVPitRQaGW3B6518E' };
-const RR = { projectId: 'raveraid-bc866', key: 'AIzaSyBqsUcpCKzs2bANP0db6J4Nz_SkKe4wXzI' };
+      const PROJECT = 'flappy-ff9f6';
+      const API_KEY = 'AIzaSyD7jbazGQc4wiPBUzQSMwO6W7nMcMtaJzQ';
+      const DOCS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
 
-async function runQuery(cfg, structuredQuery) {
-  const url = `https://firestore.googleapis.com/v1/projects/${cfg.projectId}/databases/(default)/documents:runQuery?key=${cfg.key}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ structuredQuery }),
-  });
-  if (!res.ok) throw new Error(`firestore ${res.status}`);
-  const parts = await res.json();
-  return parts.filter((p) => p.document).map((p) => ({
-    id: p.document.name.split('/').pop(),
-    data: decodeFields(p.document.fields || {}),
-  }));
-}
-function decodeValue(v) {
-  if ('integerValue' in v) return Number(v.integerValue);
-  if ('doubleValue' in v) return v.doubleValue;
-  if ('stringValue' in v) return v.stringValue;
-  if ('booleanValue' in v) return v.booleanValue;
-  if ('arrayValue' in v) return (v.arrayValue.values || []).map(decodeValue);
-  if ('mapValue' in v) return decodeFields(v.mapValue.fields || {});
-  if ('timestampValue' in v) return v.timestampValue;
-  return null;
-}
-function decodeFields(fields) {
-  const out = {};
-  for (const k of Object.keys(fields)) out[k] = decodeValue(fields[k]);
-  return out;
-}
-const field = (fieldPath) => ({ fieldPath });
-const orderBy = (f, dir) => ({ field: field(f), direction: dir });
-const whereEq = (f, value) => ({ fieldFilter: { field: field(f), op: 'EQUAL', value } });
+      /** Nothing may hang forever — the headset's own deadline. */
+      const TIMEOUT_MS = 8000;
 
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
-const num = (n) => Number(n || 0).toLocaleString('en-US');
-const clock = (s) => {
-  const t = Math.max(0, Math.round(s));
-  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
-};
-const rowClass = (i) => (i === 0 ? 'top1' : i === 1 ? 'top2' : i === 2 ? 'top3' : '');
+      /**
+       * One structured query. `parent` is a document path under `documents`
+       * ('boards/ff2-ranked') when the collection is a subcollection — in
+       * the REST API the parent belongs in the URL, not the body, and a
+       * query that leaves it out is a collection-group query, which the
+       * rules deny.
+       */
+      async function runQuery(collectionId, opts = {}) {
+        const parent = opts.parent ? `/${opts.parent}` : '';
+        const url = `${DOCS}${parent}:runQuery?key=${API_KEY}`;
+        const structuredQuery = { from: [{ collectionId }] };
+        if (opts.orderBy) {
+          structuredQuery.orderBy = [{ field: { fieldPath: opts.orderBy }, direction: opts.dir || 'DESCENDING' }];
+        }
+        if (opts.limit) structuredQuery.limit = opts.limit;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ structuredQuery }),
+            signal: ctrl.signal,
+          });
+          if (!res.ok) throw new Error(`firestore ${res.status}`);
+          const parts = await res.json();
+          if (!Array.isArray(parts)) throw new Error('firestore: unexpected shape');
+          return parts.filter((p) => p.document).map((p) => ({
+            id: p.document.name.split('/').pop(),
+            data: decodeFields(p.document.fields || {}),
+          }));
+        } finally {
+          clearTimeout(timer);
+        }
+      }
 
-/* THE PAINT (docs/paint.md §3): the sold palette, index-parallel to
- * src/config.ts PAINT.colours — keep in step when the racks grow. */
-const PAINT_HEX = [
-  '#f4f2ee','#17171a','#8c1d18','#b35b1e','#c2a24b','#4f5d33','#24354f','#4a3524',
-  '#ffb02e','#ff5a1f','#ff2ad5','#4fb7ff','#b06bff','#8fff3d','#2be2c2','#ff4f8e',
-  '#9fdcff','#ffe94a','#6fffb0','#e8352a',
-  '#d8b24a','#e9e2f2','#050507','#c9d2dd',
-];
+      function decodeValue(v) {
+        if ('integerValue' in v) return Number(v.integerValue);
+        if ('doubleValue' in v) return Number(v.doubleValue);
+        if ('stringValue' in v) return v.stringValue;
+        if ('booleanValue' in v) return v.booleanValue;
+        if ('arrayValue' in v) return (v.arrayValue.values || []).map(decodeValue);
+        if ('mapValue' in v) return decodeFields(v.mapValue.fields || {});
+        if ('timestampValue' in v) return v.timestampValue;
+        return null;
+      }
+      function decodeFields(fields) {
+        const out = {};
+        for (const k of Object.keys(fields)) out[k] = decodeValue(fields[k]);
+        return out;
+      }
 
-/* A row's paint chips: decode the packed look (base64; 1 format byte then
- * 8 bytes per unit, byte 1 = palette index) into the boxer's most-used
- * colours, heaviest first. Malformed or absent → no chips at all. */
-function paintChips(wire, max = 4) {
-  if (typeof wire !== 'string' || !wire || wire.length > 1024) return '';
-  let bin;
-  try { bin = atob(wire); } catch { return ''; }
-  if (bin.length < 9 || (bin.length - 1) % 8 !== 0 || bin.charCodeAt(0) !== 1) return '';
-  const tally = new Map();
-  for (let o = 1; o + 8 <= bin.length; o += 8) {
-    const c = bin.charCodeAt(o + 1);
-    if (c < PAINT_HEX.length) tally.set(c, (tally.get(c) || 0) + 1);
-  }
-  return [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, max)
-    .map(([c]) => `<span class="chip" style="background:${PAINT_HEX[c]}"></span>`).join('');
-}
+      /* ── small helpers ─────────────────────────────────────────────── */
 
-/* ── FIRE FIGHT ─────────────────────────────────────────────────────────── */
+      const esc = (s) =>
+        String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const num = (n) => Number(n || 0).toLocaleString('en-US');
+      const clock = (s) => {
+        const t = Math.max(0, Math.round(s));
+        return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+      };
+      /** A run clock keeps its tenth — a speedrun board is decided on them. */
+      const runClock = (s) => {
+        const t = Math.max(0, s);
+        const m = Math.floor(t / 60);
+        return `${m}:${(t - m * 60).toFixed(1).padStart(4, '0')}`;
+      };
+      const rowClass = (i) => (i === 0 ? 'top1' : i < 3 ? 'top3' : '');
+      const ago = (iso) => {
+        if (!iso) return '';
+        const d = typeof iso === 'number' ? new Date(iso) : new Date(iso);
+        if (Number.isNaN(d.getTime())) return '';
+        const mins = Math.round((Date.now() - d.getTime()) / 60000);
+        if (mins < 1) return 'just now';
+        if (mins < 60) return `${mins}m ago`;
+        if (mins < 1440) return `${Math.round(mins / 60)}h ago`;
+        return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      };
+      const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '—');
 
-/* The season ladder writes score_s<N>; mirror the game's clock exactly
- * (src/config.ts — seasons open Mon 6 Jul 2026, 90 days each, forever). */
-const SEASON_EPOCH = Date.UTC(2026, 6, 6);
-const SEASON_DAYS = 90;
-const seasonIndex = () => Math.max(1, 1 + Math.floor((Date.now() - SEASON_EPOCH) / (SEASON_DAYS * 86400000)));
+      /** The status chip, which speaks for whichever face is live. */
+      function setStatus(text, tone) {
+        document.getElementById('status-text').textContent = text;
+        document.getElementById('status-chip').dataset.tone = tone;
+      }
+      /** A board's own status block, in the headset's voice. */
+      function showStatus(el, line, hint, quiet) {
+        el.classList.remove('hidden');
+        el.querySelector('.line').textContent = line;
+        el.querySelector('.hint').textContent = hint || '';
+        if (quiet) el.setAttribute('data-quiet', '');
+        else el.removeAttribute('data-quiet');
+      }
 
-const FF_BOARDS = [
-  { id: 'ranked',    label: 'RANKED',   kind: 'player', field: () => `score_s${seasonIndex()}`,
-    note: () => `Season ${seasonIndex()} ladder points`, col: 'POINTS' },
-  { id: 'xp',        label: 'XP',       kind: 'player', field: () => 'xp',       note: () => 'Lifetime experience', col: 'XP' },
-  { id: 'training',  label: 'AIM',      kind: 'player', field: () => 'training', note: () => 'Best aim-training score', col: 'SCORE' },
-  { id: 'duo',       label: '2V2',      kind: 'player', field: () => 'duo',      note: () => '2v2 brawl wins', col: 'WINS' },
-  { id: 'ffa',       label: 'FFA',      kind: 'player', field: () => 'ffa',      note: () => 'Free-for-all wins', col: 'WINS' },
-  { id: 'runGauntlet',  label: 'GAUNTLET',  kind: 'run', note: () => 'All five titans, one clock — fastest cumulative fight time' },
-  { id: 'runRaid',      label: 'RAID',      kind: 'run', note: () => 'Squad titan raids — the whole crew ranks on one row' },
-  { id: 'runGoopliath', label: 'GOOPLIATH', kind: 'run', note: () => 'The tide raid — one long fight, one clock' },
-];
-let ffBoard = FF_BOARDS[0];
-const ffCache = new Map();
+      /* THE PAINT (docs/paint.md §3): the sold palette, index-parallel to
+       * src/config.ts PAINT.colours — keep in step when the racks grow. */
+      const PAINT_HEX = [
+        '#f4f2ee','#17171a','#8c1d18','#b35b1e','#c2a24b','#4f5d33','#24354f','#4a3524',
+        '#ffb02e','#ff5a1f','#ff2ad5','#4fb7ff','#b06bff','#8fff3d','#2be2c2','#ff4f8e',
+        '#9fdcff','#ffe94a','#6fffb0','#e8352a',
+        '#d8b24a','#e9e2f2','#050507','#c9d2dd',
+      ];
+      /** A row's paint chips: decode the packed look (base64; one format byte
+       *  then eight bytes a unit, byte 1 = palette index) into the boxer's
+       *  most-used colours, heaviest first. Malformed or absent, no chips. */
+      function paintChips(wire, max = 4) {
+        if (typeof wire !== 'string' || !wire || wire.length > 1024) return '';
+        let bin;
+        try { bin = atob(wire); } catch { return ''; }
+        if (bin.length < 9 || (bin.length - 1) % 8 !== 0 || bin.charCodeAt(0) !== 1) return '';
+        const tally = new Map();
+        for (let o = 1; o + 8 <= bin.length; o += 8) {
+          const c = bin.charCodeAt(o + 1);
+          if (c < PAINT_HEX.length) tally.set(c, (tally.get(c) || 0) + 1);
+        }
+        const top = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, max);
+        if (!top.length) return '';
+        return `<span class="paint">${top.map(([c]) => `<i style="background:${PAINT_HEX[c]}"></i>`).join('')}</span>`;
+      }
 
-function drawFfTabs() {
-  const host = document.getElementById('ff-boards');
-  host.innerHTML = FF_BOARDS.map((b) =>
-    `<button class="board-tab${b === ffBoard ? ' on' : ''}" data-id="${b.id}">${b.label}</button>`).join('');
-  host.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => {
-    ffBoard = FF_BOARDS.find((b) => b.id === btn.dataset.id);
-    drawFfTabs(); void loadFf();
-  }));
-}
+      /* ── THE RAILS ─────────────────────────────────────────────────────
+         One eased marker per rail, parked under the selected tab. The rail
+         is a scroller, so the marker subtracts scrollLeft by hand. */
+      function moveMarker(rail, marker) {
+        const on = rail.querySelector('[aria-selected="true"]');
+        if (!on) { marker.style.opacity = '0'; return; }
+        marker.style.opacity = '1';
+        const w = Math.max(40, Math.min(96, on.offsetWidth - 28));
+        marker.style.width = `${w}px`;
+        marker.style.transform = `translateX(${on.offsetLeft + (on.offsetWidth - w) / 2 - rail.scrollLeft}px)`;
+      }
+      function railOf(id) { return document.getElementById(id); }
+      /** Build a rail's tabs from a list, and wire the marker. */
+      function fillRail(railId, markerId, items, current, onPick) {
+        const rail = railOf(railId);
+        const marker = document.getElementById(markerId);
+        rail.querySelectorAll('.rail-tab').forEach((b) => b.remove());
+        for (const it of items) {
+          const b = document.createElement('button');
+          b.className = 'rail-tab';
+          b.type = 'button';
+          b.setAttribute('role', 'tab');
+          b.setAttribute('aria-selected', String(it.id === current));
+          b.textContent = it.label;
+          b.addEventListener('click', () => onPick(it.id));
+          rail.insertBefore(b, marker);
+        }
+        requestAnimationFrame(() => moveMarker(rail, marker));
+        if (!rail.dataset.wired) {
+          rail.dataset.wired = '1';
+          rail.addEventListener('scroll', () => moveMarker(rail, marker), { passive: true });
+        }
+      }
 
-async function loadFf() {
-  const title = document.getElementById('ff-title');
-  const note = document.getElementById('ff-note');
-  const table = document.getElementById('ff-table');
-  const state = document.getElementById('ff-state');
-  const board = ffBoard;
-  title.textContent = board.label;
-  note.textContent = board.note();
-  table.innerHTML = '';
-  state.classList.remove('hidden');
-  state.textContent = 'PULLING THE BOARD…';
-  try {
-    let rows = ffCache.get(board.id);
-    if (!rows) {
-      if (board.kind === 'player') {
-        const f = board.field();
-        rows = (await runQuery(FF, {
-          from: [{ collectionId: 'players' }],
-          orderBy: [orderBy(f, 'DESCENDING')],
-          limit: 50,
-        })).map((d) => ({ name: d.data.name || '???', value: d.data[f] || 0, look: d.data.look || '' }))
-          .filter((r) => r.value > 0);
-      } else {
-        const raw = (await runQuery(FF, {
-          from: [{ collectionId: board.id }],
-          orderBy: [orderBy('seconds', 'ASCENDING')],
-          limit: 50,
-        })).map((d) => ({
-          names: Array.isArray(d.data.names) ? d.data.names.map(String) : [],
-          seconds: d.data.seconds || 0,
-          difficulty: d.data.difficulty || 'normal',
-          hardcore: !!d.data.hardcore,
-        }));
-        /* Same dedup law as the in-game board: easy never ranks, and each
-         * squad keeps one best row per difficulty+hardcore feat. */
-        const seen = new Set();
-        rows = raw.filter((r) => r.difficulty !== 'easy').filter((r) => {
-          const key = `${r.names.map((n) => n.toLowerCase()).sort().join('|')}|${r.difficulty}|${r.hardcore ? 'hc' : ''}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
+      /* ══ FIRE FIGHT ═══════════════════════════════════════════════════ */
+
+      /* The season ladder writes score_s<N>; mirror the game's clock exactly
+       * (src/config.ts SEASON — seasons open Mon 6 Jul 2026, 90 days each). */
+      const SEASON_EPOCH = Date.UTC(2026, 6, 6);
+      const SEASON_DAYS = 90;
+      const seasonIndex = () =>
+        Math.max(1, 1 + Math.floor((Date.now() - SEASON_EPOCH) / (SEASON_DAYS * 86400000)));
+
+      /** The ranking difficulties. EASY plays but never posts, on any board. */
+      const TIERS = [
+        { id: 'normal', label: 'Normal' },
+        { id: 'hard', label: 'Hard' },
+        { id: 'blazing', label: 'Blazing' },
+      ];
+
+      /**
+       * The FIRE FIGHT rail. `kind` says where a board's rows come from:
+       *   'player'  a field on every players/{uid} doc, ranked high to low
+       *   'run'     a boards/{id}/rows subcollection, ranked low to high
+       *   'lab'     THE TAPE, which is not a board at all
+       */
+      const FF_BOARDS = [
+        { id: 'ranked', label: 'Ranked', kind: 'player', field: () => `score_s${seasonIndex()}`,
+          col: 'Points', note: () => `Season ${seasonIndex()} ladder points. A real win banks twenty; a loss costs nothing.` },
+        { id: 'xp', label: 'XP', kind: 'player', field: () => 'xp', col: 'XP',
+          note: () => 'Lifetime experience, every mode, since the first bell.' },
+        { id: 'aim', label: 'Aim', kind: 'player', field: () => 'training', col: 'Score',
+          note: () => 'Best aim-training run — the octa drones in the last thirty seconds pay three hundred a piece.' },
+        { id: 'duo', label: '2v2', kind: 'player', field: () => 'duo', col: 'Wins',
+          note: () => 'Brawl wins, two a side.' },
+        { id: 'ffa', label: 'FFA', kind: 'player', field: () => 'ffa', col: 'Wins',
+          note: () => 'Free-for-all wins, four in the pit.' },
+        { id: 'speedrun', label: 'Speedrun', kind: 'run', tiers: true, col: 'Time',
+          note: (tier) => `All five titans back to back on a fight-time clock, ${tier} grade. Fastest cumulative time wins.` },
+        { id: 'raid', label: 'Raid', kind: 'run', board: 'ff2-raid-time', col: 'Time',
+          note: () => 'Squad titan raids. The whole crew ranks on one row, under whoever posted it.' },
+        { id: 'goopliath', label: 'Goopliath', kind: 'run', board: 'ff2-goopliath-time', col: 'Time',
+          note: () => 'The tide raid: one long fight, one clock.' },
+        { id: 'lab', label: 'The Lab', kind: 'lab', col: '',
+          note: () => 'Every recorded bout, and what they add up to.' },
+      ];
+
+      const ff = { board: 'speedrun', tier: 'normal', rows: [], players: [], cache: new Map(), loaded: false };
+      ff.board = 'ranked';
+
+      /** The board id a rail tab reads from, tier included. */
+      function ffBoardId(def, tier) {
+        if (def.tiers) return `ff2-speedrun-${tier}-time`;
+        return def.board;
+      }
+
+      async function loadFf(force) {
+        const def = FF_BOARDS.find((b) => b.id === ff.board);
+        if (!def) return;
+        if (def.kind === 'lab') return loadLab(force);
+        const status = document.getElementById('ff-status');
+        const rowsEl = document.getElementById('ff-rows');
+        const key = def.kind === 'player' ? `p:${def.field()}` : `b:${ffBoardId(def, ff.tier)}`;
+        document.getElementById('ff-title').textContent = def.label + (def.tiers ? ` · ${ff.tier}` : '');
+        document.getElementById('ff-note').textContent = def.note(ff.tier);
+        document.getElementById('ff-caps').innerHTML =
+          `<span class="c-rank">#</span><span class="c-name">${def.kind === 'run' ? 'Run' : 'Boxer'}</span>` +
+          `<span class="c-score">${esc(def.col)}</span>`;
+
+        if (!force && ff.cache.has(key)) return paintFf(def, ff.cache.get(key));
+        rowsEl.innerHTML = '';
+        showStatus(status, 'READING THE BOARD', '', false);
+        setStatus('READING THE BOARD', 'warn');
+        try {
+          let rows;
+          if (def.kind === 'player') {
+            const f = def.field();
+            const docs = await runQuery('players', { orderBy: f, dir: 'DESCENDING', limit: 100 });
+            rows = docs
+              .map((d) => ({
+                name: d.data.name || '???',
+                value: Number(d.data[f]) || 0,
+                look: d.data.look || '',
+              }))
+              .filter((r) => r.value > 0);
+            if (!ff.players.length) ff.players = docs;
+          } else {
+            const docs = await runQuery('rows', {
+              parent: `boards/${ffBoardId(def, ff.tier)}`,
+              orderBy: 'value',
+              dir: 'ASCENDING',
+              limit: 100,
+            });
+            rows = docs.map((d) => ({
+              name: d.data.name || '???',
+              value: Number(d.data.value) || 0,
+              names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [],
+              difficulty: d.data.meta?.difficulty || 'normal',
+              hardcore: !!d.data.meta?.hardcore,
+              at: Number(d.data.at) || 0,
+            }));
+          }
+          ff.cache.set(key, rows);
+          paintFf(def, rows);
+          setStatus('BOARD IS LIVE', 'live');
+        } catch (err) {
+          showStatus(status, 'THE BOARD IS UNREACHABLE', 'Try again in a minute.', true);
+          setStatus('BOARD UNREACHABLE', 'danger');
+        }
+      }
+
+      function paintFf(def, rows) {
+        const status = document.getElementById('ff-status');
+        const rowsEl = document.getElementById('ff-rows');
+        document.getElementById('ff-meta').textContent = rows.length
+          ? `${rows.length} ${rows.length === 1 ? 'entry' : 'entries'}`
+          : '';
+        if (!rows.length) {
+          rowsEl.innerHTML = '';
+          showStatus(status, 'NOBODY HAS POSTED HERE YET', 'The board is open — go and set the first.', true);
+          drawFfStrip();
+          return;
+        }
+        status.classList.add('hidden');
+        rowsEl.innerHTML = rows
+          .map((r, i) => {
+            if (def.kind === 'player') {
+              return `<li class="row ${rowClass(i)}"><span class="rank">${i + 1}</span>` +
+                `<span class="name">${esc(r.name)}${paintChips(r.look)}</span>` +
+                `<span class="score">${num(r.value)}</span></li>`;
+            }
+            const squad = r.names.length > 1 ? r.names.map(esc).join(' · ') : esc(r.name);
+            const chips =
+              (r.difficulty === 'hard' ? '<span class="diff-chip hard">HARD</span>' : '') +
+              (r.difficulty === 'blazing' ? '<span class="diff-chip blazing">BLAZING</span>' : '') +
+              (r.hardcore ? '<span class="diff-chip hc">HC</span>' : '');
+            return `<li class="row ${rowClass(i)}"><span class="rank">${i + 1}</span>` +
+              `<span class="name">${squad}${chips}</span>` +
+              `<span class="when">${esc(ago(r.at))}</span>` +
+              `<span class="score">${runClock(r.value)}</span></li>`;
+          })
+          .join('');
+        drawFfStrip();
+      }
+
+      /** The strip over the FIRE FIGHT rail: who leads, how deep the board
+       *  goes, and the fastest speedrun anyone has posted. */
+      function drawFfStrip() {
+        const host = document.getElementById('ff-strip');
+        const ranked = ff.cache.get(`p:score_s${seasonIndex()}`) || [];
+        const xp = ff.cache.get('p:xp') || [];
+        let fastest = null;
+        for (const tier of TIERS) {
+          const rows = ff.cache.get(`b:ff2-speedrun-${tier.id}-time`) || [];
+          if (rows[0] && (!fastest || rows[0].value < fastest.value)) fastest = { ...rows[0], tier: tier.label };
+        }
+        const tiles = [
+          { cap: `Season ${seasonIndex()} leader`, val: ranked[0] ? esc(ranked[0].name) : '—', sub: ranked[0] ? `${num(ranked[0].value)} points` : 'nobody has banked a point' },
+          { cap: 'Fastest speedrun', val: fastest ? runClock(fastest.value) : '—', sub: fastest ? `${esc(fastest.name)} · ${fastest.tier}` : 'the titans stand unbeaten', minor: true },
+          { cap: 'Most experience', val: xp[0] ? num(xp[0].value) : '—', sub: xp[0] ? esc(xp[0].name) : 'no XP banked yet', minor: true },
+        ];
+        host.innerHTML = tiles
+          .map((t) => `<div class="stat${t.minor ? ' minor' : ''}"><div class="cap">${t.cap}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`)
+          .join('');
+      }
+
+      function drawFfRail() {
+        fillRail('board-rail', 'board-marker', FF_BOARDS, ff.board, (id) => {
+          ff.board = id;
+          drawFfRail();
+          syncFfFace();
+          void loadFf(false);
+        });
+        const def = FF_BOARDS.find((b) => b.id === ff.board);
+        const tierRail = document.getElementById('tier-rail');
+        if (def && def.tiers) {
+          tierRail.classList.remove('hidden');
+          fillRail('tier-rail', 'tier-marker', TIERS, ff.tier, (id) => {
+            ff.tier = id;
+            drawFfRail();
+            void loadFf(false);
+          });
+        } else {
+          tierRail.classList.add('hidden');
+        }
+      }
+
+      /** THE LAB is a board of this rail, so the stage gives way to it. */
+      function syncFfFace() {
+        const isLab = ff.board === 'lab';
+        document.getElementById('ff-stage').classList.toggle('hidden', isLab);
+        document.getElementById('lab').classList.toggle('hidden', !isLab);
+      }
+
+      /* ══ THE LAB ══════════════════════════════════════════════════════ */
+
+      const PART = ['head', 'chest', 'pelvis', 'body'];
+      const OUTW = ['WIN', 'LOSS', 'DRAW'];
+      const KIND_LABEL = {
+        '1v1': '1V1', '2v2': '2V2', ffa: 'FFA', raid: 'TITAN RAID',
+        gauntlet: 'SPEEDRUN', solo: 'SOLO', club: 'THE CLUB',
+      };
+      const lab = { all: [], boxer: '', open: null, loaded: false };
+      window.__ffLab = {
+        inject: (docs) => { lab.all = docs.map(normBout); lab.loaded = true; drawLab(); },
+        state: () => lab,
+      };
+
+      function normBout(d) {
+        const b = d.data || d;
+        return {
+          id: d.id,
+          kind: b.kind || 'solo',
+          net: !!b.net,
+          quick: !!b.quick,
+          ranked: !!b.ranked,
+          name: b.name || (b.me && b.me.name) || '???',
+          names: Array.isArray(b.names) ? b.names.map(String) : [],
+          win: !!b.win,
+          score: Array.isArray(b.score) ? b.score : [],
+          dur: Number(b.dur) || 0,
+          at: b.at ? new Date(typeof b.at === 'number' ? b.at : b.at) : null,
+          rounds: Array.isArray(b.rounds) ? b.rounds : [],
+          thr: b.thr || { n: 0, l: 0, r: 0, spd: 0 },
+          hits: b.hits || {},
+          par: Number(b.par) || 0,
+          grid: b.grid && b.grid.w ? b.grid : null,
+          ev: Array.isArray(b.ev) ? b.ev : [],
+          boss: b.boss || null,
+        };
+      }
+
+      async function loadLab(force) {
+        const status = document.getElementById('lab-status');
+        if (lab.loaded && !force) { drawLab(); return; }
+        showStatus(status, 'PULLING THE TAPES', '', false);
+        setStatus('PULLING THE TAPES', 'warn');
+        try {
+          const docs = await runQuery('bouts', { orderBy: 'at', dir: 'DESCENDING', limit: 200 });
+          lab.all = docs.map(normBout);
+          lab.loaded = true;
+          setStatus('TAPES ARE IN', 'live');
+          drawLab();
+        } catch {
+          showStatus(status, 'THE TAPE ROOM IS UNREACHABLE', 'Try again in a minute.', true);
+          setStatus('TAPES UNREACHABLE', 'danger');
+        }
+      }
+
+      /** The tapes the filter leaves standing. A tape belongs to whoever
+       *  recorded it, so filtering by boxer is filtering by author. */
+      function labRows() {
+        return lab.boxer ? lab.all.filter((b) => b.name === lab.boxer) : lab.all;
+      }
+
+      function drawLab() {
+        // The picker lists everyone who has a tape of their own.
+        const sel = document.getElementById('lab-boxer');
+        const names = [...new Set(lab.all.map((b) => b.name))].filter(Boolean).sort();
+        if (!names.includes(lab.boxer)) lab.boxer = '';
+        sel.innerHTML =
+          '<option value="">Everyone</option>' +
+          names
+            .map((n) => '<option value="' + esc(n) + '"' + (n === lab.boxer ? ' selected' : '') + '>' + esc(n) + '</option>')
+            .join('');
+        sel.onchange = () => { lab.boxer = sel.value; lab.open = null; drawLab(); };
+
+        const rows = labRows();
+        document.getElementById('lab-count').textContent = lab.all.length
+          ? rows.length + ' of ' + lab.all.length + (lab.all.length === 1 ? ' tape' : ' tapes')
+          : '';
+        const status = document.getElementById('lab-status');
+        if (!rows.length) {
+          showStatus(
+            status,
+            lab.all.length ? 'NO TAPES FROM THIS BOXER' : 'NO TAPES YET',
+            lab.all.length ? 'Pick another name, or everyone.' : 'Fight something for a quarter of a minute and it records itself.',
+            true,
+          );
+        } else {
+          status.classList.add('hidden');
+        }
+
+        const sum = (f) => rows.reduce((a, b) => a + (Number(f(b)) || 0), 0);
+        const n = rows.length || 1;
+        const throws = sum((b) => b.thr.n);
+        const dealt = sum((b) => b.hits.dealt);
+        const taken = sum((b) => b.hits.taken);
+        const heads = sum((b) => b.hits.head);
+        const par = sum((b) => b.par);
+        const dur = sum((b) => b.dur);
+        const left = sum((b) => b.thr.l);
+        const right = sum((b) => b.thr.r);
+        const roundsAll = rows.flatMap((b) => b.rounds);
+        const kos = roundsAll.filter((r) => r.res === 'ko').length;
+        const wins = rows.filter((b) => b.win).length;
+        const spd = throws ? sum((b) => (Number(b.thr.spd) || 0) * (Number(b.thr.n) || 0)) / throws : 0;
+
+        const tiles = [
+          { cap: 'Tapes', val: num(rows.length), sub: `${wins} won · ${rows.length - wins} lost` },
+          { cap: 'Hit rate', val: pct(dealt, throws), sub: `${num(dealt)} landed of ${num(throws)}`, minor: true },
+          { cap: 'Headshots', val: pct(heads, dealt), sub: `${num(heads)} found a head`, minor: true },
+          { cap: 'Throws a bout', val: (throws / n).toFixed(1), sub: dur ? `${(throws / (dur / 60)).toFixed(1)} a minute` : '', minor: true },
+          { cap: 'Parries a bout', val: (par / n).toFixed(1), sub: `${num(par)} balls slapped down`, minor: true },
+          { cap: 'Rounds by KO', val: pct(kos, roundsAll.length), sub: `${kos} of ${roundsAll.length}`, minor: true },
+          { cap: 'Swing speed', val: spd ? spd.toFixed(1) : '—', sub: 'metres a second at release', minor: true },
+          { cap: 'Hits taken a bout', val: (taken / n).toFixed(1), sub: `${num(sum((b) => b.hits.takenHead))} to your head`, minor: true },
+        ];
+        document.getElementById('lab-tiles').innerHTML = tiles
+          .map((t) => `<div class="stat${t.minor ? ' minor' : ''}"><div class="cap">${t.cap}</div><div class="val">${t.val}</div><div class="sub">${t.sub}</div></div>`)
+          .join('');
+
+        for (const key of ['stand', 'thrL', 'thrR', 'hit']) drawHeat(document.getElementById(`heat-${key}`), rows, key);
+
+        const dl = sum((b) => b.hits.dealtL);
+        const dr = sum((b) => b.hits.dealtR);
+        const bar = (label, a, b, la, lb) => {
+          const t = a + b || 1;
+          return `<div><div class="bar-label">${label}</div><div class="bar">` +
+            `<i class="l" style="width:${(a / t) * 100}%"></i><i class="r" style="width:${(b / t) * 100}%"></i>` +
+            `<em><span>LEFT ${la}</span><span>RIGHT ${lb}</span></em></div></div>`;
+        };
+        document.getElementById('lab-hands').innerHTML =
+          bar('Throws by hand', left, right, num(left), num(right)) +
+          bar('Hits landed by hand', dl, dr, num(dl), num(dr)) +
+          bar('Accuracy by hand', left ? dl / left : 0, right ? dr / right : 0, pct(dl, left), pct(dr, right));
+
+        // Where damage lands, read off the play-by-play rather than the totals:
+        // the part is only known on the sim that ruled the hit.
+        const partTally = { dealt: [0, 0, 0, 0], taken: [0, 0, 0, 0] };
+        for (const b of rows) {
+          for (const e of b.ev) {
+            if (e[1] === 2 && e[5] >= 0) partTally.dealt[e[5]] += 1;
+            else if (e[1] === 1 && e[6] >= 0) partTally.taken[e[6]] += 1;
+          }
+        }
+        const partBar = (label, tally) => {
+          const total = tally.reduce((a, b) => a + b, 0) || 1;
+          const head = tally[0];
+          const body = tally[1] + tally[2] + tally[3];
+          return `<div><div class="bar-label">${label}</div><div class="bar">` +
+            `<i class="l" style="width:${(head / total) * 100}%"></i><i class="r" style="width:${(body / total) * 100}%"></i>` +
+            `<em><span>HEAD ${pct(head, total)}</span><span>BODY ${pct(body, total)}</span></em></div></div>`;
+        };
+        document.getElementById('lab-parts').innerHTML =
+          partBar('Where you land it', partTally.dealt) + partBar('Where you take it', partTally.taken);
+
+        const host = document.getElementById('lab-tape');
+        host.innerHTML = rows
+          .map((b, i) => {
+            const others = b.names.filter((x) => x !== b.name);
+            const who = `<b>${esc(b.name)}</b>${others.length ? ' vs ' + others.map(esc).join(' · ') : ''}` +
+              (b.boss ? ` <span class="diff-chip">${esc(b.boss.name)}</span>` : '');
+            return `<div class="tape-row" data-i="${i}">` +
+              `<span class="when">${esc(b.at ? ago(b.at.toISOString()) : '')}</span>` +
+              `<span class="kind">${esc(KIND_LABEL[b.kind] || b.kind.toUpperCase())}</span>` +
+              `<span class="who">${who}</span>` +
+              `<span class="verdict ${b.win ? 'w' : 'l'}">${b.win ? 'WIN' : 'LOSS'} ${b.score.length ? esc(b.score.join('–')) : ''}</span>` +
+              `<span class="clock">${clock(b.dur)}</span></div>` +
+              (lab.open === b.id ? `<div class="tape-open">${tapeOpen(b)}</div>` : '');
+          })
+          .join('');
+        host.querySelectorAll('.tape-row').forEach((r) =>
+          r.addEventListener('click', () => {
+            const b = rows[Number(r.dataset.i)];
+            lab.open = lab.open === b.id ? null : b.id;
+            drawLab();
+            const c = document.querySelector('#lab-tape .tape-open canvas');
+            if (c) drawHealthStrip(c, rows.find((x) => x.id === lab.open));
+          }),
+        );
+        const c = document.querySelector('#lab-tape .tape-open canvas');
+        if (c && lab.open) drawHealthStrip(c, rows.find((x) => x.id === lab.open));
+      }
+
+      /* The platform footprint (src/config.ts OCTAGON_*): 1.72 × 1.5 m,
+         chamfered. Drawn with −z UP, which is the way you face the fight. */
+      const HALF_W = 0.86, HALF_D = 0.75, EDGE_HALF = 0.55, CHAMFER = 0.44;
+      const OCT = [
+        [-EDGE_HALF, -HALF_D], [EDGE_HALF, -HALF_D], [HALF_W, -CHAMFER], [HALF_W, CHAMFER],
+        [EDGE_HALF, HALF_D], [-EDGE_HALF, HALF_D], [-HALF_W, CHAMFER], [-HALF_W, -CHAMFER],
+      ];
+
+      /** An octagon of cells, brightest where the count peaks. Log-scaled,
+       *  so one hot corner doesn't black out everything around it. */
+      function drawHeat(canvas, rows, key) {
+        if (!canvas) return;
+        const g = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        g.clearRect(0, 0, W, H);
+        const gw = 16, gh = 14;
+        const acc = new Float64Array(gw * gh);
+        for (const b of rows) {
+          if (!b.grid || !b.grid[key] || b.grid.w !== gw) continue;
+          b.grid[key].forEach((v, i) => { acc[i] += Number(v) || 0; });
+        }
+        const max = Math.max(1, ...acc);
+        const pad = 26, pw = W - pad * 2, ph = H - pad * 2 - 12;
+        const X = (x) => pad + (x + HALF_W) * (pw / (HALF_W * 2));
+        const Z = (z) => pad + 12 + (z + HALF_D) * (ph / (HALF_D * 2));
+        const path = () => {
+          g.beginPath();
+          OCT.forEach(([x, z], i) => (i ? g.lineTo(X(x), Z(z)) : g.moveTo(X(x), Z(z))));
+          g.closePath();
+        };
+        g.save();
+        path();
+        g.clip();
+        g.fillStyle = 'rgba(255,255,255,0.03)';
+        g.fillRect(0, 0, W, H);
+        for (let r = 0; r < gh; r++) {
+          for (let c = 0; c < gw; c++) {
+            const v = acc[r * gw + c];
+            if (!v) continue;
+            g.fillStyle = heatColour(Math.log1p(v) / Math.log1p(max));
+            g.fillRect(pad + (c / gw) * pw, pad + 12 + (r / gh) * ph, pw / gw + 0.6, ph / gh + 0.6);
+          }
+        }
+        g.restore();
+        path();
+        g.strokeStyle = 'rgba(255,176,46,0.75)';
+        g.lineWidth = 2;
+        g.stroke();
+        g.font = '700 11px Rajdhani, system-ui, sans-serif';
+        g.fillStyle = 'rgba(243,240,234,0.52)';
+        g.textAlign = 'center';
+        g.textBaseline = 'top';
+        g.fillText('▲ THE FIGHT', W / 2, 3);
+        g.textBaseline = 'bottom';
+        g.fillText(max > 1 ? `peak ${Math.round(max)}` : 'no data yet', W / 2, H - 3);
+      }
+      /** Gunmetal, then ember, amber, white-hot — the fire's own ramp. */
+      function heatColour(t) {
+        const stops = [[0, [26, 24, 30]], [0.35, [140, 29, 24]], [0.7, [255, 122, 24]], [0.9, [255, 176, 46]], [1, [255, 243, 207]]];
+        for (let i = 1; i < stops.length; i++) {
+          if (t <= stops[i][0]) {
+            const [t0, a] = stops[i - 1], [t1, b] = stops[i];
+            const k = (t - t0) / (t1 - t0 || 1);
+            return `rgb(${a.map((x, j) => Math.round(x + (b[j] - x) * k)).join(',')})`;
+          }
+        }
+        return 'rgb(255,243,207)';
+      }
+
+      /** The open tape: the rounds, both health lines, the play-by-play. */
+      function tapeOpen(b) {
+        const rounds = b.rounds.length
+          ? `<table class="tape-rounds"><tr><th>Rd</th><th>Result</th><th>How</th><th>You</th><th>Them</th><th>Time</th></tr>` +
+            b.rounds
+              .map((r) => `<tr><td>${r.n}</td><td class="${r.out === 'win' ? 'w' : r.out === 'loss' ? 'l' : ''}">${esc(String(r.out).toUpperCase())}</td>` +
+                `<td>${r.res === 'ko' ? 'KO' : 'TIME'}</td><td>${r.hp?.[0] ?? ''}</td><td>${r.hp?.[1] ?? ''}</td><td>${clock(r.dur)}</td></tr>`)
+              .join('') + `</table>`
+          : '';
+        const hand = (h) => (h === 0 ? 'left' : 'right');
+        const pbp = b.ev
+          .map((e) => {
+            const t = `<b>${clock(e[0])}</b>`;
+            switch (e[1]) {
+              case 0: return `${t} threw ${hand(e[2])} from (${e[3]}, ${e[4]}) at ${e[5]} m/s`;
+              case 1: return `${t} <span class="tk">took ${e[5]} to the ${PART[e[6]] || 'body'}</span> off their ${hand(e[2])}${e[7] ? ' on the return' : ''}, standing at (${e[3]}, ${e[4]})`;
+              case 2: return `${t} <span class="hit">landed ${e[3]}</span> with the ${hand(e[2])}${e[5] >= 0 ? ` to the ${PART[e[5]]}` : ''}${e[4] ? ' on the return' : ''}`;
+              case 3: return `${t} <span class="pa">parried</span> with the ${hand(e[2])}`;
+              case 4: return `${t} <span class="rd">ROUND ${e[2]} — ${OUTW[e[3]] || ''} by ${e[4] === 0 ? 'KO' : 'the clock'} · you ${e[5]} · them ${e[6]}</span>`;
+              default: return '';
+            }
+          })
+          .filter(Boolean)
+          .join('<br>');
+        const meta = [
+          b.net ? 'online' : 'offline',
+          b.ranked ? 'ranked' : b.quick ? 'quick match' : '',
+          b.boss ? `vs ${b.boss.name}, stage ${(b.boss.stage || 0) + 1}` : '',
+          `${b.ev.length} events`,
+        ].filter(Boolean).join(' · ');
+        return `<p class="panel-note">${esc(meta)}</p>${rounds}<canvas width="900" height="96"></canvas>` +
+          `<div class="pbp">${pbp || 'this tape carries no events'}</div>`;
+      }
+
+      /** Both health lines over the bout, rebuilt from the tape's hits:
+       *  yours in ember, theirs in cool blue, refilled at every round. */
+      function drawHealthStrip(canvas, b) {
+        if (!canvas || !b) return;
+        const g = canvas.getContext('2d');
+        const W = canvas.width, H = canvas.height;
+        g.clearRect(0, 0, W, H);
+        const T = Math.max(1, b.dur || (b.ev.length ? b.ev[b.ev.length - 1][0] : 1));
+        let me = 100, them = 100;
+        const mine = [[0, 100]], theirs = [[0, 100]];
+        for (const e of b.ev) {
+          if (e[1] === 1) { me = Math.max(0, me - e[5]); mine.push([e[0], me]); }
+          else if (e[1] === 2) { them = Math.max(0, them - e[3]); theirs.push([e[0], them]); }
+          else if (e[1] === 4) {
+            mine.push([e[0], me]); theirs.push([e[0], them]);
+            me = 100; them = 100;
+            mine.push([e[0] + 0.01, 100]); theirs.push([e[0] + 0.01, 100]);
+            g.strokeStyle = 'rgba(255,176,46,0.3)';
+            g.lineWidth = 1;
+            g.beginPath();
+            g.moveTo((e[0] / T) * W, 0);
+            g.lineTo((e[0] / T) * W, H);
+            g.stroke();
+          }
+        }
+        mine.push([T, me]); theirs.push([T, them]);
+        const line = (pts, col) => {
+          g.strokeStyle = col;
+          g.lineWidth = 2.5;
+          g.beginPath();
+          const y = (hp) => H - 8 - (hp / 100) * (H - 16);
+          pts.forEach(([t, hp], i) => {
+            const x = (t / T) * W;
+            if (i === 0) g.moveTo(x, y(hp));
+            else { g.lineTo(x, y(pts[i - 1][1])); g.lineTo(x, y(hp)); }
+          });
+          g.stroke();
+        };
+        line(theirs, '#4fb7ff');
+        line(mine, '#ff7a18');
+        g.font = '700 11px Rajdhani, system-ui, sans-serif';
+        g.textAlign = 'left';
+        g.textBaseline = 'top';
+        g.fillStyle = '#ff7a18';
+        g.fillText('YOU', 8, 6);
+        g.fillStyle = '#4fb7ff';
+        g.fillText('THEM', 40, 6);
+      }
+
+      /* ══ RAVE RAID ════════════════════════════════════════════════════ */
+
+      /* The record box (src/rave/audio/tracks.ts). Anything the board
+         carries that isn't listed still shows, under its own id. */
+      const RR_TRACKS = [
+        ['sakupened', 'SAKUPENED'], ['combat', 'COMBAT'], ['discoball', 'DISCO BALL'],
+        ['loop', 'LOOP'], ['capture', 'CAPTURE'], ['morning', 'MORNING'],
+        ['money', 'MONEY'], ['target', 'TARGET'], ['breakcore', 'BREAKCORE'],
+        ['dynasty', 'DYNASTY'], ['spread', 'SPREAD'], ['unity', 'UNITY'],
+        ['assemble', 'ASSEMBLE'], ['infection', 'INFECTION'], ['giveit', 'GIVE IT TO ME'],
+        ['vone', 'ORIGINAL'], ['fusion', 'FUSION'], ['braineater', 'BRAIN EATER'],
+        ['credits', 'CREDITS'], ['chill', 'CHILL'], ['futurevibe', 'FUTURE VIBE'],
+        ['vfall', 'BREAKCORE V4'], ['defense', 'DEFENSE'], ['awakening', 'AWAKENING'],
+        ['swag', 'SWAG'], ['eclipse', 'ECLIPSE'],
+      ];
+      const RR_DIFFS = [
+        { id: '0', label: 'Easy' }, { id: '1', label: 'Normal' },
+        { id: '2', label: 'Hard' }, { id: '3', label: 'Expert' },
+      ];
+      const GRADE_COLOUR = { S: 'var(--g-s)', A: 'var(--g-a)', B: 'var(--g-b)', C: 'var(--g-c)', F: 'var(--g-f)' };
+      const rr = { track: RR_TRACKS[0][0], diff: '1', cache: new Map() };
+
+      /** A rave chart's board id — mirrors src/net/boards.ts raveBoard(). */
+      const raveBoard = (track, diff) =>
+        `rave-${String(track).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${diff}`;
+
+      function drawRrRail() {
+        fillRail('rr-rail', 'rr-marker', RR_DIFFS, rr.diff, (id) => {
+          rr.diff = id;
+          drawRrRail();
+          drawRrSongs();
+          void loadRr(false);
         });
       }
-      ffCache.set(board.id, rows);
-    }
-    if (ffBoard !== board) return;
-    if (!rows.length) { state.textContent = 'NO ENTRIES YET — THE BOARD IS OPEN.'; return; }
-    state.classList.add('hidden');
-    if (board.kind === 'player') {
-      table.innerHTML = `<tr><th>#</th><th>Boxer</th><th style="text-align:right;padding-right:18px">${board.col}</th></tr>` +
-        rows.map((r, i) =>
-          `<tr class="${rowClass(i)}"><td class="rank">${i + 1}</td><td>${esc(r.name)}${paintChips(r.look)}</td><td class="val">${num(r.value)}</td></tr>`).join('');
-    } else {
-      table.innerHTML = `<tr><th>#</th><th>Squad</th><th style="text-align:right;padding-right:18px">TIME</th></tr>` +
-        rows.map((r, i) => {
-          const badges =
-            (r.difficulty === 'hard' ? '<span class="badge b-hard">HARD</span>' :
-             r.difficulty === 'blazing' ? '<span class="badge b-blazing">BLAZING</span>' : '') +
-            (r.hardcore ? '<span class="badge b-hc">HC</span>' : '');
-          return `<tr class="${rowClass(i)}"><td class="rank">${i + 1}</td>` +
-            `<td class="names">${r.names.map(esc).join(' · ')}${badges}</td>` +
-            `<td class="val">${clock(r.seconds)}</td></tr>`;
+
+      function drawRrSongs() {
+        const host = document.getElementById('rr-songs');
+        host.innerHTML = RR_TRACKS.map(([id, name]) => {
+          const rows = rr.cache.get(raveBoard(id, rr.diff));
+          const runs = rows ? rows.length : null;
+          const best = rows && rows[0] ? rows[0].grade : '';
+          return `<li><button class="song" type="button" data-id="${id}" aria-current="${id === rr.track}">` +
+            `<span class="title">${esc(name)}</span>` +
+            `<span class="runs">${runs === null ? '' : runs}</span>` +
+            `<span class="best" style="color:${GRADE_COLOUR[best] || 'var(--faint)'}">${esc(best)}</span>` +
+            `</button></li>`;
         }).join('');
-    }
-  } catch (err) {
-    if (ffBoard !== board) return;
-    state.textContent = 'BOARD UNREACHABLE — TRY AGAIN IN A MINUTE.';
-  }
-}
+        host.querySelectorAll('.song').forEach((b) =>
+          b.addEventListener('click', () => {
+            rr.track = b.dataset.id;
+            drawRrSongs();
+            void loadRr(false);
+          }),
+        );
+      }
 
-/* ── RAVE RAID ──────────────────────────────────────────────────────────── */
+      async function loadRr(force) {
+        const status = document.getElementById('rr-status');
+        const rowsEl = document.getElementById('rr-rows');
+        const board = raveBoard(rr.track, rr.diff);
+        const name = (RR_TRACKS.find(([id]) => id === rr.track) || [rr.track, rr.track])[1];
+        document.getElementById('rr-title').textContent = `${name} · ${(RR_DIFFS.find((d) => d.id === rr.diff) || {}).label || ''}`;
+        if (!force && rr.cache.has(board)) return paintRr(rr.cache.get(board));
+        rowsEl.innerHTML = '';
+        showStatus(status, 'READING THE BOARD', '', false);
+        setStatus('READING THE BOARD', 'warn');
+        try {
+          const docs = await runQuery('rows', { parent: `boards/${board}`, orderBy: 'value', dir: 'DESCENDING', limit: 100 });
+          const rows = docs.map((d) => ({
+            name: d.data.name || '???',
+            value: Number(d.data.value) || 0,
+            grade: (d.data.meta && d.data.meta.grade) || '',
+            at: Number(d.data.at) || 0,
+          }));
+          rr.cache.set(board, rows);
+          paintRr(rows);
+          drawRrSongs();
+          setStatus('BOARD IS LIVE', 'live');
+        } catch {
+          showStatus(status, 'THE BOARD IS UNREACHABLE', 'Try again in a minute.', true);
+          setStatus('BOARD UNREACHABLE', 'danger');
+        }
+      }
 
-const RR_TRACKS = [
-  ['sakupened', 'SAKUPENED'], ['combat', 'COMBAT'], ['discoball', 'DISCO BALL'],
-  ['loop', 'LOOP'], ['capture', 'CAPTURE'], ['morning', 'MORNING'],
-  ['money', 'MONEY'], ['target', 'TARGET'], ['breakcore', 'BREAKCORE'],
-  ['dynasty', 'DYNASTY'], ['spread', 'SPREAD'], ['unity', 'UNITY'],
-  ['assemble', 'ASSEMBLE'], ['infection', 'INFECTION'], ['giveit', 'GIVE IT TO ME'],
-  ['vone', 'ORIGINAL'], ['fusion', 'FUSION'], ['braineater', 'BRAIN EATER'],
-  ['credits', 'CREDITS'], ['chill', 'CHILL'], ['futurevibe', 'FUTURE VIBE'],
-  ['vfall', 'BREAKCORE V4'], ['defense', 'DEFENSE'], ['awakening', 'AWAKENING'],
-  ['swag', 'SWAG'], ['eclipse', 'ECLIPSE'],
-];
-const RR_DIFFS = ['EASY', 'NORMAL', 'HARD', 'EXPERT'];
-let rrTrack = RR_TRACKS[0][0];
-let rrDiff = 1;
-const rrCache = new Map();
+      function paintRr(rows) {
+        const status = document.getElementById('rr-status');
+        const rowsEl = document.getElementById('rr-rows');
+        document.getElementById('rr-meta').textContent = rows.length ? `${rows.length} on the board` : '';
+        if (!rows.length) {
+          rowsEl.innerHTML = '';
+          showStatus(status, 'NO RUNS ON THIS CHART YET', 'Set the first and the board is yours.', true);
+          return;
+        }
+        status.classList.add('hidden');
+        rowsEl.innerHTML = rows
+          .map((r, i) =>
+            `<li class="row ${rowClass(i)}"><span class="rank">${i + 1}</span>` +
+            `<span class="name">${esc(r.name)}</span>` +
+            `<span class="when">${esc(ago(r.at))}</span>` +
+            `<span class="score">${num(r.value)}</span>` +
+            `<span class="grade" style="color:${GRADE_COLOUR[r.grade] || 'var(--faint)'}">${esc(r.grade)}</span></li>`,
+          )
+          .join('');
+      }
 
-function drawRrPickers() {
-  const sel = document.getElementById('rr-track');
-  sel.innerHTML = RR_TRACKS.map(([id, name]) =>
-    `<option value="${id}"${id === rrTrack ? ' selected' : ''}>${name}</option>`).join('');
-  sel.onchange = () => { rrTrack = sel.value; void loadRr(); };
-  const seg = document.getElementById('rr-diff');
-  seg.innerHTML = RR_DIFFS.map((d, i) =>
-    `<button class="${i === rrDiff ? 'on' : ''}" data-i="${i}">${d}</button>`).join('');
-  seg.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => {
-    rrDiff = Number(btn.dataset.i); drawRrPickers(); void loadRr();
-  }));
-}
+      /* ══ THE CHANNEL ══════════════════════════════════════════════════ */
 
-async function loadRr() {
-  const title = document.getElementById('rr-title');
-  const table = document.getElementById('rr-table');
-  const state = document.getElementById('rr-state');
-  const track = rrTrack, diff = rrDiff;
-  const name = RR_TRACKS.find(([id]) => id === track)[1];
-  title.textContent = `${name} — ${RR_DIFFS[diff]}`;
-  table.innerHTML = '';
-  state.classList.remove('hidden');
-  state.textContent = 'PULLING THE BOARD…';
-  try {
-    const key = `${track}|${diff}`;
-    let rows = rrCache.get(key);
-    if (!rows) {
-      rows = (await runQuery(RR, {
-        from: [{ collectionId: 'scores' }],
-        where: { compositeFilter: { op: 'AND', filters: [
-          whereEq('track', { stringValue: track }),
-          whereEq('diff', { integerValue: String(diff) }),
-        ] } },
-        orderBy: [orderBy('score', 'DESCENDING')],
-        limit: 100,
-      })).map((d) => ({ name: d.data.name || '???', score: d.data.score || 0, grade: d.data.grade || 'F' }));
-      rrCache.set(key, rows);
-    }
-    if (rrTrack !== track || rrDiff !== diff) return;
-    if (!rows.length) { state.textContent = 'NO RUNS ON THIS CHART YET — SET THE FIRST.'; return; }
-    state.classList.add('hidden');
-    table.innerHTML = `<tr><th>#</th><th>Raider</th><th style="text-align:center">Grade</th><th style="text-align:right;padding-right:18px">SCORE</th></tr>` +
-      rows.map((r, i) =>
-        `<tr class="${rowClass(i)}"><td class="rank">${i + 1}</td><td>${esc(r.name)}</td>` +
-        `<td class="grade g-${esc(r.grade)}">${esc(r.grade)}</td><td class="val">${num(r.score)}</td></tr>`).join('');
-  } catch (err) {
-    if (rrTrack !== track || rrDiff !== diff) return;
-    state.textContent = 'BOARD UNREACHABLE — TRY AGAIN IN A MINUTE.';
-  }
-}
+      /* The transmitter: ?tv= wins, then the room server beside a dev page,
+         then the hosted room server (src/config.ts ROOM_SERVER). */
+      function tvUrl() {
+        const p = new URLSearchParams(location.search).get('tv');
+        if (p) return p;
+        if (location.protocol !== 'https:') return `ws://${location.hostname}:8787/tv`;
+        return 'wss://ff2-room.onrender.com/tv';
+      }
 
-/* ── THE CHANNEL ────────────────────────────────────────────────────────── */
+      const TEAM_HEX = ['#ff7a18', '#4fb7ff', '#57e389', '#b06bff'];
+      const tv = {
+        ws: null, wanted: false, retryT: 0, connected: false,
+        guide: { channels: [], featured: null, club: { rooms: 0, people: 0 } },
+        watching: null, pinned: null,
+        frame: null, prev: null, frameAt: 0, prevAt: 0,
+        club: null, raf: 0, lastDraw: 0,
+      };
+      window.__ffTv = {
+        state: () => ({ watching: tv.watching, frame: tv.frame, club: tv.club, guide: tv.guide, connected: tv.connected }),
+      };
 
-/* The platform footprint (src/config.ts OCTAGON_*): 1.72 × 1.5 m, chamfered.
- * Drawn top-down with −z UP — the caster's own frame, its platform at the
- * origin, the fight ahead of it. */
-const HALF_W = 0.86, HALF_D = 0.75, EDGE_HALF = 0.55, CHAMFER = 0.44;
-const OCT = [[-EDGE_HALF, -HALF_D], [EDGE_HALF, -HALF_D], [HALF_W, -CHAMFER], [HALF_W, CHAMFER], [EDGE_HALF, HALF_D], [-EDGE_HALF, HALF_D], [-HALF_W, CHAMFER], [-HALF_W, -CHAMFER]];
-const TEAM_HEX = ['#ff7a18', '#4fb7ff', '#57e389', '#b06bff'];
-const KIND_LABEL = { '1v1': '1V1', '2v2': '2V2', ffa: 'FFA', raid: 'TITAN RAID', solo: 'SOLO BOUT', club: 'THE CLUB' };
+      function tvConnect() {
+        if (tv.ws || !tv.wanted) return;
+        let ws;
+        try { ws = new WebSocket(tvUrl()); } catch { tvRetry(); return; }
+        tv.ws = ws;
+        ws.onopen = () => {
+          tv.connected = true;
+          ws.send(JSON.stringify({ t: 'watch' }));
+          if (tv.pinned) ws.send(JSON.stringify({ t: 'tune', id: tv.pinned }));
+          tvBar();
+        };
+        ws.onmessage = (ev) => {
+          let m;
+          try { m = JSON.parse(ev.data); } catch { return; }
+          if (m.t === 'guide') {
+            tv.guide = { channels: m.channels || [], featured: m.featured ?? null, club: m.club || { rooms: 0, people: 0 } };
+            if (tv.pinned && !tv.guide.channels.some((c) => c.id === tv.pinned)) tv.pinned = null;
+            tvGuide();
+            tvBar();
+          } else if (m.t === 'f') {
+            if (tv.watching !== m.id) { tv.prev = null; tv.watching = m.id; }
+            else { tv.prev = tv.frame; tv.prevAt = tv.frameAt; }
+            tv.frame = m.f;
+            tv.frame.kind = m.kind;
+            tv.frameAt = performance.now();
+            tvBar();
+          } else if (m.t === 'club') {
+            tv.club = m.f;
+            if (tv.watching !== 'club') { tv.watching = 'club'; tv.frame = null; tv.prev = null; tvBar(); }
+          }
+        };
+        ws.onclose = () => {
+          if (tv.ws === ws) tv.ws = null;
+          tv.connected = false;
+          tvBar();
+          tvRetry();
+        };
+        ws.onerror = () => {};
+      }
+      function tvRetry() {
+        if (!tv.wanted) return;
+        clearTimeout(tv.retryT);
+        tv.retryT = setTimeout(tvConnect, 4000);
+      }
+      function tvOpen() {
+        tv.wanted = true;
+        tvConnect();
+        if (!tv.raf) tvLoop();
+      }
+      function tvClose() {
+        tv.wanted = false;
+        clearTimeout(tv.retryT);
+        try { tv.ws?.close(); } catch {}
+        tv.ws = null;
+        cancelAnimationFrame(tv.raf);
+        tv.raf = 0;
+      }
+      function tvTune(id) {
+        tv.pinned = id;
+        if (tv.ws && tv.ws.readyState === 1) tv.ws.send(JSON.stringify({ t: 'tune', id }));
+        tvGuide();
+      }
 
-/* The transmitter: ?tv= > the room server beside a dev page > the hosted
- * room server (src/config.ts TV.defaultRelay). */
-function tvUrl() {
-  const p = new URLSearchParams(location.search).get('tv');
-  if (p) return p;
-  if (location.protocol !== 'https:') return `ws://${location.hostname}:8787/tv`;
-  return 'wss://rave-raid-relay.onrender.com/tv';
-}
+      function tvLive() {
+        return tv.watching && tv.watching !== 'club' && tv.frame && performance.now() - tv.frameAt < 6000;
+      }
 
-const tv = {
-  ws: null, wanted: false, retryT: 0,
-  guide: { channels: [], featured: null, club: { rooms: 0, people: 0 } },
-  watching: null,            // channel id, 'club', or null (nothing yet)
-  frame: null, prev: null, frameAt: 0, prevAt: 0,
-  club: null, clubAt: 0,
-  pinned: null,
-  connected: false,
-  raf: 0,
-  lastDraw: 0,
-};
-window.__ffTv = { state: () => ({ watching: tv.watching, frame: tv.frame, club: tv.club, guide: tv.guide, connected: tv.connected }) };
+      function tvBar() {
+        const badge = document.getElementById('tv-onair');
+        const title = document.getElementById('tv-title');
+        const clockEl = document.getElementById('tv-clock');
+        if (!tv.connected) {
+          badge.className = 'onair';
+          badge.textContent = 'NO SIGNAL';
+          title.textContent = 'the room server is not answering';
+          clockEl.textContent = '';
+          if (face === 'tv') setStatus('NO SIGNAL', 'danger');
+          return;
+        }
+        if (tvLive()) {
+          const ch = tv.guide.channels.find((c) => c.id === tv.watching);
+          badge.className = 'onair live';
+          badge.textContent = 'LIVE';
+          title.textContent = `${KIND_LABEL[tv.frame.kind] || ''} · ${ch ? ch.title : ''}`;
+          clockEl.textContent = tv.frame.tm != null ? `RD ${tv.frame.rd || 1} · ${clock(tv.frame.tm)}` : (tv.frame.boss ? tv.frame.boss.n : '');
+          if (face === 'tv') setStatus('ON AIR', 'onair');
+        } else {
+          badge.className = 'onair';
+          badge.textContent = tv.guide.club.people ? 'THE CLUB' : 'OFF AIR';
+          title.textContent = tv.guide.club.people
+            ? `THE CLUB · ${tv.guide.club.people} on the floor`
+            : 'nothing on air — the club is dark';
+          clockEl.textContent = '';
+          if (face === 'tv') setStatus(tv.guide.club.people ? 'PEEPING INTO THE CLUB' : 'NOTHING ON AIR', 'warn');
+        }
+      }
 
-function tvConnect() {
-  if (tv.ws || !tv.wanted) return;
-  let ws;
-  try { ws = new WebSocket(tvUrl()); } catch { tvRetry(); return; }
-  tv.ws = ws;
-  ws.onopen = () => { tv.connected = true; ws.send(JSON.stringify({ t: 'watch' })); if (tv.pinned) ws.send(JSON.stringify({ t: 'tune', id: tv.pinned })); tvBar(); };
-  ws.onmessage = (ev) => {
-    let m; try { m = JSON.parse(ev.data); } catch { return; }
-    if (m.t === 'guide') {
-      tv.guide = { channels: m.channels || [], featured: m.featured ?? null, club: m.club || { rooms: 0, people: 0 } };
-      if (tv.pinned && !tv.guide.channels.some((c) => c.id === tv.pinned)) tv.pinned = null;
-      tvGuide(); tvBar();
-    } else if (m.t === 'f') {
-      if (tv.watching !== m.id) { tv.prev = null; tv.watching = m.id; }
-      else { tv.prev = tv.frame; tv.prevAt = tv.frameAt; }
-      tv.frame = m.f; tv.frame.kind = m.kind; tv.frameAt = performance.now();
-      tvBar();
-    } else if (m.t === 'club') {
-      tv.club = m.f; tv.clubAt = performance.now();
-      if (tv.watching !== 'club') { tv.watching = 'club'; tv.frame = null; tv.prev = null; tvBar(); }
-    }
-  };
-  ws.onclose = () => { if (tv.ws === ws) tv.ws = null; tv.connected = false; tvBar(); tvRetry(); };
-  ws.onerror = () => {};
-}
-function tvRetry() {
-  if (!tv.wanted) return;
-  clearTimeout(tv.retryT);
-  tv.retryT = setTimeout(tvConnect, 4000);
-}
-function tvOpen() {
-  tv.wanted = true;
-  tvConnect();
-  if (!tv.raf) tvLoop();
-}
-function tvClose() {
-  tv.wanted = false;
-  clearTimeout(tv.retryT);
-  try { tv.ws?.close(); } catch {}
-  tv.ws = null;
-  cancelAnimationFrame(tv.raf); tv.raf = 0;
-}
-function tvTune(id) {
-  tv.pinned = id;
-  if (tv.ws && tv.ws.readyState === 1) tv.ws.send(JSON.stringify({ t: 'tune', id }));
-  tvGuide();
-}
+      function tvGuide() {
+        const host = document.getElementById('tv-guide');
+        const auto = `<button type="button" data-id="" aria-pressed="${!tv.pinned}">AUTO</button>`;
+        const chans = tv.guide.channels
+          .map((c) => `<button type="button" data-id="${esc(c.id)}" aria-pressed="${tv.pinned === c.id}">` +
+            `<i class="dot ${c.kind === 'solo' ? 'solo' : ''}"></i>${esc(KIND_LABEL[c.kind] || c.kind)} · ${esc(c.title)}</button>`)
+          .join('');
+        const club = `<button type="button" disabled><i class="dot club"></i>THE CLUB · ${tv.guide.club.people} on the floor</button>`;
+        host.innerHTML = auto + chans + club;
+        host.querySelectorAll('button[data-id]').forEach((b) =>
+          b.addEventListener('click', () => tvTune(b.dataset.id || null)),
+        );
+      }
 
-function tvBar() {
-  const badge = document.getElementById('tv-onair');
-  const title = document.getElementById('tv-title');
-  const clockEl = document.getElementById('tv-clock');
-  const live = tv.watching && tv.watching !== 'club' && tv.frame && performance.now() - tv.frameAt < 6000;
-  if (!tv.connected) {
-    badge.className = 'onair'; badge.textContent = 'NO SIGNAL';
-    title.textContent = 'the room server is not answering'; clockEl.textContent = '';
-    return;
-  }
-  if (live) {
-    const ch = tv.guide.channels.find((c) => c.id === tv.watching);
-    badge.className = 'onair live'; badge.textContent = 'LIVE';
-    title.textContent = `${KIND_LABEL[tv.frame.kind] || ''} · ${ch ? ch.title : ''}`;
-    clockEl.textContent = tv.frame.tm != null ? `RD ${tv.frame.rd || 1} · ${clock(tv.frame.tm)}` : (tv.frame.boss ? `${tv.frame.boss.n}` : '');
-  } else {
-    badge.className = 'onair'; badge.textContent = tv.guide.club.people ? 'THE CLUB' : 'OFF AIR';
-    title.textContent = tv.guide.club.people ? `THE CLUB · ${tv.guide.club.people} on the floor` : 'nothing on — the club is dark';
-    clockEl.textContent = '';
-  }
-}
+      const cv = document.getElementById('tv-canvas');
+      const cx = cv.getContext('2d');
+      function tvLoop() {
+        tv.raf = requestAnimationFrame(tvLoop);
+        const now = performance.now();
+        if (now - tv.lastDraw < 33) return;
+        tv.lastDraw = now;
+        drawTv(now);
+      }
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const lerp3 = (a, b, t) => (a && b ? [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)] : b || a);
 
-function tvGuide() {
-  const host = document.getElementById('tv-guide');
-  const auto = `<button class="${tv.pinned ? '' : 'on'}" data-id="">AUTO</button>`;
-  const chans = tv.guide.channels.map((c) =>
-    `<button class="${tv.pinned === c.id ? 'on' : ''}" data-id="${esc(c.id)}"><i class="dot ${c.kind === 'solo' ? 'solo' : ''}"></i>${esc(KIND_LABEL[c.kind] || c.kind)} · ${esc(c.title)}</button>`).join('');
-  const club = `<button disabled><i class="dot club"></i>THE CLUB · ${tv.guide.club.people} on the floor</button>`;
-  host.innerHTML = auto + chans + club;
-  host.querySelectorAll('button[data-id]').forEach((b) => b.addEventListener('click', () => tvTune(b.dataset.id || null)));
-}
+      function drawTv(now) {
+        cx.fillStyle = '#06050a';
+        cx.fillRect(0, 0, cv.width, cv.height);
+        if (!tv.connected) return drawCard('NO SIGNAL', tvUrl().replace(/^wss?:\/\//, ''), 'rgba(243,240,234,0.52)');
+        if (tvLive()) return drawMatch(now);
+        if (tv.club && tv.club.rooms && tv.club.rooms.length) return drawClub(now);
+        drawCard('THE CLUB IS DARK', 'nobody on the floor · nothing on air', '#ff2ad5');
+      }
 
-/* ── drawing ── */
-const cv = document.getElementById('tv-canvas');
-const cx = cv.getContext('2d');
-function tvLoop() {
-  tv.raf = requestAnimationFrame(tvLoop);
-  const now = performance.now();
-  if (now - tv.lastDraw < 33) return;
-  tv.lastDraw = now;
-  drawTv(now);
-}
-const lerp = (a, b, t) => a + (b - a) * t;
-const lerp3 = (a, b, t) => (a && b ? [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)] : b || a);
+      function drawCard(big, small, colour) {
+        const W = cv.width, H = cv.height;
+        for (let i = 0; i < 700; i++) {
+          cx.fillStyle = `rgba(255,255,255,${Math.random() * 0.04})`;
+          cx.fillRect(Math.random() * W, Math.random() * H, 3, 2);
+        }
+        cx.textAlign = 'center';
+        cx.textBaseline = 'middle';
+        cx.fillStyle = colour;
+        cx.font = '700 46px Rajdhani, system-ui, sans-serif';
+        cx.fillText(big, W / 2, H / 2 - 14);
+        cx.fillStyle = 'rgba(243,240,234,0.52)';
+        cx.font = '600 16px Rajdhani, system-ui, sans-serif';
+        cx.fillText(small, W / 2, H / 2 + 28);
+      }
 
-function drawTv(now) {
-  const W = cv.width, H = cv.height;
-  cx.fillStyle = '#07080a'; cx.fillRect(0, 0, W, H);
-  if (!tv.connected) return drawCard('NO SIGNAL', tvUrl().replace(/^wss?:\/\//, ''), '#8b8f98', true);
-  const live = tv.watching && tv.watching !== 'club' && tv.frame && now - tv.frameAt < 6000;
-  if (live) return drawMatch(now);
-  if (tv.club && tv.club.rooms.length) return drawClub(now);
-  drawCard('THE CLUB IS DARK', 'nobody on the floor · nothing on air', '#ff3df0', true);
-}
+      /** Fit the frame's platforms (and the titan) into the screen, −z up. */
+      function fitView(points, margin) {
+        const W = cv.width, H = cv.height;
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (const [x, z] of points) {
+          minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+          minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+        }
+        const spanX = Math.max(3, maxX - minX), spanZ = Math.max(3, maxZ - minZ);
+        const scale = Math.min((W - margin * 2) / spanX, (H - margin * 2) / spanZ);
+        const midX = (minX + maxX) / 2, midZ = (minZ + maxZ) / 2;
+        return { scale, sx: (x) => W / 2 + (x - midX) * scale, sz: (z) => H / 2 + (z - midZ) * scale };
+      }
 
-function drawCard(big, small, colour, noise) {
-  const W = cv.width, H = cv.height;
-  if (noise) {
-    for (let i = 0; i < 900; i++) {
-      cx.fillStyle = `rgba(255,255,255,${Math.random() * 0.05})`;
-      cx.fillRect(Math.random() * W, Math.random() * H, 3, 2);
-    }
-  }
-  cx.textAlign = 'center'; cx.textBaseline = 'middle';
-  cx.fillStyle = colour; cx.font = '900 44px "Segoe UI", system-ui, sans-serif';
-  cx.fillText(big, W / 2, H / 2 - 14);
-  cx.fillStyle = '#8b8f98'; cx.font = '600 15px "Segoe UI", system-ui, sans-serif';
-  cx.fillText(small, W / 2, H / 2 + 30);
-}
+      function octPath(v, px, pz, yaw) {
+        cx.beginPath();
+        OCT.forEach(([ox, oz], i) => {
+          const c = Math.cos(yaw), s = Math.sin(yaw);
+          const x = px + ox * c + oz * s, z = pz - ox * s + oz * c;
+          if (i === 0) cx.moveTo(v.sx(x), v.sz(z));
+          else cx.lineTo(v.sx(x), v.sz(z));
+        });
+        cx.closePath();
+      }
 
-/* Fit the frame's platforms (and the titan) into the screen, −z up. */
-function fitView(points, margin) {
-  const W = cv.width, H = cv.height;
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const [x, z] of points) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
-  const spanX = Math.max(3, maxX - minX), spanZ = Math.max(3, maxZ - minZ);
-  const scale = Math.min((W - margin * 2) / spanX, (H - margin * 2) / spanZ);
-  const midX = (minX + maxX) / 2, midZ = (minZ + maxZ) / 2;
-  return { scale, sx: (x) => W / 2 + (x - midX) * scale, sz: (z) => H / 2 + (z - midZ) * scale };
-}
+      function hpBar(x, y, w, frac, colour, label) {
+        cx.fillStyle = 'rgba(0,0,0,0.5)';
+        cx.fillRect(x, y, w, 7);
+        cx.fillStyle = frac < 0.25 ? '#ff5266' : colour;
+        cx.fillRect(x, y, w * Math.max(0, Math.min(1, frac)), 7);
+        cx.strokeStyle = 'rgba(255,255,255,.25)';
+        cx.lineWidth = 1;
+        cx.strokeRect(x + 0.5, y + 0.5, w - 1, 6);
+        if (label) {
+          cx.fillStyle = '#fff';
+          cx.font = '700 14px Rajdhani, system-ui, sans-serif';
+          cx.textAlign = 'center';
+          cx.textBaseline = 'bottom';
+          cx.fillText(label, x + w / 2, y - 3);
+        }
+      }
 
-function octPath(v, px, pz, yaw) {
-  cx.beginPath();
-  OCT.forEach(([ox, oz], i) => {
-    const c = Math.cos(yaw), s = Math.sin(yaw);
-    const x = px + ox * c + oz * s, z = pz - ox * s + oz * c;
-    if (i === 0) cx.moveTo(v.sx(x), v.sz(z)); else cx.lineTo(v.sx(x), v.sz(z));
-  });
-  cx.closePath();
-}
+      function drawMatch(now) {
+        const f = tv.frame, p0 = tv.prev;
+        const t = p0 ? Math.min(1, (now - tv.frameAt) / Math.max(60, tv.frameAt - tv.prevAt)) : 1;
+        const W = cv.width, H = cv.height;
+        const pts = [];
+        for (const p of f.p) for (const [ox, oz] of OCT) pts.push([p.pl[0] + ox * 1.2, p.pl[1] + oz * 1.2]);
+        if (f.boss) { pts.push([f.boss.x - 1.6, f.boss.z - 1.6]); pts.push([f.boss.x + 1.6, f.boss.z + 1.6]); }
+        const v = fitView(pts, 70);
+        cx.strokeStyle = 'rgba(255,255,255,.035)';
+        cx.lineWidth = 1;
+        for (let x = -12; x <= 12; x++) { cx.beginPath(); cx.moveTo(v.sx(x), 0); cx.lineTo(v.sx(x), H); cx.stroke(); }
+        for (let z = -12; z <= 12; z++) { cx.beginPath(); cx.moveTo(0, v.sz(z)); cx.lineTo(W, v.sz(z)); cx.stroke(); }
+        f.p.forEach((p) => {
+          const col = TEAM_HEX[p.t % 4];
+          octPath(v, p.pl[0], p.pl[1], p.pl[2]);
+          cx.fillStyle = 'rgba(255,255,255,0.045)';
+          cx.fill();
+          cx.strokeStyle = col;
+          cx.lineWidth = 2.5;
+          cx.stroke();
+          cx.save();
+          cx.globalAlpha = 0.18;
+          cx.lineWidth = 9;
+          cx.stroke();
+          cx.restore();
+        });
+        if (f.boss) {
+          const bx = v.sx(f.boss.x), bz = v.sz(f.boss.z), r = 0.9 * v.scale;
+          const g = cx.createRadialGradient(bx, bz, r * 0.2, bx, bz, r * 1.6);
+          g.addColorStop(0, 'rgba(255,75,62,.55)');
+          g.addColorStop(1, 'rgba(255,75,62,0)');
+          cx.fillStyle = g;
+          cx.beginPath();
+          cx.arc(bx, bz, r * 1.6, 0, Math.PI * 2);
+          cx.fill();
+          cx.fillStyle = '#2a1512';
+          cx.strokeStyle = '#ff4b3e';
+          cx.lineWidth = 3;
+          cx.beginPath();
+          cx.arc(bx, bz, r, 0, Math.PI * 2);
+          cx.fill();
+          cx.stroke();
+          hpBar(bx - r * 1.4, bz - r - 18, r * 2.8, f.boss.hp, '#ff4b3e', f.boss.n || 'THE TITAN');
+        }
+        const prevBalls = p0 ? p0.b : null;
+        (f.b || []).forEach((b, i) => {
+          const q = prevBalls && prevBalls[i] && prevBalls[i][0] === b[0] ? prevBalls[i] : null;
+          const x = q ? lerp(q[1], b[1], t) : b[1], z = q ? lerp(q[3], b[3], t) : b[3];
+          const owner = f.p[b[0]];
+          const col = owner ? TEAM_HEX[owner.t % 4] : '#ffb02e';
+          const rr2 = Math.max(4, (b[5] || 0.09) * v.scale * 1.8);
+          const g = cx.createRadialGradient(v.sx(x), v.sz(z), 0, v.sx(x), v.sz(z), rr2 * 3);
+          g.addColorStop(0, col);
+          g.addColorStop(0.35, col + '88');
+          g.addColorStop(1, col + '00');
+          cx.fillStyle = g;
+          cx.beginPath();
+          cx.arc(v.sx(x), v.sz(z), rr2 * 3, 0, Math.PI * 2);
+          cx.fill();
+          cx.fillStyle = b[4] === 2 ? '#fff3cf' : col;
+          cx.beginPath();
+          cx.arc(v.sx(x), v.sz(z), rr2, 0, Math.PI * 2);
+          cx.fill();
+        });
+        f.p.forEach((p, i) => {
+          const q = p0 && p0.p[i] ? p0.p[i] : null;
+          const h = lerp3(q && q.h, p.h, t), l = lerp3(q && q.l, p.l, t), r = lerp3(q && q.r, p.r, t);
+          const col = TEAM_HEX[p.t % 4];
+          const hx = v.sx(h[0]), hz = v.sz(h[2]);
+          for (const hand of [l, r]) {
+            cx.strokeStyle = col + 'aa';
+            cx.lineWidth = 2;
+            cx.beginPath();
+            cx.moveTo(hx, hz);
+            cx.lineTo(v.sx(hand[0]), v.sz(hand[2]));
+            cx.stroke();
+            cx.fillStyle = col;
+            cx.beginPath();
+            cx.arc(v.sx(hand[0]), v.sz(hand[2]), 0.06 * v.scale, 0, Math.PI * 2);
+            cx.fill();
+          }
+          const hr = 0.16 * v.scale;
+          cx.fillStyle = p.hp > 0 ? '#f3f0ea' : '#3a3d46';
+          cx.strokeStyle = col;
+          cx.lineWidth = 3;
+          cx.beginPath();
+          cx.arc(hx, hz, hr, 0, Math.PI * 2);
+          cx.fill();
+          cx.stroke();
+          cx.beginPath();
+          cx.moveTo(hx, hz);
+          cx.lineTo(hx - Math.sin(p.yaw) * hr * 1.6, hz - Math.cos(p.yaw) * hr * 1.6);
+          cx.stroke();
+          const bw = 1.3 * v.scale;
+          hpBar(v.sx(p.pl[0]) - bw / 2, v.sz(p.pl[1]) + HALF_D * v.scale * 1.05 + 16, bw, p.hp, col, p.n || '');
+        });
+        cx.textAlign = 'left';
+        cx.textBaseline = 'top';
+        const sc = (f.sc || []).map((s) => `${'●'.repeat(s)}${'○'.repeat(Math.max(0, 3 - s))}`).join('   ');
+        if (sc) {
+          cx.fillStyle = '#f3f0ea';
+          cx.font = '700 17px Rajdhani, system-ui, sans-serif';
+          cx.fillText(sc, 16, 12);
+        }
+        if (f.tm != null) {
+          cx.textAlign = 'right';
+          cx.fillStyle = f.ph === 'playing' && f.tm <= 10 ? '#ff5266' : '#f3f0ea';
+          cx.font = '700 30px Rajdhani, system-ui, sans-serif';
+          cx.fillText(clock(f.tm), W - 16, 8);
+        }
+        if (f.msg) {
+          cx.textAlign = 'center';
+          cx.textBaseline = 'middle';
+          cx.fillStyle = 'rgba(0,0,0,.35)';
+          cx.fillRect(0, H / 2 - 44, W, 88);
+          cx.fillStyle = f.msg.includes('KO') || f.msg.includes('DEFEAT') ? '#ff5266' : '#ffb02e';
+          cx.font = '700 58px Rajdhani, system-ui, sans-serif';
+          cx.fillText(f.msg, W / 2, H / 2);
+        }
+        cx.textAlign = 'left';
+        cx.textBaseline = 'bottom';
+        cx.fillStyle = 'rgba(243,240,234,0.4)';
+        cx.font = '600 12px Rajdhani, system-ui, sans-serif';
+        cx.fillText('TOP-DOWN · THE FIGHT IS UP THE SCREEN', 16, H - 10);
+      }
 
-function hpBar(x, y, w, frac, colour, label) {
-  cx.fillStyle = '#0d0f12'; cx.fillRect(x, y, w, 7);
-  cx.fillStyle = frac < 0.25 ? '#ff4b3e' : colour; cx.fillRect(x, y, w * Math.max(0, Math.min(1, frac)), 7);
-  cx.strokeStyle = 'rgba(255,255,255,.25)'; cx.lineWidth = 1; cx.strokeRect(x + 0.5, y + 0.5, w - 1, 6);
-  if (label) {
-    cx.fillStyle = '#e8e4da'; cx.font = '800 13px "Segoe UI", system-ui, sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'bottom';
-    cx.fillText(label, x + w / 2, y - 3);
-  }
-}
+      function drawClub(now) {
+        const W = cv.width, H = cv.height;
+        const room = tv.club.rooms.slice().sort((a, b) => b.members.length - a.members.length)[0];
+        const placed = room.members.filter((m) => m.x != null && !m.away);
+        const pts = placed.map((m) => [m.x, m.z]);
+        if (room.ball) pts.push([room.ball.pos[0], room.ball.pos[2]]);
+        if (!pts.length) pts.push([-3, -3], [3, 3]);
+        pts.push([pts[0][0] - 3, pts[0][1] - 3], [pts[0][0] + 3, pts[0][1] + 3]);
+        const v = fitView(pts, 80);
+        cx.strokeStyle = 'rgba(255,42,213,.08)';
+        cx.lineWidth = 1;
+        for (let x = -20; x <= 20; x++) { cx.beginPath(); cx.moveTo(v.sx(x), 0); cx.lineTo(v.sx(x), H); cx.stroke(); }
+        for (let z = -20; z <= 20; z++) { cx.beginPath(); cx.moveTo(0, v.sz(z)); cx.lineTo(W, v.sz(z)); cx.stroke(); }
+        if (room.ball) {
+          const bx = v.sx(room.ball.pos[0]), bz = v.sz(room.ball.pos[2]);
+          const spin = (now / 400) % (Math.PI * 2);
+          for (let i = 0; i < 10; i++) {
+            const a = spin + (i / 10) * Math.PI * 2;
+            cx.fillStyle = `rgba(255,255,255,${0.15 + 0.5 * Math.abs(Math.sin(a * 3 + now / 300))})`;
+            cx.beginPath();
+            cx.arc(bx + Math.cos(a) * 16, bz + Math.sin(a) * 16, 3, 0, Math.PI * 2);
+            cx.fill();
+          }
+          cx.fillStyle = '#f3f0ea';
+          cx.beginPath();
+          cx.arc(bx, bz, 10, 0, Math.PI * 2);
+          cx.fill();
+          cx.strokeStyle = '#ff2ad5';
+          cx.lineWidth = 3;
+          cx.beginPath();
+          cx.arc(bx, bz, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (room.ball.ms / 60000));
+          cx.stroke();
+          cx.textAlign = 'center';
+          cx.textBaseline = 'top';
+          cx.fillStyle = '#ff2ad5';
+          cx.font = '700 14px Rajdhani, system-ui, sans-serif';
+          cx.fillText(
+            `${(KIND_LABEL[room.ball.mode] || room.ball.mode).toUpperCase()} · ${room.ball.name} · ${Math.ceil(room.ball.ms / 1000)}s · ${room.ball.joins + 1} in`,
+            bx, bz + 30,
+          );
+        }
+        placed.forEach((m) => {
+          const col = m.hue == null ? '#c9ced6' : `hsl(${Math.round(m.hue * 360)} 80% 62%)`;
+          const x = v.sx(m.x), z = v.sz(m.z);
+          if (m.lx != null) {
+            for (const [hx, hz] of [[m.lx, m.lz], [m.rx, m.rz]]) {
+              cx.strokeStyle = col + 'aa';
+              cx.lineWidth = 2;
+              cx.beginPath();
+              cx.moveTo(x, z);
+              cx.lineTo(v.sx(hx), v.sz(hz));
+              cx.stroke();
+              cx.fillStyle = col;
+              cx.beginPath();
+              cx.arc(v.sx(hx), v.sz(hz), 4, 0, Math.PI * 2);
+              cx.fill();
+            }
+          }
+          const hr = Math.max(7, 0.16 * v.scale);
+          cx.fillStyle = '#f3f0ea';
+          cx.strokeStyle = col;
+          cx.lineWidth = 3;
+          cx.beginPath();
+          cx.arc(x, z, hr, 0, Math.PI * 2);
+          cx.fill();
+          cx.stroke();
+          cx.beginPath();
+          cx.moveTo(x, z);
+          cx.lineTo(x - Math.sin(m.yaw) * hr * 1.6, z - Math.cos(m.yaw) * hr * 1.6);
+          cx.stroke();
+          cx.textAlign = 'center';
+          cx.textBaseline = 'bottom';
+          cx.fillStyle = col;
+          cx.font = '700 13px Rajdhani, system-ui, sans-serif';
+          cx.fillText((m.crown ? '👑 ' : '') + m.name, x, z - hr - 4);
+        });
+        const away = room.members.filter((m) => m.away).map((m) => m.name);
+        cx.textAlign = 'left';
+        cx.textBaseline = 'top';
+        cx.fillStyle = '#ff2ad5';
+        cx.font = '700 18px Rajdhani, system-ui, sans-serif';
+        cx.fillText(`THE CLUB · ROOM ${room.code} · ${room.members.length} IN`, 16, 12);
+        if (away.length) {
+          cx.fillStyle = 'rgba(243,240,234,0.52)';
+          cx.font = '600 13px Rajdhani, system-ui, sans-serif';
+          cx.fillText(`AWAY ON A SET: ${away.join(' · ')}`, 16, 38);
+        }
+        cx.textAlign = 'left';
+        cx.textBaseline = 'bottom';
+        cx.fillStyle = 'rgba(243,240,234,0.4)';
+        cx.font = '600 12px Rajdhani, system-ui, sans-serif';
+        cx.fillText('PEEPING INTO THE PUBLIC FLOOR — NOTHING ON AIR', 16, H - 10);
+      }
 
-function drawMatch(now) {
-  const f = tv.frame, p0 = tv.prev;
-  const t = p0 ? Math.min(1, (now - tv.frameAt) / Math.max(60, tv.frameAt - tv.prevAt)) : 1;
-  const W = cv.width, H = cv.height;
-  const pts = [];
-  for (const p of f.p) for (const [ox, oz] of OCT) pts.push([p.pl[0] + ox * 1.2, p.pl[1] + oz * 1.2]);
-  if (f.boss) { pts.push([f.boss.x - 1.6, f.boss.z - 1.6]); pts.push([f.boss.x + 1.6, f.boss.z + 1.6]); }
-  const v = fitView(pts, 70);
-  // floor grid
-  cx.strokeStyle = 'rgba(255,255,255,.035)'; cx.lineWidth = 1;
-  for (let x = -12; x <= 12; x++) { cx.beginPath(); cx.moveTo(v.sx(x), 0); cx.lineTo(v.sx(x), H); cx.stroke(); }
-  for (let z = -12; z <= 12; z++) { cx.beginPath(); cx.moveTo(0, v.sz(z)); cx.lineTo(W, v.sz(z)); cx.stroke(); }
-  // platforms
-  f.p.forEach((p) => {
-    const col = TEAM_HEX[p.t % 4];
-    octPath(v, p.pl[0], p.pl[1], p.pl[2]);
-    cx.fillStyle = '#16191e'; cx.fill();
-    cx.strokeStyle = col; cx.lineWidth = 2.5; cx.stroke();
-    cx.save(); cx.globalAlpha = 0.18; cx.strokeStyle = col; cx.lineWidth = 9; cx.stroke(); cx.restore();
-  });
-  // the titan
-  if (f.boss) {
-    const bx = v.sx(f.boss.x), bz = v.sz(f.boss.z), r = 0.9 * v.scale;
-    const g = cx.createRadialGradient(bx, bz, r * 0.2, bx, bz, r * 1.6);
-    g.addColorStop(0, 'rgba(255,75,62,.55)'); g.addColorStop(1, 'rgba(255,75,62,0)');
-    cx.fillStyle = g; cx.beginPath(); cx.arc(bx, bz, r * 1.6, 0, Math.PI * 2); cx.fill();
-    cx.fillStyle = '#2a1512'; cx.strokeStyle = '#ff4b3e'; cx.lineWidth = 3;
-    cx.beginPath(); cx.arc(bx, bz, r, 0, Math.PI * 2); cx.fill(); cx.stroke();
-    hpBar(bx - r * 1.4, bz - r - 18, r * 2.8, f.boss.hp, '#ff4b3e', f.boss.n || 'THE TITAN');
-  }
-  // balls
-  const prevBalls = p0 ? p0.b : null;
-  (f.b || []).forEach((b, i) => {
-    const q = prevBalls && prevBalls[i] && prevBalls[i][0] === b[0] ? prevBalls[i] : null;
-    const x = q ? lerp(q[1], b[1], t) : b[1], z = q ? lerp(q[3], b[3], t) : b[3];
-    const owner = f.p[b[0]];
-    const col = owner ? TEAM_HEX[owner.t % 4] : '#ffb02e';
-    const rr = Math.max(4, (b[5] || 0.09) * v.scale * 1.8);
-    const g = cx.createRadialGradient(v.sx(x), v.sz(z), 0, v.sx(x), v.sz(z), rr * 3);
-    g.addColorStop(0, col); g.addColorStop(0.35, col + '88'); g.addColorStop(1, col + '00');
-    cx.fillStyle = g; cx.beginPath(); cx.arc(v.sx(x), v.sz(z), rr * 3, 0, Math.PI * 2); cx.fill();
-    cx.fillStyle = b[4] === 2 ? '#fff3cf' : col; cx.beginPath(); cx.arc(v.sx(x), v.sz(z), rr, 0, Math.PI * 2); cx.fill();
-  });
-  // fighters
-  f.p.forEach((p, i) => {
-    const q = p0 && p0.p[i] ? p0.p[i] : null;
-    const h = lerp3(q && q.h, p.h, t), l = lerp3(q && q.l, p.l, t), r = lerp3(q && q.r, p.r, t);
-    const col = TEAM_HEX[p.t % 4];
-    const hx = v.sx(h[0]), hz = v.sz(h[2]);
-    // hands
-    for (const hand of [l, r]) {
-      cx.strokeStyle = col + 'aa'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(hx, hz); cx.lineTo(v.sx(hand[0]), v.sz(hand[2])); cx.stroke();
-      cx.fillStyle = col; cx.beginPath(); cx.arc(v.sx(hand[0]), v.sz(hand[2]), 0.06 * v.scale, 0, Math.PI * 2); cx.fill();
-    }
-    // head + facing
-    const hr = 0.16 * v.scale;
-    cx.fillStyle = p.hp > 0 ? '#e8e4da' : '#3a3d46'; cx.strokeStyle = col; cx.lineWidth = 3;
-    cx.beginPath(); cx.arc(hx, hz, hr, 0, Math.PI * 2); cx.fill(); cx.stroke();
-    cx.strokeStyle = col; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(hx, hz);
-    cx.lineTo(hx - Math.sin(p.yaw) * hr * 1.6, hz - Math.cos(p.yaw) * hr * 1.6); cx.stroke();
-    // name + health over the platform's back edge
-    const bw = 1.3 * v.scale;
-    hpBar(v.sx(p.pl[0]) - bw / 2, v.sz(p.pl[1]) + HALF_D * v.scale * 1.05 + 16, bw, p.hp, col, p.n || '');
-  });
-  // header: score + clock; centre: the message
-  cx.textAlign = 'left'; cx.textBaseline = 'top';
-  cx.fillStyle = '#8b8f98'; cx.font = '800 13px "Segoe UI", system-ui, sans-serif';
-  const sc = (f.sc || []).map((s, i) => `${'●'.repeat(s)}${'○'.repeat(Math.max(0, 3 - s))}`).join('   ');
-  if (sc) { cx.fillStyle = '#e8e4da'; cx.font = '700 16px "Segoe UI", system-ui, sans-serif'; cx.fillText(sc, 16, 12); }
-  if (f.tm != null) { cx.textAlign = 'right'; cx.fillStyle = f.ph === 'playing' && f.tm <= 10 ? '#ff4b3e' : '#e8e4da'; cx.font = '900 26px "Segoe UI", system-ui, sans-serif'; cx.fillText(clock(f.tm), W - 16, 10); }
-  if (f.msg) {
-    cx.textAlign = 'center'; cx.textBaseline = 'middle';
-    cx.fillStyle = 'rgba(0,0,0,.35)'; cx.fillRect(0, H / 2 - 44, W, 88);
-    cx.fillStyle = f.msg.includes('KO') || f.msg.includes('DEFEAT') ? '#ff4b3e' : '#ffb02e';
-    cx.font = '900 56px "Segoe UI", system-ui, sans-serif'; cx.fillText(f.msg, W / 2, H / 2);
-  }
-  cx.textAlign = 'left'; cx.textBaseline = 'bottom'; cx.fillStyle = '#565b64'; cx.font = '700 11px "Segoe UI", system-ui, sans-serif';
-  cx.fillText('TOP-DOWN · THE FIGHT IS UP THE SCREEN', 16, H - 10);
-}
+      /* ══ THE FACES ════════════════════════════════════════════════════ */
 
-function drawClub(now) {
-  const W = cv.width, H = cv.height;
-  const room = tv.club.rooms.slice().sort((a, b) => b.members.length - a.members.length)[0];
-  const placed = room.members.filter((m) => m.x != null && !m.away);
-  const pts = placed.map((m) => [m.x, m.z]);
-  if (room.ball) pts.push([room.ball.pos[0], room.ball.pos[2]]);
-  if (!pts.length) pts.push([-3, -3], [3, 3]);
-  pts.push([pts[0][0] - 3, pts[0][1] - 3], [pts[0][0] + 3, pts[0][1] + 3]);
-  const v = fitView(pts, 80);
-  // the floor: a dark disco checker
-  cx.strokeStyle = 'rgba(255,61,240,.08)'; cx.lineWidth = 1;
-  for (let x = -20; x <= 20; x++) { cx.beginPath(); cx.moveTo(v.sx(x), 0); cx.lineTo(v.sx(x), H); cx.stroke(); }
-  for (let z = -20; z <= 20; z++) { cx.beginPath(); cx.moveTo(0, v.sz(z)); cx.lineTo(W, v.sz(z)); cx.stroke(); }
-  if (room.ball) {
-    const bx = v.sx(room.ball.pos[0]), bz = v.sz(room.ball.pos[2]);
-    const spin = (now / 400) % (Math.PI * 2);
-    for (let i = 0; i < 10; i++) {
-      const a = spin + (i / 10) * Math.PI * 2;
-      cx.fillStyle = `rgba(255,255,255,${0.15 + 0.5 * Math.abs(Math.sin(a * 3 + now / 300))})`;
-      cx.beginPath(); cx.arc(bx + Math.cos(a) * 16, bz + Math.sin(a) * 16, 3, 0, Math.PI * 2); cx.fill();
-    }
-    cx.fillStyle = '#e8e4da'; cx.beginPath(); cx.arc(bx, bz, 10, 0, Math.PI * 2); cx.fill();
-    cx.strokeStyle = '#ff3df0'; cx.lineWidth = 3; cx.beginPath(); cx.arc(bx, bz, 24, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * (room.ball.ms / 60000))); cx.stroke();
-    cx.textAlign = 'center'; cx.textBaseline = 'top'; cx.fillStyle = '#ff3df0'; cx.font = '800 12px "Segoe UI", system-ui, sans-serif';
-    cx.fillText(`${(KIND_LABEL[room.ball.mode] || room.ball.mode).toUpperCase()} · ${room.ball.name} · ${Math.ceil(room.ball.ms / 1000)}s · ${room.ball.joins + 1} in`, bx, bz + 30);
-  }
-  placed.forEach((m) => {
-    const col = m.hue == null ? '#c9ced6' : `hsl(${Math.round(m.hue * 360)} 80% 62%)`;
-    const x = v.sx(m.x), z = v.sz(m.z);
-    if (m.lx != null) for (const [hx, hz] of [[m.lx, m.lz], [m.rx, m.rz]]) {
-      cx.strokeStyle = col + 'aa'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(x, z); cx.lineTo(v.sx(hx), v.sz(hz)); cx.stroke();
-      cx.fillStyle = col; cx.beginPath(); cx.arc(v.sx(hx), v.sz(hz), 4, 0, Math.PI * 2); cx.fill();
-    }
-    const hr = Math.max(7, 0.16 * v.scale);
-    cx.fillStyle = '#e8e4da'; cx.strokeStyle = col; cx.lineWidth = 3;
-    cx.beginPath(); cx.arc(x, z, hr, 0, Math.PI * 2); cx.fill(); cx.stroke();
-    cx.beginPath(); cx.moveTo(x, z); cx.lineTo(x - Math.sin(m.yaw) * hr * 1.6, z - Math.cos(m.yaw) * hr * 1.6); cx.stroke();
-    cx.textAlign = 'center'; cx.textBaseline = 'bottom'; cx.fillStyle = col; cx.font = '800 12px "Segoe UI", system-ui, sans-serif';
-    cx.fillText((m.crown ? '👑 ' : '') + m.name, x, z - hr - 4);
-  });
-  const away = room.members.filter((m) => m.away).map((m) => m.name);
-  cx.textAlign = 'left'; cx.textBaseline = 'top'; cx.fillStyle = '#ff3df0'; cx.font = '900 16px "Segoe UI", system-ui, sans-serif';
-  cx.fillText(`THE CLUB · ROOM ${room.code} · ${room.members.length} IN`, 16, 12);
-  if (away.length) { cx.fillStyle = '#8b8f98'; cx.font = '700 12px "Segoe UI", system-ui, sans-serif'; cx.fillText(`AWAY ON A SET: ${away.join(' · ')}`, 16, 36); }
-  cx.textAlign = 'left'; cx.textBaseline = 'bottom'; cx.fillStyle = '#565b64'; cx.font = '700 11px "Segoe UI", system-ui, sans-serif';
-  cx.fillText('PEEPING INTO THE PUBLIC FLOOR — NOTHING ON AIR', 16, H - 10);
-}
+      const FACES = {
+        ff: { tab: 'tab-ff', el: 'face-ff', hash: '#firefight', mark: '<span class="a">FIRE</span> <span class="b">FIGHT</span>', kicker: 'WORLDWIDE LEADERBOARD' },
+        rr: { tab: 'tab-rr', el: 'face-rr', hash: '#raveraid', mark: '<span class="a">RAVE</span> <span class="b">RAID</span>', kicker: 'WORLDWIDE LEADERBOARD' },
+        tv: { tab: 'tab-tv', el: 'face-tv', hash: '#tv', mark: '<span class="a">THE</span> <span class="b">CHANNEL</span>', kicker: 'LIVE FROM THE ARENA' },
+      };
+      let face = 'ff';
 
-/* ── THE LAB ────────────────────────────────────────────────────────────── */
+      function showFace(id) {
+        if (face === 'tv' && id !== 'tv') tvClose();
+        face = id;
+        document.body.dataset.face = id;
+        for (const [k, f] of Object.entries(FACES)) {
+          const tab = document.getElementById(f.tab);
+          tab.setAttribute('aria-selected', String(k === id));
+          document.getElementById(f.el).classList.toggle('hidden', k !== id);
+        }
+        document.getElementById('wordmark').innerHTML = FACES[id].mark;
+        document.getElementById('kicker').textContent = FACES[id].kicker;
+        moveMarker(document.getElementById('face-rail'), document.getElementById('face-marker'));
+        try { history.replaceState(null, '', FACES[id].hash); } catch {}
+        if (id === 'ff') { drawFfRail(); syncFfFace(); void loadFf(false); }
+        else if (id === 'rr') { drawRrRail(); drawRrSongs(); void loadRr(false); }
+        else { tvOpen(); tvGuide(); tvBar(); }
+      }
 
-const LAB_KINDS = [['', 'ALL'], ['1v1', '1V1'], ['2v2', '2V2'], ['ffa', 'FFA'], ['raid', 'RAID'], ['gauntlet', 'GAUNTLET'], ['solo', 'SOLO']];
-const lab = { all: [], boxer: '', kind: '', loaded: false, open: null };
-const PART = ['head', 'chest', 'pelvis', 'body'];
-const OUTW = ['WIN', 'LOSS', 'DRAW'];
-window.__ffLab = { inject: (docs) => { lab.all = docs.map(normBout); lab.loaded = true; drawLab(); }, state: () => lab };
+      for (const [k, f] of Object.entries(FACES)) {
+        document.getElementById(f.tab).addEventListener('click', () => showFace(k));
+      }
+      document.getElementById('face-rail').addEventListener(
+        'scroll',
+        () => moveMarker(document.getElementById('face-rail'), document.getElementById('face-marker')),
+        { passive: true },
+      );
+      window.addEventListener('resize', () => {
+        moveMarker(document.getElementById('face-rail'), document.getElementById('face-marker'));
+        moveMarker(document.getElementById('board-rail'), document.getElementById('board-marker'));
+        const tier = document.getElementById('tier-rail');
+        if (!tier.classList.contains('hidden')) moveMarker(tier, document.getElementById('tier-marker'));
+        moveMarker(document.getElementById('rr-rail'), document.getElementById('rr-marker'));
+      });
 
-function normBout(d) {
-  const b = d.data || d;
-  return {
-    id: d.id, kind: b.kind || 'solo', net: !!b.net, quick: !!b.quick, ranked: !!b.ranked,
-    me: b.me && b.me.name ? String(b.me.name) : '???', names: Array.isArray(b.names) ? b.names.map(String) : [],
-    win: !!b.win, score: Array.isArray(b.score) ? b.score : [], dur: Number(b.dur) || 0,
-    at: b.at ? new Date(b.at) : null,
-    rounds: Array.isArray(b.rounds) ? b.rounds : [],
-    thr: b.thr || { n: 0, l: 0, r: 0, spd: 0 }, hits: b.hits || {}, par: Number(b.par) || 0,
-    grid: b.grid && b.grid.w ? b.grid : null, ev: Array.isArray(b.ev) ? b.ev : [], boss: b.boss || null,
-  };
-}
+      /* The press flash, on every plate. */
+      document.addEventListener('pointerdown', (e) => {
+        const plate = e.target.closest('.plate');
+        if (!plate) return;
+        plate.classList.remove('flashing');
+        void plate.offsetWidth;
+        plate.classList.add('flashing');
+      });
+      document.getElementById('refresh').addEventListener('click', () => {
+        if (face === 'ff') { ff.cache.clear(); lab.loaded = false; void loadFf(true); }
+        else if (face === 'rr') { rr.cache.clear(); void loadRr(true); }
+        else { tvClose(); tvOpen(); }
+      });
 
-async function loadLab() {
-  if (lab.loaded) { drawLab(); return; }
-  const state = document.getElementById('lab-state');
-  state.classList.remove('hidden'); state.textContent = 'PULLING THE TAPES…';
-  try {
-    const docs = await runQuery(FF, { from: [{ collectionId: 'bouts' }], orderBy: [orderBy('at', 'DESCENDING')], limit: 200 });
-    lab.all = docs.map(normBout);
-    lab.loaded = true;
-    state.classList.add('hidden');
-    drawLab();
-  } catch {
-    state.textContent = 'THE TAPES ARE UNREACHABLE — TRY AGAIN IN A MINUTE.';
-  }
-}
-
-function labRows() {
-  return lab.all.filter((b) => (!lab.kind || b.kind === lab.kind) && (!lab.boxer || b.me === lab.boxer));
-}
-
-function drawLab() {
-  const sel = document.getElementById('lab-boxer');
-  const names = [...new Set(lab.all.flatMap((b) => [b.me, ...b.names]))].filter(Boolean).sort();
-  sel.innerHTML = `<option value="">EVERY BOXER</option>` + names.map((n) => `<option value="${esc(n)}"${n === lab.boxer ? ' selected' : ''}>${esc(n)}</option>`).join('');
-  sel.onchange = () => { lab.boxer = sel.value; drawLab(); };
-  const seg = document.getElementById('lab-kind');
-  seg.innerHTML = LAB_KINDS.map(([id, label]) => `<button class="${id === lab.kind ? 'on' : ''}" data-id="${id}">${label}</button>`).join('');
-  seg.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { lab.kind = b.dataset.id; drawLab(); }));
-
-  const rows = labRows();
-  document.getElementById('lab-count').textContent = `${rows.length} of ${lab.all.length} tapes`;
-  const state = document.getElementById('lab-state');
-  if (!lab.all.length && lab.loaded) { state.classList.remove('hidden'); state.textContent = 'NO TAPES YET — FIGHT SOMETHING AND COME BACK.'; }
-  else if (lab.loaded) state.classList.add('hidden');
-
-  // the tiles
-  const sum = (f) => rows.reduce((a, b) => a + (f(b) || 0), 0);
-  const n = rows.length || 1;
-  const throws = sum((b) => b.thr.n), dealt = sum((b) => b.hits.dealt), taken = sum((b) => b.hits.taken);
-  const heads = sum((b) => b.hits.head), par = sum((b) => b.par), dur = sum((b) => b.dur);
-  const rounds = rows.flatMap((b) => b.rounds);
-  const kos = rounds.filter((r) => r.res === 'ko').length;
-  const wins = rows.filter((b) => b.win).length;
-  const left = sum((b) => b.thr.l), right = sum((b) => b.thr.r);
-  const spd = rows.length ? sum((b) => b.thr.spd * b.thr.n) / (throws || 1) : 0;
-  const pct = (a, b) => (b ? `${Math.round((a / b) * 100)}%` : '—');
-  const tiles = [
-    [rows.length, 'bouts', `${wins}W · ${rows.length - wins}L`],
-    [pct(wins, rows.length), 'win rate', ''],
-    [(throws / n).toFixed(1), 'throws / bout', dur ? `${(throws / (dur / 60)).toFixed(1)} a minute` : ''],
-    [pct(dealt, throws), 'hit rate', `${dealt} landed of ${throws}`],
-    [pct(heads, dealt), 'headshots', `${heads} to the head`],
-    [pct(left, left + right), 'left hand', `${left} L · ${right} R`],
-    [(taken / n).toFixed(1), 'hits taken / bout', `${sum((b) => b.hits.takenHead)} to your head`],
-    [(par / n).toFixed(1), 'parries / bout', `${par} balls slapped down`],
-    [pct(kos, rounds.length), 'rounds by KO', `${kos} of ${rounds.length}`],
-    [rounds.length ? clock(rounds.reduce((a, r) => a + (r.dur || 0), 0) / rounds.length) : '—', 'avg round', ''],
-    [spd ? `${spd.toFixed(1)}` : '—', 'm/s swing', 'average release speed'],
-    [rows.length ? clock(Math.max(...rows.map((b) => b.dur))) : '—', 'longest bout', ''],
-  ];
-  document.getElementById('lab-tiles').innerHTML = tiles.map(([v, l, s]) => `<div class="tile"><b>${esc(v)}</b><span>${esc(l)}</span>${s ? `<small>${esc(s)}</small>` : ''}</div>`).join('');
-
-  // the heatmaps
-  for (const key of ['stand', 'thrL', 'thrR', 'hit']) drawHeat(document.getElementById(`heat-${key}`), rows, key);
-
-  // the hands
-  const dl = sum((b) => b.hits.dealtL), dr = sum((b) => b.hits.dealtR);
-  const bar = (label, a, b, la, lb) => {
-    const t = a + b || 1;
-    return `<div><div class="bar-label">${label}</div><div class="bar"><i class="l" style="width:${(a / t) * 100}%"></i><i class="r" style="width:${(b / t) * 100}%"></i><em><span>LEFT ${la}</span><span>RIGHT ${lb}</span></em></div></div>`;
-  };
-  document.getElementById('lab-hands').innerHTML =
-    bar('Throws by hand', left, right, left, right) +
-    bar('Hits landed by hand', dl, dr, dl, dr) +
-    bar('Accuracy by hand', left ? dl / left : 0, right ? dr / right : 0, pct(dl, left), pct(dr, right));
-
-  // the tape
-  const host = document.getElementById('lab-tape');
-  host.innerHTML = rows.map((b, i) => {
-    const others = b.names.filter((x) => x !== b.me);
-    const who = `<b>${esc(b.me)}</b>${others.length ? ' vs ' + others.map(esc).join(' · ') : ''}${b.boss ? ` <span class="k">${esc(b.boss.name)}</span>` : ''}`;
-    const when = b.at ? b.at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + b.at.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '';
-    return `<div class="tape-row" data-i="${i}"><span class="d">${esc(when)}</span><span class="k">${esc(KIND_LABEL[b.kind] || b.kind.toUpperCase())}</span><span class="who">${who}</span><span class="${b.win ? 'w' : 'l'}">${b.win ? 'WIN' : 'LOSS'} ${b.score.length ? b.score.join('–') : ''}</span><span class="t">${clock(b.dur)}</span><span class="d">${b.thr.n} thr</span></div>` +
-      (lab.open === b.id ? `<div class="tape-open">${tapeOpen(b)}</div>` : '');
-  }).join('');
-  host.querySelectorAll('.tape-row').forEach((r) => r.addEventListener('click', () => {
-    const b = rows[Number(r.dataset.i)];
-    lab.open = lab.open === b.id ? null : b.id;
-    drawLab();
-    const openEl = document.querySelector('#lab-tape .tape-open canvas');
-    if (openEl) drawHealthStrip(openEl, rows.find((x) => x.id === lab.open));
-  }));
-}
-
-/* An octagon of cells, brightest where the count peaks (log-scaled so one
- * hot corner doesn't black out the rest). The fight is UP the screen. */
-function drawHeat(canvas, rows, key) {
-  const g = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  g.fillStyle = '#0d0f12'; g.fillRect(0, 0, W, H);
-  const gw = 16, gh = 14;
-  const acc = new Float32Array(gw * gh);
-  for (const b of rows) {
-    if (!b.grid || !b.grid[key] || b.grid.w !== gw) continue;
-    b.grid[key].forEach((v, i) => { acc[i] += v; });
-  }
-  const max = Math.max(1, ...acc);
-  const pad = 26, pw = W - pad * 2, ph = H - pad * 2 - 12;
-  const sx = pw / (HALF_W * 2), sz = ph / (HALF_D * 2);
-  const X = (x) => pad + (x + HALF_W) * sx, Z = (z) => pad + 12 + (z + HALF_D) * sz;
-  g.save();
-  g.beginPath(); OCT.forEach(([x, z], i) => (i ? g.lineTo(X(x), Z(z)) : g.moveTo(X(x), Z(z)))); g.closePath(); g.clip();
-  g.fillStyle = '#16191e'; g.fillRect(0, 0, W, H);
-  for (let r = 0; r < gh; r++) for (let c = 0; c < gw; c++) {
-    const v = acc[r * gw + c];
-    if (!v) continue;
-    const t = Math.log1p(v) / Math.log1p(max);
-    g.fillStyle = heatColour(t);
-    g.fillRect(pad + (c / gw) * pw, pad + 12 + (r / gh) * ph, pw / gw + 0.5, ph / gh + 0.5);
-  }
-  g.restore();
-  g.beginPath(); OCT.forEach(([x, z], i) => (i ? g.lineTo(X(x), Z(z)) : g.moveTo(X(x), Z(z)))); g.closePath();
-  g.strokeStyle = '#ffb02e'; g.lineWidth = 2; g.stroke();
-  g.fillStyle = '#8b8f98'; g.font = '800 10px "Segoe UI", system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'top';
-  g.fillText('▲ THE FIGHT', W / 2, 4);
-  g.textBaseline = 'bottom'; g.fillText(max > 1 ? `peak ${Math.round(max)}` : 'no data', W / 2, H - 4);
-}
-function heatColour(t) {
-  // gunmetal → ember → amber → white-hot
-  const stops = [[0, [29, 33, 39]], [0.35, [140, 29, 24]], [0.7, [255, 122, 24]], [0.9, [255, 176, 46]], [1, [255, 243, 207]]];
-  for (let i = 1; i < stops.length; i++) {
-    if (t <= stops[i][0]) {
-      const [t0, a] = stops[i - 1], [t1, b] = stops[i];
-      const k = (t - t0) / (t1 - t0);
-      return `rgb(${a.map((x, j) => Math.round(x + (b[j] - x) * k)).join(',')})`;
-    }
-  }
-  return 'rgb(255,243,207)';
-}
-
-/* The open tape: the rounds, the health strip, the play-by-play. */
-function tapeOpen(b) {
-  const rounds = b.rounds.length ? `<table><tr><th>RD</th><th>RESULT</th><th>HOW</th><th>YOU</th><th>THEM</th><th>TIME</th></tr>` +
-    b.rounds.map((r) => `<tr><td>${r.n}</td><td class="${r.out === 'win' ? 'w' : r.out === 'loss' ? 'l' : ''}">${esc(String(r.out).toUpperCase())}</td><td>${r.res === 'ko' ? 'KO' : 'TIME'}</td><td>${r.hp[0]}</td><td>${r.hp[1]}</td><td>${clock(r.dur)}</td></tr>`).join('') + `</table>` : '';
-  const pbp = b.ev.map((e) => {
-    const t = `<b>${clock(e[0])}</b>`;
-    const hand = (h) => (h === 0 ? 'left' : 'right');
-    switch (e[1]) {
-      case 0: return `${t} threw ${hand(e[2])} from (${e[3]}, ${e[4]}) at ${e[5]} m/s`;
-      case 1: return `${t} <span class="tk">took ${e[5]} to the ${PART[e[6]] || 'body'}</span> off their ${hand(e[2])}${e[7] ? ' on the return' : ''}, standing at (${e[3]}, ${e[4]})`;
-      case 2: return `${t} <span class="hit">landed ${e[3]}</span> with the ${hand(e[2])}${e[5] >= 0 ? ` to the ${PART[e[5]]}` : ''}${e[4] ? ' on the return' : ''}`;
-      case 3: return `${t} <span class="pa">parried</span> with the ${hand(e[2])}`;
-      case 4: return `${t} <span class="rd">ROUND ${e[2]} — ${OUTW[e[3]] || ''} by ${e[4] === 0 ? 'KO' : 'the clock'} · you ${e[5]} · them ${e[6]}</span>`;
-      default: return '';
-    }
-  }).filter(Boolean).join('<br>');
-  const meta = [`${b.net ? 'online' : 'offline'}`, b.ranked ? 'ranked' : b.quick ? 'quick' : '', b.boss ? `vs ${b.boss.name} (stage ${b.boss.stage + 1})` : '', b.ev.length ? `${b.ev.length} events` : 'no play-by-play'].filter(Boolean).join(' · ');
-  return `<div class="board-note" style="padding:6px 0">${esc(meta)}</div>${rounds}<canvas width="800" height="90"></canvas><div class="pbp">${pbp || 'this tape has no events'}</div>`;
-}
-
-/* Both health lines over the bout, rebuilt from the tape's hits: yours in
- * ember, theirs in cool blue, refilled at every round. */
-function drawHealthStrip(canvas, b) {
-  if (!canvas || !b) return;
-  const g = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  g.fillStyle = '#0a0c0f'; g.fillRect(0, 0, W, H);
-  const T = Math.max(1, b.dur || (b.ev.length ? b.ev[b.ev.length - 1][0] : 1));
-  let me = 100, them = 100;
-  const mine = [[0, 100]], theirs = [[0, 100]];
-  for (const e of b.ev) {
-    if (e[1] === 1) { me = Math.max(0, me - e[5]); mine.push([e[0], me]); }
-    else if (e[1] === 2) { them = Math.max(0, them - e[3]); theirs.push([e[0], them]); }
-    else if (e[1] === 4) { mine.push([e[0], me]); theirs.push([e[0], them]); me = 100; them = 100; mine.push([e[0] + 0.01, 100]); theirs.push([e[0] + 0.01, 100]);
-      g.strokeStyle = 'rgba(255,176,46,.35)'; g.beginPath(); g.moveTo((e[0] / T) * W, 0); g.lineTo((e[0] / T) * W, H); g.stroke(); }
-  }
-  mine.push([T, me]); theirs.push([T, them]);
-  const line = (pts, col) => {
-    g.strokeStyle = col; g.lineWidth = 2; g.beginPath();
-    pts.forEach(([t, hp], i) => { const x = (t / T) * W, y = H - 6 - (hp / 100) * (H - 12); if (i) g.lineTo(x, pts[i - 1][1] === hp ? y : H - 6 - (pts[i - 1][1] / 100) * (H - 12)); i ? g.lineTo(x, y) : g.moveTo(x, y); });
-    g.stroke();
-  };
-  line(theirs, '#4fb7ff'); line(mine, '#ff7a18');
-  g.fillStyle = '#8b8f98'; g.font = '800 10px "Segoe UI", system-ui, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'top';
-  g.fillText('YOU', 6, 4); g.fillStyle = '#4fb7ff'; g.fillText('THEM', 34, 4);
-  g.fillStyle = '#ff7a18'; g.fillText('YOU', 6, 4);
-}
-
-/* ── Faces ──────────────────────────────────────────────────────────────── */
-
-const FACES = {
-  ff:  { tab: 'tab-ff',  face: 'face-ff',  hash: '#firefight', mark: 'FIRE <span>FIGHT</span>', sub: 'World Leaderboards', on: () => {} },
-  rr:  { tab: 'tab-rr',  face: 'face-rr',  hash: '#raveraid',  mark: 'RAVE <span style="color:#ff3df0">RAID</span>', sub: 'World Leaderboards', on: () => { if (!rrCache.size) void loadRr(); } },
-  tv:  { tab: 'tab-tv',  face: 'face-tv',  hash: '#tv',        mark: 'THE <span style="color:#ff4b3e">CHANNEL</span>', sub: 'Live from the arena', on: tvOpen },
-  lab: { tab: 'tab-lab', face: 'face-lab', hash: '#lab',       mark: 'THE <span style="color:#4fb7ff">LAB</span>', sub: 'The stat nerd\'s desk', on: loadLab },
-};
-let faceId = 'ff';
-function showFace(id) {
-  if (faceId === 'tv' && id !== 'tv') tvClose();
-  faceId = id;
-  for (const [k, f] of Object.entries(FACES)) {
-    document.getElementById(f.tab).classList.toggle('on', k === id);
-    document.getElementById(f.face).classList.toggle('hidden', k !== id);
-  }
-  document.querySelector('.mark').innerHTML = FACES[id].mark;
-  document.getElementById('sub').textContent = FACES[id].sub;
-  try { history.replaceState(null, '', FACES[id].hash); } catch {}
-  FACES[id].on();
-}
-for (const [k, f] of Object.entries(FACES)) document.getElementById(f.tab).addEventListener('click', () => showFace(k));
-
-drawFfTabs();
-drawRrPickers();
-const startFace = Object.entries(FACES).find(([, f]) => f.hash === location.hash)?.[0] || 'ff';
-if (startFace !== 'ff') showFace(startFace);
-void loadFf();
-</script>
-</body>
+      /* Boot on whichever face the address names. */
+      const startFace = Object.entries(FACES).find(([, f]) => f.hash === location.hash);
+      drawFfRail();
+      syncFfFace();
+      showFace(startFace ? startFace[0] : 'ff');
+      /* The strip wants the ladder and the speedruns whether or not they are
+         the board on screen — one quiet pass behind the first paint. */
+      if (!startFace || startFace[0] === 'ff') {
+        void (async () => {
+          try {
+            for (const tier of TIERS) {
+              const docs = await runQuery('rows', { parent: `boards/ff2-speedrun-${tier.id}-time`, orderBy: 'value', dir: 'ASCENDING', limit: 100 });
+              ff.cache.set(`b:ff2-speedrun-${tier.id}-time`, docs.map((d) => ({
+                name: d.data.name || '???',
+                value: Number(d.data.value) || 0,
+                names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [],
+                difficulty: d.data.meta?.difficulty || tier.id,
+                hardcore: !!d.data.meta?.hardcore,
+                at: Number(d.data.at) || 0,
+              })));
+            }
+            const xpDocs = await runQuery('players', { orderBy: 'xp', dir: 'DESCENDING', limit: 100 });
+            ff.cache.set('p:xp', xpDocs.map((d) => ({ name: d.data.name || '???', value: Number(d.data.xp) || 0, look: d.data.look || '' })).filter((r) => r.value > 0));
+            drawFfStrip();
+          } catch {
+            /* the strip simply stays as it is */
+          }
+        })();
+      }
+    </script>
+  </body>
 </html>

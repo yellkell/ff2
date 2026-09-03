@@ -18,54 +18,64 @@ plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 (DESIGN.md §10). [`FOUNDATION.md`](FOUNDATION.md) is FF1's own README,
 carried over verbatim: everything in it still applies to this code.
 
-- `public/stats.html` — the web leaderboard: FIRE FIGHT boards first,
-  RAVE RAID as a separate-but-equal tab. Standalone, read-only, no SDK.
-  Two more doors on it now:
-  - **THE CHANNEL** (`#tv`) — television. The headset RUNNING a bout (a
-    bot bout's one player, a duel's host, the mesh authority, the raid
-    host) casts a top-down frame five times a second to THE ROOM
-    SERVER's `/tv` relay (`server/tv.mjs`, mounted by `room.mjs`;
-    `systems/BroadcastSystem.ts` → `net/tvCast.ts` on the headset), and
-    the page draws it: every platform, head, hands and health, the balls
-    in the air, the round clock, the titan. Nothing on? It peeps into
-    THE CLUB — the rave relay's public floor (who's dancing where, the
-    ball if one hangs). Club dark too? It says so. Live people rank over
-    raids over solo bouts; pin a channel from the guide strip or leave it
-    on AUTO. `?tv=ws://…` points the page at another relay.
-  - **THE LAB** (`#lab`) — the stat nerd's desk. Every bout that lasts
-    keeps a TAPE (`net/telemetry.ts`, posted to the `bouts` collection
-    at the final): platform HEATMAPS of where you stand, where each hand
-    throws from, and where you were when hit; the play-by-play of every
-    throw, hit taken, hit dealt, parry and round as timed events; the
-    rounds with both health pools at the bell. The page aggregates the
-    last two hundred tapes — filter by boxer and mode — into tiles (hit
-    rate, headshots, left-hand share, parries, KO rate, swing speed…),
-    the four heatmaps, a hands panel (throws, landings and accuracy per
-    hand) and THE TAPE itself: tap a bout for its rounds, both health
-    lines rebuilt from the hits, and the play-by-play. Needs the `bouts`
-    rule in `firestore.rules` deployed. Probe: `npm run check:tv`
-    (needs `npm run dev` up).
+- `public/stats.html` — **THE WORLDWIDE LEADERBOARD**, rebuilt on RAVE
+  RAID's stats-page surface language (near-black glass, corner brackets,
+  the rail with its eased marker, Rajdhani) with FIRE FIGHT's hazard amber
+  as the accent. Three faces on one rail, each swapping the accent and the
+  pools on the floor:
+  - **FIRE FIGHT** — RANKED · XP · AIM · 2V2 · FFA read off `players`
+    docs; **SPEEDRUN** (what GAUNTLET is called now) · RAID · GOOPLIATH
+    read off `boards/{board}/rows`. SPEEDRUN carries a difficulty
+    sub-rail — NORMAL · HARD · BLAZING — because it is three boards, one
+    per tier (`src/net/boards.ts` `speedrunBoard()`): a board is a
+    ratchet keyed on your uid, so a single board would let your blazing
+    run and your normal run fight over one row. The lobby's own board
+    merges the three back into one ranked list wearing difficulty symbols.
+  - **THE LAB**, a board of that same rail rather than a tab of its own.
+    Every bout that lasts keeps a TAPE (`src/net/telemetry.ts`, posted to
+    the `bouts` collection at the final bell): platform HEATMAPS of where
+    you stand, where each hand throws from and where you were when hit;
+    the play-by-play of every throw, hit taken, hit dealt, parry and round
+    as timed events; the rounds with both health pools at the bell. The
+    page aggregates the last two hundred, filtered by boxer, into stat
+    tiles, the four heatmaps, a hands panel, a damage panel, and the tape
+    itself — open one for its rounds, both health lines rebuilt from the
+    hits, and the play-by-play.
+  - **THE CHANNEL** — television. The headset RUNNING a bout (a bot
+    bout's one player, a duel's host, the mesh authority, the raid host)
+    casts a top-down frame five times a second to THE ROOM SERVER's `/tv`
+    relay (`server/tv.mjs`; `systems/BroadcastSystem.ts` and
+    `net/tvCast.ts` on the headset), and the page draws it: every
+    platform, head, hands and health, the balls in the air, the round
+    clock, the titan. Nothing on air and it peeps into THE CLUB — the
+    rave relay's public floor, who is dancing where, the ball if one
+    hangs. Club dark too and it says so. `?tv=ws://…` points the page at
+    another relay.
+
+  It reads the SAME project the game writes to (`flappy-ff9f6`, behind
+  ff2.web.app) over the plain Firestore REST API — no SDK, read-only, and
+  boards are read one at a time rather than as a collection group, which
+  is what the rules allow. Probe: `npm run check:tv` (needs `npm run dev`).
 - **THE JOIN LINK + THE BOT'S WRITE PATH** (DESIGN.md §8, phase 10, first
   pass) — every hosted room mints `?join=CODE`: a five-digit arena code
-  booted with it walks the lobby into whatever the host opened (the
-  keypad types itself; `rave.html?room=` still answers a four-digit club
-  code, and `?join=` with four digits hops there). The squad room's
-  invite band shows the code, the link, a QR a phone reads off the
-  screen mirror (`src/ui/qr.ts`, byte mode, level M, verified against a
-  third-party decoder) and, for the host, SHARE ON DISCORD. The Discord
-  bot that has polled the bar-TV channel for years now POSTS
-  (`server/discord.mjs`, one paced queue): THE BELL in the club posts
-  the game and its join link when the ball goes up; SHARE posts a room
-  card through `/tv/invite`; THE CHANNEL posts LIVE once a match has
-  held eight seconds and the final when it ends (bot bouts never make
-  the paper). `DISCORD_BOT_TOKEN` arms it; `PUBLIC_URL` sets the links;
+  booted with it walks the lobby into whatever the host opened (the keypad
+  types itself; a four-digit club code hops to `rave.html?room=`). The
+  squad room's invite band shows the code, the link, a QR a phone reads
+  off the screen mirror (`src/ui/qr.ts`, byte mode, level M, verified
+  against a third-party decoder) and, for the host, SHARE ON DISCORD. The
+  Discord bot that has polled the bar-TV channel for years now POSTS
+  (`server/discord.mjs`, one paced queue): THE BELL in the club posts the
+  game and its join link when the ball goes up; SHARE posts a room card
+  through `/tv/invite`; THE CHANNEL posts LIVE once a match has held eight
+  seconds, and the final when it ends (bot bouts never make the paper).
+  `DISCORD_BOT_TOKEN` arms it, `PUBLIC_URL` sets the links, and
   `DISCORD_BELL=off` quiets the bell.
 - **THE HORNS** re-cut: the gear shop's HORNS are a ram's pair now — one
-  tapered tube per side along a spline, rooted thick on the temple, up
-  and back over the ear, down behind the jaw and forward to a point
-  level with the eye, flat-shaded like the rest of the kit. You never see
-  your own: `applyGear` skips the head slot on a rig flagged
-  first-person, and the arena never draws the local head anyway.
+  tapered tube per side along a spline, rooted thick on the temple, up and
+  back over the ear, down behind the jaw and forward to a point level with
+  the eye, flat-shaded like the rest of the kit. You never see your own:
+  `applyGear` skips the head slot on a rig flagged first-person, and the
+  arena never draws the local head anyway.
 - **THE WRAP** — the wrap-around three-panel lobby (DESIGN.md §2, phase 2),
   now TABBED (MENUS 2, the Overwatch / Fortnite grammar): every panel wears
   a strip of horizontal tabs across its top. The center slab is FIGHT ·
@@ -231,9 +241,13 @@ dev plugin provides a WebXR emulator (WASD + mouse).
 
 ## Deploying
 
-The live site is **GitHub Pages, published by GitHub Actions**
-(`.github/workflows/deploy.yml` → https://yellkell.github.io/ff2/). A push
-builds `dist/` and uploads it; no Firebase involved.
+The live site is **https://ff2.web.app**, published by GitHub Actions
+(`.github/workflows/firebase-deploy.yml`). A push to `main` goes live; a pull
+request gets a temporary preview channel so a change can be walked around in a
+headset before it is merged.
+
+A **GitHub Pages** mirror still builds from `.github/workflows/deploy.yml`
+(https://yellkell.github.io/ff2/).
 
 Pages serves the game from a **subpath** (`/ff2/`), not a domain root, so
 every reference to a file in `public/` must be written **relatively**
@@ -244,7 +258,89 @@ shipped this bug once. `npm run build && npm run check:pages` serves the
 build under `/ff2/` in a real browser and fails on any 404; the deploy
 workflow runs a fast static version of the same guard.
 
-> Firebase is still used for **Firestore** (leaderboards, matchmaking, the
-> gazette) — only hosting moved. `firebase-deploy.yml` remains parked on
-> manual dispatch and still points at FIRE FIGHT 1's project, so it must
-> not be run from this repo.
+### The room server
+
+Three relays, one process, one host: `server/room.mjs` mounts the duel relay at
+`/ff`, the Iron Balls pub at `/pub` and the rave's room relay at `/rave`. The
+client resolves all three off one `ROOM_SERVER` constant (`src/config.ts`).
+
+On a free plan that consolidation matters more than tidiness — a sleeping
+service takes the best part of a minute to wake, and one service means everyone
+arriving anywhere in the town wakes the same one.
+
+`render.yaml` is a Blueprint: **Render → New → Blueprint → this repo** creates
+the service and prompts for the secrets. Setting one up by hand instead, the
+four things that matter are:
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | `server` |
+| Build Command | `npm install` |
+| Start Command | `npm start` |
+| Health Check Path | `/` |
+
+`server/` is self-contained — node built-ins, `ws`, and its own files — so
+Render never builds the client to run the relay.
+
+**The env vars do not travel with the code.** `LIVEKIT_URL`,
+`LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` live on whichever service used to
+run the pub; without them the pub still works and nobody can hear each other.
+`DISCORD_BOT_TOKEN` / `DISCORD_CHANNEL_ID` (the bar TV) and `ADMIN_TOKEN` (the
+ban panel) are optional.
+
+You can tell by eye which build a host is running — the room server answers `/`
+with `{"room":"fire-fight-2","relays":[…]}`, where a single old relay answers
+with its own name.
+
+> If the host's name changes, `ROOM_SERVER` in `src/config.ts` has to change
+> with it. It is one constant, and it is the only place the hostname appears.
+
+### The Firebase project
+
+Everything server-side — boards, matchmaking, presence, the gazette — lives in
+**one Firestore**, the project behind ff2.web.app, shared by FIRE FIGHT 2, RAVE
+RAID and the club.
+
+It did not use to. FF2 talked to `arfi-b68f9`, inherited from the ARFI era and
+also **FIRE FIGHT 1's live hosting** — which is why this workflow sat parked on
+manual dispatch, since an automatic deploy from this repo would have
+overwritten the live FF1 site. RAVE RAID kept its world board in a project of
+its own, and the pub's arcade board was a single document wedged into FF2's.
+One player had three identities and a board in one game could not see a name
+from another.
+
+> The project id reads `flappy-ff9f6`, which is where the `ff2` hosting site
+> was reserved. A `.web.app` name is globally unique, so prising it loose to
+> rename the project would mean releasing `ff2` into the pool where anyone
+> could take it. The id is invisible to players — treat it as **the FF2
+> project**.
+
+Two pieces of setup are not in this repo, because they cannot be:
+
+- **Anonymous sign-in must be ON** (Authentication → Sign-in method →
+  Anonymous). Every security rule identifies a row by its document name
+  matching `request.auth.uid`, so with it off there is no uid, and every write
+  in the game is denied — boards go quiet and matchmaking never pairs.
+- **Nothing else.** There WAS a second item here — a Firestore TTL policy on
+  `expiresAt` for `rooms` and `presence` — and it turned out not to be needed.
+  TTL requires the Blaze plan, and more to the point it was never load
+  bearing: both collections are queried with `where('expiresAt', '>', now)`,
+  so an expired record is filtered out SERVER-SIDE. It is never returned,
+  never shown, and never costs a read, which means a ghost cannot crowd a live
+  room out of a `limit()`ed scan — the failure the field exists to prevent.
+
+  Removing the records is housekeeping on top of that, and the clients do it:
+  `net/presence.ts` sweeps a handful of lapsed records once per session, and
+  the rules let any signed-in player bin one that has already expired. That is
+  the same arrangement the duel lobbies have always had, where
+  `webrtcTransport` reaps the ghosts it scans past.
+
+  Turn TTL on if you move to Blaze for other reasons — the field is the right
+  type for it (a timestamp; a policy aimed at a number sweeps nothing and says
+  nothing about it) — but it buys tidiness, not correctness.
+
+Rules and indexes DO live here and ship with the repo:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes
+```

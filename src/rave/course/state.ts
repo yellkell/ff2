@@ -8,6 +8,8 @@
  * belongs to the frame of reference out on the circuit.
  */
 
+import { COURSE_ORIGIN } from './config.js';
+
 export interface PlatformState {
   anchor: { x: number; y: number; z: number };
   moving: boolean;
@@ -83,4 +85,18 @@ export function resetRide(): void {
   G.wayfind.targetIndex = -1;
   G.wayfind.targetAligned = false;
   G.wayfind.homeward = 0;
+}
+
+/**
+ * A platform's position in WORLD terms, for a sound to come from.
+ *
+ * Anchors are course-local (the root is parked at COURSE_ORIGIN, 300 m under
+ * the club) while the audio listener is glued to the camera in world space, so
+ * a panner handed a raw anchor would sit a fixed 300 m below the ear and be
+ * silent. One conversion, in one place, so no call site has to remember it.
+ */
+export function platformSoundAt(index: number): { x: number; y: number; z: number } | undefined {
+  const a = G.platforms[index]?.anchor;
+  if (!a) return undefined;
+  return { x: a.x + COURSE_ORIGIN.x, y: a.y + COURSE_ORIGIN.y, z: a.z + COURSE_ORIGIN.z };
 }

@@ -221,11 +221,17 @@ function openRoom(ws, msg, isPublic) {
     crown: null,
     lastSet: new Set(),
     crownSettled: true, // no set yet — nothing to claim
+    // VOIDSTEP's clock. The course is a shared PLACE, not a set everyone
+    // starts together: people walk out onto it and back off it whenever
+    // they like, so there is no 'start' to synchronise on. Instead the
+    // circuit has been running since the room opened, and a client crossing
+    // in is told how long that has been — see `courseMs` below.
+    openedAt: Date.now(),
   };
   room.members.set(ws, { name: sanitizeName(msg.name), hue: sanitizeHue(msg.hue), ...look(msg), idx: 0, seat: 0 });
   rooms.set(code, room);
   ws.room = code;
-  send(ws, { t: 'room', code, host: true, idx: 0, open: isPublic });
+  send(ws, { t: 'room', code, host: true, idx: 0, open: isPublic, courseMs: 0 });
   send(ws, { t: 'roster', players: roster(room) });
   // The snapshot doubles as "this relay speaks drinks"; the first coupe
   // rises on the dumbwaiter's own clock.
@@ -246,7 +252,7 @@ function joinRoomByCode(ws, msg, code) {
   const idx = Math.max(-1, ...[...room.members.values()].map((m) => m.idx)) + 1;
   room.members.set(ws, { name: sanitizeName(msg.name), hue: sanitizeHue(msg.hue), ...look(msg), idx, seat: idx });
   ws.room = code;
-  send(ws, { t: 'room', code, host: false, idx, open: Boolean(room.isPublic) });
+  send(ws, { t: 'room', code, host: false, idx, open: Boolean(room.isPublic), courseMs: Date.now() - room.openedAt });
   broadcast(room, { t: 'roster', players: roster(room) });
   // Walk them into whatever is mid-air: a hanging ball, a live game.
   if (room.ball) {
@@ -479,7 +485,7 @@ function leaveRoom(ws) {
   if (ws === room.host) {
     const heir = [...room.members.entries()].sort((a, b) => a[1].idx - b[1].idx)[0];
     room.host = heir[0];
-    send(heir[0], { t: 'room', code, host: true, idx: heir[1].idx });
+    send(heir[0], { t: 'room', code, host: true, idx: heir[1].idx, courseMs: Date.now() - room.openedAt });
     console.log(`[dance-raid] room ${code}: host left, ${heir[1].name} inherits`);
   }
   if (info) {
@@ -770,6 +776,20 @@ wss.on('connection', (ws) => {
           info.poseAt = Date.now();
         }
         broadcast(room, { t: 'cp', idx: info.idx, d: msg.d }, ws);
+        break;
+      }
+
+      case 'xp': {
+        // A VOIDSTEP pose — someone out on the course, through the club's
+        // west door. Identical handling to 'cp' and deliberately a separate
+        // verb: the two are different PLACES, and a club figure standing in
+        // the course's coordinates (or the reverse) would be a body in the
+        // wrong world rather than a body in the wrong spot.
+        const room = rooms.get(ws.room);
+        if (!room) break;
+        const info = room.members.get(ws);
+        if (!info) break;
+        broadcast(room, { t: 'xp', idx: info.idx, d: msg.d }, ws);
         break;
       }
 

@@ -482,6 +482,41 @@ export function tracksFor(role: TrackRole): Track[] {
   return TRACKS.filter((t) => t.roles.includes(role));
 }
 
+/**
+ * Records VOIDSTEP will not play, whatever the shuffle says.
+ *
+ * AWAKENING and BRAIN EATER are both records that ARRIVE — they open on a
+ * long held build and land somewhere. The course has no drop to land on: it
+ * is a lap you walk at a constant 128 BPM, and a record that spends ninety
+ * seconds promising something turns the whole circuit into a wait. Every
+ * other record on the shelf will happily play from anywhere in itself.
+ */
+const VOIDSTEP_BANNED = new Set(['awakening', 'braineater']);
+
+/**
+ * The VOIDSTEP shelf, SHUFFLED — and shuffled per headset, not per room.
+ *
+ * This is the one piece of music in the building that is deliberately NOT
+ * shared. A set is one record because everybody is dancing the same chart to
+ * it, and the club floor is one record because a room hears the room. The
+ * course is neither: it is a place people are walking through in different
+ * directions at different points of a lap, and there is nothing to be in time
+ * with except the floor's own 128 — which the conductor keeps underneath
+ * regardless. So everyone gets their own record and their own order, the way
+ * everyone out for a walk has their own headphones on.
+ *
+ * (Which also means it costs nothing to synchronise, and cannot desync.)
+ */
+export function voidstepShelf(): Track[] {
+  const shelf = TRACKS.filter((t) => !t.roles.includes('credits') && !VOIDSTEP_BANNED.has(t.id));
+  // Fisher–Yates, once, on a copy.
+  for (let i = shelf.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shelf[i], shelf[j]] = [shelf[j], shelf[i]];
+  }
+  return shelf;
+}
+
 /** Linear gain that brings a master to TARGET_LUFS. */
 export function trackGain(track: Track): number {
   return Math.pow(10, (TARGET_LUFS - track.lufs) / 20);

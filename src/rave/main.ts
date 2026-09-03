@@ -30,6 +30,7 @@ import { CourseFrameSystem } from './systems/CourseFrameSystem.js';
 import { CoursePlatformSystem } from './systems/CoursePlatformSystem.js';
 import { CourseSystem } from './systems/CourseSystem.js';
 import { CourseVoidSystem } from './systems/CourseVoidSystem.js';
+import { CourseRidersSystem } from './systems/CourseRidersSystem.js';
 import { CourseWayfindSystem } from './systems/CourseWayfindSystem.js';
 import { DiscoSystem } from './systems/DiscoSystem.js';
 import { GoopliathSystem } from './systems/GoopliathSystem.js';
@@ -107,6 +108,7 @@ World.create(container, {
   world.registerSystem(CourseFrameSystem);
   world.registerSystem(CourseWayfindSystem);
   world.registerSystem(CourseVoidSystem);
+  world.registerSystem(CourseRidersSystem);
   world.registerSystem(ClubSocialSystem);
   world.registerSystem(ClubMirrorSystem);
   world.registerSystem(ClubBallSystem);

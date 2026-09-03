@@ -48,6 +48,7 @@ import { CourseFrameSystem } from './systems/CourseFrameSystem.js';
 import { CoursePlatformSystem } from './systems/CoursePlatformSystem.js';
 import { CourseSystem, courseView } from './systems/CourseSystem.js';
 import { CourseVoidSystem } from './systems/CourseVoidSystem.js';
+import { CourseRidersSystem } from './systems/CourseRidersSystem.js';
 import { CourseWayfindSystem } from './systems/CourseWayfindSystem.js';
 import { DiscoSystem } from './systems/DiscoSystem.js';
 import { GoopliathSystem } from './systems/GoopliathSystem.js';
@@ -109,6 +110,7 @@ export function mountRaveExperience(world: World, onLeaveToArena: () => void): R
     CourseFrameSystem,
     CourseWayfindSystem,
     CourseVoidSystem,
+    CourseRidersSystem,
     ClubSocialSystem,
     ClubMirrorSystem,
     ClubBallSystem,

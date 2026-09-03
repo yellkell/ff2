@@ -33,7 +33,7 @@ import { audioContext, ensureAudio } from '../audio/sfx.js';
 import { clearVoiceSpeakers, removeVoiceSpeaker, stopVoiceCapture } from '../club/voice.js';
 import { startRaid } from '../game/flow.js';
 import { dancerAtSeat, match } from '../game/state.js';
-import { clearClubPoses, clubPoses, remotePoses } from './poses.js';
+import { clearClubPoses, clearCoursePoses, clubPoses, coursePoses, remotePoses } from './poses.js';
 
 export type NetPhase = 'off' | 'connecting' | 'hosting' | 'joined' | 'live' | 'error';
 
@@ -176,6 +176,7 @@ function connect(onOpen: () => void): void {
     stopVoiceCapture();
     clearVoiceSpeakers();
     clearClubPoses();
+  clearCoursePoses();
   };
   ws.onmessage = (ev) => {
     // Binary payloads are voice frames; everything else is JSON room traffic.
@@ -227,6 +228,7 @@ function teardown(reason: string): void {
   stopVoiceCapture();
   clearVoiceSpeakers();
   clearClubPoses();
+  clearCoursePoses();
 }
 
 /** A voice frame off the wire: [1-byte id length][ascii sender id][pcm]. */
@@ -282,6 +284,16 @@ function handle(msg: Record<string, unknown>): void {
       net.isPublic = Boolean(msg.open);
       net.code = String(msg.code ?? net.code);
       if (Number.isFinite(Number(msg.idx))) net.myIdx = Number(msg.idx);
+      // VOIDSTEP's clock, pinned. The relay says how long its course has been
+      // running; we note the local instant that corresponds to bar zero, plus
+      // half the round trip for the flight time of the answer. From here the
+      // bar count is a pure function of the local clock, which is what lets
+      // people walk on and off the course at any time and still see the same
+      // platform in the same place.
+      {
+        const courseMs = Number(msg.courseMs);
+        if (Number.isFinite(courseMs)) courseZeroAt = performance.now() - courseMs - net.rttMs / 2;
+      }
       net.dirty++;
       break;
     }
@@ -293,6 +305,7 @@ function handle(msg: Record<string, unknown>): void {
         if (!still.has(old.idx)) {
           removeVoiceSpeaker(String(old.idx));
           clubPoses.delete(old.idx);
+          coursePoses.delete(old.idx);
         }
       }
       net.members = members;
@@ -430,6 +443,20 @@ function handle(msg: Record<string, unknown>): void {
       });
       break;
     }
+    case 'xp': {
+      // A room-mate out on VOIDSTEP (course world space, keyed by idx).
+      const idx = Number(msg.idx);
+      const d = msg.d as number[];
+      if (!Number.isFinite(idx) || !Array.isArray(d) || d.length < 10) break;
+      coursePoses.set(idx, {
+        hx: d[0], hy: d[1], hz: d[2], hyaw: d[3],
+        lx: d[4], ly: d[5], lz: d[6],
+        rx: d[7], ry: d[8], rz: d[9],
+        hpitch: d[10] ?? 0, hroll: d[11] ?? 0,
+        t: performance.now(),
+      });
+      break;
+    }
     case 'cp': {
       // A room-mate moving through the club (world space, keyed by idx).
       const idx = Number(msg.idx);
@@ -479,6 +506,7 @@ function handle(msg: Record<string, unknown>): void {
       if (Number.isFinite(idx)) {
         removeVoiceSpeaker(String(idx));
         clubPoses.delete(idx);
+        coursePoses.delete(idx);
         seatByIdx.delete(idx);
       }
       net.dirty++;
@@ -852,6 +880,28 @@ export function sendPose(d: number[]): void {
 }
 
 /** My spot on the club floor (world space) — for the room-mates' view. */
+/**
+ * When this headset's course clock reads bar zero, in `performance.now()`
+ * terms. Null until a room has told us — solo riders keep their own clock.
+ */
+let courseZeroAt: number | null = null;
+
+/**
+ * The room's VOIDSTEP bar count right now, or null when there is no room to
+ * share a course with (solo, or the relay is an older build that doesn't send
+ * `courseMs`). A solo rider falls back to a clock that starts when they cross,
+ * which is what the course did for everybody before it had company.
+ */
+export function courseBars(barSeconds: number): number | null {
+  if (courseZeroAt === null) return null;
+  return (performance.now() - courseZeroAt) / 1000 / barSeconds;
+}
+
+/** Stream a VOIDSTEP pose (course world space). Same shape as a club pose. */
+export function sendCoursePose(d: number[]): void {
+  if (net.phase === 'hosting' || net.phase === 'joined') send({ t: 'xp', d });
+}
+
 export function sendClubPose(d: number[]): void {
   if (net.phase === 'hosting' || net.phase === 'joined') send({ t: 'cp', d });
 }

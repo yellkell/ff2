@@ -1,15 +1,12 @@
 {
   "projects": {
-    "default": "arfi-b68f9"
+    "default": "flappy-ff9f6"
   },
   "targets": {
-    "arfi-b68f9": {
+    "flappy-ff9f6": {
       "hosting": {
-        "arfi": [
-          "arfi-b68f9"
-        ],
-        "playfirefight": [
-          "playfirefight"
+        "ff2": [
+          "ff2"
         ]
       }
     }

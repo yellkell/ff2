@@ -23,10 +23,12 @@
 
 import { createSystem } from '@iwsdk/core';
 import {
+  CanvasTexture,
   Group,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
+  SRGBColorSpace,
   type Points,
 } from 'three';
 import { hueToColor, LASER_HUES, PALETTE } from '../config.js';
@@ -51,6 +53,7 @@ import { applyDim } from '../course/dimmer.js';
 import { panelTexture, textPanel } from '../course/textures.js';
 import { course, G } from '../course/state.js';
 import { courseRoot } from '../course/world.js';
+import { font } from '../ui/fonts.js';
 
 /** The black glass the whole world doubles in. */
 export const FLOOR_Y = -0.06;
@@ -58,12 +61,77 @@ export const FLOOR_Y = -0.06;
 /** Where the scenery starts — comfortably outside the circuit's widest reach. */
 const INNER = 13;
 
+/** The DANGER sign's height as a fraction of its width. */
+const DANGER_ASPECT = 0.25;
+
+/**
+ * DANGER in lit red glass, chevrons leaning in from each end — the same sign
+ * THE STEP hangs on the club side of the portal (club/build.ts), redrawn
+ * without its steel backing because out here there is nothing to bolt it to.
+ *
+ * Two passes for the word and the strokes alike: a wide halo under a crisp
+ * core. That is what makes a canvas read as a gas tube rather than as red
+ * paint, and it is the one trick every neon in this building uses.
+ */
+function dangerTexture(): CanvasTexture {
+  const W = 1024;
+  const H = Math.round(W * DANGER_ASPECT);
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d')!;
+  g.clearRect(0, 0, W, H);
+
+  const red = '#ff2233';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  // The word has to FIT between the chevrons. Sized off the canvas height
+  // and then measured, because a tracked-out 'DANGER' at the club sign's
+  // proportions runs straight under the strokes on a wider board and comes
+  // out reading '⟪ANGE⟫'.
+  g.font = font(700, Math.round(H * 0.5));
+  g.letterSpacing = '14px';
+  g.shadowColor = red;
+  g.shadowBlur = H * 0.5;
+  g.fillStyle = red;
+  g.fillText('DANGER', W / 2, H / 2 + 1);
+  g.shadowBlur = H * 0.16;
+  g.fillStyle = '#ffd9d9';
+  g.fillText('DANGER', W / 2, H / 2 + 1);
+  g.shadowBlur = 0;
+  g.letterSpacing = '0px';
+
+  g.strokeStyle = red;
+  g.lineWidth = Math.max(2, H * 0.07);
+  g.lineCap = 'round';
+  g.shadowColor = red;
+  g.shadowBlur = H * 0.3;
+  for (let i = 0; i < 3; i++) {
+    for (const side of [-1, 1] as const) {
+      const x = W / 2 + side * (W * 0.36 + i * H * 0.22);
+      g.beginPath();
+      g.moveTo(x - side * H * 0.14, H * 0.24);
+      g.lineTo(x + side * H * 0.06, H / 2);
+      g.lineTo(x - side * H * 0.14, H * 0.76);
+      g.stroke();
+    }
+  }
+  g.shadowBlur = 0;
+
+  const tex = new CanvasTexture(c);
+  tex.colorSpace = SRGBColorSpace;
+  tex.anisotropy = 4;
+  return tex;
+}
+
 export class CourseVoidSystem extends createSystem({}) {
   private near!: TowerRing;
   private mid!: TowerRing;
   private skyEdges!: GlowBank;
   private skyCount = 0;
   private canopy!: Canopy;
+  private danger!: Mesh;
+  private dangerMat!: MeshBasicMaterial;
   private arcs!: GlowBank;
   private arcCount = 0;
   private shards!: ShardField;
@@ -179,6 +247,33 @@ export class CourseVoidSystem extends createSystem({}) {
     this.card = new Mesh(new PlaneGeometry(2.5, 2.5 * room.aspect), this.cardMat);
     this.card.position.set(0, 1.6, -2.5);
     root.add(this.card);
+
+    // DANGER, hung over the room check.
+    //
+    // THE STEP wears one of these on the club side of the portal, and the
+    // reasoning carries through the door: a doorway with moving ground
+    // behind it has earned a warning, and a warning is allowed to be a
+    // word. What the card below it says is a room instruction — clear the
+    // space, stand in it, recentre. What this says is why that instruction
+    // is not advice. They belong together, so they arrive and leave together.
+    //
+    // No backing plate and no drop rods, unlike the club's: there is no
+    // ceiling out here to hang anything from, and the void kit's whole law
+    // is that darkness is given shape by LIGHT ONLY. So it is lit gas in
+    // mid-air — the one red thing in a place of cyan and magenta, which is
+    // exactly the job DECOR.danger does indoors.
+    const cardH = 2.5 * room.aspect;
+    const signW = 1.9;
+    const signH = signW * DANGER_ASPECT;
+    this.dangerMat = new MeshBasicMaterial({
+      map: dangerTexture(),
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false, // lit gas reads through the tone curve, like every neon here
+    });
+    this.danger = new Mesh(new PlaneGeometry(signW, signH), this.dangerMat);
+    this.danger.position.set(0, 1.6 + cardH / 2 + 0.18 + signH / 2, -2.5);
+    root.add(this.danger);
   }
 
   update(dt: number): void {
@@ -193,6 +288,12 @@ export class CourseVoidSystem extends createSystem({}) {
     const want = G.handovers === 0 ? 1 : 0;
     this.cardMat.opacity += (want - this.cardMat.opacity) * Math.min(1, dt * 3);
     this.card.visible = this.cardMat.opacity > 0.01;
+    // The warning is part of the same notice, so it goes when the notice
+    // goes. A DANGER left hanging over nothing after the card beneath it has
+    // faded would be a sign about the void in general, which is scenery — and
+    // scenery that says DANGER is how a warning stops meaning anything.
+    this.dangerMat.opacity = this.cardMat.opacity;
+    this.danger.visible = this.card.visible;
 
     // Energy: the world ducks while the ground you own is counting itself
     // out — and harder still for the beat after a missed step, so the whole

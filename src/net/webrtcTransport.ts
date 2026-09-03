@@ -12,22 +12,27 @@
  * the remote track is surfaced via onRemoteAudio and spatialised in
  * net/voice.ts. Mic denied? You still hear them (recvonly).
  *
- * Matchmaking (collection `lobbies`):
- *   - look for an open lobby; claim it with a transaction → you are the
+ * Matchmaking (collection `rooms`, mode 'duel' or 'ranked'):
+ *   - look for an open room; claim it with a transaction → you are the
  *     CALLEE (guest, side 1);
  *   - none open → create one and wait → you are the CALLER (host, side 0).
- *   Offer/answer ride on the lobby doc; ICE candidates ride two
+ *   Offer/answer ride on the room doc; ICE candidates ride two
  *   subcollections, exactly the Firestore WebRTC codelab shape.
+ *
+ * THE THREE COLLECTIONS THIS USED TO USE — `lobbies` (public queue),
+ * `privateLobbies` (5-digit codes) and `rankedRooms` (the server browser) —
+ * are one collection now, told apart by `mode` and `visibility` (net/rooms.ts
+ * explains why). One consequence is worth knowing: private duel codes and
+ * private mesh codes finally share ONE code space, so a code can no longer
+ * mean two different rooms depending on which screen you typed it into.
  */
 
-import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   addDoc,
   collection,
   deleteDoc,
   doc,
   getDocs,
-  getFirestore,
   limit,
   onSnapshot,
   query,
@@ -39,7 +44,8 @@ import {
   type Firestore,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { firebaseConfig } from './firebaseConfig.js';
+import { cloud, type Cloud } from './firebase.js';
+import { expiryMs } from './rooms.js';
 import { clockConfident, serverNow, syncServerClock } from './serverClock.js';
 import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
@@ -102,12 +108,77 @@ function lobbyLongDead(data: Record<string, unknown> | undefined, now: number): 
   return now - last > GHOST_REAP_MS;
 }
 
-let firebaseApp: FirebaseApp | undefined;
+/**
+ * The shared connection (net/firebase.ts) — the same app, sign-in and uid the
+ * leaderboard and the club use. Every entry point below opens it before it
+ * touches Firestore, because under the current rules an unauthenticated write
+ * is not a slow write, it is a denied one.
+ */
+let live: Cloud | null = null;
+
+async function openCloud(): Promise<Cloud> {
+  live ??= await cloud();
+  if (!live) throw new Error('no connection');
+  return live;
+}
 
 function db(): Firestore {
-  // The leaderboard may have initialised the app already — share it.
-  firebaseApp ??= getApps().length ? getApp() : initializeApp(firebaseConfig);
-  return getFirestore(firebaseApp);
+  if (!live) throw new Error('cloud not open'); // openCloud() first — always awaited by the caller
+  return live.db;
+}
+
+/** This headset's uid — who a room is hosted by. */
+function uid(): string {
+  return live?.uid ?? '';
+}
+
+/** The one rooms collection. */
+function rooms(): ReturnType<typeof collection> {
+  return collection(db(), 'rooms');
+}
+
+/** A scan of the OPEN public rooms of one mode. Equality filters only, so
+ *  Firestore serves it by merging single-field indexes. */
+function openRooms(mode: 'duel' | 'ranked') {
+  return query(
+    rooms(),
+    where('mode', '==', mode),
+    where('visibility', '==', 'public'),
+    where('open', '==', true),
+    limit(25),
+  );
+}
+
+/** How long a room's lease runs. Private codes get read out over voice chat,
+ *  typed wrong and typed again, so they outlive a queue lobby by a lot. */
+const PUBLIC_LEASE_MS = 90 * 1000;
+
+/**
+ * The fields the rules insist on: what kind of room this is, who holds it, and
+ * when it stops counting. `expiresAt` is not bookkeeping — a leaked room sorts
+ * ahead of live ones in a limit()ed scan, and enough of them is exactly the
+ * August '26 outage where nobody ever paired.
+ */
+function roomFields(mode: 'duel' | 'ranked', visibility: 'public' | 'private') {
+  const now = Date.now();
+  return {
+    mode,
+    visibility,
+    host: uid(),
+    at: now,
+    // A TIMESTAMP: a TTL policy ignores a numeric field entirely (net/rooms.ts).
+    expiresAt: new Date(now + (visibility === 'private' ? PRIVATE_FRESH_MS : PUBLIC_LEASE_MS)),
+  };
+}
+
+/** A heartbeat: push the lease out, and keep `seen` for the freshness window. */
+function beatFields(visibility: 'public' | 'private') {
+  const now = Date.now();
+  return {
+    seen: serverTimestamp(),
+    at: now,
+    expiresAt: new Date(now + (visibility === 'private' ? PRIVATE_FRESH_MS : PUBLIC_LEASE_MS)),
+  };
 }
 
 export class WebRtcTransport implements Transport {
@@ -145,11 +216,11 @@ export class WebRtcTransport implements Transport {
     // Correct for device clock skew BEFORE judging any lobby's freshness — a
     // headset clock off by >LOBBY_FRESH_MS otherwise sees every live lobby as
     // stale and never matches (the "both searching, never pair" bug).
+    await openCloud();
     await syncServerClock();
     if (this.closed) return;
-    const lobbies = collection(db(), 'lobbies');
 
-    const claimed = await this.tryClaimLobby(lobbies);
+    const claimed = await this.tryClaimLobby(openRooms('duel'));
     if (this.closed) return;
     if (!(await this.setupConnection())) return;
 
@@ -160,7 +231,12 @@ export class WebRtcTransport implements Transport {
       this.armConnectTimeout();
     } else {
       this.isCaller = true;
-      const ref = await addDoc(lobbies, { open: true, createdAt: serverTimestamp(), seen: serverTimestamp() });
+      const ref = await addDoc(rooms(), {
+        open: true,
+        createdAt: serverTimestamp(),
+        seen: serverTimestamp(),
+        ...roomFields('duel', 'public'),
+      });
       if (this.closed) return;
       // Callers wait in the queue indefinitely; the clock starts when an
       // answer arrives (see runCallerOn).
@@ -173,11 +249,12 @@ export class WebRtcTransport implements Transport {
   }
 
   /**
-   * Host a private match: reserve a free 5-digit code (its own doc id in
-   * `privateLobbies`), publish an offer there, and wait. Resolves with the code.
+   * Host a private match: reserve a free 5-digit code (which IS the room's doc
+   * id), publish an offer there, and wait. Resolves with the code.
    */
   async hostPrivate(): Promise<string> {
     this.events.onStatus('creating private match…');
+    await openCloud();
     await syncServerClock();
     if (!(await this.setupConnection())) throw new Error('cancelled');
     this.isCaller = true;
@@ -191,12 +268,17 @@ export class WebRtcTransport implements Transport {
   /** Join a private match by code: claim its lobby and answer the host's offer. */
   async joinPrivate(code: string): Promise<void> {
     this.events.onStatus('joining…');
+    await openCloud();
     await syncServerClock();
-    const ref = doc(collection(db(), 'privateLobbies'), code);
+    const ref = doc(rooms(), code);
     // Claim it first (validates the code) so a bad code never prompts for mic.
     await runTransaction(db(), async (txn) => {
       const snap = await txn.get(ref);
       if (!snap.exists()) throw new Error('code not found');
+      // One code space now covers every private room in the app, so a code
+      // that IS a room but isn't a duel is a real answer, not a miss — say so
+      // rather than letting a raid code fail as "not found".
+      if (snap.data()?.mode !== 'duel') throw new Error('that code is not a duel');
       if (snap.data()?.open !== true) throw new Error('match already started');
       const created = (snap.data()?.createdAt?.toMillis?.() as number | undefined) ?? 0;
       if (serverNow() - created > PRIVATE_FRESH_MS) throw new Error('code expired');
@@ -211,7 +293,7 @@ export class WebRtcTransport implements Transport {
 
   /**
    * Host a PUBLIC ranked room, listed in the server browser: create an open
-   * doc in `rankedRooms` tagged with your name, publish an offer, and wait for
+   * room tagged with your name, publish an offer, and wait for
    * a challenger to pick it out of the list. Heartbeats `seen` so a dropped
    * host ages out of everyone's browser. Resolves with the room's doc id once
    * it's live and waiting (you're the caller, side 0) — the browser uses that
@@ -219,15 +301,17 @@ export class WebRtcTransport implements Transport {
    */
   async hostRanked(name: string): Promise<string> {
     this.events.onStatus('opening your server…');
+    await openCloud();
     await syncServerClock();
     if (!(await this.setupConnection())) throw new Error('cancelled');
     this.isCaller = true;
-    const rooms = collection(db(), 'rankedRooms');
-    const ref = await addDoc(rooms, {
+    const ref = await addDoc(rooms(), {
       open: true,
-      host: name.slice(0, 14) || 'BOXER',
       createdAt: serverTimestamp(),
       seen: serverTimestamp(),
+      ...roomFields('ranked', 'public'),
+      // `host` is the uid the rules check; the browser wants a NAME to show.
+      hostName: name.slice(0, 14) || 'BOXER',
     });
     if (this.closed) throw new Error('cancelled');
     await this.runCallerOn(ref);
@@ -241,8 +325,9 @@ export class WebRtcTransport implements Transport {
   /** Join a listed ranked room by its doc id: claim it, then answer the host. */
   async joinRanked(id: string): Promise<void> {
     this.events.onStatus('joining…');
+    await openCloud();
     await syncServerClock();
-    const ref = doc(collection(db(), 'rankedRooms'), id);
+    const ref = doc(rooms(), id);
     // Claim it first so a full/stale room fails before we prompt for the mic.
     await runTransaction(db(), async (txn) => {
       const snap = await txn.get(ref);
@@ -267,7 +352,7 @@ export class WebRtcTransport implements Transport {
   private startRankedHeartbeat(): void {
     this.hostTimer = setInterval(() => {
       if (this.closed || this.matched || !this.lobbyRef) return;
-      void updateDoc(this.lobbyRef, { seen: serverTimestamp() }).catch(() => {});
+      void updateDoc(this.lobbyRef, beatFields('public')).catch(() => {});
     }, HOST_TICK_MS);
   }
 
@@ -281,23 +366,28 @@ export class WebRtcTransport implements Transport {
     return !this.closed;
   }
 
-  /** Reserve a free 5-digit code as a `privateLobbies` doc; sets `lobbyRef`. */
+  /**
+   * Reserve a free 5-digit code as a private duel room; sets `lobbyRef`.
+   *
+   * The code space is now shared with every other kind of private room — a
+   * mesh 2v2, a raid, a rave set — because they are all documents in `rooms`
+   * keyed by their code. That is the point: a code used to be ambiguous
+   * between two collections, and typing a raid code into the duel box got you
+   * "not found" rather than the truth.
+   */
   private async allocateCode(): Promise<string> {
-    const coll = collection(db(), 'privateLobbies');
     for (let attempt = 0; attempt < 8 && !this.closed; attempt++) {
       const code = String(Math.floor(Math.random() * 100000)).padStart(5, '0');
-      const ref = doc(coll, code);
+      const ref = doc(rooms(), code);
       try {
         await runTransaction(db(), async (txn) => {
           const snap = await txn.get(ref);
           if (snap.exists()) {
-            const created = (snap.data()?.createdAt?.toMillis?.() as number | undefined) ?? 0;
-            // Only reuse a code whose lobby is dead; a live one is taken.
-            if (snap.data()?.open === true && serverNow() - created < PRIVATE_FRESH_MS) {
-              throw new Error('taken');
-            }
+            // A code is TAKEN while its room is still leased, whatever kind of
+            // room that is — the lease is the one clock every room keeps.
+            if (Date.now() < expiryMs(snap.data()?.expiresAt)) throw new Error('taken');
           }
-          txn.set(ref, { open: true, createdAt: serverTimestamp() });
+          txn.set(ref, { open: true, createdAt: serverTimestamp(), ...roomFields('duel', 'private') });
         });
         this.lobbyRef = ref;
         return code;
@@ -387,11 +477,9 @@ export class WebRtcTransport implements Transport {
 
   // --- matchmaking -----------------------------------------------------------
 
-  /** Try to claim the freshest open lobby; null means "be the caller". */
-  private async tryClaimLobby(
-    lobbies: ReturnType<typeof collection>,
-  ): Promise<DocumentReference | null> {
-    const open = await getDocs(query(lobbies, where('open', '==', true), limit(25)));
+  /** Try to claim the freshest open room; null means "be the caller". */
+  private async tryClaimLobby(scan: ReturnType<typeof openRooms>): Promise<DocumentReference | null> {
+    const open = await getDocs(scan);
     const now = serverNow();
     for (const snap of open.docs) {
       if (!lobbyFresh(snap.data(), now)) {
@@ -456,8 +544,7 @@ export class WebRtcTransport implements Transport {
    * exactly one mover with no timestamps involved.
    */
   private async crossOverIfRivalHost(): Promise<void> {
-    const lobbies = collection(db(), 'lobbies');
-    const open = await getDocs(query(lobbies, where('open', '==', true), limit(25)));
+    const open = await getDocs(openRooms('duel'));
     if (this.closed || this.matched || !this.lobbyRef) return;
     const now = serverNow();
     const myId = this.lobbyRef.id;

@@ -602,14 +602,23 @@ hosting targets.
 - Reads FF1's `players`/`run*` collections and RAVE RAID's `scores`
   ratchet board directly; when FF2 gets its own Firestore project the
   page gains an FF2 board the same way.
-- **THE CHANNEL** (`#tv`): a live top-down broadcast of whatever is on —
+- **THE CHANNEL** (the third face): a live top-down broadcast of whatever is on —
   the headset running a bout casts frames to `server/tv.mjs` at `/tv`
   (`systems/BroadcastSystem.ts`, `net/tvCast.ts`); the page draws
   platforms, fighters, balls, clock, titan; falls back to the rave
   relay's public club floor, then to a dark test card. The relay ranks
   people over raids over solo bouts and expires a silent channel in six
   seconds. The Discord bot announces LIVE / FINAL for online matches.
-- **THE LAB** (`#lab`): THE TAPE — `net/telemetry.ts` records each bout
+- **THE LOOK**: the page wears RAVE RAID's stats-page surface language
+  (near-black glass, corner brackets, the rail and its eased marker,
+  Rajdhani) with FIRE FIGHT's hazard amber as the accent; each face swaps
+  the accent and the floor's pools rather than the layout.
+- **SPEEDRUN** is what the GAUNTLET board is called now, and it is three
+  boards rather than one — `ff2-speedrun-{normal,hard,blazing}-time` —
+  because a board is a per-uid ratchet and one board would keep only your
+  fastest clear across every tier. The page gives it a difficulty
+  sub-rail; the lobby merges the three back into one ranked list.
+- **THE LAB** (a board of the FIRE FIGHT rail, not a tab of its own): THE TAPE — `net/telemetry.ts` records each bout
   (standing / throw-left / throw-right / hit-taken heatmap grids over the
   platform footprint, the timed play-by-play, the rounds) into the
   `bouts` collection; the page aggregates the last 200 into tiles, four
@@ -780,10 +789,11 @@ Each phase is shippable; nothing waits on everything.
     *(First pass shipped: the join link and boot join, the invite band's
     QR + SHARE, the bot's write path (bell, invite, LIVE/FINAL), THE
     CHANNEL and THE LAB on stats.html — see §8 and §9. Open: the
-    countdown edits, Rich Presence, slash commands, and where THE ROOM
-    SERVER lives in production — `config.TV.defaultRelay` names the rave
-    relay's host; that service must run `npm run server` (room.mjs) for
-    `/tv` to answer.)*
+    countdown edits, Rich Presence and slash commands. THE ROOM SERVER is
+    `ff2-room` on Render (render.yaml) and `config.ROOM_SERVER` names it;
+    every relay including `/tv` answers there, which is also why THE
+    CHANNEL lives inside room.mjs — the club peep reads the rave relay's
+    rooms out of memory, so the two have to share a process.)*
 
 Session-zero decisions still open (flagged, not blocking): FF2's own
 Firebase project + hosting target; whether FF2 ships as an update to the

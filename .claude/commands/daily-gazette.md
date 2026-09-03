@@ -20,8 +20,8 @@ length). Then:
    the grumble and the tin tell close it. A quiet wire still gets an edition
    (see the voice doc's second example) and a `wanted` for the top of the roll.
 3. Run `node scripts/publish-gazette.mjs /tmp/gazette.json`. It validates the
-   fields, bumps the edition number, writes `newspaper/latest` (the lobby's
-   red dot lights for every player), rolls `newspaper/_snapshot` forward and
+   fields, bumps the edition number, writes `gazette/latest` (the lobby's
+   red dot lights for every player), rolls `gazette/_snapshot` forward and
    archives a copy under `gazette-archive/`.
 4. Commit the archive file it wrote with the message
    `Gazette No. <edition>: <headline>` and push.
