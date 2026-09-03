@@ -52,7 +52,9 @@ await page.addInitScript(() => {
 // looks like for its first two hundred milliseconds, and why players kept
 // landing in a room of one. The room of one is still the last resort, and
 // this proves it still happens; it just no longer waits a minute to say so.
-const floorUrl = `${base}/?floorPatience=1200`;
+// Four seconds, not one: at one the check had six attempts to get a second
+// headset onto the floor, and lost the race whenever the machine was busy.
+const floorUrl = `${base}/?floorPatience=4000`;
 await page.goto(floorUrl, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => page.goto(floorUrl));
 await page.waitForTimeout(1200);
 await page.click('#enter-vr');

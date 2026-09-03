@@ -66,7 +66,7 @@ import {
 import {
   inRoom,
   autoJoinFromUrl,
-  enterPublicRoom,
+  openPublicFloor,
   hostRoom,
   joinRoom,
   leaveRoom,
@@ -693,7 +693,15 @@ export class MenuSystem extends createSystem({}) {
     } else if (id === 'club') {
       // Straight through — no code to read, so nothing to hold the foyer
       // for. The relay puts you wherever the crowd already is.
-      enterPublicRoom();
+      //
+      // THE PATIENT one (net/session.ts openPublicFloor), not a bare
+      // connect. This is the door most people actually walk through, and it
+      // was the last one still taking a single swing at the relay: one
+      // refused socket and you stood on the floor unconnected for the whole
+      // visit, with nobody able to join you and nothing for FFTV to peep
+      // at — and no sign anything was wrong, because the hall is up either
+      // way. The other two doors were fixed and this one was missed.
+      openPublicFloor();
     } else if (id === 'rooms') {
       this.multiPage = 'pick';
     } else if (id === 'host') {

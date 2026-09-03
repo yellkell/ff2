@@ -1673,6 +1673,19 @@
             </section>
           </div>
 
+          <!-- THE PLAYER'S OWN MATCH LOG. The profile is a service record,
+               and what somebody has actually played is the most service-
+               record thing there is. It is the LOG only: the bench stays in
+               the Lab, because where-you-stand and which-fist-you-throw is
+               a question about the game rather than about a person. -->
+          <section class="panel opening" style="animation-delay: 0.18s; margin-top: clamp(12px, 1.6vw, 18px)">
+            <i class="halo"></i><span class="sheen"></span>
+            <h2 class="panel-title">Match log</h2>
+            <p class="panel-note">Every recorded match this player fought, newest first. Tap one to open its rounds and play-by-play.</p>
+            <div id="profile-tape" style="margin-top: 12px"></div>
+            <div class="status hidden" id="profile-tape-status"><div class="line"></div><div class="hint"></div></div>
+          </section>
+
         </div>
       </section>
 
@@ -3572,6 +3585,9 @@
       ];
 
       const profile = { uid: '', name: '', open: false, seq: 0 };
+      /** Which tape is expanded in the PROFILE's log — separate from the
+       *  Lab's, so opening one there does not open one here. */
+      const profileTape = { open: null };
       window.__ffProfile = { open: (uid, name) => openProfile(uid, name), state: () => profile };
 
       /** A name, as a link to its owner. */
@@ -3611,6 +3627,7 @@
         profile.uid = uid;
         profile.name = name || '';
         profile.open = true;
+        profileTape.open = null;
         if (face !== 'ff') showFace('ff');
         syncFfFace();
         try { history.replaceState(null, '', `#player=${encodeURIComponent(uid)}`); } catch {}
@@ -3634,6 +3651,49 @@
         openProfile(b.dataset.uid, b.dataset.name);
       }, true);
 
+      /**
+       * The tapes behind a profile. They come from the same fifty the Lab
+       * pulls — one query, cached on `lab` — so opening a profile after
+       * visiting the Lab costs nothing, and opening one first warms it for
+       * the Lab in turn. `bouts` shares its read quota with the boards and
+       * the roster the GAME needs, so it is not worth a second query.
+       */
+      async function loadProfileTapes() {
+        const seq = profile.seq;
+        const status = document.getElementById('profile-tape-status');
+        showStatus(status, 'PULLING THE TAPES', '', false);
+        try {
+          await loadLab(false);
+        } catch {
+          /* the log is a courtesy; the record above it still stands */
+        }
+        if (seq !== profile.seq || !profile.open) return;
+        drawProfileTapes();
+      }
+
+      /** A tape is THIS player's if they kept it, or if they are named in
+       *  it — an opponent's recording of the same fight is still their
+       *  match, and only one side of a bout writes the tape. */
+      function profileTapes() {
+        const name = (profile.name || '').toLowerCase();
+        return lab.all.filter(
+          (b) => isMatch(b) && (b.uid === profile.uid || (name && b.names.some((n) => String(n).toLowerCase() === name))),
+        );
+      }
+
+      function drawProfileTapes() {
+        const host = document.getElementById('profile-tape');
+        const status = document.getElementById('profile-tape-status');
+        const mine = profileTapes();
+        if (!mine.length) {
+          host.innerHTML = '';
+          showStatus(status, 'NO MATCHES YET', 'Nothing this player fought has been recorded.', true);
+          return;
+        }
+        status.classList.add('hidden');
+        renderTapeList(host, mine, profileTape, drawProfileTapes);
+      }
+
       function profileChip(text, tone) {
         document.getElementById('profile-chip-text').textContent = text;
         document.getElementById('profile-chip').dataset.tone = tone;
@@ -3646,8 +3706,10 @@
         document.getElementById('profile-rank').textContent = '';
         document.getElementById('profile-record').innerHTML = '';
         document.getElementById('profile-rave').innerHTML = '';
+        document.getElementById('profile-tape').innerHTML = '';
         profileChip('PULLING THE RECORD', 'warn');
         setStatus('PULLING THE RECORD', 'warn');
+        void loadProfileTapes();
 
         // The player doc, the run boards and every rave chart, all at once.
         const ravePaths = [];

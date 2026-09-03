@@ -442,13 +442,19 @@ const prof = await page.evaluate(() => ({
   rank: document.getElementById('profile-rank').textContent,
   chip: document.getElementById('profile-chip-text').textContent,
   hash: location.hash,
-  // A profile is the service record: no tapes, no heatmaps, no lab bench.
-  lab: document.querySelectorAll('#profile .tape-row, #profile canvas.heat').length,
+  // A profile is the service record: it carries the player's own MATCH LOG
+  // (their tapes are part of that record) but never the Lab BENCH — the
+  // heatmaps and the hand and damage breakdowns are questions about the
+  // game rather than about a person, and they stay in the Lab.
+  bench: document.querySelectorAll('#profile canvas.heat, #profile .hands').length,
+  log: document.querySelectorAll('#profile #profile-tape .tape-row').length,
+  logKinds: [...document.querySelectorAll('#profile #profile-tape .tape-row .kind')].map((e) => e.textContent.trim()),
 }));
 check('tapping a name opens the profile over the rail', prof.shown && prof.railHidden, JSON.stringify({ shown: prof.shown, railHidden: prof.railHidden }));
 check('the profile names the player and a rank', prof.name === 'PROBE' && /BRONZE|SILVER|GOLD/.test(prof.rank), `${prof.name} / ${prof.rank}`);
 check('the address deep-links the player', /^#player=u1$/.test(prof.hash), prof.hash);
-check('the profile carries no lab data', prof.lab === 0, `${prof.lab} lab elements`);
+check('the profile carries no lab bench', prof.bench === 0, `${prof.bench} bench elements`);
+check("the profile lists the player's own matches", prof.log > 0 && prof.logKinds.every((k) => ['1V1', '2V2', 'FFA'].includes(k)), `${prof.log} row(s): ${prof.logKinds.join(',') || 'none'}`);
 const back = await page.evaluate(() => {
   document.getElementById('profile-back').click();
   return { shown: !document.getElementById('profile').classList.contains('hidden'), rail: !document.getElementById('board-rail').classList.contains('hidden'), hash: location.hash };
