@@ -1730,7 +1730,13 @@
           structuredQuery.orderBy = [{ field: { fieldPath: opts.orderBy }, direction: opts.dir || 'DESCENDING' }];
         }
         if (opts.where) {
-          structuredQuery.where = { fieldFilter: { field: { fieldPath: opts.where.field }, op: 'EQUAL', value: { stringValue: String(opts.where.value) } } };
+          structuredQuery.where = {
+            fieldFilter: {
+              field: { fieldPath: opts.where.field },
+              op: opts.where.op || 'EQUAL',
+              value: opts.where.value ?? { stringValue: String(opts.where.value) },
+            },
+          };
         }
         if (opts.limit) structuredQuery.limit = opts.limit;
         const ctrl = new AbortController();
@@ -2111,7 +2117,21 @@
         showStatus(status, 'PULLING THE TAPES', '', false);
         setStatus('PULLING THE TAPES', 'warn');
         try {
-          const docs = await runQuery('bouts', { orderBy: 'at', dir: 'DESCENDING', limit: 200 });
+          // ORDERED BY THE LEASE, not by `at`. Both run the same way (a
+          // tape's expiry is its own stamp plus a fixed month), but filtering
+          // and ordering on ONE field needs no composite index — where the
+          // pair would — and it drops a lapsed tape server-side, so an
+          // expired one is invisible before anything sweeps it.
+          //
+          // Fifty, not two hundred: `bouts` shares its daily read quota with
+          // the boards, the rooms and the roster the GAME needs, and a stat
+          // page is the one reader here that can spend it in bulk.
+          const docs = await runQuery('bouts', {
+            orderBy: 'expiresAt',
+            dir: 'DESCENDING',
+            limit: 50,
+            where: { field: 'expiresAt', op: 'GREATER_THAN', value: { timestampValue: new Date().toISOString() } },
+          });
           lab.all = docs.map(normBout);
           lab.loaded = true;
           setStatus('TAPES ARE IN', 'live');

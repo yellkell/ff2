@@ -355,6 +355,24 @@ const wiring = await page.evaluate(async () => {
 });
 check('the page reads the ff2.web.app project', wiring.project && !wiring.old, JSON.stringify(wiring));
 check('boards are read per board, not as a collection group', wiring.boardParent && wiring.speedrun, JSON.stringify(wiring));
+
+// THE TAPES ARE LEASED. `bouts` is the one collection here that grows a
+// document per bout rather than one row per player, and Spark has no TTL —
+// so the reader must filter on the lease (an expired tape is invisible at
+// once, and the page cannot quietly pull two hundred of them a visit).
+const lease = await page.evaluate(async () => {
+  const src = await fetch('/stats.html').then((r) => r.text());
+  const cfg = await fetch('/src/config.ts').then((r) => r.text());
+  const q = /runQuery\('bouts', \{([\s\S]{0,400}?)\}\)/.exec(src);
+  return {
+    q: q ? q[1].replace(/\s+/g, ' ') : '',
+    keepDays: /keepDays: (\d+)/.exec(cfg)?.[1],
+    sweeps: /sweepBouts/.test(await fetch('/src/net/leaderboard.ts').then((r) => r.text())),
+  };
+});
+check('the tape query filters on the lease and orders by it', /expiresAt/.test(lease.q) && /GREATER_THAN/.test(lease.q), lease.q.slice(0, 140));
+check('the tape query does not pull the whole collection', /limit: (\d\d?),/.test(lease.q), (/limit: \d+/.exec(lease.q) || ['—'])[0]);
+check('tapes carry a keep window and the clients sweep', Number(lease.keepDays) > 0 && lease.sweeps, `${lease.keepDays} days, sweep ${lease.sweeps}`);
 check('no page errors', errors.length === 0, errors[0]);
 
 /* ── the QR encoder ──────────────────────────────────────────────────── */

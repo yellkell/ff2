@@ -21,7 +21,7 @@ import { xpForArcade, xpForBot, xpForCampaign, xpForMatch, xpForTraining, xpForT
 import { myPackedLook } from '../avatar/paint.js';
 import { customization, myPackedGear } from '../menu/customization.js';
 import { addCoins } from '../menu/wallet.js';
-import { CURRENCY, LADDER, seasonIndex, seasonScoreField, type ArcadeMode, type Difficulty } from '../config.js';
+import { CURRENCY, LADDER, seasonIndex, seasonScoreField, TV, type ArcadeMode, type Difficulty } from '../config.js';
 
 export interface LbRow {
   /** The player's doc id — identifies them when their row is clicked. */
@@ -684,23 +684,60 @@ export function myUid(): string {
 }
 
 /**
- * THE TAPE (net/telemetry.ts): one immutable `bouts` doc per recorded bout
- * — the heatmap grids, the timed events, the rounds. Fire-and-forget like
- * a run post; the LAB on stats.html reads them back.
+ * THE TAPE (net/telemetry.ts): one `bouts` doc per recorded bout — the
+ * heatmap grids, the timed events, the rounds. Fire-and-forget like a run
+ * post; the LAB on stats.html reads them back.
+ *
+ * Every tape is LEASED (config.ts TV.keepDays). This is the only collection
+ * in the project that grows without bound — a board keeps one row per player
+ * however often they play, but a tape is a fresh document every bout — and a
+ * Firestore TTL policy, which is what an expiry field is normally for, needs
+ * the Blaze plan. On Spark the clients do the housekeeping instead, exactly
+ * as presence and rooms already do: the reader filters on `expiresAt` so a
+ * lapsed tape is invisible immediately, and the next headset to post one
+ * bins a handful of the expired on its way past.
  */
 export function reportBout(doc: Record<string, unknown>): void {
   void (async () => {
     const h = await firestore();
     if (!h) return;
     try {
-      // `uid` and `at` are the rules' business, not the caller's: the tape
-      // must be stamped with the uid that is actually signed in, and `at`
-      // must be a NUMBER (firestore.rules stamped()), not a server timestamp.
-      await h.fs.addDoc(h.fs.collection(h.db, 'bouts'), { ...doc, uid: h.uid, at: Date.now() });
+      // `uid`, `at` and `expiresAt` are the rules' business, not the
+      // caller's: the tape must be stamped with the uid that is actually
+      // signed in, `at` must be a NUMBER (firestore.rules stamped()), and
+      // `expiresAt` must be a TIMESTAMP or the reader's filter cannot
+      // compare it (the same trap rooms fell into — see firestore.rules).
+      const now = Date.now();
+      await h.fs.addDoc(h.fs.collection(h.db, 'bouts'), {
+        ...doc,
+        uid: h.uid,
+        at: now,
+        expiresAt: new Date(now + TV.keepDays * 86_400_000),
+      });
     } catch {
       /* unreachable — this tape stays in the headset */
     }
+    void sweepBouts();
   })();
+}
+
+/** Once per session: bin a bounded handful of tapes that have already
+ *  lapsed. What a TTL policy would have done, done by whoever turns up. */
+let sweptBouts = false;
+async function sweepBouts(): Promise<void> {
+  if (sweptBouts) return;
+  sweptBouts = true;
+  const h = await firestore();
+  if (!h) return;
+  try {
+    const { collection, deleteDoc, getDocs, limit, orderBy, query, where } = h.fs;
+    const snap = await getDocs(
+      query(collection(h.db, 'bouts'), where('expiresAt', '<', new Date()), orderBy('expiresAt'), limit(TV.sweep)),
+    );
+    await Promise.all(snap.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+  } catch {
+    /* denied, offline, or nothing to do — the boards are unaffected */
+  }
 }
 
 /** Clear-badge tier per difficulty (easy earns nothing — same as ranking). */

@@ -144,6 +144,15 @@ service cloud.firestore {
     // many of these, so the name is Firestore's own id and `uid` says whose
     // it is. Signed in and honest about who you are is the boundary; the
     // caps are what stop a client parking a novel in the collection.
+    //
+    // AND EVERY TAPE IS LEASED. This is the only collection here that grows
+    // without bound — a board is one row per player however often they play;
+    // a tape is a new document every bout — so `expiresAt` is required, the
+    // reader filters on it, and any signed-in player may bin one that has
+    // already lapsed. That is precisely what a TTL policy would do, and TTL
+    // needs Blaze; this project is on Spark, so the clients sweep (see
+    // net/leaderboard.ts sweepBouts, and the same arrangement on presence).
+    // An author may always bin their own, lapsed or not.
     match /bouts/{bout} {
       allow read: if true;
       allow create: if signedIn()
@@ -158,8 +167,13 @@ service cloud.firestore {
         && request.resource.data.grid is map
         && request.resource.data.att is map
         && num(request.resource.data.dur, 0, 86400)
+        && leased()
         && stamped();
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if signedIn()
+        && (resource.data.uid == request.auth.uid
+            || !(resource.data.expiresAt is timestamp)
+            || resource.data.expiresAt < request.time);
     }
 
     /* ── rooms — every lobby in the game, in one collection ───────────── */

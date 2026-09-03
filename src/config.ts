@@ -1059,6 +1059,26 @@ export const TV = {
   eventCap: 600,
   /** Shorter bouts are never posted: a mis-tap, a forfeit at the bell. */
   minBoutSeconds: 15,
+  /**
+   * HOW LONG A TAPE LIVES. `bouts` is the one append-only collection in the
+   * project — a board is a ratchet with one row per player, but a tape is a
+   * new document every time anybody fights — so without an expiry it is the
+   * only thing here that grows for ever.
+   *
+   * A Firestore TTL policy is the obvious answer and needs the Blaze plan;
+   * this project is on Spark. So a tape carries `expiresAt` and the CLIENTS
+   * sweep, exactly as `presence` and `rooms` already do (net/presence.ts).
+   * The reader filters on the field, so an expired tape is invisible from
+   * the moment it lapses whether or not anything has binned it yet.
+   *
+   * Thirty days is a stat page's useful memory: long enough to see a habit
+   * across a month of play, short enough that a busy season cannot fill a
+   * free tier's gigabyte.
+   */
+  keepDays: 30,
+  /** Expired tapes one headset bins per session — bounded, lazy, best-effort
+   *  housekeeping, like presence's own. */
+  sweep: 20,
 };
 
 /**
