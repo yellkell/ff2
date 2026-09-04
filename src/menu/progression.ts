@@ -31,6 +31,13 @@ export function tierForXp(xp: number): TierInfo {
 
 /** Flat XP for completing an Aim Training run (the score sets the board best,
  *  not the XP). */
+/** A tier's name by index — the promotion FX names the tier it lands ON,
+ *  which it knows as an index, not as an XP total. */
+export function tierName(index: number): string {
+  const tiers = PROGRESSION.tiers;
+  return tiers[Math.max(0, Math.min(tiers.length - 1, index))].name;
+}
+
 export function xpForTraining(): number {
   return PROGRESSION.trainingRun;
 }

@@ -325,6 +325,21 @@ export function clearFirePools(): void {
   trailPool?.clear();
 }
 
+/**
+ * Lift (or drop back) the ember pool's place in the transparent draw order.
+ *
+ * The pool sits at 0, which is right for a bout: fire belongs in the world,
+ * sorted with it. It is wrong in the LOBBY, where the kit's menu panels ride
+ * renderOrder 30 with depthWrite off specifically to beat transparent
+ * scenery — so a fountain of sparks in front of a panel gets painted out by
+ * the panel behind it. The promotion celebration borrows this to put its
+ * fire back on top for the five seconds it owns the view, and puts it down
+ * again on the way out. Pass 0 to restore.
+ */
+export function setEmberDrawOrder(order: number): void {
+  if (emberPool) emberPool.points.renderOrder = order;
+}
+
 /** A drifting spark. cool=true gives the opponent's blue fire. */
 export function spawnEmber(pos: Vector3, up = 0.4, cool = false): void {
   if (!emberPool) return;

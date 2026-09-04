@@ -25,7 +25,8 @@
     "check:rules": "firebase emulators:exec --only firestore --project ff2-rules-check \"node tools/rules-check.mjs\"",
     "check:mirror": "node tools/mirror-check.mjs",
     "check:voidstep": "node tools/voidstep-check.mjs",
-    "check:tv": "node tools/tv-check.mjs"
+    "check:tv": "node tools/tv-check.mjs",
+    "check:promo": "node tools/promo-check.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "0.4.2",

@@ -17,10 +17,10 @@
  *
  * One rail, one content region, no floating sub-panels. TOUR is its own
  * flow screen; PLAY, MULTIPLAYER and SYSTEM are in-panel modes of the
- * lobby. MULTIPLAYER stays locked (greyed) until the first boss falls —
- * tour set 1's finale — then the club opens for good. With a room OPEN the
- * board doesn't exist at all: the club floor's console is the SOCIAL panel
- * (ClubSocialSystem), and the board waits in the foyer.
+ * lobby. The club's door is open from the first visit — nobody should have
+ * to grind a boss alone before they can play with a friend. With a room
+ * OPEN the board doesn't exist at all: the club floor's console is the
+ * SOCIAL panel (ClubSocialSystem), and the board waits in the foyer.
  *
  * Mid-set the board vanishes and the right controller's A button raises
  * THE PAUSE CARD — a small pop-up dead ahead (the Beat Saber posture):
@@ -356,11 +356,6 @@ export class MenuSystem extends createSystem({}) {
       (net.phase === 'live' ? this.pauseRoom : this.pause).buttonIds();
 
     autoJoinFromUrl();
-  }
-
-  /** The club (multiplayer) opens when the first boss falls — set 1's finale. */
-  private multiplayerUnlocked(): boolean {
-    return clearedTourNights().has('0:2');
   }
 
   private activeTab(): Tab {
@@ -946,8 +941,7 @@ export class MenuSystem extends createSystem({}) {
 
     // The rail: pure hit-areas — drawShell paints the tabs (text + marker,
     // no boxes: the Valorant move), so the highlight can ease.
-    const clubOpen = this.multiplayerUnlocked();
-    this.railTabs(clubOpen).forEach((t) => {
+    this.railTabs().forEach((t) => {
       buttons.push({
         id: t.id,
         label: t.label,
@@ -1013,7 +1007,7 @@ export class MenuSystem extends createSystem({}) {
     );
   }
 
-  private railTabs(clubOpen: boolean): {
+  private railTabs(): {
     id: string;
     tab: Tab;
     label: string;
@@ -1024,14 +1018,7 @@ export class MenuSystem extends createSystem({}) {
     return [
       { id: 'tab-tour', tab: 'tour', label: 'THE TOUR', sub: this.tourProgressSub(), y: 152 },
       { id: 'tab-play', tab: 'play', label: 'SOLO', y: 270 },
-      {
-        id: 'tab-multi',
-        tab: 'multi',
-        label: 'MULTIPLAYER',
-        sub: clubOpen ? undefined : 'beat the first boss',
-        disabled: !clubOpen,
-        y: 388,
-      },
+      { id: 'tab-multi', tab: 'multi', label: 'MULTIPLAYER', y: 388 },
       { id: 'tab-sys', tab: 'sys', label: 'SYSTEM', y: 506 },
       // ONE TOWN (FF2): the rave is a page of FIRE FIGHT 2 — this is the
       // door back to the arena's lobby. Same name, same wallet, same body.
@@ -1453,8 +1440,7 @@ export class MenuSystem extends createSystem({}) {
     g.strokeStyle = UI.lineFaint;
     g.stroke();
 
-    const clubOpen = this.multiplayerUnlocked();
-    const tabs = this.railTabs(clubOpen);
+    const tabs = this.railTabs();
     const activeY = tabs.find((t) => tab === t.tab)?.y ?? tabs[0].y;
     this.railTargetY = activeY + 18;
     if (!Number.isFinite(this.railY)) this.railY = this.railTargetY;
@@ -2362,33 +2348,6 @@ export class MenuSystem extends createSystem({}) {
           g.letterSpacing = '2px';
           g.fillStyle = UI.info;
           g.fillText('▼ NEXT', n.x, n.y - n.r - 30);
-          g.letterSpacing = '0px';
-        }
-
-        // THE UNLOCK FLAG: multiplayer opens when this night is cleared, so
-        // the map says which night that is — and stops saying it the moment
-        // it's yours. It sits above NEXT when they land on the same stop.
-        if (s === 0 && i === 2 && !this.multiplayerUnlocked()) {
-          const label = 'UNLOCKS MULTIPLAYER';
-          g.font = font(700, 19);
-          g.letterSpacing = '2px';
-          const pw = g.measureText(label).width + 40;
-          const py = n.y - n.r - (next ? 58 : 30);
-          // A leader down to the stop — a pill hanging in the white space
-          // between three nodes belongs to whichever one you assume.
-          g.strokeStyle = UI.info;
-          g.lineWidth = 2;
-          g.beginPath();
-          g.moveTo(n.x, py + 18);
-          g.lineTo(n.x, n.y - n.r - 2);
-          g.stroke();
-          g.beginPath();
-          g.roundRect(n.x - pw / 2, py - 18, pw, 36, 18);
-          g.fillStyle = 'rgba(111,200,255,0.14)';
-          g.fill();
-          g.stroke();
-          g.fillStyle = UI.info;
-          g.fillText(label, n.x, py + 1);
           g.letterSpacing = '0px';
         }
 
