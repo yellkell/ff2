@@ -2764,8 +2764,12 @@
 
       /* ══ RAVE RAID ════════════════════════════════════════════════════ */
 
-      /* The record box (src/rave/audio/tracks.ts). Anything the board
-         carries that isn't listed still shows, under its own id. */
+      /* The record box: the RAIDABLE records only — the tracks carrying
+         roles: ['raid'] in src/rave/audio/tracks.ts, which is exactly the
+         shelf the lobby offers (tracksFor('raid')). A lobby or credits
+         track never gets raided, so it can never hold a record, and listing
+         it here just offers an empty board. Anything the board carries that
+         isn't listed still shows, under its own id. */
       const RR_TRACKS = [
         ['sakupened', 'SAKUPENED'], ['combat', 'COMBAT'], ['discoball', 'DISCO BALL'],
         ['loop', 'LOOP'], ['capture', 'CAPTURE'], ['morning', 'MORNING'],
@@ -2773,9 +2777,8 @@
         ['dynasty', 'DYNASTY'], ['spread', 'SPREAD'], ['unity', 'UNITY'],
         ['assemble', 'ASSEMBLE'], ['infection', 'INFECTION'], ['giveit', 'GIVE IT TO ME'],
         ['vone', 'ORIGINAL'], ['fusion', 'FUSION'], ['braineater', 'BRAIN EATER'],
-        ['credits', 'CREDITS'], ['chill', 'CHILL'], ['futurevibe', 'FUTURE VIBE'],
-        ['vfall', 'BREAKCORE V4'], ['defense', 'DEFENSE'], ['awakening', 'AWAKENING'],
-        ['swag', 'SWAG'], ['eclipse', 'ECLIPSE'],
+        ['futurevibe', 'FUTURE VIBE'], ['vfall', 'BREAKCORE V4'],
+        ['defense', 'DEFENSE'], ['awakening', 'AWAKENING'],
       ];
       const RR_DIFFS = [
         { id: '0', label: 'Easy' }, { id: '1', label: 'Normal' },
