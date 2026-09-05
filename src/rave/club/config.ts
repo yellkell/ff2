@@ -281,6 +281,67 @@ const S = CLUB.step;
 /** Booth marble tabletop height (top.y 0.745 + half its 0.035 slab). */
 const BOOTH_TABLE_Y = 0.763;
 
+/** How far inside the stage drum's radius (3.0) a landing may stand — the
+ *  brass nosing keeps the last fifteen centimetres to itself. */
+const STAGE_STAND_R = 2.85;
+/** The stage FACE, for the wall table: the drum's edge plus the nosing's
+ *  overhang, which is the line a floor-level hop may not cross. */
+const STAGE_FACE_R = CLUB.stage.r + 0.3;
+
+/** Round a half-width DOWN to the nearest five centimetres, so a band's
+ *  corners sit inside the curve rather than on it. */
+const down5 = (v: number): number => Math.floor(v * 20) / 20;
+
+/**
+ * THE STAGE DECK, as the half-drum it is. One rectangle big enough to be
+ * worth standing on would hang its corners out over the lip, and the three
+ * hand-placed patches that replaced it left a metre of deck along the front
+ * — exactly where anyone performing wants to stand — refusing every arc.
+ * So: bands, twenty centimetres deep from the lip back to the drape. Each
+ * is as wide as the curve allows at its FRONT edge (the edge nearer the
+ * floor, where the drum is narrowest for that band), which keeps every
+ * corner inside STAGE_STAND_R; the bands that share the console's depth
+ * are split into two wings around it.
+ */
+function stageBands(): FloorArea[] {
+  const out: FloorArea[] = [];
+  const y = CLUB.stage.h;
+  const desk = CLUB.stage.desk;
+  const deskFront = desk.z + desk.halfD;
+  const deskBack = desk.z - desk.halfD;
+  const deskHalfW = desk.halfW + 0.13; // a hand's width clear of the console
+  const back = CLUB.stage.z + 0.25; // the drape's own clearance
+  for (let zFront = CLUB.stage.z + STAGE_STAND_R - 0.05; zFront > back + 0.05; zFront -= 0.2) {
+    const zBack = Math.max(zFront - 0.2, back);
+    const d = zFront - CLUB.stage.z;
+    const hw = down5(Math.sqrt(Math.max(0, STAGE_STAND_R * STAGE_STAND_R - d * d)));
+    const atDesk = zBack < deskFront && zFront > deskBack;
+    if (!atDesk) {
+      if (hw >= 0.3) out.push({ minX: -hw, maxX: hw, minZ: zBack, maxZ: zFront, y });
+    } else if (hw > deskHalfW + 0.2) {
+      out.push({ minX: deskHalfW, maxX: hw, minZ: zBack, maxZ: zFront, y });
+      out.push({ minX: -hw, maxX: -deskHalfW, minZ: zBack, maxZ: zFront, y });
+    }
+  }
+  return out;
+}
+
+/**
+ * THE FLOOR IN FRONT OF THE STAGE. The hall's centre band stops at the
+ * stage's straight face line, but the stage is round: either side of the
+ * drum's bulge there is a crescent of perfectly good floor between that line
+ * and the deck — a metre deep at the edges — that no arc could land on. Bands
+ * again, mirrored, each starting where the drum (plus its nosing) actually
+ * is at the band's INNER edge, where it reaches furthest forward.
+ */
+function crescentBands(x0: number, x1: number): FloorArea[] {
+  const z = down5(CLUB.stage.z + Math.sqrt(Math.max(0, STAGE_FACE_R * STAGE_FACE_R - x0 * x0))) + 0.05;
+  return [
+    { minX: x0, maxX: x1, minZ: z, maxZ: -5.9, y: 0 },
+    { minX: -x1, maxX: -x0, minZ: z, maxZ: -5.9, y: 0 },
+  ];
+}
+
 export const TELEPORT_AREAS: FloorArea[] = [
   // ── STANDABLE FURNITURE — small islands, listed FIRST so they win the
   // area lookup over the floor beneath them. Dancing on the tables is not
@@ -295,15 +356,10 @@ export const TELEPORT_AREAS: FloorArea[] = [
     maxZ: CLUB.bar.z1 - 0.2,
     y: CLUB.bar.top,
   },
-  // THE STAGE. Three patches, not one rectangle: the deck is a half-drum
-  // of radius 3 centred on the north wall, so a single box big enough to be
-  // worth standing on would hang its corners out over the lip. A wide strip
-  // in FRONT of the decks (where anyone performing actually stands), and a
-  // wing either side of the console — every corner inside r = 2.85, which
-  // leaves the brass nosing to itself.
-  { minX: -2.0, maxX: 2.0, minZ: -8.0, maxZ: -7.35, y: CLUB.stage.h },
-  { minX: -2.5, maxX: -1.25, minZ: -9.05, maxZ: -8.0, y: CLUB.stage.h },
-  { minX: 1.25, maxX: 2.5, minZ: -9.05, maxZ: -8.0, y: CLUB.stage.h },
+  // THE STAGE, band by band from the lip back to the drape (stageBands):
+  // the whole deck inside the nosing, split into wings where the console
+  // stands (its footprint is CLUB.stage.desk).
+  ...stageBands(),
   // The booth tables (inside each velvet horseshoe).
   ...CLUB.boothZs.map((bz) => ({
     minX: CLUB.boothX - 0.42,
@@ -326,9 +382,21 @@ export const TELEPORT_AREAS: FloorArea[] = [
   { minX: -3.2, maxX: 3.2, minZ: -5.9, maxZ: T.z0 - 0.12, y: 0 },
   { minX: -8.55, maxX: -3.2, minZ: -8.15, maxZ: T.z0 - 0.12, y: 0 },
   { minX: 3.2, maxX: CLUB.bar.x - 0.15, minZ: -8.15, maxZ: T.z0 - 0.12, y: 0 },
+  // …and the crescents either side of the drum's bulge, between the centre
+  // band's straight edge and the stage's actual curve (crescentBands).
+  ...crescentBands(0.8, 1.6),
+  ...crescentBands(1.6, 2.4),
+  ...crescentBands(2.4, 3.2),
   // Behind the bar — the keeper's aisle is open to anyone who fancies
   // playing host (enter round the counter's south end).
   { minX: CLUB.bar.x + CLUB.bar.depth + 0.25, maxX: 8.45, minZ: CLUB.bar.z0 + 0.15, maxZ: CLUB.bar.z1 + 0.9, y: 0 },
+  // The ways ROUND the bar. The hall floor stopped at the counter's front
+  // line for the whole east side, so past either end of the counter — where
+  // there is no counter, just floor between the hall and the aisle — an arc
+  // found nothing to land on, and the corridor everyone uses to get behind
+  // the bar was a dead band you could see and not stand in.
+  { minX: CLUB.bar.x - 0.15, maxX: 8.45, minZ: CLUB.bar.z1 + 0.15, maxZ: A.minZ - 0.15, y: 0 },
+  { minX: CLUB.bar.x - 0.15, maxX: 8.45, minZ: -8.15, maxZ: CLUB.bar.z0 - 0.45, y: 0 },
   // Terrace wings (raised) either side of the vestibule. Neither wing runs
   // the whole way any more — the arcade took the east corner and THE STEP
   // has the west, so the two galleries are the same length again.
@@ -384,6 +452,22 @@ export function floorYAt(x: number, z: number): number {
  */
 export type WallSegment = [number, number, number, number, number?];
 
+/** The stage's curved face as silled chords, west end to east end. */
+function stageFaceChords(): WallSegment[] {
+  const n = 8;
+  const pt = (i: number): [number, number] => {
+    const a = Math.PI - (i * Math.PI) / n; // west (π) round the front to east (0)
+    return [Math.cos(a) * STAGE_FACE_R, CLUB.stage.z + Math.sin(a) * STAGE_FACE_R];
+  };
+  const out: WallSegment[] = [];
+  for (let i = 0; i < n; i++) {
+    const [ax, az] = pt(i);
+    const [bx, bz] = pt(i + 1);
+    out.push([ax, az, bx, bz, CLUB.stage.h]);
+  }
+  return out;
+}
+
 /**
  * Solid walls a teleport may not arc THROUGH — the landing can be valid
  * floor, but if the straight path from where you stand crosses one of these
@@ -412,14 +496,13 @@ export const WALL_SEGMENTS: WallSegment[] = [
   [S.doorX1, S.minZ, S.maxX, S.minZ],
   // The stage face, silled at the deck like the bar counter: step UP onto
   // the stage and back down, but a hop at floor level still can't use it as
-  // a shortcut to the backstage walk behind.
-  [
-    -CLUB.stage.r - 0.4,
-    CLUB.stage.z + CLUB.stage.r + 0.35,
-    CLUB.stage.r + 0.4,
-    CLUB.stage.z + CLUB.stage.r + 0.35,
-    CLUB.stage.h,
-  ],
+  // a shortcut to the backstage walk behind. It follows the DRUM — eight
+  // chords round the half-circle at STAGE_FACE_R — rather than one straight
+  // line across the hall at the drum's front, which had been refusing every
+  // floor-level hop from one side of the dance floor to the other that
+  // happened to pass in front of the stage, and everything onto the
+  // crescents of floor beside the drum's bulge.
+  ...stageFaceChords(),
   // The stage's flat BACK — a closed panelled face, so the way onto the
   // stage is its steps, not a hop through the scenery from the backstage
   // walk. No sill: solid at every height.

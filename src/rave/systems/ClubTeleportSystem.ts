@@ -2,13 +2,20 @@
  * ClubTeleportSystem — FIRE FIGHT's club movement, carried over whole:
  * teleport-only, no sliding, no smooth turn.
  *
- *  - Deflect either thumbstick and that controller starts aiming: a
+ *  - Push either thumbstick FORWARD and that controller starts aiming: a
  *    ballistic arc curves from it to the floor, ending in an OCTAGON marker
  *    (the dancer's platform footprint, naturally) with an arrow inside it.
  *  - Move the controller to move the landing spot; roll the thumbstick to
  *    spin the arrow — that's the way you'll be FACING when you arrive.
  *  - Let the stick spring back and you're there.
  *  - An isolated sideways flick (when not aiming) is a snap turn.
+ *  - BACK on the stick is a short step backwards, on the spot — never an
+ *    arc. (It was always meant to be, and never was: the arc opened on any
+ *    vertical deflection past its engage point, which a stick on its way
+ *    back passes through before it reaches the step's own threshold, and
+ *    once the arc was open the flick was never consulted again. So back
+ *    threw a ray behind you, and the step fired only on a push so hard it
+ *    skipped a frame. Now only a forward push can open the arc.)
  *
  * Landing spots are restricted to the club's floor rectangles
  * (TELEPORT_AREAS — hall, bar aisle, terrace wings, still room, and the
@@ -270,7 +277,9 @@ export class ClubTeleportSystem extends createSystem({}) {
     } else {
       for (const hand of ['left', 'right'] as const) {
         const a = this.input.xr.gamepads[hand]?.getAxesValues(InputComponent.Thumbstick);
-        if (a && Math.hypot(a.x, a.y) >= TELEPORT.engage && Math.abs(a.y) >= Math.abs(a.x)) {
+        // FORWARD opens the arc (−y is forward on a thumbstick); back is the
+        // step's, and sideways the snap turn's — neither ever throws a ray.
+        if (a && a.y <= -TELEPORT.engage && Math.abs(a.y) >= Math.abs(a.x)) {
           this.aimingHand = hand;
           axes = a;
           break;
@@ -402,10 +411,11 @@ export class ClubTeleportSystem extends createSystem({}) {
       return true;
     }
     // …and a clear BACKWARD one steps back. (Forward is −y on a thumbstick,
-    // so back is positive.) Consumes the flick either way it lands: a push
-    // that finds a wall behind you must not fall through to the teleport
-    // arc, or backing into a corner would fire a blind hop instead.
-    if (sy >= TELEPORT.snapEngage && sy > Math.abs(sx)) {
+    // so back is positive.) It engages where the arc would — the same push
+    // that opens a ray forwards steps you backwards — and consumes the
+    // flick either way it lands: a push that finds a wall behind you must
+    // not fall through to anything else.
+    if (sy >= TELEPORT.engage && sy > Math.abs(sx)) {
       this.snapArmed = false;
       this.stepBack();
       return true;
