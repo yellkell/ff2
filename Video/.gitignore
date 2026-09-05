@@ -1,0 +1,12 @@
+# Everything the pipeline regenerates. The scripts and the edits are the
+# source; the frames, mixes, renders and contact sheets are their output.
+cap/
+out/
+stills/
+sheets/
+sfx/
+edit/*.wav
+*.png
+*.log
+# one-off framing / API probes
+probe*.mjs

@@ -1,0 +1,433 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>FF2 trailer compositor</title>
+<style>
+  html, body { margin: 0; background: #111; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="out" width="1280" height="720"></canvas>
+<script type="module">
+// Resolution and edit are chosen by the URL, so one compositor serves both
+// the 16:9 master and the 9:16 short:
+//   compositor.html?tl=./timeline-vertical.mjs&w=1080&h=1920
+const params = new URLSearchParams(location.search);
+const { TL } = await import(params.get('tl') ?? './timeline.mjs');
+const W = Number(params.get('w') ?? 1280);
+const H = Number(params.get('h') ?? 720);
+const canvas = document.getElementById('out');
+canvas.width = W;
+canvas.height = H;
+const ctx = canvas.getContext('2d');
+const off = (w = W, h = H) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const frameLayer = off();      // the clip frame after zoom/shake/filters
+const chan = [off(), off(), off()];
+const lowres = off(320, 180);
+// The band background: a tiny copy scaled back up, which is a cheap blur.
+const bgres = off(Math.max(24, Math.round(W / 16)), Math.max(24, Math.round(H / 16)));
+const logoCard = off(1280, 640);
+
+/* ── clips ─────────────────────────────────────────────────────────────── */
+const clips = new Map(); // name -> { stamps, frames }
+async function loadClip(name) {
+  if (clips.has(name)) return clips.get(name);
+  const r = await fetch(`/Video/cap/${name}/stamps.json`);
+  if (!r.ok) { console.warn('missing clip', name); clips.set(name, null); return null; }
+  const j = await r.json();
+  clips.set(name, j);
+  return j;
+}
+const cache = new Map(); // key -> Image
+const order = [];
+function frameImg(name, idx) {
+  const key = `${name}/${idx}`;
+  let img = cache.get(key);
+  if (!img) {
+    img = new Image();
+    img.src = `/Video/cap/${name}/f${String(idx).padStart(5, '0')}.jpg`;
+    img.__ready = img.decode().then(() => true).catch(() => false);
+    cache.set(key, img);
+    order.push(key);
+    while (order.length > 260) cache.delete(order.shift());
+  }
+  return img;
+}
+function frameIndex(clip, ct) {
+  const s = clip.stamps;
+  let lo = 0, hi = s.length - 1;
+  if (ct <= s[0]) return 0;
+  if (ct >= s[hi]) return hi;
+  while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (s[mid] <= ct) lo = mid; else hi = mid - 1; }
+  return lo;
+}
+
+/* ── timeline helpers ──────────────────────────────────────────────────── */
+const shots = TL.shots;
+function shotAt(t) {
+  let s = shots[0];
+  for (const x of shots) { if (x.t <= t) s = x; else break; }
+  const i = shots.indexOf(s);
+  const end = shots[i + 1]?.t ?? TL.DUR;
+  return { shot: s, end, i };
+}
+const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+const clamp01 = (x) => Math.max(0, Math.min(1, x));
+function inRange(list, t) { for (const r of list ?? []) if (t >= r[0] && t < r[1]) return r; return null; }
+// seeded-ish noise
+function hash(n) { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+
+/* ── grain texture ─────────────────────────────────────────────────────── */
+const grain = off(512, 512);
+{
+  const g = grain.getContext('2d');
+  const d = g.createImageData(512, 512);
+  for (let i = 0; i < d.data.length; i += 4) { const v = 128 + (Math.random() - 0.5) * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+  g.putImageData(d, 0, 0);
+}
+
+/* ── images ────────────────────────────────────────────────────────────── */
+const images = new Map();
+function img(src) {
+  let i = images.get(src);
+  if (!i) { i = new Image(); i.src = src; i.__ready = i.decode().then(() => true).catch(() => false); images.set(src, i); }
+  return i;
+}
+const logo = img('/signs/fire-fight.png');
+
+function drawLogoCard() {
+  // the game's own crop + radial feather (BootIntro.drawMark), lettering only
+  const c = logoCard.getContext('2d');
+  c.clearRect(0, 0, 1280, 640);
+  const cx = 640, cy = 320;
+  const sx = logo.naturalWidth * 0.22, sy = logo.naturalHeight * 0.06, sw = logo.naturalWidth * 0.53, sh = logo.naturalHeight * 0.72;
+  const width = 680, height = (width * sh) / sw;
+  c.drawImage(logo, sx, sy, sw, sh, cx - width / 2, cy - height / 2, width, height);
+  c.globalCompositeOperation = 'destination-in';
+  c.save();
+  c.translate(cx, cy);
+  c.scale(1, height / width);
+  const feather = c.createRadialGradient(0, 0, width * 0.3, 0, 0, width * 0.5);
+  feather.addColorStop(0, 'rgba(0,0,0,1)');
+  feather.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = feather;
+  c.fillRect(-width / 2, -width / 2, width, width);
+  c.restore();
+  c.globalCompositeOperation = 'source-over';
+}
+let logoDrawn = false;
+
+/* ── text ──────────────────────────────────────────────────────────────── */
+function drawText(o, t) {
+  const age = t - o.t0;
+  const life = o.t1 - o.t0;
+  let scale = 1;
+  if (o.pop !== false) { const k = clamp01(age / 0.14); scale = 1.55 - 0.55 * easeOut(k); }
+  if (o.wobble) scale *= 1 + Math.sin(age * 28) * 0.03 * Math.exp(-age * 2);
+  let alpha = 1;
+  if (o.fadeIn) alpha *= clamp01(age / o.fadeIn);
+  if (o.fadeOut) alpha *= clamp01((o.t1 - t) / o.fadeOut);
+  const size = (o.size ?? 96) * scale;
+  const font = o.font ?? 'Impact';
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.translate((o.x ?? 0.5) * W, (o.y ?? 0.5) * H);
+  if (o.rot) ctx.rotate(o.rot);
+  if (o.shakeText) ctx.translate((hash(t * 60) - 0.5) * 14, (hash(t * 60 + 9) - 0.5) * 14);
+  ctx.font = `${o.weight ?? ''} ${size}px "${font}", "Segoe UI Emoji", sans-serif`.trim();
+  if ('letterSpacing' in ctx) ctx.letterSpacing = o.spacing ?? '0px';
+  ctx.textAlign = o.align ?? 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  const lines = String(o.text).split('\n');
+  const lh = size * 1.02;
+  const y0 = -((lines.length - 1) * lh) / 2;
+  for (let i = 0; i < lines.length; i++) {
+    const y = y0 + i * lh;
+    if (o.stroke !== false) {
+      ctx.lineWidth = Math.max(4, size * (o.strokeW ?? 0.11));
+      ctx.strokeStyle = o.strokeColor ?? '#000';
+      ctx.strokeText(lines[i], 0, y);
+    }
+    if (o.glow) { ctx.shadowColor = o.glow; ctx.shadowBlur = size * 0.35; }
+    ctx.fillStyle = o.color ?? '#fff';
+    ctx.fillText(lines[i], 0, y);
+    ctx.shadowBlur = 0;
+  }
+  ctx.restore();
+}
+function drawEmoji(o, t) {
+  const age = t - o.t0, life = o.t1 - o.t0, k = clamp01(age / life);
+  const from = o.from ?? [0.5, 0.5], to = o.to ?? from;
+  const x = (from[0] + (to[0] - from[0]) * k) * W;
+  const y = (from[1] + (to[1] - from[1]) * k) * H + (o.bounce ? -Math.abs(Math.sin(age * 9)) * 40 : 0);
+  let scale = 1;
+  if (o.pop !== false) scale = 1.8 - 0.8 * easeOut(clamp01(age / 0.15));
+  if (o.pulse) scale *= 1 + 0.12 * Math.sin(age * 12);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate((o.rot ?? 0) + (o.spin ?? 0) * age);
+  ctx.font = `${(o.size ?? 140) * scale}px "Segoe UI Emoji"`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (o.fadeOut) ctx.globalAlpha = clamp01((o.t1 - t) / o.fadeOut);
+  ctx.fillText(o.ch, 0, 0);
+  ctx.restore();
+}
+function drawImageOverlay(o, t) {
+  const im = img(o.src);
+  if (!im.complete || !im.naturalWidth) return;
+  const age = t - o.t0;
+  let scale = 1;
+  if (o.pop !== false) scale = 2.2 - 1.2 * easeOut(clamp01(age / 0.12));
+  if (o.pulse) scale *= 1 + 0.06 * Math.sin(age * 10);
+  const w = (o.w ?? 0.5) * W * scale;
+  const h = w * (im.naturalHeight / im.naturalWidth);
+  ctx.save();
+  if (o.fadeOut) ctx.globalAlpha = clamp01((o.t1 - t) / o.fadeOut);
+  ctx.translate((o.x ?? 0.5) * W, (o.y ?? 0.5) * H);
+  ctx.rotate((o.rot ?? 0) + (o.spin ?? 0) * age);
+  if (o.shakeText) ctx.translate((hash(t * 60) - 0.5) * 12, (hash(t * 60 + 3) - 0.5) * 12);
+  ctx.drawImage(im, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+/* ── the frame ─────────────────────────────────────────────────────────── */
+async function renderFrame(t) {
+  const { shot, end } = shotAt(t);
+  const within = t - shot.t;
+  const shotLen = end - shot.t;
+
+  // zoom: shot-level ramp + punches
+  let zoom = 1;
+  if (shot.zoom) zoom *= shot.zoom[0] + (shot.zoom[1] - shot.zoom[0]) * clamp01(within / shotLen);
+  for (const p of TL.punches) if (t >= p.t && t < p.t + 1.2) zoom *= 1 + p.s * Math.exp(-(t - p.t) * (p.k ?? 9));
+  // shake
+  let sx = 0, sy = 0;
+  for (const s of TL.shakes) if (t >= s.t && t < s.t + 1) { const a = s.s * Math.exp(-(t - s.t) * (s.k ?? 7)); sx += (hash(t * 91 + 1) - 0.5) * a; sy += (hash(t * 97 + 5) - 0.5) * a; }
+  if (shot.handheld) { sx += Math.sin(t * 3.1) * 4 + Math.sin(t * 7.3) * 2; sy += Math.cos(t * 2.7) * 3 + Math.sin(t * 9.1) * 1.5; }
+
+  // filters
+  const fry = inRange(TL.ranges.fry, t);
+  const strobe = inRange(TL.ranges.strobe, t);
+  const invert = inRange(TL.ranges.invert, t);
+  const chroma = inRange(TL.ranges.chroma, t);
+  const glitch = inRange(TL.ranges.glitch, t);
+  const grainR = inRange(TL.ranges.grain, t);
+  const filters = [];
+  if (fry) { const k = fry[2] ?? 1; filters.push(`contrast(${1 + 0.9 * k}) saturate(${1 + 1.8 * k}) brightness(${1 + 0.12 * k})`); }
+  if (strobe) { const beatK = strobe[2] ?? 8; const hue = Math.floor(t * beatK) * 67 % 360; filters.push(`hue-rotate(${hue}deg) saturate(1.6)`); }
+  if (invert) filters.push('invert(1)');
+  if (shot.filter) filters.push(shot.filter);
+
+  // source
+  const fl = frameLayer.getContext('2d');
+  fl.save();
+  fl.fillStyle = '#000';
+  fl.fillRect(0, 0, W, H);
+  let drewClip = false;
+  if (shot.clip) {
+    const clip = await loadClip(shot.clip);
+    if (clip) {
+      let ct = shot.start + within * (shot.rate ?? 1);
+      if (shot.freeze != null) ct = shot.freeze;
+      ct = Math.max(0, Math.min(clip.seconds, ct));
+      const idx = frameIndex(clip, ct);
+      const im = frameImg(shot.clip, idx);
+      // prefetch ahead
+      for (let k = 1; k <= 8; k++) frameImg(shot.clip, Math.min(clip.stamps.length - 1, idx + k));
+      await im.__ready;
+      // How 16:9 footage sits in the output frame.
+      //   stretch — fill it (the 16:9 master: identity)
+      //   cover   — fill and crop the overflow, `pan` nudges what survives
+      //   band    — full width, letterboxed over a blurred copy of itself,
+      //             which is where the captions get their room in 9:16
+      const sw = im.naturalWidth || 1280, sh = im.naturalHeight || 720;
+      const fit = shot.fit ?? (H > W ? 'cover' : 'stretch');
+      let dw, dh, dx, dy;
+      if (fit === 'band') {
+        dw = W;
+        dh = (sh / sw) * W;
+        dy = (H - dh) * (shot.bandY ?? 0.5);
+        dx = 0;
+      } else if (fit === 'cover') {
+        const k = Math.max(W / sw, H / sh);
+        dw = sw * k;
+        dh = sh * k;
+        dx = (W - dw) / 2 + (shot.pan?.[0] ?? 0) * W;
+        dy = (H - dh) / 2 + (shot.pan?.[1] ?? 0) * H;
+      } else {
+        dw = W; dh = H; dx = 0; dy = 0;
+      }
+      if (fit === 'band') {
+        const bc = bgres.getContext('2d');
+        const k = Math.max(bgres.width / sw, bgres.height / sh);
+        bc.drawImage(im, (bgres.width - sw * k) / 2, (bgres.height - sh * k) / 2, sw * k, sh * k);
+        fl.save();
+        fl.filter = 'brightness(0.4) saturate(1.35)';
+        fl.drawImage(bgres, 0, 0, W, H);
+        fl.restore();
+      }
+      fl.filter = filters.join(' ') || 'none';
+      // zoom about a focus point (default the frame centre) so a subject
+      // off-centre stays in frame as we push in
+      const fx = (shot.focus?.[0] ?? 0.5) * W, fy = (shot.focus?.[1] ?? 0.5) * H;
+      fl.translate(fx + sx, fy + sy);
+      fl.scale(zoom, zoom);
+      if (shot.flipX) fl.scale(-1, 1);
+      if (shot.rot) fl.rotate(shot.rot);
+      fl.translate(-fx, -fy);
+      if (fry && (fry[2] ?? 1) > 0.6) {
+        // deep-fry: crush through a tiny canvas
+        const lc = lowres.getContext('2d');
+        lc.imageSmoothingEnabled = true;
+        lc.drawImage(im, 0, 0, 320, 180);
+        fl.imageSmoothingEnabled = false;
+        fl.drawImage(lowres, dx, dy, dw, dh);
+        fl.imageSmoothingEnabled = true;
+      } else {
+        fl.drawImage(im, dx, dy, dw, dh);
+      }
+      drewClip = true;
+    }
+  }
+  fl.restore();
+  // prefetch the next shot's opening frames as we approach it
+  {
+    const { i } = shotAt(t);
+    const nx = shots[i + 1];
+    if (nx?.clip && nx.t - t < 0.5) {
+      const c = await loadClip(nx.clip);
+      if (c) { const idx = frameIndex(c, Math.max(0, nx.start ?? 0)); for (let k = 0; k < 6; k++) frameImg(nx.clip, Math.min(c.stamps.length - 1, idx + k)); }
+    }
+  }
+
+  // glitch: slice displacement on the frame layer
+  if (glitch && drewClip) {
+    const g = glitch[2] ?? 1;
+    const n = 6 + Math.floor(hash(t * 50) * 6);
+    for (let i = 0; i < n; i++) {
+      const y = Math.floor(hash(t * 33 + i * 7) * H);
+      const h = 4 + Math.floor(hash(t * 21 + i) * 40);
+      const dx = (hash(t * 17 + i * 3) - 0.5) * 160 * g;
+      fl.drawImage(frameLayer, 0, y, W, h, dx, y, W, h);
+    }
+  }
+
+  // composite to the main canvas, with chromatic aberration if asked
+  ctx.save();
+  ctx.filter = 'none';
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+  if (chroma && drewClip) {
+    const amt = (chroma[2] ?? 1) * (chroma[3] ? Math.exp(-(t - chroma[0]) * chroma[3]) : 1) * 10;
+    const tints = ['#ff0000', '#00ff00', '#0000ff'];
+    const offs = [[-amt, 0], [0, 0], [amt, 0]];
+    for (let i = 0; i < 3; i++) {
+      const c = chan[i].getContext('2d');
+      c.globalCompositeOperation = 'source-over';
+      c.drawImage(frameLayer, 0, 0);
+      c.globalCompositeOperation = 'multiply';
+      c.fillStyle = tints[i];
+      c.fillRect(0, 0, W, H);
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) ctx.drawImage(chan[i], offs[i][0], offs[i][1]);
+    ctx.globalCompositeOperation = 'source-over';
+  } else {
+    ctx.drawImage(frameLayer, 0, 0);
+  }
+  ctx.restore();
+
+  // grain (deep-fry and explicit)
+  if (fry || grainR) {
+    ctx.save();
+    ctx.globalAlpha = fry ? 0.22 * (fry[2] ?? 1) : (grainR[2] ?? 0.12);
+    ctx.globalCompositeOperation = 'overlay';
+    const ox = Math.floor(hash(t * 13) * 256), oy = Math.floor(hash(t * 19) * 256);
+    for (let x = -ox; x < W; x += 512) for (let y = -oy; y < H; y += 512) ctx.drawImage(grain, x, y);
+    ctx.restore();
+  }
+
+  // vignette on clips
+  if (drewClip && shot.vignette !== false) {
+    const v = ctx.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, H * 0.95);
+    v.addColorStop(0, 'rgba(0,0,0,0)');
+    v.addColorStop(1, `rgba(0,0,0,${shot.vignette ?? 0.45})`);
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // the logo card
+  if (shot.type === 'logo') {
+    if (!logoDrawn && logo.complete && logo.naturalWidth) { drawLogoCard(); logoDrawn = true; }
+    const age = within;
+    const fadeIn = clamp01(age / (shot.fadeIn ?? 1.2));
+    const fadeOut = shot.fadeOutAt != null ? clamp01((end - t) / (end - shot.fadeOutAt)) : 1;
+    const a = fadeIn * fadeOut;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 2.4);
+    const s = 0.93 + pulse * 0.14;
+    ctx.save();
+    ctx.globalAlpha = a;
+    // haze + hot core, the landing's pool of red
+    for (const [r, col, op] of [[W * 0.41 * s, 'rgba(196,18,8,', 0.42], [W * 0.26 * s, 'rgba(255,42,16,', 0.5]]) {
+      const g = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, r);
+      g.addColorStop(0, col + (op * (0.72 + pulse * 0.5)) + ')');
+      g.addColorStop(0.6, col + (op * 0.35 * (0.72 + pulse * 0.5)) + ')');
+      g.addColorStop(1, col + '0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    }
+    const lw = W * 0.78, lh = lw / 2;
+    ctx.drawImage(logoCard, W / 2 - lw / 2, H * (shot.logoY ?? 0.5) - lh / 2 - 20, lw, lh);
+    ctx.restore();
+  }
+
+  // overlays
+  for (const o of TL.overlays) {
+    if (t < o.t0 || t >= o.t1) continue;
+    if (o.type === 'text') drawText(o, t);
+    else if (o.type === 'emoji') drawEmoji(o, t);
+    else if (o.type === 'image') drawImageOverlay(o, t);
+    else if (o.type === 'bars') { ctx.fillStyle = '#000'; const h = (o.h ?? 0.1) * H; ctx.fillRect(0, 0, W, h); ctx.fillRect(0, H - h, W, h); }
+    else if (o.type === 'fill') { ctx.save(); ctx.globalAlpha = o.alpha ?? 1; ctx.fillStyle = o.color ?? '#000'; ctx.fillRect(0, 0, W, H); ctx.restore(); }
+  }
+  // flashes
+  for (const f of TL.flashes) {
+    if (t < f.t || t > f.t + (f.d ?? 0.25)) continue;
+    const a = (f.s ?? 1) * (1 - (t - f.t) / (f.d ?? 0.25));
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.fillStyle = f.color ?? '#fff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+  // global fades
+  for (const f of TL.fades ?? []) {
+    if (t < f.t0 || t > f.t1) continue;
+    const k = clamp01((t - f.t0) / (f.t1 - f.t0));
+    ctx.save();
+    ctx.globalAlpha = f.to === 'black' ? k : 1 - k;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
+  return canvas.toDataURL('image/jpeg', 0.94);
+}
+
+window.renderFrame = renderFrame;
+window.__ready = (async () => {
+  await Promise.all([...new Set(shots.map((s) => s.clip).filter(Boolean))].map(loadClip));
+  await logo.__ready;
+  for (const o of TL.overlays) if (o.type === 'image') img(o.src);
+  await document.fonts.load('96px Impact').catch(() => {});
+  await document.fonts.load('96px "Comic Sans MS"').catch(() => {});
+  await document.fonts.load('96px "Segoe UI Emoji"').catch(() => {});
+  return true;
+})();
+</script>
+</body>
+</html>
