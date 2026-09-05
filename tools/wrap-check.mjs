@@ -40,8 +40,13 @@ page.on('pageerror', (e) => {
   console.log(`[pageerror] ${e.message}`);
 });
 
+// THE DOOR IS HELD for the floor now (experience/ClubExperienceManager):
+// with no relay on this machine, ENTER CLUB waits out the floor's whole
+// patience before it crosses to a room of one. The default minute would
+// outlast the wait below; four seconds proves the same door opens.
+const enterUrl = `${base}/?floorPatience=4000`;
 async function enter() {
-  await page.goto(base, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => page.goto(base));
+  await page.goto(enterUrl, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => page.goto(enterUrl));
   await page.waitForTimeout(1200);
   await page.click('#enter-vr');
   await page.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 20000 });

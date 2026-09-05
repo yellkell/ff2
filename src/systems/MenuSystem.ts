@@ -236,6 +236,7 @@ export class MenuSystem extends createSystem({}) {
     const cur: unknown[] = [
       app.searching,
       app.netStatus,
+      app.venueStatus, // the CLUB door's wait, read out while it's held
       app.pubCount,
       // Fresh object every 8 s poll — stringify so identical counts don't repaint.
       JSON.stringify(app.pubRegionCounts),

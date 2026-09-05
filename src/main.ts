@@ -52,7 +52,7 @@ import { FXSystem } from './systems/FXSystem.js';
 import { DesertSystem } from './systems/DesertSystem.js';
 import { PlatformFXSystem } from './systems/PlatformFXSystem.js';
 import { PerfHudSystem } from './systems/PerfHudSystem.js';
-import { FOVEATION } from './config.js';
+import { FOVEATION, warmRoomServer } from './config.js';
 
 installCrashTrap(); // headset playtests have no console — trap + persist crashes
 
@@ -150,6 +150,10 @@ World.create(container, {
   // Check in. The doors (experience/clubNavigation.ts) hand presence on from
   // here as you move between the arena, the venue and the rave.
   enterRoom('arena', myName(), myPackedLook());
+  // Knock on the room server now, whoever this is. It sleeps on a free tier
+  // and takes most of a minute to wake; the lobby is the one place we have
+  // a minute, and the CLUB door is the one that can't hide a cold host.
+  warmRoomServer();
   setupEnvironment(world);
   buildArena(world);
   setupCombatants(world);

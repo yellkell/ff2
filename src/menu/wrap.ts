@@ -40,6 +40,7 @@ import { gazette } from '../net/gazette.js';
 import { ladderFace } from './ladder.js';
 import { settingsFace } from './settingsFace.js';
 import { CARD_H, CARD_W, CHIP_H, CHIP_W, profileCardFace, profileChipFace } from './profilePop.js';
+import { warmRoomServer } from '../config.js';
 
 /** One face of a wrap panel: everything Panel.paint needs. */
 interface Face {
@@ -391,20 +392,34 @@ function arcadeFace(): Face {
  *  you straight through it, which meant the top bar had a button that
  *  wasn't a tab; now CLUB shows you the way in and you take it. */
 function clubFace(): Face {
+  // THE DOOR, HELD. ENTER CLUB no longer drops the curtain at once: the
+  // arena first gets the venue's floor to answer — the room server sleeps
+  // on a free tier and can take most of a minute to wake — and only then
+  // crosses, so the black lifts on the club and never on the rave's foyer
+  // (experience/ClubExperienceManager holdForTheFloor). While it waits,
+  // this board says so, and the button is not a button.
+  const waiting = app.venueStatus !== '';
   return {
     title: 'FIRE FIGHT 2',
     // The headcount is the only thing worth saying here, and only when
-    // there IS one — a board with one button doesn't need a caption.
-    body: app.pubCount > 0 ? crumb(`${app.pubCount} INSIDE RIGHT NOW`, CW) : () => {},
+    // there IS one — a board with one button doesn't need a caption, and
+    // the held door's readout says all the waiting has to say.
+    body: !waiting && app.pubCount > 0 ? crumb(`${app.pubCount} INSIDE RIGHT NOW`, CW) : () => {},
     buttons: [
       {
         id: 'open-pub',
-        label: 'ENTER CLUB',
+        label: waiting ? 'WAKING THE HOUSE' : 'ENTER CLUB',
+        sub: waiting ? app.venueStatus : undefined,
         // A button the size of the board reads as the board. This is a
         // button: the same height as the ones on every other face, sitting
         // in the same first-row slot, just wider because it's alone.
         x: M + 220, y: 300, w: WIDE - 440, h: 200,
-        primary: true,
+        primary: !waiting,
+        // While the door is held it is a live readout, not a dead button
+        // (the kit's `disabled` grey reads as broken; `display` reads as
+        // data) — and the kit already refuses presses on a display chip.
+        display: waiting,
+        tone: waiting ? KIT.accent : undefined,
       },
     ],
   };
@@ -575,6 +590,10 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
       case 'wrap:tab-arcade':
       case 'wrap:tab-club':
         wrapNav.center = id === 'wrap:tab-fight' ? 'fight' : id === 'wrap:tab-arcade' ? 'arcade' : 'club';
+        // Opening the CLUB tab is the moment before pressing ENTER CLUB:
+        // knock on the room server now, so a sleeping host has a head
+        // start on the door (config.ts warmRoomServer).
+        if (wrapNav.center === 'club') warmRoomServer();
         return;
       case 'wrap:tab-town':
         wrapNav.town = 'town';

@@ -1188,6 +1188,24 @@ export function roomServerHost(): string {
   return ROOM_SERVER;
 }
 
+/**
+ * KNOCK on the room server over HTTP. Fire and forget: a free-tier host
+ * sleeps when idle and wakes on any request, and a plain GET gets further
+ * through a cold router than a WebSocket upgrade does. The arena knocks at
+ * boot and again when the CLUB tab opens, so by the time anyone presses
+ * ENTER CLUB the house is usually already up — and the held door
+ * (experience/ClubExperienceManager holdForTheFloor) covers the times it
+ * isn't, in the arena's own menu rather than in the rave's foyer.
+ */
+export function warmRoomServer(): void {
+  try {
+    const http = roomServerHost().replace(/^ws/, 'http');
+    void fetch(http, { mode: 'no-cors', cache: 'no-store' }).catch(() => {});
+  } catch {
+    /* no fetch, or no host to knock on — the socket will still try */
+  }
+}
+
 /** THE CHANNEL's transmitter: the room server's /tv, wherever that is.
  *  `?tv=` overrides it outright, for pointing one page at another relay. */
 export function tvServerUrl(): string {

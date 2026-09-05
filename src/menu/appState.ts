@@ -114,6 +114,13 @@ export const app: {
   /** Human-readable connection status for the lobby info panel. */
   netStatus: string;
   /**
+   * THE CLUB's door, held. While the arena waits for the venue's floor to
+   * answer (the room server sleeps on a free tier and takes up to a minute
+   * to wake — experience/ClubExperienceManager holdForTheFloor) this is the
+   * line the CLUB tab reads out. Empty when nobody is waiting.
+   */
+  venueStatus: string;
+  /**
    * The guided BASICS TUTORIAL is running. It rides a normal vs-bot bout, but
    * a standalone TutorialSystem (the ONLY reader of this flag) layers pop-ups,
    * a half-health bot and a paced lesson script on top WITHOUT touching any
@@ -266,6 +273,7 @@ export const app: {
   arcade: '1v1',
   mySlot: 0,
   netStatus: 'not connected',
+  venueStatus: '',
   // Off unless the player has explicitly switched it on.
   shootBack: localStorage.getItem('ff-shootback') === '1',
   onlyBots: localStorage.getItem('ff-onlybots') === '1',

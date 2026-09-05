@@ -140,11 +140,15 @@ export function finishRaid(): void {
           setMenuMusic('credits');
         }
       }
-    } else if (!match.online) {
-      // A finished solo set posts to the song's leaderboards — this
-      // headset's book, and the world board. The campaign and the club's
-      // raids never do. The world post is fire-and-forget: it must never
-      // hold up the podium, and a set danced offline is still a set.
+    } else {
+      // A finished set posts to the song's leaderboards — this headset's
+      // book, and the world board. Solo sets always did; the club's raids
+      // now count too: it is the same record at the same tempo, dodged
+      // against the same landings (an online ring shares its seed, track
+      // and difficulty), and a score set beside other people is no less a
+      // score. Only the campaign keeps to its own map. The world post is
+      // fire-and-forget: it must never hold up the podium, and a set
+      // danced offline is still a set.
       recordSoloRun(match.trackId, match.difficulty, me.score, grade, profileName());
       void submitWorldScore(match.trackId, match.difficulty, me.score, grade, profileName());
     }

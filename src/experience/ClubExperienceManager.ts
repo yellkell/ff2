@@ -23,8 +23,10 @@
 import type { World } from '@iwsdk/core';
 import { Color, type Fog, type FogExp2, type Object3D, type Texture } from 'three';
 import { setMenuMusicActive } from '../audio/menuMusic.js';
+import { myPackedLook } from '../avatar/paint.js';
 import { clearFirePools } from '../fx/fire.js';
 import { app } from '../menu/appState.js';
+import { myPackedGear, myTone } from '../menu/customization.js';
 import { net as duel } from '../net/client.js';
 import { myStats } from '../net/leaderboard.js';
 import { mesh } from '../net/mesh.js';
@@ -63,6 +65,26 @@ export type TownPlace = 'arena' | 'venue' | 'rave';
 /** How long the black holds while a place is swapped (seconds each way). */
 const FALL = 0.42;
 const LIFT = 0.55;
+
+/** How often the held door looks at the floor (ms). */
+const FLOOR_LOOK_MS = 200;
+/** Under the black, how many looks the floor gets to be open before the
+ *  curtain lifts regardless. The door was held for the floor BEFORE the
+ *  curtain fell, so this is insurance against a socket dropping in the
+ *  gap, not the wait itself. */
+const FLOOR_SETTLE_TICKS = 25;
+
+type FloorNet = typeof import('../rave/net/session.js');
+
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+/** What the CLUB tab reads out while the door is held. */
+function floorStatus(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 2) return 'knocking on the door…';
+  if (s < 8) return 'the house is waking up…';
+  return `waking the house — a cold host takes up to a minute · ${s}s`;
+}
 
 function nextRenderFrame(world: World): Promise<void> {
   return new Promise((resolve) => {
@@ -231,6 +253,89 @@ export function installTownExperienceManager(
     clearFirePools();
   };
 
+  /* ── THE DOOR, HELD ─────────────────────────────────────────────────── */
+
+  let floorNet: FloorNet | null = null;
+
+  /**
+   * Get the venue's floor to answer BEFORE the curtain falls.
+   *
+   * The rave shows the club only once you are in a room — a relay's, or
+   * the room of one — and until then its foyer (the RAVE RAID menu) stands
+   * where the club will be. The crossing used to drop the curtain, mount
+   * the rave and lift with the join still in flight: so the black came up
+   * on the foyer, and the club arrived a beat later — or, against a host
+   * asleep on its free tier, most of a minute later. Now the arena stays
+   * exactly where it is, the CLUB tab reads out the wait, and the curtain
+   * falls only once there is a floor to lift it on.
+   *
+   * Resolves true when the floor is open (either kind); false if the
+   * player did something else meanwhile — started a bout, ended the
+   * session — in which case nothing has moved and nothing needs undoing.
+   * The rave's session module failing to load is not a reason to refuse
+   * the door: the crossing then goes ahead as it always did.
+   */
+  const holdForTheFloor = async (): Promise<boolean> => {
+    // The board flips the moment the door is pressed — before the rave's
+    // session chunk has even been fetched — so the press is never a dead
+    // tap while the first import lands.
+    const t0 = performance.now();
+    app.venueStatus = floorStatus(0);
+    try {
+      let net: FloorNet;
+      try {
+        const [session, profile] = await Promise.all([import('../rave/net/session.js'), import('../rave/game/profile.js')]);
+        net = session;
+        floorNet = session;
+        // The greeting that joins a room carries the name and the body, and
+        // the rave's menu — which normally signs them on mount — is not up
+        // yet. Sign them here, or the floor meets a bare DANCER for the whole
+        // visit (a name travels with the greeting and never after).
+        session.setDancerName(profile.profileName());
+        session.setDancerHue(profile.profileHue());
+        session.setDancerBody(myPackedLook(), myPackedGear(), myTone());
+      } catch (error) {
+        console.warn('[town] the floor could not be asked ahead of the door', error);
+        return true;
+      }
+      // Home from THE BELL (still a member of the room), or already on a
+      // floor: nothing to wait for.
+      if (net.net.dealtAway || net.inRoom()) return true;
+
+      // The rave's chunk downloads while the host wakes — two waits, overlapped.
+      void import('../rave/experience.js').catch(() => {});
+
+      const sessionAtStart = world.session ?? null;
+      let wanted = true;
+      net.openPublicFloor(() => wanted);
+      for (;;) {
+        if (net.inRoom()) return true;
+        if (app.state !== 'menu' || (sessionAtStart && world.session !== sessionAtStart)) {
+          // The player went elsewhere: stand down, and close whatever
+          // socket was still knocking.
+          wanted = false;
+          net.cancelPublicFloor();
+          net.leaveRoom();
+          return false;
+        }
+        app.venueStatus = floorStatus(performance.now() - t0);
+        await sleep(FLOOR_LOOK_MS);
+      }
+    } finally {
+      app.venueStatus = '';
+    }
+  };
+
+  /** Under the black: give the floor a moment to be open before the lift. */
+  const settleFloor = async (): Promise<void> => {
+    const net = floorNet;
+    if (!net) return;
+    for (let i = 0; i < FLOOR_SETTLE_TICKS && !net.inRoom(); i++) {
+      await frame();
+      await sleep(FLOOR_LOOK_MS);
+    }
+  };
+
   /* ── the crossings ─────────────────────────────────────────────────── */
 
   let rave: RaveExperience | null = null;
@@ -242,6 +347,20 @@ export function installTownExperienceManager(
   const enterRave = async (place: RavePlace): Promise<void> => {
     if (townView.busy || townView.place !== 'arena') return;
     townView.busy = true;
+    // THE CLUB's door is held for its floor before anything moves (above).
+    // A held door that is let go leaves the arena exactly as it was.
+    if (place === 'club') {
+      let ready = true;
+      try {
+        ready = await holdForTheFloor();
+      } catch {
+        ready = true;
+      }
+      if (!ready) {
+        townView.busy = false;
+        return;
+      }
+    }
     try {
       await curtain.to(1, FALL, frame);
 
@@ -267,6 +386,10 @@ export function installTownExperienceManager(
       // put everything where it lives, one for the render to catch up.
       await frame();
       await frame();
+      // And the floor itself: the club is shown only once you are in a
+      // room, so the black waits for that — briefly, the door was held for
+      // it already — rather than lifting on the foyer.
+      if (place === 'club') await settleFloor();
       await curtain.to(0, LIFT, frame);
     } catch (error) {
       console.error('[town] crossing failed', error);

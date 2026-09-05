@@ -707,15 +707,29 @@ export function warmRelay(): void {
  * written to stop. The patience window covers a genuinely offline headset
  * anyway: it waits, then opens the floor of one.
  */
+/** Who is asking, right now: the latest caller's predicate, so an attempt
+ *  already in flight answers to whoever most recently wanted the floor. */
+let floorWanted: () => boolean = () => true;
+
 export function openPublicFloor(stillWanted: () => boolean = () => true): void {
-  cancelPublicFloor();
+  floorWanted = stillWanted;
+  // Already on the floor: nothing to open. The arena's CLUB door joins the
+  // room BEFORE it drops its curtain (experience/ClubExperienceManager
+  // holdForTheFloor), and the mount's own call lands a moment later — a
+  // second greeting here would tear that socket down to open it again,
+  // which is a flicker of foyer for the player and a leave-and-rejoin for
+  // everyone else on the floor.
+  if (inRoom()) return;
+  // An attempt already in flight keeps going; it just answers to the new
+  // caller from here on.
+  if (floorTimer) return;
   warmRelay();
   enterPublicRoom();
   let ticks = 0;
   let lastTry = 0;
   const poll = (): void => {
     floorTimer = 0;
-    if (!stillWanted()) return;
+    if (!floorWanted()) return;
     if (inRoom()) return; // we are in — nothing more to do
     if (++ticks > FLOOR_PATIENCE_TICKS) {
       enterSoloFloor();
