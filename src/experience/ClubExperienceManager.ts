@@ -25,7 +25,7 @@ import { Color, type Fog, type FogExp2, type Object3D, type Texture } from 'thre
 import { setMenuMusicActive } from '../audio/menuMusic.js';
 import { myPackedLook } from '../avatar/paint.js';
 import { clearFirePools } from '../fx/fire.js';
-import { app } from '../menu/appState.js';
+import { app, saveDifficulty } from '../menu/appState.js';
 import { myPackedGear, myTone } from '../menu/customization.js';
 import { net as duel } from '../net/client.js';
 import { myStats } from '../net/leaderboard.js';
@@ -510,6 +510,18 @@ export function installTownExperienceManager(
   const carryToFight = async (deal: FightDeal): Promise<void> => {
     if (townView.place === 'arena') return;
     bellDeal = deal;
+    // THE TIER: a titan raid is built to the difficulty the caller picked
+    // on the club desk, for the whole squad. It is set here for every
+    // dealt headset AND mirrored into the mesh's own room state, because
+    // launchLobby reads the host's pick back off the mesh — and the room
+    // doc's round trip may not have landed by the time the lobby launches.
+    // The caller's pick is already saved (the desk saved it); a joiner's
+    // own saved pick is left alone, exactly as the arena's lobby does.
+    if (deal.mode === 'raid') {
+      app.difficulty = deal.difficulty;
+      mesh.raidDifficulty = deal.difficulty;
+      if (deal.mine) saveDifficulty();
+    }
     // The arena's lobby state is set BEFORE the arena resumes, so its menu
     // wakes already seated in the room and never tears it down as stale.
     app.privateCode = deal.code;
@@ -569,6 +581,9 @@ export function installTownExperienceManager(
           return;
         }
       } else {
+        // The host writes the tier to the room doc too, so a seat claimed
+        // late still mirrors the same boss.
+        if (deal.mode === 'raid') mesh.setRaidDifficulty(deal.difficulty);
         startWhenSeated(deal);
       }
     }

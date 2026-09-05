@@ -440,6 +440,7 @@ function fireFight(code, room, ball, players) {
       t: 'start',
       mode: ball.mode,
       code: ball.code,
+      diff: ball.diff, // a TITAN RAID's tier, the caller's pick, for the whole squad
       role: i < cap ? 'fighter' : 'watcher',
       callerIdx: ball.caller,
       fighters,

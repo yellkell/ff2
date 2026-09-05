@@ -3695,16 +3695,20 @@ export class CampaignSystem extends createSystem({
 
     const unlockTag = unlocked ? ` · ${DIFFICULTY[unlocked].label} UNLOCKED` : '';
     if (this.raid() && lastStage) {
-      // The raid is BEATEN. The HOST posts the ONE run record for the whole
-      // squad. (A dedicated GOOPLIATH raid has no titan-run board — the fell
-      // itself is the trophy.)
-      if (this.isAuthority() && !solo) {
+      // The raid is BEATEN. EVERY RAIDER posts the run — on their own row,
+      // under their own uid, which is the only row the rules let them write
+      // (net/leaderboard.ts reportRun). It used to be the host alone, "the
+      // one record for the squad", from the days a run was one shared row;
+      // on a board of personal bests that left everyone else's row blank,
+      // and a raid dealt from THE CLUB's room of one — a raid with no mesh
+      // and so no host — posted for nobody at all.
+      if (!solo) {
         reportRun('raid', this.runClock, this.squadNames(), this.activeDifficulty(), app.raidHardcore);
       }
       // A GOOPLIATH raid races its OWN board — one long fight is a different
       // race from a five-titan run. (Hardcore means nothing to a single
       // fight, so the tide's rows never wear the HC mark.)
-      if (this.isAuthority() && solo && this.raid()) {
+      if (solo && this.raid()) {
         reportRun('goopliath', this.runClock, this.squadNames(), this.activeDifficulty(), false);
       }
       // Every raider banks the clear badge (easy earns nothing); a hardcore

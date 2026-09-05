@@ -49,6 +49,7 @@ import {
   SphereGeometry,
   Sprite,
   TorusGeometry,
+  Vector3,
 } from 'three';
 import { CONFIG } from './config.js';
 import { makePaperDouble, makeRng } from './paper.js';
@@ -316,22 +317,44 @@ function telegraphLine(n: number): Group {
  *  crown and hung off a gooseneck that reaches out over the board. (It
  *  used to be an open cone flipped apex-down — a spike with the bulb
  *  hanging out the bottom of it, and see-through from every angle but
- *  one.) */
+ *  one.)
+ *
+ *  And the gooseneck hangs off a STANDPIPE. The sign's post (props.ts
+ *  signpost) stops at 2.2 m, well under the arm, and the arm's stub was
+ *  drawn where a taller post would have been — so the whole lamp hung in
+ *  mid-air beside the board, joined to nothing. A pipe now carries on up
+ *  from the top of the post to the arm, and the arm's drop is aimed at
+ *  the shade's crown rather than laid alongside it. */
 function signLamp(): { group: Group; light: PointLight; bulb: Mesh } {
   const g = new Group();
   const steel = rustMat(0x4c4440, { roughness: 0.75 });
   const X = 0.62; // out over the board, not past its end
-  const Y = 2.66; // clear of the sign's top edge, under the post's cap
-  // THE GOOSENECK: a stub off the post, an elbow, and the drop the shade
-  // hangs from — one bent arm rather than a rod floating in the air.
+  const Y = 2.66; // clear of the sign's top edge
+  // THE STANDPIPE: up from the post's top (props.ts: a 0.14 m square post
+  // at x −0.05, z −0.12, 2.2 m tall) to the arm, with a collar at the joint.
+  const POST_TOP = 2.2;
+  const PX = -0.05;
+  const PZ = -0.12;
+  const armY = Y + 0.2;
+  const riser = new Mesh(new CylinderGeometry(0.03, 0.038, armY - POST_TOP + 0.06, 10), steel);
+  riser.position.set(PX, (POST_TOP + armY) / 2 + 0.02, PZ);
+  const collar = new Mesh(new CylinderGeometry(0.05, 0.05, 0.05, 12), steel);
+  collar.position.set(PX, armY, PZ);
+  // THE GOOSENECK: a stub off the standpipe, an elbow, and the drop the
+  // shade hangs from — one bent arm, every piece touching the next.
   const stub = new Mesh(new CylinderGeometry(0.022, 0.022, 0.42, 10), steel);
   stub.rotation.z = Math.PI / 2;
-  stub.position.set(0.16, Y + 0.2, -0.03);
+  stub.position.set(PX + 0.21, armY, PZ);
+  const elbowAt = new Vector3(PX + 0.42, armY, PZ);
   const elbow = new Mesh(new SphereGeometry(0.032, 10, 8), steel);
-  elbow.position.set(0.37, Y + 0.2, -0.03);
-  const reach = new Mesh(new CylinderGeometry(0.02, 0.02, 0.34, 10), steel);
-  reach.rotation.set(0, 0, Math.PI / 2 - 0.5);
-  reach.position.set(0.52, Y + 0.13, -0.02);
+  elbow.position.copy(elbowAt);
+  // The drop runs from the elbow to the shade's crown, wherever that is in
+  // three dimensions — not a rod rotated in one plane and left short.
+  const crownAt = new Vector3(X, Y + 0.11, 0);
+  const drop = crownAt.clone().sub(elbowAt);
+  const reach = new Mesh(new CylinderGeometry(0.02, 0.02, drop.length(), 10), steel);
+  reach.position.copy(elbowAt).addScaledVector(drop, 0.5);
+  reach.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), drop.clone().normalize());
   // THE SHADE: a tall cone, mouth down over the bulb — steel outside, and
   // a warm liner just inside it so from underneath you read a lit
   // reflector with the bulb hanging in it, not a flat disc.
@@ -349,7 +372,7 @@ function signLamp(): { group: Group; light: PointLight; bulb: Mesh } {
   // it lights the sign and the sand under it, not half the trailhead.
   const light = new PointLight(0xffc27a, 3.2, 4.2, 2);
   light.position.set(X, Y - 0.14, 0.02);
-  g.add(stub, elbow, reach, shade, liner, cap, bulb, light);
+  g.add(riser, collar, stub, elbow, reach, shade, liner, cap, bulb, light);
   return { group: g, light, bulb };
 }
 

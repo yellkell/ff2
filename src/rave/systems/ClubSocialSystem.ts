@@ -83,6 +83,9 @@ import {
 import { raveBridge } from '../bridge.js';
 import { bellView, FIGHTS, type BellMode } from '../club/bell.js';
 import { coins } from '../../menu/wallet.js';
+import { app, saveDifficulty } from '../../menu/appState.js';
+import { DIFFICULTY as TIERS, DIFFICULTY_ORDER, type Difficulty } from '../../config.js';
+import { difficultyUnlocked } from '../../campaign/campaignState.js';
 import { font } from '../ui/fonts.js';
 import { Panel, UI, type PanelButton } from '../ui/panel.js';
 import {
@@ -183,6 +186,9 @@ export const socialView: {
   snapSocial?: () => string;
   snapSongs?: () => string;
   openSongs?: (on: boolean) => void;
+  /** THE TIER list (the titan raid's difficulty), the songs' twin. */
+  snapTiers?: () => string;
+  openTiers?: (on: boolean) => void;
   /** Press any panel button by id — the headless finger for the floor's
    *  console. Named apart from menuView.act on purpose: __gdr.menu merges
    *  the two views into one namespace, and a shared name would hand every
@@ -212,6 +218,11 @@ export class ClubSocialSystem extends createSystem({}) {
   private callError = '';
   private songsOpen = false;
   private songsKey = '';
+  /** THE TIER LIST: the titan raid's difficulty, flown out beside the desk
+   *  the way the records are — the row on the FIGHT tab opens it. */
+  private tiers!: Panel;
+  private tiersOpen = false;
+  private tiersKey = '';
   private pointers!: Record<'left' | 'right', PointerRay>;
   private ray = new Raycaster();
   private hover: string | null = null;
@@ -241,14 +252,28 @@ export class ClubSocialSystem extends createSystem({}) {
     this.songs.group.position.set(-0.51, 0.107, 0.008);
     this.panel.group.add(this.songs.group);
 
+    // THE TIER LIST, the same leaf on the FIGHT side: a TITAN RAID is a run
+    // with a difficulty, and the tier picked here is the one the bell deals
+    // to the whole squad. Top-aligned with the record list, shorter — four
+    // tiers, not fourteen records.
+    this.tiers = new Panel(0.38, 0.4, 440, 464);
+    this.tiers.setShown(false, true);
+    this.tiers.group.position.set(-0.51, 0.107 + 0.777 / 2 - 0.2, 0.008);
+    this.panel.group.add(this.tiers.group);
+
     this.pointers = { left: new PointerRay(this.scene), right: new PointerRay(this.scene) };
 
     socialView.show = (on) => {
       this.panel.setShown(on);
-      if (!on) this.closeSongs();
+      if (!on) {
+        this.closeSongs();
+        this.closeTiers();
+      }
       if (on) this.place();
       this.paintKey = '';
     };
+    socialView.snapTiers = () => (this.tiers.ctx().canvas as HTMLCanvasElement).toDataURL('image/png');
+    socialView.openTiers = (on) => this.openTiers(on);
     socialView.shown = () => this.panel.isShown;
     socialView.snapSongs = () => (this.songs.ctx().canvas as HTMLCanvasElement).toDataURL('image/png');
     socialView.openSongs = (on) => this.openSongs(on);
@@ -583,13 +608,14 @@ export class ClubSocialSystem extends createSystem({}) {
       _d.set(0, 0, -1).applyQuaternion(_q).normalize();
       this.ray.set(_o, _d);
       this.ray.far = 3;
-      // Both surfaces when the list is out — nearest hit wins, and the id
-      // says which panel owns it ('song:' is the list's).
-      const hit = this.ray.intersectObjects(
-        this.songsOpen ? [this.panel.mesh, this.songs.mesh] : [this.panel.mesh],
-        false,
-      )[0];
-      const owner = hit?.object === this.songs.mesh ? this.songs : this.panel;
+      // Every surface that is out — nearest hit wins, and the id says
+      // which panel owns it ('song:' is the record list's, 'tier:' the
+      // tier list's).
+      const surfaces = [this.panel.mesh];
+      if (this.songsOpen) surfaces.push(this.songs.mesh);
+      if (this.tiersOpen) surfaces.push(this.tiers.mesh);
+      const hit = this.ray.intersectObjects(surfaces, false)[0];
+      const owner = hit?.object === this.songs.mesh ? this.songs : hit?.object === this.tiers.mesh ? this.tiers : this.panel;
       const id = hit?.uv ? owner.buttonAt(hit.uv.x, hit.uv.y) : null;
       p.update(delta, _o, hit ? hit.point : null, Boolean(id));
       if (!id) continue;
@@ -604,6 +630,7 @@ export class ClubSocialSystem extends createSystem({}) {
       if (hover) sfx.uiHover();
       this.paintKey = '';
       this.songsKey = '';
+      this.tiersKey = '';
     }
     if (clicked) {
       sfx.uiClick();
@@ -612,17 +639,31 @@ export class ClubSocialSystem extends createSystem({}) {
 
     this.paint();
     if (this.songsOpen) this.paintSongs();
+    if (this.tiersOpen) this.paintTiers();
   }
 
   /** Press one of the console's buttons — the trigger's path, and the
    *  headless finger's (socialView.press). */
   private act(id: string): void {
     const onList = id.startsWith('song:');
-    (onList ? this.songs : this.panel).press(id);
+    const onTiers = id.startsWith('tier:');
+    (onList ? this.songs : onTiers ? this.tiers : this.panel).press(id);
     if (onList) {
       const pick = id.slice(5);
       if (pick !== 'close') this.setTrack(pick === 'shuffle' ? '' : pick);
       this.closeSongs();
+    } else if (onTiers) {
+      // The titan raid's tier — the arena's own store, saved the way the
+      // arena's picker saves it, so the RUN shelf and the desk agree. A
+      // locked tier's row is not a button (paintTiers), so no re-check.
+      const pick = id.slice(5);
+      if (pick !== 'close' && (DIFFICULTY_ORDER as string[]).includes(pick)) {
+        app.difficulty = pick as Difficulty;
+        saveDifficulty();
+      }
+      this.closeTiers();
+    } else if (id === 'raiddiff') {
+      this.openTiers(!this.tiersOpen);
     } else if (safetyClick(id)) {
       // MUTE, BLOCK, the mic and the voice master switch all belong to the
       // safety console (ui/safety.ts), which the mid-set card shares. Two
@@ -638,9 +679,12 @@ export class ClubSocialSystem extends createSystem({}) {
     } else if (id === 'tab-fight' || id === 'tab-rave') {
       this.tab = id === 'tab-fight' ? 'fight' : 'rave';
       this.callError = '';
+      this.closeSongs();
+      this.closeTiers();
     } else if (id.startsWith('fight-')) {
       const pick = FIGHTS.find((f) => f.id === id.slice(6));
       if (pick) this.fight = pick.id;
+      if (this.fight !== 'raid') this.closeTiers();
     } else if (id === 'call') {
       if (this.tab === 'fight' && raveBridge.openFightRoom) this.callFight();
       else this.callFromHere();
@@ -661,9 +705,99 @@ export class ClubSocialSystem extends createSystem({}) {
     } else if (id === 'leave') {
       this.panel.setShown(false);
       this.closeSongs();
+      this.closeTiers();
       leaveRoom();
     }
     this.paintKey = '';
+  }
+
+  /* ── TIERS: the list that flies out of the titan raid's row ───────────── */
+
+  private openTiers(on: boolean): void {
+    this.tiersOpen = on;
+    this.tiers.setShown(on);
+    this.tiersKey = '';
+    this.paintKey = '';
+    if (on) {
+      this.closeSongs();
+      this.paintTiers();
+    }
+  }
+
+  private closeTiers(): void {
+    if (this.tiersOpen) this.openTiers(false);
+  }
+
+  private paintTiers(): void {
+    const cur = app.difficulty;
+    const unlocked = DIFFICULTY_ORDER.map((t) => difficultyUnlocked(t));
+    const key = `${cur}#${this.hover ?? ''}#${unlocked.join('')}`;
+    if (key === this.tiersKey) return;
+    this.tiersKey = key;
+
+    const Y0 = 104;
+    const PITCH = 74;
+    const ROW_H = PITCH - 6;
+    const CLOSE_Y = Y0 + DIFFICULTY_ORDER.length * PITCH + 8;
+    // Ghost hit-areas over rows the body paints itself (name, blurb and the
+    // lock on one plate); a locked tier gets no button at all.
+    const buttons: PanelButton[] = [];
+    DIFFICULTY_ORDER.forEach((t, i) => {
+      if (!unlocked[i]) return;
+      buttons.push({ id: `tier:${t}`, label: TIERS[t].label, ghost: true, x: 16, y: Y0 + i * PITCH, w: 408, h: ROW_H });
+    });
+    buttons.push({ id: 'tier:close', label: 'CLOSE', x: 16, y: CLOSE_Y, w: 408, h: 44, small: true });
+
+    this.tiers.paint(
+      '',
+      (g) => {
+        g.textBaseline = 'middle';
+        g.textAlign = 'left';
+        g.font = font(600, 22);
+        g.letterSpacing = '4px';
+        g.fillStyle = UI.dim;
+        g.fillText('TITAN RAID', 22, 50);
+        g.letterSpacing = '0px';
+        g.fillStyle = UI.lineFaint;
+        g.fillRect(22, 76, 402, 2);
+
+        DIFFICULTY_ORDER.forEach((t, i) => {
+          const y = Y0 + i * PITCH;
+          const selected = cur === t;
+          const open = unlocked[i];
+          const hov = open ? this.tiers.hoverOf(`tier:${t}`) : 0;
+          g.beginPath();
+          g.roundRect(16, y, 408, ROW_H, 9);
+          g.fillStyle = selected ? UI.accentFaint : `rgba(255,255,255,${(0.03 + 0.05 * hov).toFixed(3)})`;
+          g.fill();
+          if (selected) {
+            g.lineWidth = 2;
+            g.strokeStyle = UI.accentDim;
+            g.stroke();
+            g.fillStyle = UI.accent;
+            g.beginPath();
+            g.roundRect(21, y + 8, 4, ROW_H - 16, 2);
+            g.fill();
+          }
+          // The tier's own accent (the arena's), as a swatch by the name.
+          g.fillStyle = open ? `#${TIERS[t].accent.toString(16).padStart(6, '0')}` : UI.faint;
+          g.beginPath();
+          g.arc(48, y + 26, 6, 0, Math.PI * 2);
+          g.fill();
+          g.textAlign = 'left';
+          g.font = font(600, 23);
+          g.letterSpacing = '1px';
+          g.fillStyle = !open ? UI.faint : selected ? UI.textHi : UI.text;
+          g.fillText(TIERS[t].label, 66, y + 26);
+          g.letterSpacing = '0px';
+          g.font = font(500, 17);
+          g.fillStyle = open ? UI.dim : UI.faint;
+          g.fillText(open ? TIERS[t].blurb : 'locked — clear the tier below', 66, y + 50, 350);
+        });
+      },
+      buttons,
+      this.hover,
+    );
   }
 
   /* ── SONGS: the list that flies out of the ♪ row ──────────────────────── */
@@ -806,10 +940,13 @@ export class ClubSocialSystem extends createSystem({}) {
     _fwd.set(0, 0, -1).applyQuaternion(_q);
     const pos = ballSpawnPos(_v, _fwd);
     const mode = this.fight;
+    // A TITAN RAID carries its tier — the desk's pick, as an index into the
+    // arena's order — so the deal builds the same boss for the whole squad.
+    const diff = mode === 'raid' ? Math.max(0, DIFFICULTY_ORDER.indexOf(app.difficulty)) : undefined;
     if (net.solo) {
       // A ROOM OF ONE: no arena room to open — the ball deals you into a
       // fight against the arena's own bots (net/session.ts soloCall).
-      callBall(pos, { mode, code: '' });
+      callBall(pos, { mode, code: '', diff });
       return;
     }
     const me = net.members.find((m) => m.idx === net.myIdx);
@@ -818,7 +955,7 @@ export class ClubSocialSystem extends createSystem({}) {
     this.paintKey = '';
     open(mode, me?.name ?? '')
       .then((code) => {
-        callBall(pos, { mode, code });
+        callBall(pos, { mode, code, diff });
       })
       .catch((err: unknown) => {
         this.callError = err instanceof Error && err.message ? err.message : 'the arena could not open a room';
@@ -858,7 +995,7 @@ export class ClubSocialSystem extends createSystem({}) {
     // fade costs a few repaints, not one a frame.
     const takeAge = performance.now() - bellView.paidAt;
     const takeShown = bellView.lastPay > 0 && takeAge < 20_000;
-    const deskKey = `${key}#${this.tab}#${this.fight}#${this.calling ? 1 : 0}#${this.callError}#${coins.balance}#${takeShown ? bellView.lastPay : 0}`;
+    const deskKey = `${key}#${this.tab}#${this.fight}#${this.calling ? 1 : 0}#${this.callError}#${coins.balance}#${takeShown ? bellView.lastPay : 0}#${app.difficulty}#${this.tiersOpen ? 1 : 0}`;
     if (deskKey === this.paintKey) return;
     this.paintKey = deskKey;
 
@@ -896,6 +1033,9 @@ export class ClubSocialSystem extends createSystem({}) {
         small: true,
       });
     }
+    // With TITAN RAID lit the fight rows tighten to make room for its tier
+    // row underneath; the other fights have no tiers and keep the height.
+    const tiered = tab === 'fight' && this.fight === 'raid';
     if (tab === 'fight') {
       // The four fights, names only.
       FIGHTS.forEach((f, i) => {
@@ -904,12 +1044,27 @@ export class ClubSocialSystem extends createSystem({}) {
           label: f.label,
           selected: this.fight === f.id,
           x: 24 + (i % 2) * 334,
-          y: 698 + Math.floor(i / 2) * 54,
+          y: 698 + Math.floor(i / 2) * (tiered ? 46 : 54),
           w: 318,
-          h: 48,
+          h: tiered ? 42 : 48,
           small: true,
         });
       });
+      if (tiered) {
+        // THE TIER ROW: the titan raid's difficulty, opening onto the list
+        // the way the ♪ row opens onto the records. It is the arena's own
+        // pick (the RUN shelf's), and the bell deals it to the squad.
+        buttons.push({
+          id: 'raiddiff',
+          label: `${this.tiersOpen ? '◂' : '▸'}  ◆ ${TIERS[app.difficulty].label}`,
+          selected: this.tiersOpen,
+          x: 24,
+          y: 792,
+          w: 652,
+          h: 40,
+          small: true,
+        });
+      }
     } else {
       buttons.push({
         id: 'track',
@@ -942,8 +1097,8 @@ export class ClubSocialSystem extends createSystem({}) {
         });
       });
     }
-    const ctaY = fights ? 810 : 808;
-    const ctaH = fights ? 72 : 74;
+    const ctaY = tiered ? 838 : fights ? 810 : 808;
+    const ctaH = tiered ? 56 : fights ? 72 : 74;
     if (mine) {
       // MY BALL IS UP, so the row splits: call it off, or drop the needle
       // now. The clock is a courtesy to a room still walking over, and a

@@ -27,7 +27,7 @@
 import { NET, seatHue, serverUrl } from '../config.js';
 import { raveBridge } from '../bridge.js';
 import { bellView, isFightMode, type BellMode, type DealtMember, type FightDeal } from '../club/bell.js';
-import { CURRENCY } from '../../config.js';
+import { CURRENCY, DIFFICULTY_ORDER } from '../../config.js';
 import { addCoins, coins } from '../../menu/wallet.js';
 import { audioContext, ensureAudio } from '../audio/sfx.js';
 import { clearVoiceSpeakers, removeVoiceSpeaker, stopVoiceCapture } from '../club/voice.js';
@@ -377,6 +377,8 @@ function handle(msg: Record<string, unknown>): void {
             : [];
         const deal: FightDeal = {
           mode: msg.mode,
+          // The tier rides as an index; an older relay sends none → NORMAL.
+          difficulty: DIFFICULTY_ORDER[Number(msg.diff)] ?? 'normal',
           code: typeof msg.code === 'string' ? msg.code : '',
           role: msg.role === 'watcher' ? 'watcher' : 'fighter',
           callerIdx: Number(msg.callerIdx),
@@ -862,15 +864,18 @@ function soloProp(msg: Record<string, unknown>): void {
 
 /** Send the ball up at `pos` — my song pick and ring-size preference ride
  *  along. The relay owns the 60-second clock from here. */
-export function callBall(pos: [number, number, number], call?: { mode: BellMode; code: string }): void {
+export function callBall(pos: [number, number, number], call?: { mode: BellMode; code: string; diff?: number }): void {
   if (net.solo) {
-    soloCall(pos, call?.mode ?? 'rave');
+    soloCall(pos, call?.mode ?? 'rave', call?.diff);
     return;
   }
   if (net.phase !== 'hosting' && net.phase !== 'joined') return;
   if (call && call.mode !== 'rave') {
-    // THE BELL: a fight rides the ball with the arena room it deals into.
-    send({ t: 'ball-up', mode: call.mode, code: call.code, track: match.preferredTrack, diff: match.difficulty, pos });
+    // THE BELL: a fight rides the ball with the arena room it deals into —
+    // and, for a TITAN RAID, the tier the caller picked on the desk (an
+    // index into the arena's DIFFICULTY_ORDER, in the slot a record's chart
+    // difficulty rides in).
+    send({ t: 'ball-up', mode: call.mode, code: call.code, track: match.preferredTrack, diff: call.diff ?? match.difficulty, pos });
     return;
   }
   // No seat count rides the ball. A club raid is sized by WHO TURNS UP —
@@ -915,7 +920,7 @@ let soloBallTimer = 0;
  * you exactly as the relay would have. A record deals a ring of one plus
  * groupies; a fight deals you into the arena against its own bots.
  */
-function soloCall(pos: [number, number, number], mode: BellMode): void {
+function soloCall(pos: [number, number, number], mode: BellMode, diff?: number): void {
   if (net.ball) return;
   window.clearTimeout(soloBallTimer);
   const me = net.members[0];
@@ -925,7 +930,7 @@ function soloCall(pos: [number, number, number], mode: BellMode): void {
     mode,
     code: '',
     track: match.preferredTrack,
-    diff: match.difficulty,
+    diff: diff ?? match.difficulty,
     pos,
     firesAt: performance.now() + SOLO_BALL_MS,
     joins: new Set(),
@@ -958,6 +963,7 @@ function fireSoloBall(): void {
     t: 'start',
     mode: ball.mode,
     code: '',
+    diff: ball.diff,
     role: 'fighter',
     callerIdx: 0,
     solo: true,

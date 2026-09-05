@@ -20,6 +20,8 @@
  */
 
 /** Everything the ball can call: the record, or one of the four fights. */
+import type { Difficulty } from '../../config.js';
+
 export type BellMode = 'rave' | '1v1' | '2v2' | 'ffa' | 'raid';
 
 export const FIGHT_MODES: readonly Exclude<BellMode, 'rave'>[] = ['1v1', '2v2', 'ffa', 'raid'];
@@ -58,6 +60,10 @@ export interface DealtMember {
 /** What lands on every dealt headset when a FIGHT ball fires. */
 export interface FightDeal {
   mode: Exclude<BellMode, 'rave'>;
+  /** A TITAN RAID's difficulty — the caller's pick on the club desk, dealt
+   *  to the whole squad so the arena builds one boss for everyone. (The
+   *  other fights have no tiers; it rides as NORMAL and nobody reads it.) */
+  difficulty: Difficulty;
   /** The FIRE FIGHT room's code (the caller opened it at the call). */
   code: string;
   /** Am I on a platform or on the rail? */
