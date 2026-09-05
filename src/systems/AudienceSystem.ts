@@ -15,24 +15,24 @@
  *    feet but the plate.
  *
  *  - EITHER WAY: put BODIES on the terrace. Every watcher streams a head
- *    (MeshSystem's `watch` frames), and each one gets a blank standing at
- *    the rail, solved by the same IK a fighter's body uses. This is what
- *    makes the crowd's roar mean something: when the terrace goes up, the
- *    fighters can see it go up.
+ *    (MeshSystem's `watch` frames), and each one gets a CROWD FIGURE at
+ *    the rail (arena/desert/crowdFigure.ts): a low-poly silhouette, not
+ *    another fighter — the crowd reads as a crowd because it is simpler
+ *    than the show. Its arms rise with the roar on the wire, which is what
+ *    makes the roar mean something: when the terrace goes up, the fighters
+ *    can see it go up.
  *
  * The watchers' WORDS never reach a fighter (MeshSystem.mayHear); their
  * NOISE always does (audio/crowd.ts). That split is the pillar.
  */
 
 import { createSystem } from '@iwsdk/core';
-import { Group, Quaternion, Vector3 } from 'three';
+import { Quaternion, Vector3 } from 'three';
 import { app } from '../menu/appState.js';
 import { mesh } from '../net/mesh.js';
-import { buildBoxer, solveTorso, type BoxerRig } from '../avatar/boxer.js';
 import { audienceStands, type Stand } from '../arena/desert/audience.js';
+import { buildCrowdFigure, type CrowdFigure } from '../arena/desert/crowdFigure.js';
 
-const _chest = new Vector3();
-const _pelvis = new Vector3();
 const _pos = new Vector3();
 const _quat = new Quaternion();
 
@@ -48,21 +48,17 @@ export const audienceView = {
   bodies: 0,
 };
 
-interface TerraceBody {
-  rig: BoxerRig;
-  root: Group;
-}
 
 export class AudienceSystem extends createSystem({}) {
-  private bodies = new Map<number, TerraceBody>();
+  private bodies = new Map<number, CrowdFigure>();
   private planted = false;
   private stand: Stand | null = null;
 
-  update(): void {
+  update(delta: number): void {
     const watching = app.spectating && app.state === 'playing';
     if (watching && !this.planted) this.takeMyStand();
     if (!watching && this.planted) this.leaveMyStand();
-    this.dressTerrace();
+    this.dressTerrace(delta);
     audienceView.mine = this.stand;
     audienceView.bodies = this.bodies.size;
   }
@@ -99,8 +95,8 @@ export class AudienceSystem extends createSystem({}) {
     if (pad) pad.visible = true;
   }
 
-  /** A blank at the rail for every watcher on the wire. */
-  private dressTerrace(): void {
+  /** A crowd figure at the rail for every watcher on the wire. */
+  private dressTerrace(delta: number): void {
     // Nobody left on the terrace (bout over, room gone) — strike the set.
     if (mesh.watchers.size === 0 && this.bodies.size > 0) {
       for (const [seat] of this.bodies) this.drop(seat);
@@ -111,21 +107,17 @@ export class AudienceSystem extends createSystem({}) {
       let body = this.bodies.get(seat);
       if (!body) {
         if (this.bodies.size >= MAX_BODIES) continue;
-        body = this.build();
+        body = buildCrowdFigure(seat);
+        body.root.name = 'terrace-watcher';
+        this.world.scene.add(body.root);
         this.bodies.set(seat, body);
       }
       body.root.visible = true;
       _pos.set(w.x, w.y, w.z);
       _quat.set(w.qx, w.qy, w.qz, w.qw);
-      // The same torso solve a fighter's body uses — a watcher leaning on
-      // the rail leans like a person, not like a signpost.
-      solveTorso(body.rig, _pos, _quat, w.x, w.z, _chest, _pelvis);
-      // Their hands are not on the wire (the terrace streams a head), so
-      // the gloves rest at their sides rather than jittering at the origin.
-      for (const hand of [0, 1] as const) {
-        const side = hand === 0 ? -0.26 : 0.26;
-        body.rig.gloves[hand].position.set(w.x + side, Math.max(0, w.y - 0.62), w.z + 0.06);
-      }
+      // The head is theirs; the body hangs under it, and the arms go up
+      // with their hands-up roar.
+      body.pose(_pos, _quat, w.roar, delta);
     }
     // Anyone the wire dropped takes their body with them.
     for (const [seat] of this.bodies) {
@@ -133,19 +125,10 @@ export class AudienceSystem extends createSystem({}) {
     }
   }
 
-  private build(): TerraceBody {
-    const root = new Group();
-    root.name = 'terrace-watcher';
-    const rig = buildBoxer(0, 'blank');
-    root.add(...rig.all);
-    this.world.scene.add(root);
-    return { rig, root };
-  }
-
   private drop(seat: number): void {
     const body = this.bodies.get(seat);
     if (!body) return;
-    body.root.removeFromParent();
+    body.dispose();
     this.bodies.delete(seat);
   }
 }
