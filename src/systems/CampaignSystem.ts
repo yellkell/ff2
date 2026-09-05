@@ -526,7 +526,11 @@ export class CampaignSystem extends createSystem({
   /** Solo campaigns are always their own authority; raids follow the mesh
    *  host (which MIGRATES if the host's headset dies — see mesh.isHost). */
   private isAuthority(): boolean {
-    return !this.raid() || mesh.isHost();
+    // A raid with NO mesh under it — dealt from the club's room of one, the
+    // arena's own bots for company — has nobody else to defer to: this
+    // headset is the authority, or the boss never takes a hit and the run
+    // has no clock to post.
+    return !this.raid() || !mesh.joined || mesh.isHost();
   }
 
   private mySeatId(): number {
@@ -576,8 +580,12 @@ export class CampaignSystem extends createSystem({
 
   /** Every raider's callsign for the run board (mine + the mesh names). */
   private squadNames(): string[] {
-    if (!this.raid()) return [myName()];
-    return this.occupiedSeats().map((s) => (s === mesh.mySeat ? myName() : mesh.names[s] || `RAIDER ${s + 1}`));
+    // A raid with no mesh under it (the club's room of one) is a squad of
+    // me — and a squad of nobody would leave the run off the board, since a
+    // post with no names is refused (net/leaderboard.ts reportRun).
+    if (!this.raid() || !mesh.joined) return [myName()];
+    const names = this.occupiedSeats().map((s) => (s === mesh.mySeat ? myName() : mesh.names[s] || `RAIDER ${s + 1}`));
+    return names.length ? names : [myName()];
   }
 
   /** Seats with a living fighter on them (hp > 0). */
