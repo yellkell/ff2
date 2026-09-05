@@ -22,7 +22,7 @@ import {
 import { app } from './appState.js';
 import { coins } from './wallet.js';
 import { GAME_TITLE, type ArcadeMode } from '../config.js';
-import { gazette, type GazetteArticle } from '../net/gazette.js';
+import { frontPage, type GazetteArticle } from '../net/gazette.js';
 import { PUB_MAX_PLAYERS } from '../pub/protocol.js';
 import { PUB_REGIONS } from '../pub/config.js';
 import { UI, buttonPlate, hazardStrip, plate, stencilFont } from '../ui/industrial.js';
@@ -34,6 +34,8 @@ export type PanelId =
   | 'train'
   | 'duel'
   | 'info'
+  /** THE READER: the paper held up large in front of you (MenuSystem). */
+  | 'reader'
   /** THE PAINT BAY (a kit panel modal — src/menu/paintbay.ts). */
   | 'paintbay'
   /** THE PROFILE pop-out above the YOU wing: the chip, and the card it drops. */
@@ -181,6 +183,9 @@ export type MenuAction =
   /** Open / close the Gasket Gazette. */
   | 'open-gazette'
   | 'gazette-close'
+  /** Hold the paper up large in front of you, and put it back on the wing. */
+  | 'gazette-reader'
+  | 'reader-close'
   /** Open / close the SETTINGS modal (the gear disc left of the paper). */
   | 'open-settings'
   | 'settings-close'
@@ -1342,7 +1347,8 @@ function layoutArticle(ctx: CanvasRenderingContext2D, art: GazetteArticle, top: 
     ctx.font = `bold 16px ${NEWS_SERIF}`;
     if (draw) ctx.fillText('WEATHER', 50, y + 30);
     ctx.font = `italic 19px ${NEWS_SERIF}`;
-    y = flowParagraph(ctx, art.weather, 140, y + 30, NW - 190, 26, draw) + 8;
+    // Clear of the WEATHER label's own width, or the two run together.
+    y = flowParagraph(ctx, art.weather, 158, y + 30, NW - 208, 26, draw) + 8;
   }
   return y;
 }
@@ -1364,7 +1370,7 @@ function drawNews(ctx: CanvasRenderingContext2D): void {
   ctx.lineWidth = 1.5;
   ctx.strokeRect(22, 22, NW - 44, NH - 44);
 
-  const art = gazette.article;
+  const art = frontPage();
 
   // Masthead — a tin sheriff's star crests the page.
   ctx.fillStyle = NEWS_INK;
@@ -1384,7 +1390,7 @@ function drawNews(ctx: CanvasRenderingContext2D): void {
   // short and never collides.
   ctx.font = `bold 16px ${NEWS_SERIF}`;
   ctx.textAlign = 'left';
-  ctx.fillText(art ? `No. ${art.edition}` : 'No. —', 50, 216);
+  ctx.fillText(art ? (art.edition > 0 ? `No. ${art.edition}` : 'WELCOME') : 'No. —', 50, 216);
   let dateText = (art?.dateline || '').replace(/^\s*GASKET TERRITORY\s*[—–-]\s*/i, '').trim();
   if (!dateText) dateText = 'GASKET TERRITORY';
   ctx.textAlign = 'center';
@@ -1395,7 +1401,7 @@ function drawNews(ctx: CanvasRenderingContext2D): void {
   if (!art) {
     ctx.font = `italic 26px ${NEWS_SERIF}`;
     ctx.fillStyle = NEWS_INK;
-    ctx.fillText(gazette.status || 'the presses are quiet', NW / 2, NH / 2 - 40);
+    ctx.fillText('the presses are warming up', NW / 2, NH / 2 - 40);
     ctx.font = `18px ${NEWS_SERIF}`;
     ctx.fillText('Check back after the next edition is filed.', NW / 2, NH / 2);
   } else {
@@ -1444,19 +1450,25 @@ function drawNews(ctx: CanvasRenderingContext2D): void {
 }
 
 /** The page's own canvas — rendered fresh on each call (the wing's redraw
- *  is the freshness clock) and handed back to be blitted. */
-let newsCanvas: HTMLCanvasElement | null = null;
-export function renderNewsPage(): HTMLCanvasElement {
-  if (!newsCanvas) {
-    newsCanvas = document.createElement('canvas');
-    newsCanvas.width = NW;
-    newsCanvas.height = NH;
+ *  is the freshness clock) and handed back to be blitted. `scale` renders
+ *  the same page at a multiple of its native pixels: the wing blits it at
+ *  1×, THE READER holds it up at 2× so the type stays sharp held close. One
+ *  canvas per scale, so the two never fight over a single bitmap. */
+const newsCanvases = new Map<number, HTMLCanvasElement>();
+export function renderNewsPage(scale = 1): HTMLCanvasElement {
+  let canvas = newsCanvases.get(scale);
+  if (!canvas) {
+    canvas = document.createElement('canvas');
+    canvas.width = Math.round(NW * scale);
+    canvas.height = Math.round(NH * scale);
+    newsCanvases.set(scale, canvas);
   }
-  const ctx = newsCanvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d')!;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   drawNews(ctx);
-  return newsCanvas;
+  return canvas;
 }
 
 // --- THE COIN WALLET + PLATFORM STORE ---------------------------------------

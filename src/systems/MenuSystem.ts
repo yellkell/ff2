@@ -44,6 +44,9 @@ import {
   type Menu,
   type MenuAction,
   type PanelId,
+  NW,
+  NH,
+  renderNewsPage,
 } from '../menu/menu.js';
 import { createNameKeyboard, type NameKeyboard } from '../menu/keyboard.js';
 import { installWrap, wrapNav, type Wrap } from '../menu/wrap.js';
@@ -138,6 +141,26 @@ const _fwd = new Vector3();
 const BOARD_SCROLL_DEADZONE = 0.55;
 const BOARD_SCROLL_INITIAL_REPEAT = 0.28;
 const BOARD_SCROLL_REPEAT = 0.12;
+/** THE READER's canvas: the page at 2× (menu.ts NW × NH) plus a row for
+ *  CLOSE under it. */
+const READER_W = NW * 2;
+const READER_H = NH * 2 + 120;
+
+/** THE READER's face: the front page, large, and the way back. Tapping the
+ *  page itself puts it back too — the same press that held it up. */
+function readerFace(): { title: string; body: (g: CanvasRenderingContext2D, hover: string | null) => void; buttons: PanelButton[] } {
+  return {
+    title: '',
+    buttons: [
+      { id: 'reader-close', label: '', ghost: true, x: 0, y: 0, w: READER_W, h: NH * 2 },
+      { id: 'reader-close', label: 'CLOSE', x: READER_W / 2 - 300, y: NH * 2 + 20, w: 600, h: 80, small: true },
+    ],
+    body: (g) => {
+      g.drawImage(renderNewsPage(2), 0, 0, READER_W, NH * 2);
+    },
+  };
+}
+
 /** Pixels of newspaper body scrolled per thumbstick step (~2.5 lines). */
 const NEWS_SCROLL_STEP = 76;
 
@@ -150,7 +173,7 @@ function preTutorialAllowed(action: MenuAction | null): boolean {
   if (action === 'start-tutorial' || action === 'rename' || action === 'edit-note') return true;
   // Tabs, the paper, settings and the profile card all answer before the
   // tutorial; the ladder, the fights, the bay and the shop clank.
-  return /^(wrap:tab-|open-gazette|gazette-close|open-settings|settings-|credits-back|sfx-|music-|toggle-mute|toggle-voice|toggle-hide-paint|profile-|badge-|lb-)/.test(action);
+  return /^(wrap:tab-|open-gazette|gazette-close|gazette-reader|reader-close|open-settings|settings-|credits-back|sfx-|music-|toggle-mute|toggle-voice|toggle-hide-paint|profile-|badge-|lb-)/.test(action);
 }
 
 interface Pointer {
@@ -294,6 +317,11 @@ export class MenuSystem extends createSystem({}) {
     this.addModal('shop', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(false), [0.5, 1.5, -1.1], -0.3);
     this.addModal('campaign', 1.5, 1.5 * (CAMP_H / CAMP_W), CAMP_W, CAMP_H, campaignFace, [0, 1.5, -1.2], 0);
     this.addModal('lobby', 1.05, 1.05, LOBBY_W, LOBBY_H, lobbyFace, [0, 1.5, -1.18], 0);
+    // THE READER: the Gazette held up large, straight ahead, where the slab
+    // was. The page renders at 2× so the type is sharp at reading distance;
+    // the thumbstick scrolls it as it does on the wing, and tapping the page
+    // (or CLOSE) puts it back.
+    this.addModal('reader', 1.2, 1.2 * (READER_H / READER_W), READER_W, READER_H, readerFace, [0, 1.5, -1.12], 0);
     // The loadout hangs out on the RIGHT, clear of the mirror on the left,
     // and answers its own `ball:*` ids before anything global.
     this.addModal('balls', 0.8, 0.8, BALLS_W, BALLS_H, ballsFace, [1.32, 1.18, -0.66], -0.6, (id) => ballsClick(id));
@@ -520,7 +548,8 @@ export class MenuSystem extends createSystem({}) {
     const modalCustom = customization.open && !shopOpen;
     const modalCampaign = app.campaignOpen;
     const modalLobby = app.lobbyMode !== null;
-    const arcUp = !customization.open && !modalCampaign && !modalLobby && !app.paintBayOpen;
+    const modalReader = app.readerOpen;
+    const arcUp = !customization.open && !modalCampaign && !modalLobby && !app.paintBayOpen && !modalReader;
     let visChanged = this.rayTargets.length === 0; // first frame: build the list
     for (const p of this.menu.panels) {
       let show: boolean;
@@ -543,6 +572,9 @@ export class MenuSystem extends createSystem({}) {
           break;
         case 'paintbay':
           show = app.paintBayOpen;
+          break;
+        case 'reader':
+          show = modalReader;
           break;
         default:
           // The arc (train/duel/info) and the profile chip: the lobby's
@@ -601,7 +633,7 @@ export class MenuSystem extends createSystem({}) {
         const axis = this.input.xr.gamepads[hand]?.getAxesValues(InputComponent.Thumbstick)?.y ?? 0;
         if (Math.abs(axis) > Math.abs(boardScrollAxis)) boardScrollAxis = axis;
       }
-      if (panel.id === 'duel' && wrapNav.town === 'news') {
+      if ((panel.id === 'duel' && wrapNav.town === 'news') || panel.id === 'reader') {
         newsPointed = true;
         const axis = this.input.xr.gamepads[hand]?.getAxesValues(InputComponent.Thumbstick)?.y ?? 0;
         if (Math.abs(axis) > Math.abs(newsScrollAxis)) newsScrollAxis = axis;
@@ -672,7 +704,7 @@ export class MenuSystem extends createSystem({}) {
       if (hover) sfx.uiHover(); // soft laser zap as the pointer lands
     }
     // A scroll repaints its own page, nothing else.
-    if (boardScrolled || newsScrolled) this.redrawPanel('duel');
+    if (boardScrolled || newsScrolled) this.redrawPanel(app.readerOpen ? 'reader' : 'duel');
     // A skin change can touch several faces (locker, shop, board avatar) —
     // it's a rare, single event, so the full repaint is fine. A slider scrub
     // bumps the version EVERY frame — the drag branch below repaints just the
@@ -727,6 +759,10 @@ export class MenuSystem extends createSystem({}) {
     this.redrawTimer -= delta;
     if (this.redrawTimer <= 0) {
       this.redrawTimer = 0.5;
+      // The wing opens on the paper now, so an edition that lands while the
+      // page is already on the wall is read the moment it is drawn — the
+      // pip is for an edition you have NOT got in front of you.
+      if (wrapNav.town === 'news' && gazette.unread && gazette.article) markGazetteRead();
       if (this.liveDirty()) this.menu.redrawAll(this.hovered, this.hoveredAction);
     }
 
@@ -1139,6 +1175,17 @@ export class MenuSystem extends createSystem({}) {
         break;
       case 'gazette-close':
         wrapNav.town = 'town';
+        app.readerOpen = false;
+        break;
+      case 'gazette-reader':
+        // Tap the page on the wing: hold it up large, straight ahead. The
+        // scroll carries over — you keep your place in the article.
+        wrapNav.town = 'news';
+        markGazetteRead();
+        app.readerOpen = true;
+        break;
+      case 'reader-close':
+        app.readerOpen = false;
         break;
       case 'open-settings':
         wrapNav.you = 'settings';
@@ -1558,10 +1605,14 @@ export class MenuSystem extends createSystem({}) {
             ...art,
           };
           gazette.status = '';
+          gazette.welcomeFirst = false; // a probe's edition is the page, welcome or not
         },
         open: () => this.run('open-gazette'),
         scroll: (px: number) => scrollNews(px),
         close: () => this.run('gazette-close'),
+        /** THE READER, held up and put back. */
+        reader: (on: boolean) => this.run(on ? 'gazette-reader' : 'reader-close'),
+        readerOpen: () => app.readerOpen,
         snap: (): string => {
           // The paper is a tab on the TOWN wing now — snap the wing.
           const p = this.menu.panels.find((x) => x.id === 'duel');

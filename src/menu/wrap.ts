@@ -106,7 +106,9 @@ export type YouTab = 'you' | 'settings';
 /** Which tab each panel is on. */
 export const wrapNav = {
   center: 'fight' as CenterTab,
-  town: 'town' as TownTab,
+  // The wing opens on the PAPER: the day's edition — or the welcome, for a
+  // newcomer — is the first thing on the wall, not a chip count.
+  town: 'news' as TownTab,
   you: 'you' as YouTab,
 };
 
@@ -459,7 +461,9 @@ function townTabs(): PanelButton[] {
   return [
     { id: 'wrap:tab-town', label: 'TOWN', tab: true, x: 48, y: TAB_Y, w: 190, h: TAB_H, selected: wrapNav.town === 'town' },
     { id: 'wrap:tab-ladder', label: 'LADDER', tab: true, x: 248, y: TAB_Y, w: 220, h: TAB_H, selected: wrapNav.town === 'ladder', disabled: lock },
-    { id: 'wrap:tab-news', label: 'NEWS', tab: true, x: 478, y: TAB_Y, w: 190, h: TAB_H, selected: wrapNav.town === 'news', badge: gazette.unread },
+    // The pip says "a new edition you haven't seen" — pointless while the
+    // paper is the very thing on the wing (MenuSystem marks it read there).
+    { id: 'wrap:tab-news', label: 'NEWS', tab: true, x: 478, y: TAB_Y, w: 190, h: TAB_H, selected: wrapNav.town === 'news', badge: gazette.unread && wrapNav.town !== 'news' },
   ];
 }
 
@@ -483,18 +487,28 @@ function townBoard(): Face {
  *  portrait canvas (menu.ts) and lands here scaled to fit under the strip;
  *  the thumbstick scrolls the article while the pointer is on the wing. */
 function newsFace(): Face {
-  const PW = 704;
-  const PH = 880;
+  // Same 4:5 as the page itself, and short enough under the strip that the
+  // caption beneath it lands inside the wing's canvas rather than off it.
+  const PW = 680;
+  const PH = 850;
   return {
     title: '',
-    buttons: [],
-    body: (g) => {
+    // The whole page is one press: tap it and THE READER holds it up large
+    // in front of you (MenuSystem 'gazette-reader'). A ghost, so the page
+    // draws as a page and not as a button with a page on it.
+    buttons: [{ id: 'gazette-reader', label: '', ghost: true, x: (LW - PW) / 2, y: 124, w: PW, h: PH }],
+    body: (g, hover) => {
       const page = renderNewsPage();
       g.save();
-      g.shadowColor = 'rgba(0,0,0,0.55)';
-      g.shadowBlur = 24;
+      g.shadowColor = hover === 'gazette-reader' ? 'rgba(255,176,0,0.55)' : 'rgba(0,0,0,0.55)';
+      g.shadowBlur = hover === 'gazette-reader' ? 34 : 24;
       g.drawImage(page, (LW - PW) / 2, 124, PW, PH);
       g.restore();
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.font = font(500, 20);
+      g.fillStyle = KIT.faint;
+      g.fillText('tap the page to hold it up', LW / 2, 124 + PH + 22);
     },
   };
 }

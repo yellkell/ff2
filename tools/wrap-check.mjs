@@ -103,6 +103,7 @@ if (!tutorialDone) {
 console.log('\n=== the slab: FIGHT · ARCADE · CLUB ===');
 let nav = await wrap(`nav()`);
 check('the slab opens on FIGHT', nav.center === 'fight' && !nav.club, JSON.stringify(nav));
+check('the TOWN wing opens on NEWS (the paper first)', nav.town === 'news', nav.town);
 check('FIGHT: modes + the demoted ONLY BOTS, no BACK', has(slab, 'quick-match', 'ranked-match', 'private-open', 'arcade-2v2', 'arcade-ffa', 'toggle-onlybots') && !slab.includes('wrap:back'), notTabs(slab).join(','));
 save('fight', await wrap(`snap('train')`));
 await wrap(`act('wrap:tab-arcade')`);
@@ -147,6 +148,7 @@ face = await wrap(`buttons('train')`);
 check('BACK lands on the FIGHT root', face.includes('quick-match') || face.includes('cancel-queue'), notTabs(face).join(','));
 
 console.log('\n=== the TOWN wing: TOWN · LADDER · NEWS ===');
+await wrap(`act('wrap:tab-town')`); // the wing opens on NEWS now — walk to TOWN first
 town = await wrap(`buttons('duel')`);
 check('TOWN: the live chips, nothing pressable', has(town, 'town-queue', 'town-raids', 'town-club') && notTabs(await wrap(`live('duel')`)).length === 0, notTabs(town).join(','));
 save('town', await wrap(`snap('duel')`));
@@ -190,6 +192,25 @@ await wrap(`act('wrap:tab-town')`);
   check('GAZETTE: closing the paper returns to TOWN', after.town === 'town', after.town);
   save('news', snap);
   save('news-2', snap2);
+
+  // THE READER: tap the page on the wing and it is held up large, straight
+  // ahead, as a modal over the arc; tap it (or CLOSE) and it goes back.
+  await page.evaluate(() => window.__ff2.gazette.open());
+  const wingPage = await wrap(`buttons('duel')`);
+  await wrap(`act('gazette-reader')`);
+  await page.waitForTimeout(300);
+  const readerUp = await page.evaluate(() => window.__ff2.gazette.readerOpen());
+  const readerButtons = await page.evaluate(() => window.__ff2.modals.buttons('reader'));
+  const readerSnap = await page.evaluate(() => window.__ff2.modals.snap('reader'));
+  const wingHidden = await wrap(`visible('duel')`);
+  await wrap(`act('reader-close')`);
+  await page.waitForTimeout(200);
+  const readerDown = await page.evaluate(() => window.__ff2.gazette.readerOpen());
+  check('READER: the page on the wing is a press', wingPage.includes('gazette-reader'), notTabs(wingPage).join(','));
+  check('READER: tapping it holds the paper up large, over the arc', readerUp && readerButtons.includes('reader-close') && readerSnap.length > 20000 && wingHidden === false, JSON.stringify({ readerUp, readerButtons, bytes: readerSnap.length, wingHidden }));
+  check('READER: CLOSE puts it back', readerDown === false, String(readerDown));
+  save('reader', readerSnap);
+  await page.evaluate(() => window.__ff2.gazette.close());
 }
 
 console.log('\n=== the YOU wing: YOU · SETTINGS ===');

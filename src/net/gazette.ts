@@ -36,15 +36,67 @@ export interface GazetteArticle {
   weather: string;
 }
 
+/**
+ * THE WELCOME EDITION — the paper a newcomer finds on the wall, written
+ * into the build rather than filed by the presses, so it is there before
+ * the first daily lands and stays there whenever the presses are quiet
+ * (no edition filed yet, or a headset with no cloud). Cole's voice, under
+ * the voice's rules (docs/gazette-voice.md): it translates everything the
+ * town does into Gasket's words, punches nobody down, and carries one tin
+ * tell. Edition 0, so the first filed daily is still No. 1.
+ */
+export const WELCOME_EDITION: GazetteArticle = {
+  edition: 0,
+  dateline: 'GASKET TERRITORY — AT THE TRAILHEAD, ANY DUSK',
+  headline: 'NEW IN TOWN? THIS OFFICE HAS SOME NOTES',
+  subhead: 'A word of welcome to whoever just stepped off the wagon, from the man who has to live here.',
+  body: [
+    'You have stepped off the wagon at the trailhead, and the township of Gasket, through this office, notes your arrival. The sign points the wrong way. Ignore it. Everything you came for is behind you.',
+    'The flats are where the Clankers settle things: a duel if it is personal, a pair fight if it is social, a brawl if four of them cannot agree on who to hit. They stand on their decks and throw fire at one another until somebody is knocked off, and then they do it again. The roll is posted outside this office. Every one of them reads it before breakfast and claims not to.',
+    'Out past the flats is the boneyard, where the titans sleep badly. RUSTHOOK, PISTONKAISER, VULTURE, JUGGERNAUT, and GOLIATH, who is the king of them. Squads go out at dusk to put one down and come back through the trailhead making the noise they make, holding up the time on the county watch like it means something. It does, to them.',
+    'There is also that place with the mirror ball. I do not go in. I am told there is a dance hall behind the doors, that they hold a set in it most nights, and that the bell in there calls the fights now too, which means the trouble has a bar.',
+    'Paint yourself if you must. Bolt what you like to your skull. The locker is by the terrace. The township will describe it accurately and without approval.',
+    'Welcome to Gasket. Keep your fire on the flats. My hand has been ringing against the desk all morning, which the doctor says is the desk.',
+  ].join('\n\n'),
+  byline: 'Sheriff Cole Ironside',
+  mood: 'WARY',
+  wanted: { name: 'THE NEWCOMER', crime: 'Arriving. It always starts with arriving.', reward: '5 iron-dollars, on account' },
+  notice: 'The trailhead is not a parking place for wagons. Fights on the flats, titans at the boneyard, dancing indoors.',
+  weather: 'Dusk. It was dusk when you arrived and it will be dusk when you leave. Bring a coat.',
+};
+
+const SEEN_KEY = 'gg-seen-edition';
+const WELCOME_KEY = 'gg-welcome-read';
+
+function welcomeRead(): boolean {
+  try {
+    return localStorage.getItem(WELCOME_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** Live gazette state the lobby reads each redraw. */
 export const gazette = {
   article: null as GazetteArticle | null,
   status: FIREBASE_ENABLED ? 'loading…' : 'gazette offline',
   /** True while the latest edition is newer than the one this reader has seen. */
   unread: false,
+  /**
+   * A first visit reads the WELCOME EDITION whatever the presses have filed:
+   * decided once, at boot, so the page does not swap out from under a
+   * newcomer the moment the daily lands. From the next boot on, the daily
+   * is the front page and the welcome only stands in when there is none.
+   */
+  welcomeFirst: !welcomeRead(),
 };
 
-const SEEN_KEY = 'gg-seen-edition';
+/** The page on the wall right now: the daily, or the WELCOME EDITION —
+ *  on a first visit, or whenever the presses have nothing filed. */
+export function frontPage(): GazetteArticle | null {
+  if (gazette.welcomeFirst) return WELCOME_EDITION;
+  return gazette.article ?? (gazette.status === 'loading…' ? null : WELCOME_EDITION);
+}
 
 function seenEdition(): number {
   try {
@@ -120,6 +172,14 @@ export function initGazette(): void {
 
 /** Mark the current edition read — clears the lobby button's red dot. */
 export function markGazetteRead(): void {
+  // The welcome counts as read the first time the paper is looked at; it
+  // keeps the wall for the rest of THIS visit (welcomeFirst is a boot-time
+  // decision) and the daily takes over from the next.
+  try {
+    localStorage.setItem(WELCOME_KEY, '1');
+  } catch {
+    /* storage unavailable — the newcomer gets welcomed again next boot */
+  }
   if (!gazette.article) return;
   try {
     localStorage.setItem(SEEN_KEY, String(gazette.article.edition));

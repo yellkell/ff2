@@ -171,6 +171,9 @@ export const app: {
   /** The ARCADE campaign line-up (the titan sub-menu) is open over the lobby
    *  (modal, like customisation). Campaign bouts return here, win or lose. */
   campaignOpen: boolean;
+  /** THE READER: the paper held up large in front of you, a modal over the
+   *  arc — opened by tapping the page on the TOWN wing. */
+  readerOpen: boolean;
   /** Which titan is being fought while mode === 'campaign' (0-based stage). */
   campaignStage: number;
   /**
@@ -284,6 +287,7 @@ export const app: {
   infoView: 'root',
   paintBayOpen: false,
   campaignOpen: false,
+  readerOpen: false,
   campaignStage: 0,
   campaignMode: 'single',
   lobbyMode: null,
