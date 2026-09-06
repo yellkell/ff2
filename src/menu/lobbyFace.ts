@@ -35,7 +35,10 @@ export function inviteLink(code: string): string {
 }
 
 export const LOBBY_W = 896;
-export const LOBBY_H = 896;
+/** Taller than it is wide: a raid seats five, and under those five the
+ *  squad room still has to fit the difficulty band, the breakers, the
+ *  invite band (the QR sets its height), the waiting line and the footer. */
+export const LOBBY_H = 960;
 
 const M = 64;
 const INNER = LOBBY_W - M * 2;
@@ -178,6 +181,11 @@ const SEAT_Y0 = 150;
 const DIFF_H = 58;
 const BREAKER_H = 72;
 const FOOT_H = 88;
+/** The QR's edge — it sets the invite band's height. */
+const QR_PX = 96;
+/** The invite band, the waiting line under it, and their gaps: what the
+ *  footer has to leave above itself when the room has a code. */
+const BAND_ASK = 188;
 
 /**
  * The squad room lays out TOP-DOWN — the seats set where everything under
@@ -207,16 +215,19 @@ function squadLayout(cap: number, raid: boolean, hasCode: boolean): {
   // The footer sits at the bottom of the panel when the stack clears it, and
   // slides down under the stack when it doesn't.
   // With a code the band under the stack carries the QR, the link and
-  // SHARE, so it asks for more room than one line of digits did.
-  const footY = Math.max(stackBottom + (hasCode ? 146 : 68), LOBBY_H - 196);
+  // SHARE, and the waiting line sits UNDER the band, not across it: the
+  // band is as tall as the QR, so the footer leaves room for the QR, the
+  // line and a breath between each — measured up from the footer so the
+  // three never drift into one another whatever the stack above did.
+  const footY = Math.max(stackBottom + (hasCode ? BAND_ASK : 68), LOBBY_H - 196);
   return {
     seatH,
     seatGap,
     diffLabelY,
     diffY,
     breakerY,
-    codeY: footY - 122,
-    statusY: footY - 34,
+    codeY: footY - BAND_ASK + 20,
+    statusY: footY - 38,
     footY,
   };
 }
@@ -355,7 +366,7 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
       g.textBaseline = 'middle';
       if (code) {
         const bandY = L.codeY;
-        const qrPx = 96;
+        const qrPx = QR_PX;
         try {
           drawQr(g, inviteLink(code), M, bandY, qrPx);
         } catch {
@@ -392,6 +403,7 @@ function squadRoom(mode: ArcadeMode): LobbyFace {
             : `${count} / ${cap} ${noun} — a full room ${launch}`,
         LOBBY_W / 2,
         L.statusY,
+        INNER,
       );
     },
   };

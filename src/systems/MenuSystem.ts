@@ -316,7 +316,7 @@ export class MenuSystem extends createSystem({}) {
     this.addModal('custom', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(true), [0.5, 1.53, -1.1], -0.3);
     this.addModal('shop', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(false), [0.5, 1.5, -1.1], -0.3);
     this.addModal('campaign', 1.5, 1.5 * (CAMP_H / CAMP_W), CAMP_W, CAMP_H, campaignFace, [0, 1.5, -1.2], 0);
-    this.addModal('lobby', 1.05, 1.05, LOBBY_W, LOBBY_H, lobbyFace, [0, 1.5, -1.18], 0);
+    this.addModal('lobby', 1.05, 1.05 * (LOBBY_H / LOBBY_W), LOBBY_W, LOBBY_H, lobbyFace, [0, 1.5, -1.18], 0);
     // THE READER: the Gazette held up large, straight ahead, where the slab
     // was. The page renders at 2× so the type is sharp at reading distance;
     // the thumbstick scrolls it as it does on the wing, and tapping the page
