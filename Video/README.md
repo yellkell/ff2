@@ -12,22 +12,27 @@ Two cuts, one pile of footage:
 | --- | --- | --- |
 | the master | `edit/timeline.mjs` | `out/trailer.mp4` — 1:10, 1280x720 |
 | the short | `edit/timeline-vertical.mjs` | `out/short.mp4` — 0:34, 1080x1920 |
-| DID YOU KNOW | `edit/timeline-dyk.mjs` | `out/dyk.mp4` — 0:53, 1280x720 |
-| DID YOU KNOW, the short | `edit/timeline-dyk-vertical.mjs` | `out/dyk-short.mp4` — 0:44, 1080x1920 |
+| DID YOU KNOW | `edit/timeline-dyk.mjs` | `out/dyk.mp4` — 1:04, 1280x720 |
+| DID YOU KNOW, the short | `edit/timeline-dyk-vertical.mjs` | `out/dyk-short.mp4` — 0:53, 1080x1920 |
 
 The short is for Shorts / TikTok / Reels. It starts the music at 20.04 s,
 which is both a downbeat on the master's grid and where the track steps up
 into its loudest stretch, so its own grid is just `V(n) = n · BEAT`.
 
-DID YOU KNOW is three facts in the same voice and on the same grid: you
-host games from the club (the desk, HOST, the disco ball, START deals
+DID YOU KNOW is three facts in the same voice and on the same grid: the
+club hosts everything (press Ⓐ on the floor and the desk comes up; the
+RAVE tab picks a record, the FIGHT tab a fight or a TITAN RAID with its
+tier and HARDCORE; HOST drops the disco ball, friends touch in, START deals
 everyone across together), people can WATCH (the terrace, the WATCH chip,
 fighters never hear the crowd's words), and raids (five seats, code + QR +
 Discord, giant titans, GOLIATH's second life). Its footage comes from
-`capture2.mjs`: the club desk driven through `__gdr.menu.press`, a solo
-ball called from the desk and dealt with `__gdr.club.go()`, eight watchers
-put on the flats' terraces through `mesh.watchers`, and the raid lobby's
-browser and squad room drawn from faked `app.lobbyRooms` / `mesh` state.
+`capture2.mjs` (a 2v2 ball, eight watchers put on the flats' terraces
+through `mesh.watchers`, the raid lobby's browser and squad room drawn from
+faked `app.lobbyRooms` / `mesh` state) and `capture3.mjs` (the desk itself:
+the right Ⓐ tap that raises it, the record list and `song:discoball`,
+`tier:blazing` and `raidhc`, each hosted, and the raid deal into the pit).
+The desk is driven through `__gdr.menu.press`; a solo ball is called from
+it and dealt with `__gdr.club.go()`.
 
 Making it turned up two things in the game, both fixed in `src/`: terrace
 watchers were full fighter bodies solved against the arena's floor plane,
@@ -54,6 +59,7 @@ The DID YOU KNOW footage and cut:
 
 ```bash
 node Video/capture2.mjs disco raidlobby        # add --probe for framing stills instead
+node Video/capture3.mjs                        # the desk: Ⓐ, the record, the tier + HARDCORE
 node Video/audio.mjs --tl ./edit/timeline-dyk.mjs --out mix-dyk.wav
 node Video/render.mjs --tl ./timeline-dyk.mjs --mix Video/edit/mix-dyk.wav --out Video/out/dyk.mp4
 node Video/audio.mjs --tl ./edit/timeline-dyk-vertical.mjs --out mix-dyk-vertical.wav
