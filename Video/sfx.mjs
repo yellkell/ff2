@@ -33,6 +33,14 @@ render('glitch', "aevalsrc='0.5*sgn(sin(2*PI*t*(220+900*mod(floor(t*40),5))))*lt
 render('hit', "anoisesrc=color=brown:seed=11:amplitude=1,lowpass=f=900,afade=t=out:st=0.02:d=0.16,volume=1.6,alimiter=limit=0.95", 0.2);
 // CLICK — a dry tick for the fast cuts.
 render('click', "aevalsrc='0.5*sin(2*PI*t*2400)*exp(-t*90)':s=48000", 0.08);
+// BOING — a spring: a sine whose pitch wobbles down as it dies.
+render('boing', "aevalsrc='0.7*sin(2*PI*t*(180+260*exp(-t*6))*(1+0.12*sin(2*PI*t*14)*exp(-t*3)))*exp(-t*4)':s=48000", 0.7);
+// SLIDE WHISTLE — up, hang, and down.
+render('whistle', "aevalsrc='0.5*sin(2*PI*t*(500+900*(1-cos(PI*min(1,t/0.35)))/2*(1-0.9*max(0,(t-0.45)/0.35))))*min(1,t*30)*(1-exp(-(0.85-t)*40))':s=48000", 0.85);
+// QUACK — an FM honk with a nasal formant.
+render('quack', "aevalsrc='0.6*sin(2*PI*t*(240-80*t)+2.2*sin(2*PI*t*480))*min(1,t*60)*exp(-t*9)':s=48000,bandpass=f=900:width_type=o:w=2,volume=2.4,alimiter=limit=0.9", 0.35);
+// FART — because it was 2019: brown noise with a wobbling low sine under it.
+render('fart', "aevalsrc='0.6*sin(2*PI*t*(70+25*sin(2*PI*t*9)))*exp(-t*3)':s=48000[s];anoisesrc=color=brown:seed=5:amplitude=0.8[n];[n]lowpass=f=350,volume='0.8*exp(-t*3)':eval=frame[nf];[s][nf]amix=inputs=2:normalize=0,alimiter=limit=0.9", 0.7);
 // RISER — a 1.9 s noise + sine climb into a drop.
 render('riser', "aevalsrc='0.35*sin(2*PI*t*(200+900*t*t))*(t/1.9) + 0.25*sin(2*PI*t*(100+450*t*t))*(t/1.9)':s=48000,alimiter=limit=0.9", 1.9);
 console.log('sfx done');

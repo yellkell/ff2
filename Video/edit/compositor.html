@@ -208,6 +208,19 @@ async function renderFrame(t) {
   let sx = 0, sy = 0;
   for (const s of TL.shakes) if (t >= s.t && t < s.t + 1) { const a = s.s * Math.exp(-(t - s.t) * (s.k ?? 7)); sx += (hash(t * 91 + 1) - 0.5) * a; sy += (hash(t * 97 + 5) - 0.5) * a; }
   if (shot.handheld) { sx += Math.sin(t * 3.1) * 4 + Math.sin(t * 7.3) * 2; sy += Math.cos(t * 2.7) * 3 + Math.sin(t * 9.1) * 1.5; }
+  // tilt: a rotation slam that rings down — {t, deg, k}
+  let tilt = 0;
+  for (const r of TL.tilts ?? []) if (t >= r.t && t < r.t + 1.2) tilt += (r.deg * Math.PI) / 180 * Math.exp(-(t - r.t) * (r.k ?? 8)) * Math.cos((t - r.t) * 24);
+  // jitter: the frame twitches every frame — [t0, t1, amount] (0.04 = a lot)
+  const jit = inRange(TL.ranges.jitter, t);
+  if (jit) {
+    const a = jit[2] ?? 0.03;
+    const f = Math.floor(t * 60);
+    zoom *= 1 + (hash(f * 1.7) - 0.5) * 2 * a;
+    sx += (hash(f * 2.3 + 11) - 0.5) * 900 * a;
+    sy += (hash(f * 3.1 + 17) - 0.5) * 600 * a;
+    tilt += (hash(f * 4.3 + 23) - 0.5) * 0.08 * (a / 0.03);
+  }
 
   // filters
   const fry = inRange(TL.ranges.fry, t);
@@ -277,7 +290,7 @@ async function renderFrame(t) {
       fl.translate(fx + sx, fy + sy);
       fl.scale(zoom, zoom);
       if (shot.flipX) fl.scale(-1, 1);
-      if (shot.rot) fl.rotate(shot.rot);
+      if (shot.rot || tilt) fl.rotate((shot.rot ?? 0) + tilt);
       fl.translate(-fx, -fy);
       if (fry && (fry[2] ?? 1) > 0.6) {
         // deep-fry: crush through a tiny canvas
