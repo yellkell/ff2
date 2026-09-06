@@ -1,7 +1,7 @@
 // DID YOU KNOW — three things about FIRE FIGHT 2, cut like it's 2019.
 //
 //   1. the club hosts everything: press Ⓐ on the floor and the desk comes
-//      up; the RAVE tab picks a record, the FIGHT tab a fight or a TITAN
+//      up; the RAVE tab picks a song, the FIGHT tab a fight or a TITAN
 //      RAID with its tier and HARDCORE; HOST drops a DISCO BALL, your
 //      homies touch it, START deals everyone across together.
 //   2. people can WATCH: the terrace, the WATCH chip, fighters hear the
@@ -87,7 +87,7 @@ E(V(10), V(16), '🎶', { size: 140, from: [0.86, 0.3], to: [0.86, 0.27], bounce
 pulse(10, 13, 0.12);
 cut(V(13), 'desk_rave', 2.9, { zoom: [1.25, 1.4], focus: [0.4, 0.5] }, { punch: 0.35 });
 A(V(13), 'quack', 0.9);
-T(V(13), V(16), 'pick a record (any record)', { ...comic, size: 46, y: 0.86, color: '#ffe3c2' });
+T(V(13), V(16), 'pick a song (any song)', { ...comic, size: 46, y: 0.86, color: '#ffe3c2' });
 pulse(13, 16, 0.12);
 cut(V(16), 'desk_rave', 5.4, { zoom: [1.2, 1.4], focus: [0.5, 0.55] }, { punch: 0.4 });
 A(V(16), 'cash', 0.8); tilts.push({ t: V(16), deg: 3, k: 9 });
@@ -98,7 +98,7 @@ cut(V(19), 'desk_rave_host', 0.85, { zoom: [1.0, 1.1] }, { punch: 0 });
 slam(V(19), { deg: 7, s: 0.7, jit: 0.5 }); boosts.push([V(19), V(20)]);
 T(V(19), V(21), 'HOST', { size: 170, y: 0.5, glow: 'rgba(255,60,220,0.9)', shakeText: true });
 cut(V(21), 'desk_rave_host', 2.4, { zoom: [1.05, 1.25], focus: [0.18, 0.4] }, { punch: 0.35 });
-T(V(21), V(24), 'the record rides the ball', { ...comic, size: 46, y: 0.86, color: '#ffe3c2' });
+T(V(21), V(24), 'the song rides the ball', { ...comic, size: 46, y: 0.86, color: '#ffe3c2' });
 spam(V(21), V(24), '🪩', 6, 5);
 pulse(21, 24, 0.12);
 // the homies

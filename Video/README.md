@@ -21,7 +21,7 @@ into its loudest stretch, so its own grid is just `V(n) = n · BEAT`.
 
 DID YOU KNOW is three facts in the same voice and on the same grid: the
 club hosts everything (press Ⓐ on the floor and the desk comes up; the
-RAVE tab picks a record, the FIGHT tab a fight or a TITAN RAID with its
+RAVE tab picks a song, the FIGHT tab a fight or a TITAN RAID with its
 tier and HARDCORE; HOST drops the disco ball, friends touch in, START deals
 everyone across together), people can WATCH (the terrace, the WATCH chip,
 fighters never hear the crowd's words), and raids (five seats, code + QR +
@@ -29,7 +29,7 @@ Discord, giant titans, GOLIATH's second life). Its footage comes from
 `capture2.mjs` (a 2v2 ball, eight watchers put on the flats' terraces
 through `mesh.watchers`, the raid lobby's browser and squad room drawn from
 faked `app.lobbyRooms` / `mesh` state) and `capture3.mjs` (the desk itself:
-the right Ⓐ tap that raises it, the record list and `song:discoball`,
+the right Ⓐ tap that raises it, the song list and `song:discoball`,
 `tier:blazing` and `raidhc`, each hosted, and the raid deal into the pit).
 The desk is driven through `__gdr.menu.press`; a solo ball is called from
 it and dealt with `__gdr.club.go()`.
@@ -59,7 +59,7 @@ The DID YOU KNOW footage and cut:
 
 ```bash
 node Video/capture2.mjs disco raidlobby        # add --probe for framing stills instead
-node Video/capture3.mjs                        # the desk: Ⓐ, the record, the tier + HARDCORE
+node Video/capture3.mjs                        # the desk: Ⓐ, the song, the tier + HARDCORE
 node Video/audio.mjs --tl ./edit/timeline-dyk.mjs --out mix-dyk.wav
 node Video/render.mjs --tl ./timeline-dyk.mjs --mix Video/edit/mix-dyk.wav --out Video/out/dyk.mp4
 node Video/audio.mjs --tl ./edit/timeline-dyk-vertical.mjs --out mix-dyk-vertical.wav

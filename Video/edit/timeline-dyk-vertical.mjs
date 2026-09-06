@@ -75,7 +75,7 @@ E(V(10), V(16), '🎶', { size: 150, from: [0.85, 0.3], to: [0.85, 0.27], bounce
 pulse(10, 13, 0.12);
 cut(V(13), 'desk_rave', 2.9, { ...DESK_LIST, zoom: [1.2, 1.35] }, { punch: 0.35 });
 A(V(13), 'quack', 0.9);
-T(V(13), V(16), 'pick a record\n(any record)', { ...comic, size: 44, y: BOT - 0.015, color: '#ffe3c2' });
+T(V(13), V(16), 'pick a song\n(any song)', { ...comic, size: 44, y: BOT - 0.015, color: '#ffe3c2' });
 pulse(13, 16, 0.12);
 cut(V(16), 'desk_rave', 5.4, { ...DESK, zoom: [1.15, 1.35] }, { punch: 0.4 });
 A(V(16), 'cash', 0.8); tilts.push({ t: V(16), deg: 3, k: 9 });
@@ -85,7 +85,7 @@ cut(V(19), 'desk_rave_host', 0.85, { fit: 'cover', zoom: [1.0, 1.1], focus: [0.5
 slam(V(19), { deg: 7, s: 0.7, jit: 0.5 }); boosts.push([V(19), V(20)]);
 T(V(19), V(21), 'HOST', { size: 180, y: 0.5, glow: 'rgba(255,60,220,0.9)', shakeText: true });
 cut(V(21), 'desk_rave_host', 2.4, { fit: 'cover', pan: [0.2, 0], zoom: [1.05, 1.25], focus: [0.3, 0.45] }, { punch: 0.35 });
-T(V(21), V(24), 'the record rides the ball', { ...comic, size: 44, y: BOT, color: '#ffe3c2' });
+T(V(21), V(24), 'the song rides the ball', { ...comic, size: 44, y: BOT, color: '#ffe3c2' });
 spam(V(21), V(24), '🪩', 6, 5);
 pulse(21, 24, 0.12);
 cut(V(24), 'ball_join', 1.2, { fit: 'cover', zoom: [1.05, 1.2], focus: [0.5, 0.72] }, { punch: 0.4 });
