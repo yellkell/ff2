@@ -69,7 +69,7 @@ import { LINES, PRAISE_POOL, type LineKey } from '../tutorial/script.js';
 import { grantGraduationStripe } from '../avatar/paint.js';
 import { customization } from '../menu/customization.js';
 import { wrapLines, wrapText } from '../menu/menu.js';
-import { BALLS_H, BALLS_W, ballsClick, ballsHit, renderBallsPanel } from '../menu/ballsFace.js';
+import { BALLS_H, BALLS_W, ballsClick, ballsDrag, ballsHit, renderBallsPanel } from '../menu/ballsFace.js';
 
 /** The bot's health in tutorial — deliberately low so a beginner can win. */
 const TUT_BOT_HP = 55;
@@ -237,6 +237,9 @@ export class TutorialSystem extends createSystem({
   // --- console panels + laser pointers ---
   private console: Panel | null = null;
   private loadout: Panel | null = null;
+  /** True while a trigger that closed on the loadout's BEND slider is still
+   *  held — the knob follows the ray until it opens. */
+  private bendGrabbed = false;
   private ray = new Raycaster();
   private pointers: Partial<Record<'left' | 'right', Pointer>> = {};
 
@@ -1364,6 +1367,18 @@ export class TutorialSystem extends createSystem({
       this.loadout.hot = overReady;
       this.drawLoadout();
     }
+    if (!hit?.held) this.bendGrabbed = false;
+    // The BEND slider: a press on its track grabs it, and the knob rides the
+    // ray for as long as the trigger stays down — a scrub is a held trigger
+    // over the panel, so it claims the trigger every frame it lasts.
+    if (hit && hit.y <= BALLS_H && (hit.clicked || this.bendGrabbed)) {
+      if (ballsDrag(hit.x / BALLS_W, 1 - hit.y / BALLS_H, this.bendGrabbed)) {
+        this.bendGrabbed = true;
+        app.tutorialHoldFire = true;
+        this.drawLoadout();
+        return;
+      }
+    }
     if (!hit?.clicked) return;
     // The click's trigger edge must not double as an ignite: claim the
     // trigger for THIS frame only (FireballSystem runs after us; update()'s
@@ -1385,12 +1400,13 @@ export class TutorialSystem extends createSystem({
     }
   }
 
-  /** Aim a laser from each hand at `mesh`; report the hover point (canvas px)
-   *  and whether a trigger clicked it this frame. */
-  private pollPanel(mesh: Mesh, cw: number, ch: number): { x: number; y: number; clicked: boolean } | null {
+  /** Aim a laser from each hand at `mesh`; report the hover point (canvas px),
+   *  whether a trigger clicked it this frame, and whether one is held on it
+   *  (a scrub). A hand with its trigger down wins over one merely pointing. */
+  private pollPanel(mesh: Mesh, cw: number, ch: number): { x: number; y: number; clicked: boolean; held: boolean } | null {
     if (!this.pointers.left) this.pointers.left = this.makePointer();
     if (!this.pointers.right) this.pointers.right = this.makePointer();
-    let out: { x: number; y: number; clicked: boolean } | null = null;
+    let out: { x: number; y: number; clicked: boolean; held: boolean } | null = null;
     for (const hand of ['left', 'right'] as const) {
       const p = this.pointers[hand]!;
       const rayObj = this.world.playerSpaceEntities.raySpaces[hand]?.object3D;
@@ -1413,7 +1429,8 @@ export class TutorialSystem extends createSystem({
         p.dot.position.copy(hit.point);
         p.dot.visible = true;
         const clicked = this.input.xr.gamepads[hand]?.getButtonDown(InputComponent.Trigger) ?? false;
-        if (!out || clicked) out = { x: hit.uv.x * cw, y: (1 - hit.uv.y) * ch, clicked };
+        const held = this.input.xr.gamepads[hand]?.getButtonPressed(InputComponent.Trigger) ?? false;
+        if (!out || clicked || (held && !out.held)) out = { x: hit.uv.x * cw, y: (1 - hit.uv.y) * ch, clicked, held };
       } else {
         p.dot.visible = false;
       }

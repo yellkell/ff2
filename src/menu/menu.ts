@@ -237,9 +237,11 @@ export interface MenuPanel {
   /**
    * Continuous control (e.g. a slider): called every frame the trigger is
    * held over the panel. Returns true if the hit landed on the control (the
-   * caller then redraws and suppresses the click action).
+   * caller then redraws and suppresses the click action). `grabbed` is true
+   * once the caller has seen a press land on the control and the trigger is
+   * still down — the control may then follow the ray off its own track.
    */
-  drag?: (u: number, v: number) => boolean;
+  drag?: (u: number, v: number, grabbed?: boolean) => boolean;
   /**
    * Self-contained click on trigger-down (mutates + persists its own state).
    * Returns true if it handled the hit, so the caller redraws + clicks the

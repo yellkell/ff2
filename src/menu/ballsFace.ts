@@ -7,14 +7,17 @@
  * ball. Below them, a line saying what the last one you touched does —
  * the panel teaches as you poke it.
  *
- * Behind the ADVANCED tab: the curve switch, how hard a curve bends, and
- * whether you can see your own body. All three are settings about YOUR
- * hands rather than about a bout, which is why they live here and not in
- * the wing's SETTINGS.
+ * Behind the ADVANCED tab: the curve switch, how hard a curve bends (a
+ * slider — BEND — scrubbed live by the trigger, like the wing's volume
+ * tracks), and whether you can see your own body. All three are settings
+ * about YOUR hands rather than about a bout, which is why they live here
+ * and not in the wing's SETTINGS.
  *
  * Every click is self-contained — it mutates and persists app state and
  * nothing else — so the ids are local (`ball:*`) and `ballsClick` answers
- * them, the same contract the paint bay uses.
+ * them, the same contract the paint bay uses. The slider is the one
+ * control a click can't settle: `ballsDrag` takes the hit's UV every frame
+ * the trigger is held, from whichever host is showing the face.
  */
 
 import { KIT, Panel, type PanelButton } from '../ui/kit/panel.js';
@@ -36,6 +39,14 @@ const TILE_H = 132;
 const ROW_L = 190;
 const ROW_R = 378;
 const DESC_Y = 546;
+/** BEND, the ADVANCED face's slider: the label's line and the track under
+ *  it, in the slot the −/+ pair used to hold. */
+const BEND = { label: 328, track: 350 };
+const TRACK_H = 60;
+/** The knob can't go below this — a curve that doesn't bend isn't a curve. */
+const BEND_MIN = 0.1;
+
+const clamp01 = (n: number): number => Math.min(1, Math.max(0, n));
 
 const TYPES = [ATTACH.split, ATTACH.grow, ATTACH.shrink];
 const ATTACHMENTS = [
@@ -72,10 +83,9 @@ export function ballsClick(id: string): boolean {
   } else if (what === 'body') {
     app.showBody = !app.showBody;
     saveShowBody();
-  } else if (what === 'bend-' || what === 'bend+') {
-    const step = what === 'bend+' ? 0.05 : -0.05;
-    app.curveStrength = Math.round(Math.max(0.1, Math.min(1, app.curveStrength + step)) * 20) / 20;
-    saveCurveStrength();
+  } else if (what === 'bend') {
+    // The slider: a bare click carries no position, so it settles nothing —
+    // `ballsDrag` (fed the hit's UV) is what moves it.
   } else {
     // ball:<side>-<slot> — arm that fist, or take the attachment off.
     const [side, slot] = what.split('-').map(Number);
@@ -87,6 +97,80 @@ export function ballsClick(id: string): boolean {
   }
   state.version++;
   return true;
+}
+
+/**
+ * THE BEND SLIDER, scrubbed: a hit's UV on the loadout canvas → the curve
+ * strength, in 5% steps between BEND_MIN and 100%. Returns true when the
+ * hit landed on the track (or `grabbed`: the trigger closed on the track
+ * earlier and is still held, so the knob follows the ray wherever it has
+ * wandered — up, down, past either end). False leaves the caller free to
+ * treat the press as an ordinary click.
+ */
+export function ballsDrag(u: number, v: number, grabbed = false): boolean {
+  if (!state.advanced) return false;
+  const x = u * BALLS_W;
+  const y = (1 - v) * BALLS_H;
+  if (!grabbed && (x < M || x > M + INNER || y < BEND.track || y > BEND.track + TRACK_H)) return false;
+  const t = clamp01((x - M - 20) / (INNER - 40));
+  const next = Math.round((BEND_MIN + t * (1 - BEND_MIN)) * 20) / 20;
+  if (next !== app.curveStrength) {
+    app.curveStrength = next;
+    saveCurveStrength();
+    state.version++;
+  }
+  return true;
+}
+
+/** The slider's face: label left, the number right, a well with the filled
+ *  run in the accent and a knob — the wing's volume tracks, in this
+ *  panel's margins. */
+function drawBendTrack(g: CanvasRenderingContext2D, hot: boolean): void {
+  const value = app.curveStrength;
+  g.textBaseline = 'middle';
+  g.textAlign = 'left';
+  g.font = font(600, 26);
+  g.letterSpacing = '2px';
+  g.fillStyle = hot ? KIT.accent : KIT.dim;
+  g.fillText('BEND', M, BEND.label);
+  g.letterSpacing = '0px';
+  g.textAlign = 'right';
+  g.font = font(700, 26);
+  g.fillStyle = KIT.text;
+  g.fillText(`${Math.round(value * 100)}%`, BALLS_W - M, BEND.label);
+  const ty = BEND.track + TRACK_H / 2 - 12;
+  const x0 = M + 20;
+  const tw = INNER - 40;
+  g.fillStyle = KIT.well;
+  g.beginPath();
+  g.roundRect(x0, ty, tw, 24, 12);
+  g.fill();
+  g.lineWidth = 1.5;
+  g.strokeStyle = hot ? KIT.lineHover : KIT.line;
+  g.stroke();
+  // The knob's run is BEND_MIN..1: the left end IS the floor, not an empty
+  // stretch the knob can never reach.
+  const fw = clamp01((value - BEND_MIN) / (1 - BEND_MIN)) * tw;
+  if (fw > 4) {
+    g.fillStyle = KIT.accent;
+    g.beginPath();
+    g.roundRect(x0, ty, fw, 24, 12);
+    g.fill();
+  }
+  g.beginPath();
+  g.arc(x0 + fw, ty + 12, 18, 0, Math.PI * 2);
+  g.fillStyle = hot ? '#ffffff' : KIT.text;
+  g.fill();
+  g.lineWidth = 3;
+  g.strokeStyle = KIT.accent;
+  g.stroke();
+  // The one word the number needs.
+  g.textAlign = 'left';
+  g.font = font(600, 18);
+  g.letterSpacing = '2px';
+  g.fillStyle = KIT.faint;
+  g.fillText('HOW HARD IT BENDS', x0, BEND.track + TRACK_H + 18);
+  g.letterSpacing = '0px';
 }
 
 export function ballsFace(): BallsFace {
@@ -108,16 +192,9 @@ export function ballsFace(): BallsFace {
         selected: curve,
         toggle: true,
       },
-      { id: 'ball:bend-', label: '−', x: M, y: 316, w: 110, h: 96, px: 44, disabled: app.curveStrength <= 0.1 },
-      {
-        id: 'ball:bend',
-        label: `${Math.round(app.curveStrength * 100)}%`,
-        sub: 'how hard it bends',
-        x: M + 126, y: 316, w: INNER - 252, h: 96,
-        display: true,
-        tone: KIT.accent,
-      },
-      { id: 'ball:bend+', label: '+', x: BALLS_W - M - 110, y: 316, w: 110, h: 96, px: 44, disabled: app.curveStrength >= 1 },
+      // The slider's track: hit-testable (so the ray lights it and a press
+      // over it is a scrub, not a click), painted by the body.
+      { id: 'ball:bend', label: '', ghost: true, x: M, y: BEND.track, w: INNER, h: TRACK_H },
       {
         id: 'ball:body',
         label: 'SHOW MY BODY',
@@ -132,7 +209,7 @@ export function ballsFace(): BallsFace {
       buttons,
       // No prose under the breakers: the switches say what they are, and
       // the one number that needs a word keeps its "how hard it bends".
-      body: () => {},
+      body: (g, hover) => drawBendTrack(g, hover === 'ball:bend'),
     };
   }
 
