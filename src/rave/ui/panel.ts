@@ -363,9 +363,16 @@ export class Panel {
     g.textAlign = 'center';
     g.textBaseline = 'middle';
 
-    const labelPx = b.px ?? (b.primary ? 40 : b.small ? 27 : 36);
-    const labelY = b.y + b.h / 2 - (b.sub ? 16 : 0);
-    const subY = b.y + b.h / 2 + 26;
+    // A sub-line needs room. The tall buttons stack label and sub about the
+    // centre at fixed offsets; a LOW button (the desk's split CTA row) lays
+    // both out by its height, with the fonts shrunk to fit, so "just you"
+    // never hangs below the plate it belongs to.
+    const compact = !!b.sub && b.h < 72;
+    const labelPx0 = b.px ?? (b.primary ? 40 : b.small ? 27 : 36);
+    const labelPx = compact ? Math.min(labelPx0, Math.round(b.h * 0.42)) : labelPx0;
+    const subPx = compact ? Math.max(14, Math.round(b.h * 0.27)) : b.primary ? 22 : 21;
+    const labelY = compact ? b.y + b.h * 0.36 : b.y + b.h / 2 - (b.sub ? 16 : 0);
+    const subY = compact ? b.y + b.h * 0.74 : b.y + b.h / 2 + 26;
 
     if (b.display) {
       // A value chip: quiet plate, live text, no chrome.
@@ -414,7 +421,7 @@ export class Panel {
       g.fillText(b.label, b.x + b.w / 2, labelY, b.w - 32);
       g.letterSpacing = '0px';
       if (b.sub) {
-        g.font = font(600, 22);
+        g.font = font(600, subPx);
         g.fillStyle = 'rgba(24,4,17,0.8)';
         g.fillText(b.sub, b.x + b.w / 2, subY, b.w - 32);
       }
@@ -456,7 +463,7 @@ export class Panel {
     g.fillText(b.label, b.x + b.w / 2, labelY, b.w - 28);
     g.letterSpacing = '0px';
     if (b.sub) {
-      g.font = font(500, 21);
+      g.font = font(500, subPx);
       g.fillStyle = b.disabled ? 'rgba(233,236,244,0.2)' : UI.dim;
       g.fillText(b.sub, b.x + b.w / 2, subY, b.w - 28);
     }
