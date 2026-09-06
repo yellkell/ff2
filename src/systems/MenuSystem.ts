@@ -55,7 +55,7 @@ import { clearReportSent, markReportSent, musicVolFromU, setCreditsOpen, sfxVolF
 import { lockerFace, LOCKER_H, LOCKER_W } from '../menu/lockerFace.js';
 import { campaignFace, campaignModal, CAMP_H, CAMP_W } from '../menu/campaignFace.js';
 import { lobbyFace, LOBBY_H, LOBBY_W } from '../menu/lobbyFace.js';
-import { ballsClick, ballsFace, ballsFaceKey, ballsHit, BALLS_H, BALLS_W } from '../menu/ballsFace.js';
+import { ballsClick, ballsDrag, ballsFace, ballsFaceKey, ballsHit, BALLS_H, BALLS_W } from '../menu/ballsFace.js';
 import { profilePop } from '../menu/profilePop.js';
 import { audienceStands } from '../arena/desert/audience.js';
 import { audienceView } from './AudienceSystem.js';
@@ -240,6 +240,9 @@ export class MenuSystem extends createSystem({}) {
    *  a fresh trigger press over the track, so a trigger held from opening the
    *  panel (or clicking elsewhere) can't hijack a slider as the ray crosses it. */
   private sliderGrab: { hand: 'left' | 'right'; panel: PanelId } | null = null;
+  /** The hand scrubbing the loadout's BEND slider on the ACTION panel
+   *  (between rounds), held until its trigger opens. */
+  private loadoutGrab: 'left' | 'right' | null = null;
   /** Cached raycast target list — rebuilt only when panel visibility flips
    *  (modal open/close), not re-filtered/mapped every frame. */
   private rayTargets: Object3D[] = [];
@@ -316,7 +319,7 @@ export class MenuSystem extends createSystem({}) {
     this.addModal('custom', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(true), [0.5, 1.53, -1.1], -0.3);
     this.addModal('shop', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(false), [0.5, 1.5, -1.1], -0.3);
     this.addModal('campaign', 1.5, 1.5 * (CAMP_H / CAMP_W), CAMP_W, CAMP_H, campaignFace, [0, 1.5, -1.2], 0);
-    this.addModal('lobby', 1.05, 1.05, LOBBY_W, LOBBY_H, lobbyFace, [0, 1.5, -1.18], 0);
+    this.addModal('lobby', 1.05, 1.05 * (LOBBY_H / LOBBY_W), LOBBY_W, LOBBY_H, lobbyFace, [0, 1.5, -1.18], 0);
     // THE READER: the Gazette held up large, straight ahead, where the slab
     // was. The page renders at 2× so the type is sharp at reading distance;
     // the thumbstick scrolls it as it does on the wing, and tapping the page
@@ -324,7 +327,8 @@ export class MenuSystem extends createSystem({}) {
     this.addModal('reader', 1.2, 1.2 * (READER_H / READER_W), READER_W, READER_H, readerFace, [0, 1.5, -1.12], 0);
     // The loadout hangs out on the RIGHT, clear of the mirror on the left,
     // and answers its own `ball:*` ids before anything global.
-    this.addModal('balls', 0.8, 0.8, BALLS_W, BALLS_H, ballsFace, [1.32, 1.18, -0.66], -0.6, (id) => ballsClick(id));
+    // …and settles its own scrub: the BEND slider on its ADVANCED face.
+    this.addModal('balls', 0.8, 0.8, BALLS_W, BALLS_H, ballsFace, [1.32, 1.18, -0.66], -0.6, (id) => ballsClick(id), ballsDrag);
     // THE MODALS, readable headlessly: what each one is offering, and its
     // canvas, so a probe can walk every face without a headset.
     (window.__ff2 as unknown as Record<string, unknown>).modals = {
@@ -655,7 +659,7 @@ export class MenuSystem extends createSystem({}) {
       // Gate the drag branch on an ACTUAL track hit — a press off the track
       // (e.g. on the accent panel's DEFAULT button) then falls through to the
       // click/action branch below instead of being swallowed.
-      if (hit.uv && panel.drag && (down || owns) && panel.drag(hit.uv.x, hit.uv.y)) {
+      if (hit.uv && panel.drag && (down || owns) && panel.drag(hit.uv.x, hit.uv.y, owns)) {
         if (down) this.sliderGrab = { hand, panel: panel.id };
         dragged = true;
       } else if (hit.uv && action === 'sfx-vol' && (down || owns)) {
@@ -792,11 +796,13 @@ export class MenuSystem extends createSystem({}) {
     pos: [number, number, number],
     rotY: number,
     local?: (id: string) => boolean,
+    drag?: KitMenuPanel['drag'],
   ): void {
     const panel = new KitMenuPanel(id, wM, hM, pxW, pxH, face, (pressed) => {
       if (local?.(pressed)) return;
       this.run(pressed as MenuAction);
     });
+    if (drag) panel.drag = drag;
     panel.mesh.position.set(pos[0], pos[1], pos[2]);
     panel.mesh.rotation.y = rotY;
     panel.mesh.visible = false;
@@ -1905,10 +1911,14 @@ export class MenuSystem extends createSystem({}) {
     let hover: string | null = null;
     for (const hand of ['left', 'right'] as const) {
       const hit = this.updatePointer(hand, [this.panel.mesh]);
+      const gp = this.input.xr.gamepads[hand];
+      const held = gp?.getButtonPressed(InputComponent.Trigger) ?? false;
+      if (!held && this.loadoutGrab === hand) this.loadoutGrab = null;
       if (!hit?.uv) continue;
       const id = this.panel.hitTest(hit.uv.x, hit.uv.y);
-      const down = this.input.xr.gamepads[hand]?.getButtonDown(InputComponent.Trigger) ?? false;
-      if (id) {
+      const down = gp?.getButtonDown(InputComponent.Trigger) ?? false;
+      const owns = this.loadoutGrab === hand;
+      if (id && !owns) {
         hover = id;
         if (down) {
           this.runPanelAction(id);
@@ -1922,6 +1932,15 @@ export class MenuSystem extends createSystem({}) {
       // painter — no action button ever carries that id).
       if (content.loadout) {
         const bh = this.panel.ballsHit(hit.uv.x, hit.uv.y);
+        // The BEND slider scrubs here too: a press that lands on its track
+        // grabs it, and the knob follows that hand while the trigger is held
+        // (the same grab rule the lobby's sliders keep).
+        if (bh && (down || owns) && ballsDrag(bh.u, bh.v, owns)) {
+          if (down) this.loadoutGrab = hand;
+          hover = 'ball:bend';
+          this.panelKey = ''; // repaint with the knob where the ray put it
+          continue;
+        }
         const bid = bh ? ballsHit(bh.u, bh.v) : null;
         if (bid) hover = bid;
         if (down && bid && ballsClick(bid)) {

@@ -58,6 +58,9 @@ export class KitMenuPanel implements MenuPanel {
   readonly kit: Panel;
   readonly mesh;
   click?: (u: number, v: number) => boolean;
+  /** A face with a slider sets this (MenuSystem.addModal): the scrub hook
+   *  MenuSystem feeds the hit's UV every frame the trigger is held. */
+  drag?: (u: number, v: number, grabbed?: boolean) => boolean;
 
   constructor(
     readonly id: PanelId,
