@@ -108,6 +108,8 @@ export interface BallVisual {
     seconds: number;
     /** What the ball calls: 'rave' reads the record; a fight reads its name. */
     mode: BellMode;
+    /** A titan raid called HARDCORE — the plate says so under the fight. */
+    hardcore?: boolean;
     trackId: string;
     callerName: string;
     joinNames: string[];
@@ -254,7 +256,7 @@ export function buildBallVisual(): BallVisual {
     pips.push(pip);
   }
 
-  const paint: BallVisual['paint'] = ({ seconds, mode, trackId, callerName, joinNames, mine, joined, inReach }) => {
+  const paint: BallVisual['paint'] = ({ seconds, mode, hardcore, trackId, callerName, joinNames, mine, joined, inReach }) => {
     const g = canvas.getContext('2d')!;
     g.clearRect(0, 0, 512, 300);
     g.fillStyle = 'rgba(7,5,14,0.82)';
@@ -286,7 +288,7 @@ export function buildBallVisual(): BallVisual {
       // THE BELL: a fight on the ball wears hazard amber, the arena's own
       // colour for something about to happen.
       g.fillStyle = '#ffb03a';
-      g.fillText(`⚔ ${fightLabel(mode)}`, 256, 140);
+      g.fillText(`⚔ ${fightLabel(mode)}${hardcore ? ' · HARDCORE' : ''}`, 256, 140);
     }
     g.font = font(600, 24);
     g.fillStyle = 'rgba(232,236,242,0.75)';

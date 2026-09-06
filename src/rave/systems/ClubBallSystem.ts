@@ -186,13 +186,14 @@ export class ClubBallSystem extends createSystem({}) {
     const mine = state.callerIdx === net.myIdx;
     const joined = state.joins.has(net.myIdx);
     const joinIdxs = [...state.joins].sort((a, b) => a - b);
-    const key = `${seconds}|${joinIdxs.join(',')}|${mine}|${joined}|${inReach}`;
+    const key = `${seconds}|${joinIdxs.join(',')}|${mine}|${joined}|${inReach}|${state.hardcore ? 1 : 0}`;
     if (key !== this.lastPaintKey) {
       this.lastPaintKey = key;
       const nameOf = (idx: number): string => net.members.find((m) => m.idx === idx)?.name ?? `#${idx}`;
       v.paint({
         seconds,
         mode: state.mode,
+        hardcore: state.hardcore,
         trackId: state.track,
         callerName: state.callerName || nameOf(state.callerIdx),
         joinNames: joinIdxs.map(nameOf),

@@ -264,6 +264,7 @@ function joinRoomByCode(ws, msg, code) {
       code: room.ball.code,
       track: room.ball.track,
       diff: room.ball.diff,
+      hc: room.ball.hardcore === true,
       pos: room.ball.pos,
       ms: Math.max(500, room.ball.deadline - Date.now()),
       joins: [...room.ball.joins],
@@ -441,6 +442,7 @@ function fireFight(code, room, ball, players) {
       mode: ball.mode,
       code: ball.code,
       diff: ball.diff, // a TITAN RAID's tier, the caller's pick, for the whole squad
+      hc: ball.hardcore === true, // …and whether it runs HARDCORE
       role: i < cap ? 'fighter' : 'watcher',
       callerIdx: ball.caller,
       fighters,
@@ -648,6 +650,8 @@ wss.on('connection', (ws) => {
         }
         // The caller's difficulty rides the ball like their song pick does.
         const diff = Number.isFinite(Number(msg.diff)) ? Math.max(0, Math.min(3, Number(msg.diff))) : 1;
+        // …and a titan raid's HARDCORE, the desk's toggle. Only a raid has one.
+        const hardcore = mode === 'raid' && msg.hc === true;
         // Capture the code now — ws.room clears if the caller walks, and
         // the timeout must still find the room (fireBall re-checks state).
         const code = ws.room;
@@ -657,6 +661,7 @@ wss.on('connection', (ws) => {
           code: roomCode,
           track,
           diff,
+          hardcore,
           pos,
           joins: new Set(),
           deadline: Date.now() + BALL_MS,
@@ -670,6 +675,7 @@ wss.on('connection', (ws) => {
           code: roomCode,
           track,
           diff,
+          hc: hardcore,
           pos,
           ms: BALL_MS,
           joins: [],
@@ -679,7 +685,7 @@ wss.on('connection', (ws) => {
         );
         // THE BELL rings on Discord too: the game, the link, the clock.
         if (BELL_POSTS && discordConfigured()) {
-          void postDiscord(bellCard({ name: info.name, mode, code: roomCode, clubCode: code, seconds: Math.round(BALL_MS / 1000), floor: room.members.size }));
+          void postDiscord(bellCard({ name: info.name, mode, hardcore, code: roomCode, clubCode: code, seconds: Math.round(BALL_MS / 1000), floor: room.members.size }));
         }
         break;
       }

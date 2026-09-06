@@ -521,6 +521,12 @@ export function installTownExperienceManager(
       app.difficulty = deal.difficulty;
       mesh.raidDifficulty = deal.difficulty;
       if (deal.mine) saveDifficulty();
+      // HARDCORE rides the deal the same way, for the same reason: the
+      // launch reads it back off the mesh. The caller — the room's host —
+      // also writes it to the room doc, so a joiner's lobby shows the
+      // breaker lit while the squad seats.
+      mesh.raidHardcore = deal.hardcore;
+      if (deal.mine) mesh.setRaidHardcore(deal.hardcore);
     }
     // The arena's lobby state is set BEFORE the arena resumes, so its menu
     // wakes already seated in the room and never tears it down as stale.
@@ -541,7 +547,7 @@ export function installTownExperienceManager(
       if (deal.mode === 'raid') {
         app.mode = 'campaign';
         app.campaignMode = 'raid';
-        app.raidHardcore = false;
+        app.raidHardcore = deal.hardcore;
         app.raidGoopliath = false;
         app.raidSize = 1;
         app.campaignStage = 0;

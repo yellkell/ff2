@@ -157,11 +157,11 @@ export function card({ title, lines = [], url, color = AMBER, footer }) {
 }
 
 /** THE BELL rang in the club: who, what, how to get in, how long is left. */
-export function bellCard({ name, mode, code, clubCode, seconds, floor }) {
+export function bellCard({ name, mode, hardcore, code, clubCode, seconds, floor }) {
   const fight = mode !== 'rave';
   const link = fight ? joinLink(code) : joinLink(clubCode);
   return card({
-    title: fight ? `🔔 ${name} rang the bell — ${modeLabel(mode)}` : `💿 ${name} put a record on`,
+    title: fight ? `🔔 ${name} rang the bell — ${modeLabel(mode)}${hardcore ? ' · HARDCORE' : ''}` : `💿 ${name} put a record on`,
     lines: [
       fight ? `Touch in from the club floor, or join the arena room from here:` : `Join the floor and touch the ball:`,
       link,

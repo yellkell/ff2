@@ -64,6 +64,10 @@ export interface FightDeal {
    *  to the whole squad so the arena builds one boss for everyone. (The
    *  other fights have no tiers; it rides as NORMAL and nobody reads it.) */
   difficulty: Difficulty;
+  /** A TITAN RAID run HARDCORE — no refit between titans. The caller's
+   *  desk toggle, dealt with the tier so the whole squad launches one
+   *  raid. Always false for the other fights. */
+  hardcore: boolean;
   /** The FIRE FIGHT room's code (the caller opened it at the call). */
   code: string;
   /** Am I on a platform or on the rail? */

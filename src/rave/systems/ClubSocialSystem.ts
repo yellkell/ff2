@@ -213,6 +213,10 @@ export class ClubSocialSystem extends createSystem({}) {
    *  standalone rave page has no arena and shows the shelf alone. */
   private tab: 'fight' | 'rave' = raveBridge.openFightRoom ? 'fight' : 'rave';
   private fight: Exclude<BellMode, 'rave'> = '2v2';
+  /** TITAN RAID run HARDCORE — no refit between titans. The desk's own
+   *  toggle (the arena's lobby has the same one for a room hosted there);
+   *  it rides the ball with the tier and the deal stamps it on the raid. */
+  private hardcore = false;
   /** A fight call in flight: the arena is opening the room. */
   private calling = false;
   private callError = '';
@@ -664,6 +668,8 @@ export class ClubSocialSystem extends createSystem({}) {
       this.closeTiers();
     } else if (id === 'raiddiff') {
       this.openTiers(!this.tiersOpen);
+    } else if (id === 'raidhc') {
+      this.hardcore = !this.hardcore;
     } else if (safetyClick(id)) {
       // MUTE, BLOCK, the mic and the voice master switch all belong to the
       // safety console (ui/safety.ts), which the mid-set card shares. Two
@@ -943,10 +949,11 @@ export class ClubSocialSystem extends createSystem({}) {
     // A TITAN RAID carries its tier — the desk's pick, as an index into the
     // arena's order — so the deal builds the same boss for the whole squad.
     const diff = mode === 'raid' ? Math.max(0, DIFFICULTY_ORDER.indexOf(app.difficulty)) : undefined;
+    const hardcore = mode === 'raid' && this.hardcore;
     if (net.solo) {
       // A ROOM OF ONE: no arena room to open — the ball deals you into a
       // fight against the arena's own bots (net/session.ts soloCall).
-      callBall(pos, { mode, code: '', diff });
+      callBall(pos, { mode, code: '', diff, hardcore });
       return;
     }
     const me = net.members.find((m) => m.idx === net.myIdx);
@@ -955,7 +962,7 @@ export class ClubSocialSystem extends createSystem({}) {
     this.paintKey = '';
     open(mode, me?.name ?? '')
       .then((code) => {
-        callBall(pos, { mode, code, diff });
+        callBall(pos, { mode, code, diff, hardcore });
       })
       .catch((err: unknown) => {
         this.callError = err instanceof Error && err.message ? err.message : 'the arena could not open a room';
@@ -995,7 +1002,7 @@ export class ClubSocialSystem extends createSystem({}) {
     // fade costs a few repaints, not one a frame.
     const takeAge = performance.now() - bellView.paidAt;
     const takeShown = bellView.lastPay > 0 && takeAge < 20_000;
-    const deskKey = `${key}#${this.tab}#${this.fight}#${this.calling ? 1 : 0}#${this.callError}#${coins.balance}#${takeShown ? bellView.lastPay : 0}#${app.difficulty}#${this.tiersOpen ? 1 : 0}`;
+    const deskKey = `${key}#${this.tab}#${this.fight}#${this.calling ? 1 : 0}#${this.callError}#${coins.balance}#${takeShown ? bellView.lastPay : 0}#${app.difficulty}#${this.tiersOpen ? 1 : 0}#${this.hardcore ? 1 : 0}`;
     if (deskKey === this.paintKey) return;
     this.paintKey = deskKey;
 
@@ -1060,7 +1067,20 @@ export class ClubSocialSystem extends createSystem({}) {
           selected: this.tiersOpen,
           x: 24,
           y: 792,
-          w: 652,
+          w: 408,
+          h: 40,
+          small: true,
+        });
+        // HARDCORE beside it: the raid lobby's breaker, on the floor. Lit in
+        // the danger tone when armed, the way the lobby lights its own.
+        buttons.push({
+          id: 'raidhc',
+          label: 'HARDCORE',
+          selected: this.hardcore,
+          tone: this.hardcore ? UI.danger : undefined,
+          x: 440,
+          y: 792,
+          w: 236,
           h: 40,
           small: true,
         });
