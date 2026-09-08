@@ -684,14 +684,22 @@ export const GRAMMAR = {
   waveStepBeats: [2, 2, 1, 1, 1],
   waveTurnExtraBeats: 1,
   waveThirdChance: 0.3,
-  /** THE ROUTINE: corners to hold per act, beats corner-to-corner, how many
-   *  beats the blocks visibly fall, commitment margin past the quarter
-   *  lines, and the per-fight swept-routine coin. */
-  routineSteps: [2, 2, 3, 4, 4],
-  routineStepBeats: 3,
-  routineDropBeats: 2,
-  routineMargin: 0.08,
-  routineSweepChance: 0.12,
+  /** THE RECITAL: steps per act (moves and holds together), the odds a
+   *  step is a HOLD (stay where you are — the blue cue), beats per taught
+   *  step in THE LESSON and the pause after it, beats step-to-step in the
+   *  recital, how many beats before a landing its note sounds, how many
+   *  beats the blocks visibly fall (short: the note is the warning, the
+   *  drop only confirms it), the commitment margin past the quarter lines,
+   *  and the per-fight swept coin. */
+  recitalSteps: [3, 3, 4, 5, 5],
+  recitalHoldChance: [0.25, 0.3, 0.35, 0.4, 0.4],
+  recitalLessonBeats: 1.6,
+  recitalPauseBeats: 1.5,
+  recitalStepBeats: 2.5,
+  recitalCueBeats: 1.5,
+  recitalDropBeats: 0.7,
+  recitalMargin: 0.08,
+  recitalSweepChance: 0.12,
   /** THE DONUT: safe-disc radii (blazing holds the tight disc all night),
    *  the one-two's opening-laser odds and follow gap. */
   donutInnerR: 0.42,

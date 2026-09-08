@@ -31,6 +31,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   SphereGeometry,
+  type Object3D,
 } from 'three';
 import { GOOPLIATH, PALETTE, RAID, type Difficulty } from '../config.js';
 
@@ -134,7 +135,7 @@ export interface BossDef {
    */
   grammar?: Partial<Record<import('./grammar.js').GrammarKind, number>>;
   /** Seconds per grammar beat — this titan's pulse; every cascade (twin
-   *  bounces, wave marches, routine steps, the donut's one-two) steps on
+   *  bounces, wave marches, recital steps, the donut's one-two) steps on
    *  multiples of it. Defaults to 0.5. */
   beat?: number;
   /** Telegraph charge (seconds) for grammar moves — the read length. The
@@ -268,10 +269,10 @@ export const BOSSES: BossDef[] = [
     enrageAt: 0.5,
     weakPattern: 'crown',
     platform: 'blazing',
-    // The king learned it all — and being the king, he TEACHES: THE ROUTINE
+    // The king learned it all — and being the king, he TEACHES: THE RECITAL
     // is his memory test, the wave his procession, and once in a blazing
     // night the COMBINATION (duckdonut) closes the show on the beat.
-    grammar: { routine: 3, wave: 3, donut: 2, duckdonut: 0.4 },
+    grammar: { recital: 3, wave: 3, donut: 2, duckdonut: 0.4 },
     beat: 0.46,
     grammarCharge: 1.9,
   },
@@ -385,11 +386,27 @@ export function goopliathBoss(raid: boolean, raiders = 4): BossDef {
 
 // --- rig ---------------------------------------------------------------------
 
+/** One finger, talon or hook that CURLS: a hinge and its open/closed
+ *  pitch about that hinge's x. */
+export interface TitanDigit {
+  node: Object3D;
+  open: number;
+  closed: number;
+}
+
 export interface TitanArm {
   /** Shoulder pivot — rotate to wind up and strike. */
   pivot: Group;
-  /** The gauntlet / hook / talon at the end of the arm. */
+  /** THE ELBOW: a real joint under the upper arm; negative x folds the
+   *  forearm forward/up (the same sign the shoulder raises with). */
+  elbow: Group;
+  /** THE WRIST at the forearm's end: negative x bends the hand back (a
+   *  palm held out), positive forward (a chop, a baton's flick). */
+  wrist: Group;
+  /** The gauntlet / hook / talon hanging off the wrist. */
   fist: Group;
+  /** Whatever on the hand can close — talons, fingers — for the curl. */
+  digits: TitanDigit[];
   /** Rest pose captured at build time so animation can ease home. */
   restX: number;
   restZ: number;
@@ -1034,9 +1051,11 @@ export function buildTitan(def: BossDef): TitanRig {
     root.add(skirtGlow);
   }
 
-  // ── ARMS: shoulder pivots carrying girder arms + bespoke hands ───────────
-  const buildHand = (side: -1 | 1): Group => {
+  // ── ARMS: shoulder pivots carrying girder arms, real elbows and wrists,
+  //    and bespoke hands whose digits curl ───────────────────────────────
+  const buildHand = (side: -1 | 1): { hand: Group; digits: TitanDigit[] } => {
     const hand = new Group();
+    const digits: TitanDigit[] = [];
     if (def.style === 'hook' && side === 1) {
       // The crane HOOK: a chain link, a shank, and the big open J-hook.
       const link = new Mesh(new CylinderGeometry(0.05 * s, 0.05 * s, 0.05 * s, 8), dark());
@@ -1062,7 +1081,8 @@ export function buildTitan(def: BossDef): TitanRig {
       const point = new Mesh(new CylinderGeometry(0.004 * s, 0.045 * s, 0.14 * s, 6), dark());
       point.position.set(-0.17 * s, -0.16 * s, 0);
       hand.add(point);
-      return hand;
+      // The hook swings on its link: the wrist rolls it, nothing curls.
+      return { hand, digits };
     }
     if (def.style === 'piston') {
       // The HAMMER-BLOCK: one massive rectangular drop-forge fist.
@@ -1080,19 +1100,25 @@ export function buildTitan(def: BossDef): TitanRig {
         bolt.position.set(bx * s, -0.2 * s, bz * s);
         hand.add(bolt);
       }
-      return hand;
+      // A drop-forge has no fingers — the whole block is the fist.
+      return { hand, digits };
     }
     if (def.style === 'vulture') {
-      // Talons: three claw fingers curling from a slim wrist block.
-      const wrist = new Mesh(new BoxGeometry(0.12 * s, 0.1 * s, 0.12 * s), chassis(accent, 0.05));
-      hand.add(wrist);
+      // Talons: three claw fingers curling from a slim wrist block — each on
+      // its own hinge, so the hand really GRIPS and really SPREADS.
+      const palm = new Mesh(new BoxGeometry(0.12 * s, 0.1 * s, 0.12 * s), chassis(accent, 0.05));
+      hand.add(palm);
       for (let f = -1; f <= 1; f++) {
+        const hinge = new Group();
+        hinge.position.set(f * 0.05 * s, -0.04 * s, -0.03 * s);
         const claw = new Mesh(new CylinderGeometry(0.006 * s, 0.03 * s, 0.2 * s, 5), dark());
-        claw.position.set(f * 0.05 * s, -0.14 * s, -0.03 * s);
-        claw.rotation.x = -0.5;
-        hand.add(claw);
+        claw.position.y = -0.1 * s;
+        hinge.add(claw);
+        hinge.rotation.x = -0.5;
+        hand.add(hinge);
+        digits.push({ node: hinge, open: -0.25, closed: -1.55 });
       }
-      return hand;
+      return { hand, digits };
     }
     // Fortress + king: the classic crane gauntlet (the king's wears gold cuffs).
     const block = new Mesh(new BoxGeometry(0.22 * s, 0.17 * s, 0.24 * s), chassis(accent, 0.06));
@@ -1110,39 +1136,97 @@ export function buildTitan(def: BossDef): TitanRig {
     cuff.rotation.x = Math.PI / 2;
     cuff.position.z = 0.14 * s;
     hand.add(cuff);
-    return hand;
+    // FOUR FINGERS and a thumb on the gauntlet, each two segments on a
+    // knuckle hinge along the block's front edge: open they lie straight
+    // out, curled they fold under the palm into the fist every punch used
+    // to fake. The thumb rides the inner side and folds across.
+    for (let i = 0; i < 4; i++) {
+      const knuckle = new Group();
+      knuckle.position.set((-0.075 + i * 0.05) * s, -0.04 * s, -0.12 * s);
+      const seg1 = new Mesh(new BoxGeometry(0.038 * s, 0.04 * s, 0.09 * s), chassis(accent, 0.04));
+      seg1.position.z = -0.045 * s;
+      knuckle.add(seg1);
+      const joint = new Group();
+      joint.position.z = -0.09 * s;
+      const seg2 = new Mesh(new BoxGeometry(0.034 * s, 0.036 * s, 0.075 * s), dark());
+      seg2.position.z = -0.037 * s;
+      joint.add(seg2);
+      joint.rotation.x = -0.35;
+      knuckle.add(joint);
+      hand.add(knuckle);
+      // The second segment curls about twice as far as the knuckle — a
+      // finger folds from the tip in.
+      digits.push({ node: knuckle, open: 0.05, closed: -1.35 });
+      digits.push({ node: joint, open: -0.1, closed: -1.7 });
+    }
+    const thumbHinge = new Group();
+    thumbHinge.position.set(-side * 0.12 * s, -0.02 * s, -0.04 * s);
+    const thumb = new Mesh(new BoxGeometry(0.036 * s, 0.038 * s, 0.085 * s), chassis(accent, 0.04));
+    thumb.position.z = -0.04 * s;
+    thumbHinge.add(thumb);
+    thumbHinge.rotation.y = side * 0.5;
+    hand.add(thumbHinge);
+    digits.push({ node: thumbHinge, open: -0.1, closed: -1.2 });
+    return { hand, digits };
   };
 
   const arms = [0, 1].map((i) => {
     const side = (i === 0 ? -1 : 1) as -1 | 1;
+    // THE SHOULDER: the pivot carrying the upper arm.
     const pivot = new Group();
     pivot.position.set(side * (yokeW / 2 + 0.15 * s), shoulderY + 0.04 * s, 0);
-    const upper = new Mesh(new BoxGeometry(0.11 * s, 0.62 * s, 0.13 * s), chassis(accent, 0.03));
-    upper.position.y = -0.31 * s;
+    const upper = new Mesh(new BoxGeometry(0.11 * s, 0.5 * s, 0.13 * s), chassis(accent, 0.03));
+    upper.position.y = -0.25 * s;
     pivot.add(upper);
     if (def.style === 'piston') {
       // The drive piston riding each girder arm: sleeve up top, bright rod
       // below — the press's whole anatomy on display. Parented to the pivot
       // so it swings with every hammer stroke.
-      const sleeve = new Mesh(new CylinderGeometry(0.045 * s, 0.045 * s, 0.26 * s, 8), dark());
-      sleeve.position.set(side * 0.02 * s, -0.16 * s, -0.1 * s);
+      const sleeve = new Mesh(new CylinderGeometry(0.045 * s, 0.045 * s, 0.22 * s, 8), dark());
+      sleeve.position.set(side * 0.02 * s, -0.13 * s, -0.1 * s);
       pivot.add(sleeve);
-      const rod = new Mesh(new CylinderGeometry(0.02 * s, 0.02 * s, 0.3 * s, 6), steelMat(0x8d949f));
-      rod.position.set(side * 0.02 * s, -0.42 * s, -0.1 * s);
+      const rod = new Mesh(new CylinderGeometry(0.02 * s, 0.02 * s, 0.24 * s, 6), steelMat(0x8d949f));
+      rod.position.set(side * 0.02 * s, -0.36 * s, -0.1 * s);
       pivot.add(rod);
     }
-    const elbow = new Mesh(new CylinderGeometry(0.075 * s, 0.075 * s, 0.14 * s, 8), dark());
-    elbow.rotation.z = Math.PI / 2;
-    elbow.position.y = -0.62 * s;
+    // THE ELBOW: a real joint at the upper arm's end. Its cap is the old
+    // barrel; an accent lamp peeks out either side of it, so the fold reads
+    // from across the pit.
+    const elbow = new Group();
+    elbow.position.y = -0.5 * s;
     pivot.add(elbow);
-    const fist = buildHand(side);
-    fist.position.y = -0.82 * s;
-    pivot.add(fist);
-    // Rest pose: hanging slightly out and forward, guard-ish.
+    const elbowCap = new Mesh(new CylinderGeometry(0.075 * s, 0.075 * s, 0.15 * s, 8), dark());
+    elbowCap.rotation.z = Math.PI / 2;
+    elbow.add(elbowCap);
+    const elbowLamp = new Mesh(new CylinderGeometry(0.04 * s, 0.04 * s, 0.17 * s, 8), glowMat(accent, 0.8));
+    elbowLamp.rotation.z = Math.PI / 2;
+    elbow.add(elbowLamp);
+    // THE FOREARM, with the ram that drives it: a rod on the front face
+    // reading as the hydraulic that folds the joint.
+    const fore = new Mesh(new BoxGeometry(0.095 * s, 0.42 * s, 0.11 * s), chassis(accent, 0.03));
+    fore.position.y = -0.21 * s;
+    elbow.add(fore);
+    const ram = new Mesh(new CylinderGeometry(0.016 * s, 0.016 * s, 0.3 * s, 6), steelMat(0x8d949f));
+    ram.position.set(0, -0.2 * s, -0.07 * s);
+    elbow.add(ram);
+    // THE WRIST at the forearm's end, its own barrel, the hand hung off it.
+    const wrist = new Group();
+    wrist.position.y = -0.42 * s;
+    elbow.add(wrist);
+    const wristCap = new Mesh(new CylinderGeometry(0.05 * s, 0.05 * s, 0.12 * s, 8), dark());
+    wristCap.rotation.z = Math.PI / 2;
+    wrist.add(wristCap);
+    const { hand: fist, digits } = buildHand(side);
+    fist.position.y = -0.1 * s;
+    wrist.add(fist);
+    // Rest pose: hanging slightly out and forward, guard-ish, the elbow a
+    // little bent (gestures.ts ARM_REST), the hand loose.
     pivot.rotation.x = 0.18;
     pivot.rotation.z = side * 0.14;
+    elbow.rotation.x = -0.35;
+    for (const d of digits) d.node.rotation.x = d.open + (d.closed - d.open) * 0.3;
     root.add(pivot);
-    return { pivot, fist, restX: 0.18, restZ: side * 0.14 } satisfies TitanArm;
+    return { pivot, elbow, wrist, fist, digits, restX: 0.18, restZ: side * 0.14 } satisfies TitanArm;
   }) as [TitanArm, TitanArm];
 
   const height = headY + 0.35 * s;

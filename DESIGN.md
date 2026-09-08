@@ -265,7 +265,7 @@ RAVE RAID vocabulary, ported from `dance/src/config.ts` (`MoveKind`,
 | **gate** | everything burns but one band | stand in the gap |
 | **cross / THE TRAP** | rails ahead/behind, both at once | step off the strip / squeeze the band |
 | **donut** | center lane, then all-but-center | step out, run back in |
-| **THE ROUTINE** | the boss *teaches* corners, then hides them | remember and commit |
+| **THE RECITAL** | the boss *teaches* a pattern of quarters, a note each, then calls it by ear alone | remember, listen, commit |
 | **wave / THE LONG WAVE** | marching strips with a dark exit that turns | travel with the march |
 | **seesaw / surge** | half-court cascades (already in FF1 as halves — upgraded to RR's chained cascades) | cross on the beat |
 | **duckdonut** | sweep + donut on one beat | middle AND duck |
@@ -284,7 +284,7 @@ scrapyard **gate** (+ slotted lanes), PISTONKAISER the **wave** (its
 drumline, marched deck-wide) + the surge, VULTURE the **crossfire** (rails,
 THE TRAP, the lattice) and **THE X**, JUGGERNAUT closing walls (**row
 gates + the donut's rim**), and GOLIATH — the king teaches — **THE
-ROUTINE**, the wave as procession, the donut, and once in a blazing night
+RECITAL**, the wave as procession, the donut, and once in a blazing night
 the **duckdonut**. Vocabulary is act-gated (`GRAMMAR_ACT_MIN`): an EASY
 bout stays the fight it always was; the hard tiers meet the whole grammar.
 `volley` remains the one blockable attack (the parry law is FF1's soul and
@@ -314,6 +314,24 @@ down wide) that decays into the next step's windup so a cascade breathes
 like RAVE RAID's bosses did, and a temperament per chassis (the press
 snaps, the king reaches). `check:grammar` now asserts every forced move
 raises the arms and that no two shapes' silhouettes come within 0.4 rad.
+**SHIPPED (third pass — THE RECITAL, and ARTICULATED ARMS)**: THE ROUTINE
+is withdrawn; GOLIATH teaches **THE RECITAL** instead (`campaign/grammar.ts`
+`recital`). THE LESSON lights each quarter of the pattern in turn with a
+NOTE — pitch says front or back, stereo pan says left or right — green for
+a move, blue with a ring for a HOLD ("stay") — then THE RECITAL calls the
+same notes with the marks dark (`sfx.recitalNote`, a beat and a half before
+each landing; the blocks fall short and low, so they confirm the note
+rather than answer it). A move never repeats the corner before it, a hold
+always does, never two running, lengths act-gated 3–5. The titans' arms
+are CHAINS now (`campaign/bosses.ts`: shoulder → elbow → wrist → hand, the
+talons and the gauntlets' fingers on hinges that curl), every shape drives
+every joint, and the classics joined the gesture language with shapes of
+their own: the slam's HAMMER (drawn, hoisted, trembling at the top), the
+sweep's SCYTHE, the beam's CANNON (one arm locked at you, the other hand
+bracing its elbow), the volley's LAUNCHER, the nova's COIL, the seesaw's
+TILT (a balance beam tipping toward the flood), the surge's SHOVE. THE
+RECITAL is CONDUCTED — forearms up, a baton flick on every cue, a palm for
+a hold — and never pointed at.
 
 Raid escalation carries over unchanged for the classic kinds (solo-target
 → two marks → whole squad, DECREE-style shared bearings, the resurrection

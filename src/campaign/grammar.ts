@@ -13,7 +13,8 @@
  *  - the SHAPES: gate (stand in the gap, both axes), cross (rails from the
  *    side emitters: singles, THE TRAP's jaws, the vertical twin + bounce),
  *    donut (the rim burns, the middle lives — usually opened by a middle
- *    laser: out, then back), THE ROUTINE (taught corners, then blocks),
+ *    laser: out, then back), THE RECITAL (a pattern of quarters taught
+ *    with a note each, then called by ear alone),
  *    the wave (a march with a dark exit that ALWAYS turns), duckdonut (the
  *    combination: middle AND duck), and the beam's whole upgrade path as
  *    'lanes' (slots, the SPLIT corridor, the TWIN + bounce rally, THE X);
@@ -51,9 +52,9 @@ export function mulberry32(seed: number): () => number {
 
 /** The Encore moves this module builds. (The classic kinds — slam, sweep,
  *  beam, volley, nova, seesaw, surge — keep their existing machinery.) */
-export type GrammarKind = 'lanes' | 'cross' | 'gate' | 'donut' | 'routine' | 'wave' | 'duckdonut';
+export type GrammarKind = 'lanes' | 'cross' | 'gate' | 'donut' | 'recital' | 'wave' | 'duckdonut';
 
-export const GRAMMAR_KINDS: readonly GrammarKind[] = ['lanes', 'cross', 'gate', 'donut', 'routine', 'wave', 'duckdonut'];
+export const GRAMMAR_KINDS: readonly GrammarKind[] = ['lanes', 'cross', 'gate', 'donut', 'recital', 'wave', 'duckdonut'];
 
 /** The escalation-act floor per kind (RAVE RAID's weight curves, folded to
  *  a single gate): below its act a kind never deals, so an EASY bout keeps
@@ -65,7 +66,7 @@ export const GRAMMAR_ACT_MIN: Record<GrammarKind, number> = {
   gate: 0,
   donut: 1,
   wave: 1,
-  routine: 2,
+  recital: 2,
   duckdonut: 4,
 };
 
@@ -84,10 +85,11 @@ export type GrammarZone =
   /** The rim burns, the middle lives — everything outside `innerR` is
    *  doomed, so get to the centre. */
   | { kind: 'ring'; innerR: number }
-  /** One step of THE ROUTINE: the deck's four quarters, `corner` the only
-   *  one that lives (bit 0 = local +x, bit 1 = local +z). Every step
-   *  carries the WHOLE routine so the marks can teach it up front. */
-  | { kind: 'quad'; corner: number; step: number; routine: readonly number[] }
+  /** One step of THE RECITAL: the deck's four quarters, `corner` the only
+   *  one that lives (bit 0 = local +x, bit 1 = local +z). A HOLD step
+   *  keeps the previous step's corner — the blue cue, "stay". Every step
+   *  carries the WHOLE pattern so the lesson can teach it up front. */
+  | { kind: 'quad'; corner: number; step: number; hold: boolean; pattern: readonly number[]; holds: readonly boolean[] }
   /** The blade overhead — duck (duckdonut borrows the classic sweep). */
   | { kind: 'sweep' };
 
@@ -115,7 +117,7 @@ export const VERB: Record<string, string> = {
   nova: 'compass',
   sweep: 'duck',
   volley: 'guard',
-  routine: 'corners',
+  recital: 'corners',
   wave: 'travel', // the whole-deck crossing — its own verb, never damped
 };
 
@@ -174,7 +176,7 @@ export function evictsPark(landings: readonly GrammarLanding[], park: Park): boo
       case 'gate':
         return Math.abs((zone.axis ? park.z : park.x) - zone.at) > zone.half - 0.05;
       case 'sweep': // the duck is a demand wherever you stand
-      case 'quad': // the routine makes you commit, corner to corner
+      case 'quad': // the recital makes you commit, corner to corner
         return true;
     }
   });
@@ -189,7 +191,7 @@ export function parkOf(kind: GrammarKind, landings: readonly GrammarLanding[], p
     case 'donut':
     case 'duckdonut':
       return { x: 0, z: 0 }; // hauled into the middle by definition
-    case 'routine': {
+    case 'recital': {
       const quads = landings.filter((l) => l.zone.kind === 'quad');
       const lastQ = quads[quads.length - 1]?.zone;
       if (lastQ?.kind !== 'quad') return prev;
@@ -291,8 +293,8 @@ export interface GrammarOpts {
   beat: number;
   /** Blazing serves expert law: the tight donut disc, the rally promise. */
   expert: boolean;
-  /** The per-fight coin for THE SWEPT ROUTINE (act 4 only). */
-  sweptRoutine: boolean;
+  /** The per-fight coin for THE SWEPT RECITAL (act 4 only). */
+  swept: boolean;
   /** Where the last move parked a fighter who played it right. */
   park: Park;
 }
@@ -399,22 +401,29 @@ export function buildGrammarMove(kind: GrammarKind, rng: () => number, o: Gramma
         zone: { kind: 'lane', x: xSign * (0.2 + rng() * 0.32), halfW: GRAMMAR.laneHalfWidth },
       });
     }
-  } else if (kind === 'routine') {
-    // THE MEMORY TEST: a seeded shuffle of the four quarters, cut to length
-    // — a shuffle can't repeat a corner, so "never the same corner twice"
-    // is true by construction. THE SWEPT ROUTINE (act 4, per-fight coin):
-    // every blast arrives under the blade — the corner AND the duck.
-    const bag = [0, 1, 2, 3];
-    for (let i = bag.length - 1; i > 0; i--) {
-      const j = Math.floor(rng() * (i + 1));
-      [bag[i], bag[j]] = [bag[j], bag[i]];
+  } else if (kind === 'recital') {
+    // THE MEMORY TEST, by ear. A pattern of steps: each a MOVE to one of
+    // the three quarters you are not in, or a HOLD — stay where the last
+    // step put you (never two holds running, and the first step is always
+    // a move). THE LESSON lights every step in turn with its note; THE
+    // RECITAL calls the same notes with the marks dark. THE SWEPT RECITAL
+    // (act 4, per-fight coin): every blast arrives under the blade too.
+    const at = (a: readonly number[]): number => a[Math.min(act, a.length - 1)];
+    const n = Math.max(2, Math.min(6, at(GRAMMAR.recitalSteps)));
+    const holdChance = at(GRAMMAR.recitalHoldChance);
+    const pattern: number[] = [];
+    const holds: boolean[] = [];
+    let corner = Math.floor(rng() * 4);
+    for (let i = 0; i < n; i++) {
+      const hold = i > 0 && !holds[i - 1] && rng() < holdChance;
+      if (i > 0 && !hold) corner = (corner + 1 + Math.floor(rng() * 3)) & 3;
+      pattern.push(corner);
+      holds.push(hold);
     }
-    const want = GRAMMAR.routineSteps[Math.min(act, GRAMMAR.routineSteps.length - 1)];
-    const routine = bag.slice(0, Math.max(2, Math.min(4, want)));
-    const swept = o.sweptRoutine && act >= 4;
-    const step = GRAMMAR.routineStepBeats * beat;
-    routine.forEach((corner, i) => {
-      landings.push({ delay: i * step, zone: { kind: 'quad', corner, step: i, routine } });
+    const swept = o.swept && act >= 4;
+    const step = GRAMMAR.recitalStepBeats * beat;
+    pattern.forEach((c, i) => {
+      landings.push({ delay: i * step, zone: { kind: 'quad', corner: c, step: i, hold: holds[i], pattern, holds } });
       if (swept) landings.push({ delay: i * step, zone: { kind: 'sweep' } });
     });
   } else if (kind === 'wave') {
@@ -502,11 +511,11 @@ export function grammarZoneHit(zone: GrammarZone, x: number, z: number, r: numbe
     case 'ring':
       return Math.hypot(x, z) > zone.innerR - r * 0.3;
     case 'quad': {
-      // Committed past the quarter lines into the taught corner, or burn —
-      // loitering at dead centre never satisfies the routine.
+      // Committed past the quarter lines into the called corner, or burn —
+      // loitering at dead centre never satisfies the recital.
       const sx = zone.corner & 1 ? 1 : -1;
       const sz = zone.corner & 2 ? 1 : -1;
-      return !(x * sx > GRAMMAR.routineMargin && z * sz > GRAMMAR.routineMargin);
+      return !(x * sx > GRAMMAR.recitalMargin && z * sz > GRAMMAR.recitalMargin);
     }
     case 'sweep':
       return false; // judged by height via the classic sweep path
@@ -524,7 +533,7 @@ export function installGrammarDevHook(): void {
         act: o?.act ?? 3,
         beat: o?.beat ?? 0.5,
         expert: o?.expert ?? false,
-        sweptRoutine: o?.sweptRoutine ?? false,
+        swept: o?.swept ?? false,
         park: o?.park !== undefined ? o.park : { x: 0, z: 0 },
       }),
     pick: (seed: number, weights: ReadonlyArray<readonly [string, number]>, last: string | null): string =>

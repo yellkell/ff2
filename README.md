@@ -99,6 +99,27 @@ carried over verbatim: everything in it still applies to this code.
   its hips at the arena's fixed height, so a tall player's head no longer
   floats a hand clear of the neck in the glass (`solveTorso`'s new
   `seatUnderHead`; the arena keeps its hitbox-locked solve).
+- **THE RECITAL, AND ARMS THAT BEND** — THE ROUTINE is withdrawn from the
+  titans' book. GOLIATH teaches **THE RECITAL** (`campaign/grammar.ts`):
+  THE LESSON lights each quarter of a pattern in turn, each with its own
+  NOTE — the pitch says front or back, the stereo pan says left or right,
+  and a HOLD ("stay where you are") is a blue two-note chime with a ring on
+  the floor — and then THE RECITAL calls the same notes with the floor
+  dark, a beat and a half before each landing (`sfx.recitalNote`). The
+  blocks still fall on the three quarters the note didn't name, but short
+  and from low, so they confirm what you remembered rather than answer it.
+  Three to five steps by act; a move never repeats the quarter before it,
+  a hold always does, and holds never come in pairs. The titans' arms are
+  articulated chains now — shoulder, ELBOW, WRIST, hand, with VULTURE's
+  talons and the gauntlets' four fingers and thumb on hinges that curl —
+  and every move drives every joint (`campaign/gestures.ts`): the classics
+  got shapes of their own (the slam's HAMMER drawn, hoisted and trembling
+  at the top; the sweep's SCYTHE; the beam's CANNON with the off hand
+  bracing the barrel's elbow; the volley's LAUNCHER rocked back on its
+  heels; the nova's COIL; the seesaw's TILT, a balance beam tipping toward
+  the flood; the surge's SHOVE), and THE RECITAL is CONDUCTED — forearms
+  up, a baton flick on every cue, an open palm for a hold — never pointed
+  at.
 - **THE SHOULDERS, AND A BODY UNDER YOUR OWN HEAD** — the first night's
   feedback: "my head was far above my body, and my body turned really
   quickly". Both were the torso solve (`avatar/boxer.ts` `solveTorso`,

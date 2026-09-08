@@ -400,37 +400,41 @@ const X_FRAG = /* glsl */ `
 `;
 
 /**
- * THE ROUTINE's step mark: one quarter of the deck, ringed and washed, its
- * STEP NUMBER spelled as a row of dots. Drawn in the titan's TEACH green,
- * never hazard amber: during the lesson nothing is dangerous yet. The marks
- * fade near the end of the charge — from then on the routine lives in your
- * head. uOrd = the step number.
+ * THE LESSON's mark: one quarter of the deck, ringed and washed while its
+ * step is being taught, its STEP NUMBER spelled as a row of dots. A MOVE
+ * step wears the titan's TEACH green; a HOLD step the blue of "stay", with
+ * a ring in the middle. Never hazard amber: during the lesson nothing is
+ * dangerous yet. uLit is how brightly this quarter is lit right now (the
+ * factory's update drives it step by step), uHold whether the lit step is
+ * a hold, uOrd its number.
  */
 const MARK_FRAG = /* glsl */ `
   ${COMMON}
-  uniform float uOrd, uAspect;
+  uniform float uLit, uHold, uOrd, uAspect;
   void main(){
-    vec3 col = vec3(0.62, 1.0, 0.70);
-    // The lesson is over before the first step lands.
-    float fade = 1.0 - smoothstep(0.70, 0.92, uFill);
+    vec3 col = mix(vec3(0.62, 1.0, 0.70), vec3(0.45, 0.62, 1.0), uHold);
     float a = 0.10;
     // Border around the quarter — this whole square is the ground.
     float e = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
     a += (1.0 - smoothstep(0.022, 0.055, e)) * 0.55;
-    // The step number, as dots in a row across the middle.
-    for (int i = 0; i < 4; i++) {
+    // The step number, as dots in a row across the middle…
+    for (int i = 0; i < 6; i++) {
       if (float(i) >= uOrd) break;
-      float cx = 0.5 + (float(i) - (uOrd - 1.0) * 0.5) * 0.15;
+      float cx = 0.5 + (float(i) - (uOrd - 1.0) * 0.5) * 0.13;
       vec2 p = (vUv - vec2(cx, 0.5)) * vec2(1.0, 1.0 / uAspect);
-      a += (1.0 - smoothstep(0.04, 0.055, length(p))) * 0.95;
+      a += (1.0 - smoothstep(0.035, 0.05, length(p))) * 0.95;
     }
-    a *= fade * pulse();
+    // …and, on a hold, the ring that says STAY around them.
+    vec2 c = (vUv - 0.5) * vec2(1.0, 1.0 / uAspect);
+    float r = length(c);
+    a += (smoothstep(0.30, 0.32, r) - smoothstep(0.35, 0.37, r)) * 0.8 * uHold;
+    a *= uLit * pulse();
     gl_FragColor = vec4(col, ink(a));
   }
 `;
 
 /**
- * THE ROUTINE's quarter lines: the cross that splits the deck into four,
+ * THE RECITAL's quarter lines: the cross that splits the deck into four,
  * lit dim and neutral for the whole move — furniture, not danger. It says
  * where the boxes will land, never which quarter is yours.
  */
@@ -620,32 +624,69 @@ export function xTelegraph(halfW: number): Telegraph {
 }
 
 /**
- * THE ROUTINE, taught: one marked quarter per step, each carrying its step
- * number in dots; the marks fade themselves out as the charge runs down.
- * `routine` is the corner list (bit 0 = +x, bit 1 = +z). Place the group at
- * the deck centre on the floor.
+ * THE LESSON: the four quarters, lit ONE AT A TIME as the pattern is
+ * taught — step i lights quarter pattern[i] for its slot of the charge
+ * (`stepSecs` each, the slots running from the start of `chargeSecs`),
+ * green for a move, blue with a ring for a hold, its number in dots. When
+ * the lesson is over (fill past the slots, and all of the recital) every
+ * quarter is dark: from then on the pattern lives in your ear. Place the
+ * group at the deck centre on the floor.
  */
-export function routineMarksTelegraph(
-  routine: readonly number[],
+export function recitalMarksTelegraph(
+  pattern: readonly number[],
+  holds: readonly boolean[],
   halfWidth: number,
   halfDepth: number,
+  stepSecs: number,
+  chargeSecs: number,
 ): Telegraph {
   const meshes: Mesh[] = [];
   const mats: ShaderMaterial[] = [];
   const w = halfWidth * 0.92;
   const d = halfDepth * 0.92;
-  routine.forEach((corner, step) => {
-    const mat = warnMat(MARK_FRAG, { uOrd: { value: step + 1 }, uAspect: { value: w / d } });
+  for (let corner = 0; corner < 4; corner++) {
+    const mat = warnMat(MARK_FRAG, {
+      uLit: { value: 0 },
+      uHold: { value: 0 },
+      uOrd: { value: 0 },
+      uAspect: { value: w / d },
+    });
     const pane = new Mesh(new PlaneGeometry(w, d), mat);
     pane.rotation.x = -Math.PI / 2;
     pane.position.set(((corner & 1 ? 1 : -1) * halfWidth) / 2, 0, ((corner & 2 ? 1 : -1) * halfDepth) / 2);
     meshes.push(pane);
     mats.push(mat);
-  });
-  return makeTelegraph(meshes, mats);
+  }
+  const base = makeTelegraph(meshes, mats);
+  return {
+    group: base.group,
+    update(fill, time) {
+      base.update(fill, time);
+      const t = fill * chargeSecs;
+      const i = Math.floor(t / Math.max(0.001, stepSecs));
+      const inStep = t - i * stepSecs;
+      // In, hold, out within the slot — a beat of dark between steps so
+      // two holds on one quarter still read as two.
+      const k = inStep / stepSecs;
+      const lit = fill < 1 && i < pattern.length ? Math.min(1, k / 0.12) * (1 - smoothstep(0.78, 0.95, k)) : 0;
+      for (let corner = 0; corner < 4; corner++) {
+        const u = mats[corner].uniforms;
+        const on = i < pattern.length && pattern[i] === corner;
+        u.uLit.value = on ? lit : 0;
+        u.uHold.value = on && holds[i] ? 1 : 0;
+        u.uOrd.value = on ? i + 1 : 0;
+      }
+    },
+    dispose: base.dispose,
+  };
 }
 
-/** THE ROUTINE's quarter lines — the split deck, lit for the whole move. */
+function smoothstep(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+/** THE RECITAL's quarter lines — the split deck, lit for the whole move. */
 export function quarterTelegraph(halfWidth: number, halfDepth: number): Telegraph {
   const mat = warnMat(QUARTER_FRAG);
   const pane = new Mesh(new PlaneGeometry(halfWidth * 2, halfDepth * 2), mat);

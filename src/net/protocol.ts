@@ -127,7 +127,7 @@ export type PeerMessage =
         | 'cross'
         | 'gate'
         | 'donut'
-        | 'routine'
+        | 'recital'
         | 'wave'
         | 'duckdonut';
       seats: number[];

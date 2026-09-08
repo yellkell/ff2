@@ -1,18 +1,20 @@
 /**
- * THE ROUTINE's blocks — RAVE RAID's "DOWN language, upside down", ported
- * for the ENCORE campaign: for each routine step, the three quarters you
- * weren't taught get a spinning neon polyhedron descending on a locked
+ * THE RECITAL's blocks — RAVE RAID's "DOWN language, upside down", ported
+ * for the ENCORE campaign: for each recital step, the three quarters the
+ * note didn't name get a spinning neon polyhedron descending on a locked
  * clock — dark core, additive body shell, blazing wireframe edges, a glow
  * halo — with a telegraph ring on the deck brightening and tightening under
  * it as it closes. The landing IS the step's detonation: the block crushes
  * to the deck, flashes its quarter, and sinks away. The quarter you learned
  * stays bare.
  *
- * The judge is untouched (stand committed in the taught corner at the
- * tick); this module is the danger made VISIBLE — you watch your death
- * coming the whole way down. RAVE RAID drove it off the song's beat clock;
- * here it flies on the attack's own seconds (`update(now)` with the
- * attack-local time), landing exactly on the zone's due time.
+ * The judge is untouched (stand committed in the called corner at the
+ * tick); this module is the danger made VISIBLE. In the recital the fall
+ * is SHORT and starts LOW (`spawnY`): the note is the warning, and a
+ * block seen coming from the rafters would answer the memory test for
+ * you. RAVE RAID drove it off the song's beat clock; here it flies on the
+ * attack's own seconds (`update(now)` with the attack-local time),
+ * landing exactly on the zone's due time.
  */
 
 import {
@@ -68,11 +70,12 @@ interface FallingBlock {
   spinZ: number;
 }
 
-export class RoutineBlockfall {
+export class RecitalBlockfall {
   readonly root = new Group();
   private blocks: FallingBlock[] = [];
   private dropStart: number;
   private due: number;
+  private spawnY: number;
   private landed = false;
   private landAge = 0;
 
@@ -82,9 +85,10 @@ export class RoutineBlockfall {
    * `dropSecs` before it. `seed`+step keep every client's shapes and spins
    * identical — the fall is part of the show, and the show is deterministic.
    */
-  constructor(parent: Object3D, safeCorner: number, dueAt: number, dropSecs: number, seed: number, step: number) {
+  constructor(parent: Object3D, safeCorner: number, dueAt: number, dropSecs: number, seed: number, step: number, spawnY = SPAWN_Y) {
     this.due = dueAt;
     this.dropStart = dueAt - dropSecs;
+    this.spawnY = spawnY;
     this.root.visible = false;
     parent.add(this.root);
 
@@ -103,7 +107,7 @@ export class RoutineBlockfall {
       const radius = 0.3 + rng() * 0.1;
 
       const group = new Group();
-      group.position.set(x, SPAWN_Y, z);
+      group.position.set(x, spawnY, z);
       group.rotation.set(rng() * Math.PI, rng() * Math.PI, rng() * Math.PI);
 
       // Dark core so the bright edges have something solid to sit against.
@@ -184,7 +188,7 @@ export class RoutineBlockfall {
     this.root.visible = true;
     const fall = Math.min(1, Math.max(0, t));
     // Eased-in so the last stretch reads fastest — a drop, not an elevator.
-    const y = SPAWN_Y - (SPAWN_Y - CRUSH_Y) * fall * fall;
+    const y = this.spawnY - (this.spawnY - CRUSH_Y) * fall * fall;
     for (const b of this.blocks) {
       b.group.position.y = y;
       b.group.rotation.x += b.spinX * delta;

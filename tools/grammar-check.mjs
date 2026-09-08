@@ -8,7 +8,8 @@
  * Two stages:
  *
  *   1. THE GRAMMAR (pure, via __ff2.grammar): seeded determinism, deck
- *      bounds, the shapes' own laws (routine corners never repeat, every
+ *      bounds, the shapes' own laws (a recital's moves never repeat, its
+ *      holds always do, every
  *      wave turns, the trap's jaws oppose, twins alternate), the verb law
  *      (never the same move twice), THE FLOOR MANAGER's evict test, and
  *      the judge (gaps safe, rims deadly, corners must be committed).
@@ -76,18 +77,26 @@ const g = await page.evaluate(() => {
   // Deck bounds, thirty seeds a kind, at the hardest act.
   for (const kind of G.kinds) {
     for (let s = 1; s <= 30; s++) {
-      const landings = G.build(kind, s, { act: 4, expert: true, sweptRoutine: true });
+      const landings = G.build(kind, s, { act: 4, expert: true, swept: true });
       if (!landings.length) fail(`${kind}#${s}: empty move`);
       for (const l of landings) if (!G.onDeck(l.zone)) fail(`${kind}#${s}: zone off deck ${JSON.stringify(l.zone)}`);
     }
   }
-  // THE ROUTINE never repeats a corner, and act 4 asks for four.
-  {
-    const landings = G.build('routine', 7, { act: 4 });
-    const quads = landings.filter((l) => l.zone.kind === 'quad');
-    const corners = quads.map((l) => l.zone.corner);
-    if (new Set(corners).size !== corners.length) fail('routine repeats a corner');
-    if (corners.length !== 4) fail(`act-4 routine wants 4 corners, got ${corners.length}`);
+  // THE RECITAL: a MOVE never repeats the corner before it, a HOLD always
+  // does, holds never run in pairs, the first step is a move, and act 4
+  // asks for five steps.
+  for (let s = 1; s <= 40; s++) {
+    const landings = G.build('recital', s, { act: 4 });
+    const quads = landings.filter((l) => l.zone.kind === 'quad').map((l) => l.zone);
+    if (quads.length !== 5) fail(`recital#${s}: act 4 wants 5 steps, got ${quads.length}`);
+    if (quads[0]?.hold) fail(`recital#${s}: opens on a hold`);
+    for (let i = 1; i < quads.length; i++) {
+      const same = quads[i].corner === quads[i - 1].corner;
+      if (quads[i].hold && !same) fail(`recital#${s}: a hold moved`);
+      if (!quads[i].hold && same) fail(`recital#${s}: a move stayed`);
+      if (quads[i].hold && quads[i - 1].hold) fail(`recital#${s}: two holds running`);
+      if (quads[i].pattern !== quads[0].pattern) fail(`recital#${s}: steps carry different patterns`);
+    }
   }
   // EVERY wave turns: at least six strikes, marching in time.
   {
@@ -159,14 +168,14 @@ const g = await page.evaluate(() => {
     const ring = { kind: 'ring', innerR: 0.42 };
     if (G.hit(ring, 0, 0)) fail('judge: donut centre must be safe');
     if (!G.hit(ring, 0.7, 0)) fail('judge: donut rim must burn');
-    const quad = { kind: 'quad', corner: 3, step: 0, routine: [3] };
+    const quad = { kind: 'quad', corner: 3, step: 0, hold: false, pattern: [3], holds: [false] };
     if (G.hit(quad, 0.4, 0.4)) fail('judge: the taught corner must be safe');
     if (!G.hit(quad, 0, 0, 0)) fail('judge: loitering at centre must burn');
     const armX = { kind: 'lane', x: 0, halfW: 0.14, yaw: Math.PI / 4 };
     const armY = { kind: 'lane', x: 0, halfW: 0.14, yaw: -Math.PI / 4 };
     if (G.hit(armX, 0.55, 0, 0.1) && G.hit(armY, 0.55, 0, 0.1)) fail('judge: the X pocket must clear one arm');
     if (!G.hit(armX, 0, 0)) fail('judge: the X knot must burn');
-    // The park chain: the donut hauls you to centre, the routine to a corner.
+    // The park chain: the donut hauls you to centre, the recital to a corner.
     const donutPark = G.park('donut', [{ delay: 0, zone: ring }], { x: 0.5, z: 0.3 });
     if (donutPark.x !== 0 || donutPark.z !== 0) fail('donut must park at centre');
   }
@@ -193,7 +202,7 @@ const EXPECT = {
   donut: ['ring'],
   cross: ['rail'],
   wave: ['lane', 'rail'],
-  routine: ['quad'],
+  recital: ['quad'],
   duckdonut: ['sweep', 'ring'],
 };
 // The gesture each shape should make (campaign/gestures.ts), read off the
@@ -205,7 +214,7 @@ const GESTURE = {
   donut: 'ring',
   cross: 'scissor',
   wave: 'march',
-  routine: 'teach',
+  recital: 'teach',
   duckdonut: 'blade',
 };
 const silhouettes = {};

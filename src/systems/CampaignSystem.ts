@@ -51,7 +51,9 @@ import {
   type Park,
 } from '../campaign/grammar.js';
 import {
+  ARM_REST,
   armFor,
+  CLASSIC_SHAPE,
   gestureFocusOf,
   gestureShapeOf,
   gestureTemper,
@@ -60,7 +62,7 @@ import {
   type GestureFocus,
   type GestureShape,
 } from '../campaign/gestures.js';
-import { RoutineBlockfall } from '../campaign/blockfall.js';
+import { RecitalBlockfall } from '../campaign/blockfall.js';
 import { playBossVoice, preloadBossVoice } from '../audio/bossVoice.js';
 import { GelCreature } from '../goopliath/GelCreature.js';
 import { GooFx } from '../goopliath/splats.js';
@@ -84,7 +86,7 @@ import {
   novaTelegraph,
   quarterTelegraph,
   railTelegraph,
-  routineMarksTelegraph,
+  recitalMarksTelegraph,
   sweepTelegraph,
   xTelegraph,
   type Telegraph,
@@ -158,13 +160,13 @@ type Zone =
    *  burns — be across the centreline when it lands. */
   | { kind: 'half'; side: -1 | 1; axis: 0 | 1 }
   /** THE ENCORE's grammar zones (campaign/grammar.ts): lanes, rails, the
-   *  gate, the donut's ring and the routine's quarters — all target-local.
+   *  gate, the donut's ring and the recital's quarters — all target-local.
    *  (The grammar's height-less sweep maps onto the classic sweep above.) */
   | { kind: 'lane'; x: number; halfW: number; yaw?: number }
   | { kind: 'rail'; z: number; halfD: number; from: 1 | -1 }
   | { kind: 'gate'; at: number; half: number; axis: 0 | 1 }
   | { kind: 'ring'; innerR: number }
-  | { kind: 'quad'; corner: number; step: number; routine: readonly number[] };
+  | { kind: 'quad'; corner: number; step: number; hold: boolean; pattern: readonly number[]; holds: readonly boolean[] };
 
 /** A weak point a pattern can light. The crown circuit uses all five. */
 type WeakSpot = 'head' | 'core' | 'low' | 'shoulderL' | 'shoulderR';
@@ -209,11 +211,18 @@ interface ActiveAttack {
    *  opens each step's read one charge ahead — the return's telegraph opens
    *  as the first pair fires, never sooner (RAVE RAID's law). */
   windows: number[];
-  /** THE ROUTINE's falling blocks, one per quad zone (null elsewhere). */
-  blockfalls: (RoutineBlockfall | null)[];
+  /** THE RECITAL's falling blocks, one per quad zone (null elsewhere). */
+  blockfalls: (RecitalBlockfall | null)[];
   /** Zone-less furniture updated with the overall charge and disposed with
-   *  the attack: the routine's quarter lines + fading step marks. */
+   *  the attack: the recital's quarter lines + THE LESSON's marks. */
   dressing: Telegraph[];
+  /** THE RECITAL's sounds, on the attack clock — the lesson's notes as each
+   *  quarter lights, the recital's cues ahead of each landing — each fired
+   *  once. Empty for every other kind. */
+  cues: { at: number; corner: number; hold: boolean; lesson: boolean; fired: boolean }[];
+  /** THE RECITAL only: how the lesson is timed, for the gesture that
+   *  follows it (pendingGesture) — one slot per taught step. */
+  lesson?: { stepSecs: number; steps: number };
 }
 
 /** One volley fireball in flight — dodge it, or put a fist in its path. */
@@ -301,6 +310,8 @@ export class CampaignSystem extends createSystem({
 
   private attack: ActiveAttack | null = null;
   private cooldown = 2.5;
+  /** The headless probe holding the titan's own picks while it forces moves. */
+  private probeHold = false;
   /** Last attack picked, classic or grammar — the never-twice law spans
    *  both vocabularies on a titan that learned to dance. */
   private lastKind: AttackKind | GrammarKind | null = null;
@@ -319,9 +330,11 @@ export class CampaignSystem extends createSystem({
   private hitsOnPoint = 0;
   private invuln = 0; // player i-frames after eating a strike
   private strikeSwing: [number, number] = [0, 0]; // post-strike arm follow-through
+  /** Each hand's curl, eased (0 open … 1 fist) — the digits read it. */
+  private curl: [number, number] = [ARM_REST.curl, ARM_REST.curl];
   /** What the live follow-through is FOR — a classic kind or a grammar
    *  gesture shape (campaign/gestures.ts) — and where it was aimed. */
-  private swingShape: GestureShape | 'slam' | 'sweep' = 'slam';
+  private swingShape: GestureShape = 'hammer';
   private swingFocus: GestureFocus = { side: 0, fwd: 0 };
   /** Attack clock of the last grammar swing — a raid's five-deck chord
    *  detonates one zone per seat on the same frame, and is ONE swing. */
@@ -388,7 +401,7 @@ export class CampaignSystem extends createSystem({
         zones: (): string[] => this.attack?.zones.map((z) => z.kind) ?? [],
         /** The live gesture: shape + read fill, and each arm's pivot delta
          *  from rest [pitch, yaw] — the probe's silhouette check. */
-        pose: (): { shape: string | null; fill: number; arms: number[][]; lean: number } | null => {
+        pose: (): { shape: string | null; fill: number; arms: number[][]; elbows: number[]; wrists: number[]; curl: number[]; lean: number } | null => {
           const rig = this.rig;
           if (!rig) return null;
           const g = this.pendingGesture();
@@ -396,15 +409,25 @@ export class CampaignSystem extends createSystem({
             shape: g?.shape ?? null,
             fill: g?.fill ?? 0,
             arms: rig.arms.map((a) => [a.pivot.rotation.x - a.restX, a.pivot.rotation.z - a.restZ]),
+            elbows: rig.arms.map((a) => -a.elbow.rotation.x),
+            wrists: rig.arms.map((a) => -a.wrist.rotation.x),
+            curl: [...this.curl],
             lean: rig.root.rotation.x,
           };
         },
         force: (kind: string, seed?: number): boolean => {
           if (this.phase !== 'fight') return false;
+          if ((['slam', 'sweep', 'beam', 'volley', 'nova', 'seesaw', 'surge'] as string[]).includes(kind)) {
+            this.launchClassic(kind as AttackKind);
+            return true;
+          }
           this.buildAttack(kind as GrammarKind, [this.mySeatId()], {
             g: (seed ?? Math.floor(Math.random() * 0xffffffff)) >>> 0,
           });
           return true;
+        },
+        hold: (on: boolean): void => {
+          this.probeHold = on;
         },
         heal: (): void => {
           const me = fighterAt(0);
@@ -1368,8 +1391,10 @@ export class CampaignSystem extends createSystem({
     // ticks once it shakes the stagger off.
     if (!this.attack) {
       if (this.isAuthority() && this.stunTimer <= 0) {
-        this.cooldown -= delta;
-        if (this.cooldown <= 0) this.startAttack();
+        if (!this.probeHold) {
+          this.cooldown -= delta;
+          if (this.cooldown <= 0) this.startAttack();
+        }
       }
     } else {
       this.advanceAttack(delta);
@@ -1874,7 +1899,7 @@ export class CampaignSystem extends createSystem({
         act,
         beat: def.beat ?? 0.5,
         expert,
-        sweptRoutine: this.sweptCoin(seed),
+        swept: this.sweptCoin(seed),
         park: this.park,
       });
       // THE FLOOR MANAGER: a move that asks nothing of the parked ground
@@ -1940,8 +1965,10 @@ export class CampaignSystem extends createSystem({
     const beamOffsets: number[] = [];
     const markers: (Group | null)[] = [];
     const windows: number[] = [];
-    const blockfalls: (RoutineBlockfall | null)[] = [];
+    const blockfalls: (RecitalBlockfall | null)[] = [];
     const dressing: Telegraph[] = [];
+    const cues: ActiveAttack['cues'] = [];
+    let lesson: ActiveAttack['lesson'];
     // Strike with the arm nearer the primary target (multi-target windups
     // hoist BOTH arms — see animateTitan).
     this.seatPoint(seats[0], 0, 0, 0, _p);
@@ -1965,16 +1992,41 @@ export class CampaignSystem extends createSystem({
         act: this.grammarAct(),
         beat: this.def.beat ?? 0.5,
         expert: this.activeDifficulty() === 'blazing',
-        sweptRoutine: this.sweptCoin(seed),
+        swept: this.sweptCoin(seed),
         park,
       });
+      // THE RECITAL: the read IS THE LESSON. Its length is the pattern's —
+      // one slot per taught step and a breath after — so the charge is set
+      // from the landings rather than the titan's usual read; every
+      // headset builds the same landings from the seed, so every headset
+      // agrees. The sounds are scheduled here too: a lesson note as each
+      // quarter lights, and the recital's cue ahead of each landing.
+      if (gk === 'recital') {
+        const beat = this.def.beat ?? 0.5;
+        const stepSecs = GRAMMAR.recitalLessonBeats * beat * this.diff.charge;
+        let steps = 0;
+        for (const l of landings) if (l.zone.kind === 'quad') steps++;
+        lesson = { stepSecs, steps };
+        chargeTime = stepSecs * steps + GRAMMAR.recitalPauseBeats * beat * this.diff.charge;
+        for (const l of landings) {
+          if (l.zone.kind !== 'quad') continue;
+          cues.push({ at: l.zone.step * stepSecs + 0.04, corner: l.zone.corner, hold: l.zone.hold, lesson: true, fired: false });
+          cues.push({
+            at: chargeTime + l.delay - GRAMMAR.recitalCueBeats * beat,
+            corner: l.zone.corner,
+            hold: l.zone.hold,
+            lesson: false,
+            fired: false,
+          });
+        }
+      }
       for (const seat of seats) {
         this.seatPoint(seat, 0, CAMPAIGN.decalY, 0, _v);
         const deckX = _v.x;
         const deckY = _v.y;
         const deckZ = _v.z;
         const yawD = this.seatYawDelta(seat);
-        // The sweep line (the duckdonut's blade / the swept routine) hangs
+        // The sweep line (the duckdonut's blade / the swept recital) hangs
         // at MY height on my own deck; a remote deck wears the house line —
         // visual only, their own client judges their own zone.
         this.playerHead(_head);
@@ -1986,7 +2038,9 @@ export class CampaignSystem extends createSystem({
           zones.push(zone);
           zoneSeats.push(seat);
           staggers.push(l.delay);
-          windows.push(chargeTime);
+          // The recital's reads open one step ahead (the conductor's fill
+          // runs per step; a swept recital's blade shows a step early).
+          windows.push(gk === 'recital' ? GRAMMAR.recitalStepBeats * (this.def.beat ?? 0.5) : chargeTime);
           markers.push(null);
           let tg: Telegraph | null = null;
           if (gz.kind === 'lane' && gz.yaw) {
@@ -2023,18 +2077,20 @@ export class CampaignSystem extends createSystem({
             tg.group.position.copy(_v);
             tg.group.rotation.y = yawD;
           }
-          // quad: no zone telegraph — the marks + quarter lines teach
-          // (below) and the falling block IS the per-step warning.
+          // quad: no zone telegraph — the lesson teaches (below), the NOTE
+          // is the per-step warning, and the block only confirms it: a
+          // short fall from low, too late to be read instead of remembered.
           if (tg) this.scene.add(tg.group);
           telegraphs.push(tg);
           if (gz.kind === 'quad') {
-            const bf = new RoutineBlockfall(
+            const bf = new RecitalBlockfall(
               this.scene,
               gz.corner,
               chargeTime + l.delay,
-              GRAMMAR.routineDropBeats * (this.def.beat ?? 0.5),
+              GRAMMAR.recitalDropBeats * (this.def.beat ?? 0.5),
               seed,
               gz.step,
+              3.2,
             );
             bf.root.position.set(deckX, 0, deckZ);
             bf.root.rotation.y = yawD;
@@ -2043,13 +2099,20 @@ export class CampaignSystem extends createSystem({
             blockfalls.push(null);
           }
         }
-        // THE ROUTINE's furniture: the chalk quarter lines for the whole
-        // move and the taught marks (they fade themselves out by fill 0.92
-        // — from then on the routine lives in your head).
+        // THE RECITAL's furniture: the chalk quarter lines for the whole
+        // move and THE LESSON's marks, lit one step at a time with the
+        // notes and dark for the recital itself.
         const firstQuad = landings.find((l) => l.zone.kind === 'quad')?.zone;
-        if (firstQuad?.kind === 'quad') {
+        if (firstQuad?.kind === 'quad' && lesson) {
           const quarters = quarterTelegraph(OCTAGON_HALF_WIDTH, OCTAGON_HALF_DEPTH);
-          const marks = routineMarksTelegraph(firstQuad.routine, OCTAGON_HALF_WIDTH, OCTAGON_HALF_DEPTH);
+          const marks = recitalMarksTelegraph(
+            firstQuad.pattern,
+            firstQuad.holds,
+            OCTAGON_HALF_WIDTH,
+            OCTAGON_HALF_DEPTH,
+            lesson.stepSecs,
+            chargeTime,
+          );
           for (const d of [quarters, marks]) {
             d.group.position.set(deckX, deckY, deckZ);
             d.group.rotation.y = yawD;
@@ -2258,6 +2321,8 @@ export class CampaignSystem extends createSystem({
       windows,
       blockfalls,
       dressing,
+      cues,
+      lesson,
     };
     if (this.goop) this.goopTelegraph(this.attack.kind as AttackKind, chargeTime, seats[0]);
     sfx.chargeWhine(chargeTime);
@@ -2399,11 +2464,18 @@ export class CampaignSystem extends createSystem({
       }
     }
 
-    // THE ROUTINE's blocks fly on the attack clock (their landing IS the
-    // step's detonation), and the routine's furniture — quarter lines, the
+    // THE RECITAL's blocks fly on the attack clock (their landing IS the
+    // step's detonation), and the recital's furniture — quarter lines, the
     // fading step marks — reads the overall charge.
     for (const bf of a.blockfalls) bf?.update(a.time, delta);
     for (const d of a.dressing) d.update(clamp(a.time / a.chargeTime, 0, 1), this.time);
+    // THE RECITAL's notes, on the attack clock: the lesson's as each
+    // quarter lights, the recital's ahead of each landing (sfx.recitalNote).
+    for (const c of a.cues) {
+      if (c.fired || a.time < c.at) continue;
+      c.fired = true;
+      sfx.recitalNote(c.corner, c.hold, c.lesson);
+    }
 
     // Each zone runs its OWN countdown to its own detonation — a marching
     // drumline or a staggered volley reads as a sequence of beats, not one.
@@ -2550,7 +2622,11 @@ export class CampaignSystem extends createSystem({
     // The gesture keeps its promise: a grammar landing SWINGS the arm(s)
     // its windup raised (campaign/gestures.ts) — once per landing beat, not
     // once per seat, so a raid's five-deck chord is one swing, one sound.
-    const gshape = (GRAMMAR_KINDS as readonly string[]).includes(kind) ? gestureShapeOf(kind, zone) : null;
+    const gshape = (GRAMMAR_KINDS as readonly string[]).includes(kind)
+      ? kind === 'recital' && zone.kind === 'quad'
+        ? 'conduct' // the recital's landings are conducted — the body never points at the answer
+        : gestureShapeOf(kind, zone)
+      : null;
     if (gshape && this.attack && this.attack.time - this.swingAt > 0.05) {
       this.swingAt = this.attack.time;
       const focus = gestureFocusOf(zone);
@@ -2579,13 +2655,14 @@ export class CampaignSystem extends createSystem({
     } else if (zone.kind === 'quad') {
       sfx.slamImpact(); // the block crush (advanceAttack) carries the visual
     } else if (zone.kind === 'sweep' && (GRAMMAR_KINDS as readonly string[]).includes(kind)) {
-      // The duckdonut's blade / the swept routine — the classic cut.
+      // The duckdonut's blade / the swept recital — the classic cut.
       sfx.sweepWhoosh();
       this.spawnBladeSweep(zone.y, this.attack!.arm, seat);
     } else if (kind === 'slam') {
       sfx.slamImpact();
       if (zone.kind === 'circle') this.spawnFistCrash(zone.x, zone.z, seat);
-      this.swingShape = 'slam';
+      this.swingShape = 'hammer';
+      this.swingFocus = { side: 0, fwd: 0, arm: this.attack!.arm };
       this.strikeSwing[this.attack!.arm] = 0.6;
       // A multi-platform slam alternates fists, landing to landing — both
       // hoisted hammers visibly take their turns.
@@ -2597,7 +2674,8 @@ export class CampaignSystem extends createSystem({
       if (zone.kind === 'sweep') this.spawnBladeSweep(zone.y, this.attack!.arm, seat);
       // (GOOPLIATH already coiled through the charge — his backfist telegraph
       // whips through on this beat; see goopTelegraph.)
-      this.swingShape = 'sweep';
+      this.swingShape = 'scythe';
+      this.swingFocus = { side: 0, fwd: 0, arm: this.attack!.arm };
       this.strikeSwing[this.attack!.arm] = 0.6;
       // The squad sweep: the titan whips through a FULL TURN while the blade
       // cascades around the arc — re-armed per landing so the spin carries
@@ -2609,20 +2687,40 @@ export class CampaignSystem extends createSystem({
     } else if (kind === 'beam') {
       sfx.beamBlast();
       if (zone.kind === 'beam') this.spawnBeamColumn(zone);
+      // The cannon KICKS on the shot.
+      this.swingShape = 'cannon';
+      this.swingFocus = { side: 0, fwd: 0, arm: this.attack!.arm };
+      this.strikeSwing[this.attack!.arm] = 0.6;
     } else if (kind === 'nova') {
       sfx.beamBlast();
       sfx.slamImpact();
       if (zone.kind === 'nova') this.spawnNovaWave(zone.angle, zone.halfAngle, seat);
       // (GOOPLIATH's uppercut telegraph surges the wave out on this beat.)
+      // The coil is THROWN wide.
+      this.swingShape = 'coil';
+      this.swingFocus = { side: 0, fwd: 0, both: true };
+      this.strikeSwing[0] = this.strikeSwing[1] = 0.6;
     } else if (kind === 'seesaw' || kind === 'surge') {
       if (this.goop) sfx.gooSlam();
       else sfx.slamImpact();
-      // The opening gesture (the telegraph) is the ONLY swing these get — per-
-      // half limb slams re-ballooned the raymarch bounds on every beat and read
-      // as random punching; the flood visual carries the landings.
       if (zone.kind === 'half') this.spawnHalfFlood(zone.side, seat, zone.axis);
+      // The rig titans' tilt SLAPS the flooding half down and the shove
+      // DRIVES; GOOPLIATH keeps his opening gesture as the only swing —
+      // per-half limb slams re-ballooned the raymarch bounds on every beat
+      // and read as random punching.
+      if (!this.goop && zone.kind === 'half') {
+        this.swingShape = kind === 'seesaw' ? 'tilt' : 'shove';
+        this.swingFocus = zone.axis === 1 ? { side: 0, fwd: zone.side } : { side: zone.side, fwd: 0 };
+        this.strikeSwing[0] = this.strikeSwing[1] = 0.6;
+      }
     } else {
-      if (zone.kind === 'shot') this.launchShot(zone.side, seat);
+      if (zone.kind === 'shot') {
+        this.launchShot(zone.side, seat);
+        // The launcher JOLTS on every shot.
+        this.swingShape = 'launcher';
+        this.swingFocus = { side: 0, fwd: 0, both: true };
+        this.strikeSwing[0] = this.strikeSwing[1] = 0.45;
+      }
     }
 
     if (hit && this.invuln <= 0) {
@@ -2641,7 +2739,7 @@ export class CampaignSystem extends createSystem({
       const d = Math.abs(((ang - zone.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
       return d > zone.halfAngle;
     }
-    // THE ROUTINE judges the HEAD's commitment, like the nova — the body
+    // THE RECITAL judges the HEAD's commitment, like the nova — the body
     // spheres trail the head by design, and a corner you clearly reached
     // must never clip you on a trailing hip.
     if (zone.kind === 'quad') {
@@ -3175,7 +3273,27 @@ export class CampaignSystem extends createSystem({
    */
   private pendingGesture(): { shape: GestureShape; fill: number; focus: GestureFocus; seat: number } | null {
     const a = this.attack;
-    if (!a || !(GRAMMAR_KINDS as readonly string[]).includes(a.kind)) return null;
+    if (!a) return null;
+    if (!(GRAMMAR_KINDS as readonly string[]).includes(a.kind)) {
+      // A CLASSIC kind: its own shape on the same joints (gestures.ts —
+      // the slam's hammer, the sweep's scythe, the beam's cannon, the
+      // volley's launcher, the nova's coil, the seesaw's tilt, the surge's
+      // shove), read off the whole windup: the classic reads are one
+      // charge, no cascade windows. The chosen arm and a multi-target
+      // pair ride the focus; a flood's doomed half steers the tilt/shove.
+      const shape = CLASSIC_SHAPE[a.kind];
+      if (!shape) return null;
+      const fill = clamp(a.time / a.chargeTime, 0, 1);
+      const focus: GestureFocus = { side: 0, fwd: 0, arm: a.arm, both: a.seats.length > 1 };
+      for (let i = 0; i < a.zones.length; i++) {
+        const z = a.zones[i];
+        if (a.resolved[i] || z.kind !== 'half') continue;
+        if (z.axis === 1) focus.fwd = z.side;
+        else focus.side = z.side;
+        break;
+      }
+      return { shape, fill, focus, seat: a.seats[0] };
+    }
     let best = -1;
     let bestDue = Infinity;
     for (let i = 0; i < a.zones.length; i++) {
@@ -3188,6 +3306,27 @@ export class CampaignSystem extends createSystem({
     }
     if (best < 0) return null;
     const zone = a.zones[best];
+    if (a.kind === 'recital' && zone.kind === 'quad' && a.lesson) {
+      const seat = a.zoneSeats[best] ?? a.seats[0];
+      if (a.time < a.chargeTime) {
+        // THE LESSON: the king points at each taught quarter as it lights
+        // (a palm for a hold), then conducts the breath before the recital.
+        const i = Math.floor(a.time / a.lesson.stepSecs);
+        const p = zone.pattern[i];
+        if (i < a.lesson.steps && p !== undefined) {
+          // Up within the slot's first third and HELD to its end: the arm
+          // sweeps from quarter to quarter (the ease carries it across).
+          const fill = clamp(a.time / (0.3 * a.lesson.stepSecs), 0, 1);
+          return { shape: 'teach', fill, focus: gestureFocusOf({ kind: 'quad', corner: p, hold: zone.holds[i] }), seat };
+        }
+        return { shape: 'conduct', fill: 1, focus: { side: 0, fwd: 0 }, seat };
+      }
+      // THE RECITAL: conducted. The body never points at the answer; a
+      // hold shows the palm, and the fill runs per step.
+      const window = Math.min(a.windows[best] ?? bestDue, bestDue);
+      const fill = clamp(1 - (bestDue - a.time) / window, 0, 1);
+      return { shape: 'conduct', fill, focus: { side: 0, fwd: 0, hold: zone.hold }, seat };
+    }
     const shape = gestureShapeOf(a.kind, zone);
     if (!shape) return null;
     const window = Math.min(a.windows[best] ?? bestDue, bestDue);
@@ -3352,66 +3491,66 @@ export class CampaignSystem extends createSystem({
     // Arms: wind up with the charge, whip through on the strike, ease home.
     // The sweep winds OUT wide and whips ACROSS; the slam hoists sky-high
     // and hammers DOWN — two silhouettes you can tell apart at a glance.
-    const a = this.attack;
     for (const i of [0, 1] as const) {
       const arm = rig.arms[i];
       this.strikeSwing[i] = Math.max(0, this.strikeSwing[i] - delta);
       let targetX = arm.restX;
       let targetZ = arm.restZ;
-      // Multi-target windups use BOTH arms — a two-fisted hoist over a pair
-      // of marked platforms, or the wide double wind-out that precedes the
-      // squad sweep's full-turn lash. One target keeps the single-arm tell.
-      const bothArms = !!a && a.seats.length > 1;
-      // A GRAMMAR move: the shape's windup pose, blended under any live
-      // follow-through (a cascade's step fires while the next read opens —
-      // the strike decays into the next windup instead of cutting it).
+      // The joints past the shoulder — ELBOW, WRIST, the hand's CURL — are
+      // absolute targets, at rest unless a gesture or a strike says
+      // otherwise (gestures.ts ARM_REST).
+      let elbow: number = ARM_REST.elbow;
+      let wrist: number = ARM_REST.wrist;
+      let curl: number = ARM_REST.curl;
+      // EVERY kind is a gesture now (gestures.ts): the shape's windup
+      // pose, blended under any live follow-through — a cascade's step
+      // fires while the next read opens, and the strike decays into the
+      // next windup instead of cutting it. The classics' multi-target
+      // windups (a two-fisted hoist over a pair of marked platforms, the
+      // wide double wind-out before the squad sweep's full-turn lash) ride
+      // the focus's `both`.
       const swingK = this.strikeSwing[i] > 0 ? this.strikeSwing[i] / 0.6 : 0;
-      const grammarSwing = swingK > 0 && this.swingShape !== 'slam' && this.swingShape !== 'sweep';
-      if (pose && (swingK === 0 || grammarSwing)) {
+      if (pose) {
         let px = pose.arms[i].x;
         let pz = pose.arms[i].z;
-        if (grammarSwing) {
-          const ft = grammarFollowThrough(this.swingShape as GestureShape, swingK, i, this.swingFocus)[i];
+        elbow = pose.arms[i].elbow;
+        wrist = pose.arms[i].wrist;
+        curl = pose.arms[i].curl;
+        if (swingK > 0) {
+          const ft = grammarFollowThrough(this.swingShape, swingK, i, this.swingFocus)[i];
           px = px * (1 - swingK) + ft.x * swingK;
           pz = pz * (1 - swingK) + ft.z * swingK;
+          elbow = elbow * (1 - swingK) + ft.elbow * swingK;
+          wrist = wrist * (1 - swingK) + ft.wrist * swingK;
+          curl = curl * (1 - swingK) + ft.curl * swingK;
         }
         targetX = arm.restX + px;
         targetZ = arm.restZ + pz;
-      } else if (a && (a.kind === 'nova' || a.kind === 'seesaw' || a.kind === 'surge')) {
-        // The nova and the flood attacks: BOTH arms hoist together and the
-        // whole machine coils over the platform before it comes down.
-        const fill = clamp(a.time / a.chargeTime, 0, 1);
-        targetX = arm.restX - 2.2 * fill;
-        targetZ = arm.restZ * (1 + fill);
-      } else if (a && (a.arm === i || bothArms) && (a.kind === 'slam' || a.kind === 'sweep')) {
-        const fill = clamp(a.time / a.chargeTime, 0, 1);
-        if (a.kind === 'slam') {
-          targetX = arm.restX - 2.5 * fill; // hoist the fist(s) sky-high
-        } else {
-          targetZ = arm.restZ + (i === 0 ? -1 : 1) * 1.7 * fill; // wind out wide
-          targetX = arm.restX - 0.4 * fill;
-        }
-      } else if (grammarSwing) {
-        // A grammar landing's follow-through with no windup left to blend
-        // under (the move's last beat): the gesture keeps its promise.
-        const ft = grammarFollowThrough(this.swingShape as GestureShape, swingK, i, this.swingFocus)[i];
+      } else if (swingK > 0) {
+        // A landing's follow-through with no windup left to blend under
+        // (the move's last beat): the gesture keeps its promise.
+        const ft = grammarFollowThrough(this.swingShape, swingK, i, this.swingFocus)[i];
         targetX = arm.restX + ft.x;
         targetZ = arm.restZ + ft.z;
-      } else if (this.strikeSwing[i] > 0) {
-        const k = this.strikeSwing[i] / 0.6;
-        // Follow-through: hammered down-and-through, or swung hard across.
-        if (this.swingShape === 'sweep') {
-          targetZ = arm.restZ + (i === 0 ? 1 : -1) * 1.4 * k; // crossed the body
-          targetX = arm.restX + 0.3 * k;
-        } else {
-          targetX = arm.restX + 1.3 * k; // buried in the floor
-          targetZ = arm.restZ * (1 - k);
-        }
+        elbow = ft.elbow;
+        wrist = ft.wrist;
+        curl = ft.curl;
+      } else if (fighting) {
+        // Idle: the elbows breathe and the hands work open and shut a
+        // little — a machine ticking over, not a mannequin.
+        elbow = ARM_REST.elbow + 0.06 * Math.sin(this.time * 1.3 + i * 2.1);
+        curl = ARM_REST.curl + 0.08 * Math.sin(this.time * 0.7 + i);
       }
       // Each chassis snaps at its own speed (the press is all servo).
       const ease = Math.min(1, delta * (this.strikeSwing[i] > 0.45 ? 26 : 7) * (pose ? temper.snap : 1));
       arm.pivot.rotation.x += (targetX - arm.pivot.rotation.x) * ease;
       arm.pivot.rotation.z += (targetZ - arm.pivot.rotation.z) * ease;
+      // Forward is negative x on the elbow and the wrist alike — the same
+      // sign the shoulder raises with.
+      arm.elbow.rotation.x += (-elbow - arm.elbow.rotation.x) * ease;
+      arm.wrist.rotation.x += (-wrist - arm.wrist.rotation.x) * ease;
+      this.curl[i] += (curl - this.curl[i]) * ease;
+      for (const d of arm.digits) d.node.rotation.x = d.open + (d.closed - d.open) * this.curl[i];
     }
   }
 
