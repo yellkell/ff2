@@ -11,12 +11,13 @@
 import { createSystem, InputComponent } from '@iwsdk/core';
 import { Quaternion, type Group } from 'three';
 import { setGloveLit } from '../avatar/boxer.js';
+import { applyGear } from '../avatar/gear.js';
 import { buildHand, HAND_ADDUCTION, setHandCurl } from '../avatar/hands.js';
 import { applyLook, myLook } from '../avatar/paint.js';
 import { applyAvatarSkin } from '../avatar/skins.js';
 import { BallState, Fireball } from '../components/Fireball.js';
 import { app } from '../menu/appState.js';
-import { myAvatarSkin } from '../menu/customization.js';
+import { myAvatarSkin, myGear, myTone } from '../menu/customization.js';
 
 const HANDS = ['left', 'right'] as const;
 
@@ -56,8 +57,13 @@ export class PlayerGloveSystem extends createSystem({
         applyAvatarSkin(glove, myAvatarSkin());
         // Dressed the moment it exists: a hand is built at the bell, long
         // after the locker last repainted anything, so it bakes its own
-        // look here. (MenuSystem keeps it in step from then on — it finds
-        // both hands by name whenever the look or the skin moves.)
+        // GEAR and look here — gear first, as fresh gear is a fresh paint
+        // surface. (MenuSystem keeps it in step from then on — it finds
+        // both hands by name whenever the look, the skin or the gear
+        // moves.) Without the gear here, CUFFS bought in the store went on
+        // the mirror and on your rival's view of you, and never on the
+        // hands in front of your own face.
+        applyGear(glove, myGear(), myTone());
         applyLook(glove, myLook());
         grip.add(glove);
         this.gloves[hand] = glove;

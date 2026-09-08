@@ -41,6 +41,21 @@ export function installCrashTrap(): void {
 
   // Console helpers for remote-debugging sessions — the ONLY way stored
   // crashes surface now; earlier sessions' errors never announce themselves.
+  // A lost WebGL context is the one crash that throws nothing: the picture
+  // goes black and stays black while the audio, the sockets and the game
+  // loop all carry on. Caught in the capture phase — the event lands on the
+  // canvas and does not bubble.
+  document.addEventListener(
+    'webglcontextlost',
+    (e) => {
+      const why = (e as WebGLContextEvent).statusMessage || '';
+      console.error('[crash trap] WebGL context lost', why);
+      save('webgl', `context lost ${why}`);
+    },
+    true,
+  );
+  document.addEventListener('webglcontextrestored', () => save('webgl', 'context restored'), true);
+
   (window as unknown as Record<string, unknown>).ibbCrashes = () => stored();
   (window as unknown as Record<string, unknown>).ibbClearCrashes = () => localStorage.removeItem(KEY);
 }

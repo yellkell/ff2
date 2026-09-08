@@ -346,6 +346,17 @@ export class MenuSystem extends createSystem({}) {
         p.redraw(null);
         return (p.kit.ctx().canvas as HTMLCanvasElement).toDataURL('image/png');
       },
+      /** A button's plate on a panel, in canvas pixels — and what a press
+       *  at a canvas pixel would actually hit, which is not always the
+       *  button drawn there (the store's BUY sits on its tile's ghost). */
+      rect: (id: string, button: string): { x: number; y: number; w: number; h: number } | null => {
+        const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
+        return p?.kit?.rectOf(button) ?? null;
+      },
+      at: (id: string, x: number, y: number): string | null => {
+        const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
+        return p?.kit?.buttonAtPx(x, y) ?? null;
+      },
       up: (id: string): boolean => this.menu.panels.find((x) => x.id === id)?.mesh.visible === true,
       /** The action panel's status line right now (the bot's grade, a
        *  forfeit prompt, a rematch call) — '' when no panel applies. */

@@ -642,11 +642,28 @@ export class Panel {
   buttonAt(u: number, v: number): string | null {
     const x = u * this.pxW;
     const y = (1 - v) * this.pxH;
-    for (const b of this.buttons) {
+    // LAST pushed wins. A face lays its plate down first and the controls
+    // on it after — the store's tile, then the BUY button grown on that
+    // tile — and the ray has to land on whatever is on top. Searched front
+    // to back, the tile answered for every press on its BUY: the press
+    // re-tried-on what was already tried on, and nothing was ever bought.
+    for (let i = this.buttons.length - 1; i >= 0; i--) {
+      const b = this.buttons[i];
       if (b.disabled || b.display) continue;
       if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return b.id;
     }
     return null;
+  }
+
+  /** A button's plate in canvas pixels, for the headless probes. */
+  rectOf(id: string): { x: number; y: number; w: number; h: number } | null {
+    const b = this.buttons.find((x) => x.id === id);
+    return b ? { x: b.x, y: b.y, w: b.w, h: b.h } : null;
+  }
+
+  /** The button under a canvas pixel — the answer a ray landing there gets. */
+  buttonAtPx(x: number, y: number): string | null {
+    return this.buttonAt(x / this.pxW, 1 - y / this.pxH);
   }
 
   dispose(): void {

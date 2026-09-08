@@ -343,6 +343,12 @@ const GROUND_Y = 0.14;
  *  (mannequin.ts BODY_RINGS, 0.488) plus the egg's half-height and a
  *  hair of air, so the head floats just clear of the collar. */
 const NECK_SEAT = 0.64;
+/** How much of the head's offset from the platform centre the hips hang
+ *  back toward it (a lean), and the most they ever hang back, in metres:
+ *  past that the body is not leaning but STEPPING, and steps with the
+ *  head. */
+const HIP_LEAN_HOLD = 0.4;
+const HIP_LEAN_MAX = 0.12;
 const _hips = new Vector3();
 const _chest = new Vector3();
 const _spine = new Vector3();
@@ -407,7 +413,19 @@ export function solveTorso(
   const hipY = seatUnderHead
     ? Math.max(GROUND_Y, headPos.y - NECK_SEAT)
     : Math.max(GROUND_Y, Math.min(BODY_IK.hipHeight, headPos.y - 0.5));
-  _hips.set(padX * 0.4 + _anchor.x * 0.6, hipY, padZ * 0.4 + _anchor.z * 0.6);
+  // Laterally the hips hang under the spine anchor, pulled back toward the
+  // platform's centre by a little of the offset — the lean. The pull is
+  // CAPPED: a lean leaves the hips where they were, a step takes them with
+  // you. The old straight 40/60 blend kept 40% of ANY offset at the
+  // centre, so a player who walked to the edge of their platform left the
+  // pelvis and the chest — two of the three spheres a ball can hit —
+  // standing in the middle of it, and took the hit they had just stepped
+  // out of.
+  const dx = padX - _anchor.x;
+  const dz = padZ - _anchor.z;
+  const pull = Math.hypot(dx, dz) * HIP_LEAN_HOLD;
+  const k = pull > HIP_LEAN_MAX ? HIP_LEAN_MAX / Math.hypot(dx, dz) : HIP_LEAN_HOLD;
+  _hips.set(_anchor.x + dx * k, hipY, _anchor.z + dz * k);
   _chest.copy(_hips).lerp(_anchor, BODY_IK.chestAlong);
   _chest.y = Math.max(GROUND_Y + 0.12, _chest.y); // chest stays off the slab too
 

@@ -34,6 +34,15 @@ async function launch() {
 
 const browser = await launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
+// Enough in the wallet that the STORE's BUY is live: a disabled BUY never
+// hit-tests, and the walk below has to prove it is the BUY that answers.
+await page.addInitScript(() => {
+  try {
+    if (parseInt(localStorage.getItem('ff-coins') ?? '0', 10) < 200) localStorage.setItem('ff-coins', '500');
+  } catch {
+    /* no storage — the store check will say so */
+  }
+});
 const errors = [];
 page.on('pageerror', (e) => {
   errors.push(e.message);
@@ -277,6 +286,40 @@ console.log('\n=== THE MODALS: locker, store, line-up, lobby, loadout ===');
   ids = await m(`buttons('shop')`);
   check('the STORE is up, with no COLOUR to sell', (await m(`up('shop')`)) && !ids.includes('tab-colour'), ids.slice(0, 6).join(','));
   await shot('shop', 'store');
+
+  // THE BUY ANSWERS. A tried-on tile grows its BUY INSIDE the tile's own
+  // ghost button, so the panel's hit-test has to give the press to the
+  // BUY and not to the tile under it — which only re-tries-on what is
+  // already tried on, and buys nothing (the report: "I tried to buy a
+  // hands equip, it doesn't do anything").
+  await wrap(`act('tab-gear')`);
+  await wrap(`act('gear-hands')`);
+  await page.waitForTimeout(200);
+  ids = await m(`buttons('shop')`);
+  const cuffs = ids.includes('shop-gr-10'); // CUFFS: hands, $60
+  check('HANDS on the store shelf offers CUFFS', cuffs, ids.filter((b) => b.startsWith('shop-')).join(','));
+  if (cuffs) {
+    await wrap(`act('shop-gr-10')`);
+    await page.waitForTimeout(300);
+    ids = await m(`buttons('shop')`);
+    const live = await m(`live('shop')`);
+    check('tried on, the tile grows a live BUY', has(ids, 'shop-buy-gr-10') && live.includes('shop-buy-gr-10'), ids.filter((b) => b.startsWith('shop-')).join(','));
+    const buy = await m(`rect('shop', 'shop-buy-gr-10')`);
+    const under = buy ? await m(`at('shop', ${buy.x + buy.w / 2}, ${buy.y + buy.h / 2})`) : null;
+    check('and a press on the BUY lands on the BUY, not on the tile beneath it', under === 'shop-buy-gr-10', String(under));
+    await shot('shop', 'store-buy');
+    await wrap(`act('shop-buy-gr-10')`);
+    await page.waitForTimeout(300);
+    ids = await m(`buttons('shop')`);
+    check('bought, CUFFS leave the store shelf', !ids.includes('shop-gr-10') && !ids.includes('shop-buy-gr-10'), ids.filter((b) => b.startsWith('shop-')).join(','));
+    await wrap(`act('open-locker')`);
+    await page.waitForTimeout(300);
+    ids = await m(`buttons('custom')`);
+    check('and turn up in the LOCKER, worn', ids.includes('shop-gr-10'), ids.filter((b) => b.startsWith('shop-')).join(','));
+    // Bare again for the GEAR walk further down, which starts from nothing worn.
+    await page.evaluate(() => window.__ff2.gear?.clear?.('hands'));
+  }
+  await wrap(`act('tab-platforms')`);
   await wrap(`act('custom-close')`);
 
   await wrap(`act('open-campaign')`);

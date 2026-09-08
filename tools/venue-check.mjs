@@ -354,6 +354,45 @@ check('the MC changed colour between visits', mcSecond.visit > mcFirst.visit && 
 await page.evaluate(() => window.__town.leave());
 await settle();
 
+console.log('\n=== the crossing, with its session pulled from under it ===');
+// A crossing fades on XR session frames. The report: a player waited out
+// the relay, the black came down, and the headset dropped its session
+// under the black (the club's first build holds the thread; a doffed
+// headset sleeps) — so the frame the fade was waiting on never came, the
+// curtain never lifted, and putting the headset back on found the black
+// with the music going. End the session the instant the crossing is
+// settling under the black; it must unwind to the arena, curtain down,
+// and the door must answer again on re-entry.
+await page.evaluate(() => {
+  window.__endedAt = null;
+  const iv = setInterval(() => {
+    if (window.__town?.crossing === 'settling') {
+      clearInterval(iv);
+      window.__endedAt = performance.now();
+      window.__town.session()?.end();
+    }
+  }, 5);
+  window.__town.enterVenue();
+});
+const ended = await page.waitForFunction(() => window.__endedAt !== null, { timeout: 30000 }).then(() => true).catch(() => false);
+const unwound = ended && (await page.waitForFunction(() => !window.__town.busy && window.__town.place === 'arena' && !document.body.classList.contains('app-entered'), { timeout: 15000 }).then(() => true).catch(() => false));
+const curtainDown = await page.evaluate(() => {
+  const c = window.__gdr?.scene?.()?.getObjectByName('town-curtain');
+  return !c || (!c.visible && c.material.opacity < 0.01);
+});
+check('a session ending under the black unwinds the crossing to the arena, curtain down', ended && unwound && curtainDown, JSON.stringify({ ended, unwound, curtainDown, ...(await town()) }));
+await page.click('#enter-vr');
+await page.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 20000 }).catch(() => {});
+await page.waitForTimeout(1500);
+t = await town();
+check('back in VR, the player is in the menu, not in the black', t.place === 'arena' && !t.busy && (await inSession()), JSON.stringify(t));
+await page.evaluate(() => window.__town.enterVenue());
+await settle();
+t = await town();
+check('and the door answers again', t.place === 'venue' && (await inSession()), JSON.stringify(t));
+await page.evaluate(() => window.__town.leave());
+await settle();
+
 console.log('\n=== THE BELL: a fight called from the floor, dealt by THE ROOM SERVER ===');
 // A room server of our own, on a port nobody else has, with a short clock,
 // and two headsets on its floor. Their arena rooms are PAPER (no

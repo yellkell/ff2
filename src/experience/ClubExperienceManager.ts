@@ -86,11 +86,43 @@ function floorStatus(ms: number): string {
   return `waking the house — a cold host takes up to a minute · ${s}s`;
 }
 
+/**
+ * One real render frame — and never a frame that cannot come.
+ *
+ * A crossing fades on session frames, and a session that ENDS mid-crossing
+ * (the headset dropped to the 2D browser while the club's first build held
+ * the thread, a doffed headset going to sleep, the system button) never
+ * delivers the frame it was asked for. The crossing then waited forever:
+ * the curtain stayed up, `busy` stayed true, the door never answered
+ * again, and the player who put the headset back on was inside the black
+ * with the music still going. So the frame resolves on the session's own
+ * `end` as well, and — for a session that is merely blurred and has
+ * stopped presenting — on a timer, so that no fade can hold the town.
+ */
+const FRAME_PATIENCE_MS = 4000;
 function nextRenderFrame(world: World): Promise<void> {
   return new Promise((resolve) => {
     const session = world.session;
-    if (session) session.requestAnimationFrame(() => resolve());
-    else window.requestAnimationFrame(() => resolve());
+    if (!session) {
+      window.requestAnimationFrame(() => resolve());
+      return;
+    }
+    let done = false;
+    let timer = 0;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(timer);
+      session.removeEventListener('end', finish);
+      resolve();
+    };
+    session.addEventListener('end', finish);
+    timer = window.setTimeout(finish, FRAME_PATIENCE_MS);
+    try {
+      session.requestAnimationFrame(finish);
+    } catch {
+      finish(); // an already-ended session throws on the request
+    }
   });
 }
 
@@ -108,7 +140,11 @@ export const townView: {
   bell?: () => { deal: FightDeal | null; state: string; lobbyMode: string | null; privateCode: string };
   /** The fight is over (or the probe says so): everyone home to the floor. */
   foldHome?: () => Promise<void>;
-} = { place: 'arena', busy: false };
+  /** The live XR session, for the headless probes that end one mid-visit. */
+  session?: () => XRSession | null;
+  /** Which step of a crossing is under way ('' between crossings). */
+  crossing: '' | 'held' | 'falling' | 'mounting' | 'settling' | 'lifting';
+} = { place: 'arena', busy: false, crossing: '' };
 
 /* ── THE BELL: fights called from the club floor (DESIGN §3.1) ─────────── */
 
@@ -160,6 +196,7 @@ export function installTownExperienceManager(
 ): void {
   const curtain = new Curtain(world.camera);
   const frame = (): Promise<void> => nextRenderFrame(world);
+  townView.session = () => (world.session as XRSession | null | undefined) ?? null;
 
   /* ── ownership ──────────────────────────────────────────────────────── */
 
@@ -340,6 +377,8 @@ export function installTownExperienceManager(
 
   let rave: RaveExperience | null = null;
   let activeSession: XRSession | null = null;
+  /** The session ended while a crossing was busy: leave once it lands. */
+  let leaveAfterCrossing = false;
   const announce = (): void => {
     window.dispatchEvent(new CustomEvent('ibb:location', { detail: townView.place }));
   };
@@ -347,10 +386,12 @@ export function installTownExperienceManager(
   const enterRave = async (place: RavePlace): Promise<void> => {
     if (townView.busy || townView.place !== 'arena') return;
     townView.busy = true;
+    leaveAfterCrossing = false;
     // THE CLUB's door is held for its floor before anything moves (above).
     // A held door that is let go leaves the arena exactly as it was.
     if (place === 'club') {
       let ready = true;
+      townView.crossing = 'held';
       try {
         ready = await holdForTheFloor();
       } catch {
@@ -358,12 +399,26 @@ export function installTownExperienceManager(
       }
       if (!ready) {
         townView.busy = false;
+        townView.crossing = '';
         return;
       }
     }
+    // The session this crossing is made in. If it is gone by the time the
+    // black is down, nothing has moved yet: put the curtain back and stand
+    // down, and the player who re-enters VR lands in the menu, where the
+    // door still works (the room they joined is kept — the held door
+    // answers at once the second time).
+    const sessionAtStart = (world.session as XRSession | null | undefined) ?? null;
+    const sessionGone = (): boolean => ((world.session as XRSession | null | undefined) ?? null) !== sessionAtStart;
     try {
+      townView.crossing = 'falling';
       await curtain.to(1, FALL, frame);
+      if (sessionGone()) {
+        curtain.set(0);
+        return;
+      }
 
+      townView.crossing = 'mounting';
       captureRenderState();
       pauseArena();
       claim(arenaOwned, raveOwned);
@@ -384,12 +439,14 @@ export function installTownExperienceManager(
 
       // Two frames under the black: one for the systems' first update to
       // put everything where it lives, one for the render to catch up.
+      townView.crossing = 'settling';
       await frame();
       await frame();
       // And the floor itself: the club is shown only once you are in a
       // room, so the black waits for that — briefly, the door was held for
       // it already — rather than lifting on the foyer.
       if (place === 'club') await settleFloor();
+      townView.crossing = 'lifting';
       await curtain.to(0, LIFT, frame);
     } catch (error) {
       console.error('[town] crossing failed', error);
@@ -401,6 +458,15 @@ export function installTownExperienceManager(
       curtain.set(0);
     } finally {
       townView.busy = false;
+      townView.crossing = '';
+      // Ended under the black — after the mount, where `onSessionEnd` found
+      // the crossing busy and left it to finish, or during the build, where
+      // no listener was on the session yet. Either way the venue is not a
+      // place to leave a player who comes back: unwind to the arena.
+      if (leaveAfterCrossing || (townView.place !== 'arena' && sessionGone())) {
+        leaveAfterCrossing = false;
+        void leaveRave(false);
+      }
     }
   };
 
@@ -422,10 +488,15 @@ export function installTownExperienceManager(
       else curtain.set(0);
     } finally {
       townView.busy = false;
+      leaveAfterCrossing = false; // a leave that lost its session has still left
     }
   };
 
   const onSessionEnd = (): void => {
+    if (townView.busy) {
+      leaveAfterCrossing = true; // the crossing's own finally takes it from here
+      return;
+    }
     if (townView.place !== 'arena') void leaveRave(false);
   };
 
