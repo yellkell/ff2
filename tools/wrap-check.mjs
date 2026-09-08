@@ -433,6 +433,15 @@ console.log('\n=== the bout: what you wear, on your own hands ===');
 // match. Your own gloves are built at the bell and renamed 'player-glove-*',
 // and the dresser only knew the rig's names.
 await page.evaluate(() => window.__ff2.gear.equip('cuffs'));
+// THE MAGNET: in the paint bay every small gear piece on the mirror gets a
+// catch sphere — a five-centimetre cuff two metres off was "hard to paint
+// on". Two cuffs, two magnets.
+await wrap(`act('open-paintbay')`);
+await page.waitForTimeout(500);
+const magnets = await page.evaluate(() => window.__ff2.bayMagnets?.() ?? -1);
+check('the bay guards each worn cuff with a magnet', magnets >= 2, `${magnets} magnets`);
+await wrap(`act('paintbay-close')`);
+await page.waitForTimeout(300);
 await wrap(`act('quick-match')`);
 await page.waitForTimeout(2500);
 const wornL = await page.evaluate(() => window.__ff2.worn?.('player-glove-left') ?? []);
