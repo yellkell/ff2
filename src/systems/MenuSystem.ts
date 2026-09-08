@@ -417,6 +417,12 @@ export class MenuSystem extends createSystem({}) {
       if (!bayClick(id)) this.run(id as MenuAction);
     };
     // Probe-only: dump a rig's baked part canvas for inspection.
+    /** What the named rig piece is wearing right now (the headless checks
+     *  ask whether your own gloves got their cuffs). */
+    (window.__ff2 as unknown as Record<string, unknown>).worn = (rootName: string): string[] => {
+      const obj = this.scene.getObjectByName(rootName);
+      return obj ? wornGear(obj) : [];
+    };
     (window.__ff2 as unknown as Record<string, unknown>).paintSnap = (rootName: string, part: string): string => {
       const obj = this.scene.getObjectByName(rootName);
       let url = '';

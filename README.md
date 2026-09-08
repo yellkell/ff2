@@ -100,7 +100,9 @@ carried over verbatim: everything in it still applies to this code.
   floats a hand clear of the neck in the glass (`solveTorso`'s new
   `seatUnderHead`; the arena keeps its hitbox-locked solve).
 - **THE RECITAL, AND ARMS THAT BEND** — THE ROUTINE is withdrawn from the
-  titans' book. GOLIATH teaches **THE RECITAL** (`campaign/grammar.ts`):
+  titans' book. GOLIATH taught **THE RECITAL** for a night and it has been
+  cut from his bill too (the machinery stays in `campaign/grammar.ts` and
+  the check still walks it):
   THE LESSON lights each quarter of a pattern in turn, each with its own
   NOTE — the pitch says front or back, the stereo pan says left or right,
   and a HOLD ("stay where you are") is a blue two-note chime with a ring on

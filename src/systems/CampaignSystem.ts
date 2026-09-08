@@ -59,6 +59,7 @@ import {
   gestureTemper,
   grammarFollowThrough,
   grammarGesture,
+  type ArmDelta,
   type GestureFocus,
   type GestureShape,
 } from '../campaign/gestures.js';
@@ -332,6 +333,12 @@ export class CampaignSystem extends createSystem({
   private strikeSwing: [number, number] = [0, 0]; // post-strike arm follow-through
   /** Each hand's curl, eased (0 open … 1 fist) — the digits read it. */
   private curl: [number, number] = [ARM_REST.curl, ARM_REST.curl];
+  /** Where each arm's last WINDUP left it: an arm a strike doesn't own
+   *  comes home from here over the swing, instead of jumping. */
+  private lastWind: [ArmDelta, ArmDelta] = [
+    { x: 0, z: 0, elbow: ARM_REST.elbow, wrist: ARM_REST.wrist, curl: ARM_REST.curl },
+    { x: 0, z: 0, elbow: ARM_REST.elbow, wrist: ARM_REST.wrist, curl: ARM_REST.curl },
+  ];
   /** What the live follow-through is FOR — a classic kind or a grammar
    *  gesture shape (campaign/gestures.ts) — and where it was aimed. */
   private swingShape: GestureShape = 'hammer';
@@ -3510,14 +3517,29 @@ export class CampaignSystem extends createSystem({
       // wide double wind-out before the squad sweep's full-turn lash) ride
       // the focus's `both`.
       const swingK = this.strikeSwing[i] > 0 ? this.strikeSwing[i] / 0.6 : 0;
+      // A strike OWNS the arms its follow-through moves. The others — the
+      // hand bracing the cannon's elbow, the scythe's counterweight, the
+      // hoisted pair's idle twin — used to be handed a rest target the
+      // instant the landing fired, and snapped home at strike speed: the
+      // "hands teleport back to their sides". They come home from where
+      // their windup left them now, over the swing, at the easy rate.
+      const ft = swingK > 0 ? grammarFollowThrough(this.swingShape, swingK, i, this.swingFocus)[i] : null;
+      const owned =
+        !!ft &&
+        (Math.abs(ft.x) > 1e-6 ||
+          Math.abs(ft.z) > 1e-6 ||
+          Math.abs(ft.elbow - ARM_REST.elbow) > 1e-6 ||
+          Math.abs(ft.wrist - ARM_REST.wrist) > 1e-6 ||
+          Math.abs(ft.curl - ARM_REST.curl) > 1e-6);
       if (pose) {
-        let px = pose.arms[i].x;
-        let pz = pose.arms[i].z;
-        elbow = pose.arms[i].elbow;
-        wrist = pose.arms[i].wrist;
-        curl = pose.arms[i].curl;
-        if (swingK > 0) {
-          const ft = grammarFollowThrough(this.swingShape, swingK, i, this.swingFocus)[i];
+        const w = pose.arms[i];
+        this.lastWind[i] = { x: w.x, z: w.z, elbow: w.elbow, wrist: w.wrist, curl: w.curl };
+        let px = w.x;
+        let pz = w.z;
+        elbow = w.elbow;
+        wrist = w.wrist;
+        curl = w.curl;
+        if (ft && owned) {
           px = px * (1 - swingK) + ft.x * swingK;
           pz = pz * (1 - swingK) + ft.z * swingK;
           elbow = elbow * (1 - swingK) + ft.elbow * swingK;
@@ -3526,23 +3548,33 @@ export class CampaignSystem extends createSystem({
         }
         targetX = arm.restX + px;
         targetZ = arm.restZ + pz;
-      } else if (swingK > 0) {
+      } else if (ft && owned) {
         // A landing's follow-through with no windup left to blend under
         // (the move's last beat): the gesture keeps its promise.
-        const ft = grammarFollowThrough(this.swingShape, swingK, i, this.swingFocus)[i];
         targetX = arm.restX + ft.x;
         targetZ = arm.restZ + ft.z;
         elbow = ft.elbow;
         wrist = ft.wrist;
         curl = ft.curl;
+      } else if (swingK > 0) {
+        // Not this arm's strike: down from the windup, over the swing.
+        const w = this.lastWind[i];
+        targetX = arm.restX + w.x * swingK;
+        targetZ = arm.restZ + w.z * swingK;
+        elbow = ARM_REST.elbow + (w.elbow - ARM_REST.elbow) * swingK;
+        wrist = ARM_REST.wrist + (w.wrist - ARM_REST.wrist) * swingK;
+        curl = ARM_REST.curl + (w.curl - ARM_REST.curl) * swingK;
       } else if (fighting) {
         // Idle: the elbows breathe and the hands work open and shut a
         // little — a machine ticking over, not a mannequin.
         elbow = ARM_REST.elbow + 0.06 * Math.sin(this.time * 1.3 + i * 2.1);
         curl = ARM_REST.curl + 0.08 * Math.sin(this.time * 0.7 + i);
       }
-      // Each chassis snaps at its own speed (the press is all servo).
-      const ease = Math.min(1, delta * (this.strikeSwing[i] > 0.45 ? 26 : 7) * (pose ? temper.snap : 1));
+      // Each chassis snaps at its own speed (the press is all servo) — but
+      // only the arm a strike owns snaps; everything else, and the walk
+      // home after a move, takes the easy rate.
+      const rate = this.strikeSwing[i] > 0.45 && owned ? 26 : pose || swingK > 0 ? 7 : 4;
+      const ease = Math.min(1, delta * rate * (pose ? temper.snap : 1));
       arm.pivot.rotation.x += (targetX - arm.pivot.rotation.x) * ease;
       arm.pivot.rotation.z += (targetZ - arm.pivot.rotation.z) * ease;
       // Forward is negative x on the elbow and the wrist alike — the same

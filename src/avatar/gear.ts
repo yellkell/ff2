@@ -517,7 +517,10 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     if (d) want.set(d.slot, id);
   }
   root.traverse((o) => {
-    const slot = SLOT_OF_NAME[o.name];
+    // By name for the rig's head and body; by the tag buildHand leaves for
+    // any glove — your own gloves are renamed 'player-glove-*' by the
+    // arena and left nameless by the pub, and neither got its cuffs.
+    const slot = SLOT_OF_NAME[o.name] ?? (o.userData.gearSlot as GearSlot | undefined);
     if (!slot) return;
     // THE WEARER'S OWN HEAD: gear on the head slot of a first-person rig
     // (userData.firstPerson — the arena's PlayerBodySystem flags its own
@@ -540,7 +543,7 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     }
     const build = BUILDERS[id];
     if (!build) return;
-    const side: 1 | -1 = o.name === 'opponent-glove-right' ? -1 : 1;
+    const side: 1 | -1 = (o.userData.gearSide as 1 | -1 | undefined) ?? (o.name.endsWith('-right') ? -1 : 1);
     const g = build(primer(tone), side, trim(tone));
     g.name = 'gear';
     g.userData.gear = id;

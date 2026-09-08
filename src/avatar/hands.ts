@@ -48,6 +48,12 @@ export const HAND_ADDUCTION: [Quaternion, Quaternion] = [
 export function buildHand(side: 1 | -1): Group {
   const hand = new Group();
   hand.scale.setScalar(HAND_VISUAL_SCALE);
+  // The gear slot rides the group itself (avatar/gear.ts applyGear reads
+  // it), not its name: the rig calls this 'opponent-glove-left', the arena
+  // renames your own 'player-glove-left', the pub leaves it nameless — and
+  // a pair of CUFFS has to land on all three.
+  hand.userData.gearSlot = 'hands';
+  hand.userData.gearSide = side;
 
   const steel = (): MeshStandardMaterial => {
     const m = new MeshStandardMaterial({

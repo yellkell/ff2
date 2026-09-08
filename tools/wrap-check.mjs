@@ -428,6 +428,18 @@ check('CLOSE folds it', !(await wrap(`visible('profilecard')`)));
   check('GEAR: an oversized wire string is refused whole (bare)', wire.oversized.length === 0, JSON.stringify(wire.oversized));
 }
 
+console.log('\n=== the bout: what you wear, on your own hands ===');
+// The report: CUFFS bought in the store, and nothing on your hands in the
+// match. Your own gloves are built at the bell and renamed 'player-glove-*',
+// and the dresser only knew the rig's names.
+await page.evaluate(() => window.__ff2.gear.equip('cuffs'));
+await wrap(`act('quick-match')`);
+await page.waitForTimeout(2500);
+const wornL = await page.evaluate(() => window.__ff2.worn?.('player-glove-left') ?? []);
+const wornR = await page.evaluate(() => window.__ff2.worn?.('player-glove-right') ?? []);
+check('CUFFS worn into a bout are on both of your own hands', wornL.includes('cuffs') && wornR.includes('cuffs'), JSON.stringify({ left: wornL, right: wornR }));
+await page.evaluate(() => window.__ff2.gear.clear('hands'));
+
 check('no page errors along the way', errors.length === 0, errors.join(' | '));
 
 const bad = results.filter((r) => !r).length;

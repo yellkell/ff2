@@ -272,7 +272,9 @@ export const BOSSES: BossDef[] = [
     // The king learned it all — and being the king, he TEACHES: THE RECITAL
     // is his memory test, the wave his procession, and once in a blazing
     // night the COMBINATION (duckdonut) closes the show on the beat.
-    grammar: { recital: 3, wave: 3, donut: 2, duckdonut: 0.4 },
+    // THE RECITAL was cut from the bill after a night on it (the machinery
+    // stays in grammar.ts for the check and for a later bill).
+    grammar: { wave: 3, donut: 2, duckdonut: 0.4 },
     beat: 0.46,
     grammarCharge: 1.9,
   },
