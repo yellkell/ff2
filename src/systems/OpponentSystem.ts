@@ -183,7 +183,10 @@ export class OpponentSystem extends createSystem({
       }
 
       // Head + torso from the bus pose, anchored on this fighter's platform.
-      solveTorso(r.rig, pose.headPos, pose.headQuat, seat.pos[0], seat.pos[2], _chest, _pelvis);
+      solveTorso(r.rig, pose.headPos, pose.headQuat, seat.pos[0], seat.pos[2], _chest, _pelvis, undefined, false, {
+        dt: delta,
+        hands: pose.handPos,
+      });
       for (const hand of [0, 1] as const) {
         r.rig.gloves[hand].position.copy(pose.handPos[hand]);
         r.rig.gloves[hand].quaternion.copy(pose.handQuat[hand]).multiply(HAND_ADDUCTION[hand]);

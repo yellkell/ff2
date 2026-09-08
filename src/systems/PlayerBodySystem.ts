@@ -25,6 +25,7 @@ const _headQ = new Quaternion();
 const _rig = new Vector3();
 const _chest = new Vector3();
 const _pelvis = new Vector3();
+const _hands: [Vector3, Vector3] = [new Vector3(), new Vector3()];
 
 export class PlayerBodySystem extends createSystem({
   parts: { required: [PlayerBodyPart] },
@@ -45,7 +46,7 @@ export class PlayerBodySystem extends createSystem({
     this.scene.add(this.rig.torso);
   }
 
-  update(): void {
+  update(delta: number): void {
     const rig = this.rig;
     const headObj = this.playerHeadEntity?.object3D;
     const rigObj = this.playerEntity?.object3D;
@@ -64,7 +65,18 @@ export class PlayerBodySystem extends createSystem({
     headObj.getWorldQuaternion(_headQ);
     rigObj.getWorldPosition(_rig);
 
-    solveTorso(rig, _head, _headQ, _rig.x, _rig.z, _chest, _pelvis);
+    // Both controllers, when tracked, tell the solve where the shoulders
+    // are; the torso's yaw trails the head either way (boxer.ts).
+    const grips = this.world.playerSpaceEntities.gripSpaces;
+    const left = grips.left?.object3D;
+    const right = grips.right?.object3D;
+    let hands: [Vector3, Vector3] | null = null;
+    if (left && right) {
+      left.getWorldPosition(_hands[0]);
+      right.getWorldPosition(_hands[1]);
+      hands = _hands;
+    }
+    solveTorso(rig, _head, _headQ, _rig.x, _rig.z, _chest, _pelvis, undefined, false, { dt: delta, hands });
 
     for (const entity of this.queries.parts.entities) {
       const obj = entity.object3D;

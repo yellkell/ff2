@@ -75,6 +75,11 @@ export interface BoxerRig {
   gloves: [Group, Group];
   /** Everything, for showing/hiding as one. */
   all: Group[];
+  /** Where the SHOULDERS face (radians about +Y, 0 = −Z), carried from
+   *  solve to solve: the torso trails the head instead of snapping to it. */
+  torsoYaw?: number;
+  /** …and whether they are mid-turn, coming round to the head. */
+  torsoFollowing?: boolean;
 }
 
 export const GLOVE_VISUAL_SCALE = 1.28;
@@ -349,6 +354,27 @@ const NECK_SEAT = 0.64;
  *  head. */
 const HIP_LEAN_HOLD = 0.4;
 const HIP_LEAN_MAX = 0.12;
+/**
+ * THE SHOULDERS. A head turns freely on a neck; shoulders do not follow a
+ * glance. The torso yaw holds while the head is within TORSO_DEAD of it,
+ * drifting square only slowly (TORSO_SETTLE, a time constant). Once the
+ * head is past the dead zone the shoulders are TURNING, and keep coming
+ * round — quickly (TORSO_FOLLOW), never faster than TORSO_RATE, so the
+ * body can't whip — until they are square to within TORSO_SQUARE: two
+ * thresholds, so a turn finishes instead of stalling at the dead zone's
+ * edge with the body left looking over its own shoulder. When both hands
+ * are tracked, the line between them is a better read of the shoulders
+ * than the head is, and pulls the target half way — unless it disagrees
+ * with the head by more than a right angle (a crossed guard), when it is
+ * ignored. Solved on real time (dt), not on frames.
+ */
+const TORSO_DEAD = 0.65; // ≈37° — a glance
+const TORSO_SQUARE = 0.14; // ≈8° — square enough to stop
+const TORSO_SETTLE = 4.0; // s
+const TORSO_FOLLOW = 0.22; // s
+const TORSO_RATE = 4.0; // rad/s
+const HANDS_APART_MIN = 0.25; // m — closer than this the line says nothing
+const wrapAngle = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 const _hips = new Vector3();
 const _chest = new Vector3();
 const _spine = new Vector3();
@@ -356,6 +382,15 @@ const _fwd = new Vector3();
 const _anchor = new Vector3();
 const _tilt = new Quaternion();
 const _yaw = new Quaternion();
+const _anchorV = new Vector3();
+const _hipsV = new Vector3();
+
+/** Optional inputs to the solve: real time since the last one, and the
+ *  tracked hands (left, right) when both are known. */
+export interface TorsoSolveOpts {
+  dt?: number;
+  hands?: readonly [Vector3, Vector3] | null;
+}
 
 /**
  * Solve the torso under the head, mirroring PlayerBodySystem: hips over the
@@ -385,6 +420,7 @@ export function solveTorso(
   outPelvis: Vector3,
   setBackBase: number = BODY_IK.spineSetBack,
   seatUnderHead = false,
+  opts?: TorsoSolveOpts,
 ): void {
   rig.head.position.copy(headPos);
   rig.head.quaternion.copy(headQuat);
@@ -394,6 +430,36 @@ export function solveTorso(
   const hl = Math.hypot(_fwd.x, _fwd.z);
   const nx = hl > 1e-3 ? _fwd.x / hl : 0;
   const nz = hl > 1e-3 ? _fwd.z / hl : -1;
+  const headYaw = Math.atan2(-nx, -nz);
+
+  // THE SHOULDERS (see TORSO_DEAD): where the torso faces, trailing the head.
+  let target = headYaw;
+  const hands = opts?.hands;
+  if (hands) {
+    const sx = hands[1].x - hands[0].x;
+    const sz = hands[1].z - hands[0].z;
+    if (Math.hypot(sx, sz) >= HANDS_APART_MIN) {
+      // Forward is the shoulder line turned a quarter: at yaw 0 the hands
+      // run left→right along +X and the body faces −Z.
+      const off = wrapAngle(Math.atan2(-sz, sx) - headYaw);
+      if (Math.abs(off) < Math.PI / 2) target = headYaw + off * 0.5;
+    }
+  }
+  const dt = Math.min(0.1, Math.max(0, opts?.dt ?? 1 / 72));
+  let ty = rig.torsoYaw ?? target;
+  {
+    const d = wrapAngle(target - ty);
+    const ad = Math.abs(d);
+    const following = ad > TORSO_DEAD || (rig.torsoFollowing === true && ad > TORSO_SQUARE);
+    rig.torsoFollowing = following;
+    const ease = d * (1 - Math.exp(-dt / (following ? TORSO_FOLLOW : TORSO_SETTLE)));
+    const cap = TORSO_RATE * dt;
+    ty += Math.max(-cap, Math.min(cap, ease));
+  }
+  ty = wrapAngle(ty);
+  rig.torsoYaw = ty;
+  const tx = -Math.sin(ty);
+  const tz = -Math.cos(ty);
   // How far the head has dropped toward the platform — 0 standing, →1 laid
   // right out. As you go down, the spine anchor backs FURTHER off so the torso
   // stretches flat out BEHIND you along the slab instead of folding straight
@@ -429,17 +495,30 @@ export function solveTorso(
   _chest.copy(_hips).lerp(_anchor, BODY_IK.chestAlong);
   _chest.y = Math.max(GROUND_Y + 0.12, _chest.y); // chest stays off the slab too
 
-  // Orientation: lean the chest along the hips→anchor spine, yaw with the head.
-  _spine.copy(_anchor).sub(_hips).normalize();
+  // Everything above is THE HITBOX SOLVE, unchanged: the chest and pelvis
+  // POINTS every headset agrees on, off the head's instant yaw. What is
+  // RENDERED is solved once more for the eye — its anchor along the
+  // shoulders' yaw rather than the head's, so a glance doesn't swing the
+  // body round you, and its hips SEATED under the head, so a tall player's
+  // eyes are not thirty centimetres above their own neck (the arena kept
+  // the fixed hip height for the spheres' sake; the spheres keep it, the
+  // body no longer has to).
+  _anchorV.set(headPos.x - tx * setBack, headPos.y, headPos.z - tz * setBack);
+  const dxV = padX - _anchorV.x;
+  const dzV = padZ - _anchorV.z;
+  const pullV = Math.hypot(dxV, dzV) * HIP_LEAN_HOLD;
+  const kV = pullV > HIP_LEAN_MAX ? HIP_LEAN_MAX / Math.hypot(dxV, dzV) : HIP_LEAN_HOLD;
+  _hipsV.set(_anchorV.x + dxV * kV, Math.max(GROUND_Y, headPos.y - NECK_SEAT), _anchorV.z + dzV * kV);
+
+  // Orientation: lean the body along its hips→anchor spine, yaw with the shoulders.
+  _spine.copy(_anchorV).sub(_hipsV).normalize();
   _tilt.setFromUnitVectors(UP, _spine);
-  _yaw.setFromAxisAngle(UP, Math.atan2(-_fwd.x, -_fwd.z));
+  _yaw.setFromAxisAngle(UP, ty);
 
   // The torso group sits at the world origin, so world coords ARE local
   // here. ONE rigid body: planted at the hips and leaned along the spine,
   // so the shoulders follow the lean without a waist joint to open up.
-  // (The chest/pelvis POINTS below are still solved exactly as before —
-  // they place the hitbox spheres, which never change.)
-  rig.body.position.copy(_hips);
+  rig.body.position.copy(_hipsV);
   rig.body.quaternion.copy(_tilt).multiply(_yaw);
 
   outChest.copy(_chest);

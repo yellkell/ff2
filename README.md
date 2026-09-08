@@ -99,6 +99,25 @@ carried over verbatim: everything in it still applies to this code.
   its hips at the arena's fixed height, so a tall player's head no longer
   floats a hand clear of the neck in the glass (`solveTorso`'s new
   `seatUnderHead`; the arena keeps its hitbox-locked solve).
+- **THE SHOULDERS, AND A BODY UNDER YOUR OWN HEAD** — the first night's
+  feedback: "my head was far above my body, and my body turned really
+  quickly". Both were the torso solve (`avatar/boxer.ts` `solveTorso`,
+  shared by you, your rival and the bots). The hips were pinned at the
+  arena's fixed height because the chest and pelvis hit spheres live there,
+  so a tall player's eyes sat thirty centimetres above their own neck; and
+  the torso's yaw was the head's, one to one, every frame, so a glance
+  across the gap whipped the whole body round. Now the HIT SPHERES keep
+  the fixed-height solve every headset agrees on, while the RENDERED body
+  seats under the head (as the club's figures already did) and carries
+  its own SHOULDERS: a yaw that holds through a glance (a 37° dead zone,
+  drifting square over seconds), comes round once the head is past it —
+  fast, but never over 4 rad/s — and keeps coming until it is square to
+  8°, so a turn finishes instead of leaving the body looking over its own
+  shoulder. When both controllers are tracked the line between the hands
+  pulls the shoulders half way toward it, ignored when it disagrees with
+  the head by more than a right angle (a crossed guard). The spine's
+  set-back hangs along the shoulders' yaw, not the head's, so looking
+  sideways no longer swings the body around you.
 - **VOIDSTEP points the way**: the circuit only closes one way round, and
   a body on a deck with ground on both sides picked wrong half the time.
   A chevron on the ground a step ahead of you now points at the
