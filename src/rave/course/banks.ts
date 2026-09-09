@@ -141,6 +141,20 @@ export function mirrorBank(bank: Bank, floorY: number, dim = 0.34): Group {
   const clone = new InstancedMesh(src.geometry, src.material, 0);
   const mat = (src.material as MeshBasicMaterial).clone();
   mat.color.multiplyScalar(dim);
+  // THE FLICKER AT THE EDGES. A deck docked at floor level straddles the
+  // glass: its body runs from the face down to a tenth under, the glass
+  // sits six centimetres under. Its reflection is folded about the glass
+  // and clipped to what lies beneath it — and what lies beneath it is the
+  // real deck's own lower flanks, at exactly the same x and z. Two opaque
+  // faces in one plane, and the depth test flips between them pixel by
+  // pixel as the head moves: the edges of every floor deck shimmered, and
+  // with a second rider beside you there were twice as many to see. The
+  // reflection is pushed a hair back in depth, so wherever the two share
+  // a plane the real deck wins, every pixel, every frame; where they don't
+  // — everything the mirror is actually for — nothing changes.
+  mat.polygonOffset = true;
+  mat.polygonOffsetFactor = 1;
+  mat.polygonOffsetUnits = 2;
   // Keep y < the floor. (A Plane keeps normal·p + constant > 0; with a
   // normal of -Y that reads -y + constant > 0.)
   //

@@ -213,6 +213,13 @@ export function mirrorOf(src: Object3D, dim = 0.42, floorY = 0): Object3D {
       if (basic.color) basic.color.multiplyScalar(dim);
       if (std.emissive) std.emissive.multiplyScalar(dim);
       c.side = DoubleSide;
+      // Pushed a hair back in depth: where a reflection shares a plane
+      // with the thing it reflects (anything straddling the glass), the
+      // real surface wins outright instead of z-fighting it (banks.ts
+      // mirrorBank has the long version).
+      c.polygonOffset = true;
+      c.polygonOffsetFactor = 1;
+      c.polygonOffsetUnits = 2;
       c.depthWrite = false;
       // Clipped to below the glass, for the same reason the circuit's banks
       // are (course/banks.ts mirrorBank): a flip is only honest above the
