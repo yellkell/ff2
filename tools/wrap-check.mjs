@@ -442,6 +442,17 @@ const magnets = await page.evaluate(() => window.__ff2.bayMagnets?.() ?? -1);
 check('the bay guards each worn cuff with a magnet', magnets >= 2, `${magnets} magnets`);
 await wrap(`act('paintbay-close')`);
 await page.waitForTimeout(300);
+// And the THIN pieces: a MOHAWK is six spikes over the crown, edge-on and
+// a hair wide from in front — "we couldn't paint the mohawk". Every spike
+// gets a catch box of its own.
+await page.evaluate(() => window.__ff2.gear.equip('mohawk'));
+await wrap(`act('open-paintbay')`);
+await page.waitForTimeout(500);
+const parts = await page.evaluate(() => window.__ff2.bayMagnetParts?.() ?? []);
+check('the bay guards every spike of a MOHAWK too', parts.filter((p) => p === 'gearHead').length >= 6, `${parts.filter((p) => p === 'gearHead').length} head magnets of ${parts.length}`);
+await wrap(`act('paintbay-close')`);
+await page.waitForTimeout(300);
+await page.evaluate(() => window.__ff2.gear.clear('head'));
 await wrap(`act('quick-match')`);
 await page.waitForTimeout(2500);
 const wornL = await page.evaluate(() => window.__ff2.worn?.('player-glove-left') ?? []);

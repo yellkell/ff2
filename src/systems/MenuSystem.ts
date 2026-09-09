@@ -12,6 +12,7 @@
 
 import { createSystem, InputComponent } from '@iwsdk/core';
 import {
+  BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   Group,
@@ -181,9 +182,12 @@ interface Pointer {
   dot: Mesh;
 }
 
-/** THE MAGNET's law: only pieces this small (world bounding radius, m)
- *  get a catch sphere, and the sphere reaches this far past the piece. */
+/** THE MAGNET's law: a piece gets a catch box if it is SMALL (world
+ *  bounding radius, m) or THIN (its slimmest side, m — a crest's fin
+ *  plate, a mohawk's spike, a halo's wire), and the box reaches this far
+ *  past the piece on every side. */
 const BAY_MAGNET_MAX_R = 0.09;
+const BAY_MAGNET_THIN = 0.035;
 const BAY_MAGNET_MARGIN = 0.03;
 
 export class MenuSystem extends createSystem({}) {
@@ -434,8 +438,11 @@ export class MenuSystem extends createSystem({}) {
       const obj = this.scene.getObjectByName(rootName);
       return obj ? wornGear(obj) : [];
     };
-    /** How many gear pieces THE MAGNET is guarding in the open bay. */
+    /** How many gear pieces THE MAGNET is guarding in the open bay, and
+     *  which slots they belong to. */
     (window.__ff2 as unknown as Record<string, unknown>).bayMagnets = (): number => this.bayProxies.length;
+    (window.__ff2 as unknown as Record<string, unknown>).bayMagnetParts = (): string[] =>
+      this.bayProxies.map((p) => String((p.userData.paintProxyFor as Mesh).userData.paintPart));
     (window.__ff2 as unknown as Record<string, unknown>).paintSnap = (rootName: string, part: string): string => {
       const obj = this.scene.getObjectByName(rootName);
       let url = '';
@@ -2198,30 +2205,38 @@ export class MenuSystem extends createSystem({}) {
       if (o.userData?.paintPart) paint.push(o as Mesh);
     });
     this.bayMeshes.push(...paint);
-    // THE MAGNET, on the gear only, and only on the small pieces: a body
-    // or a skull is its own target, and a horn's sphere would swallow the
-    // head it grows from. Each proxy is a child of its piece, so it turns
-    // with the blank; it draws nothing (no colour, no depth) and only the
-    // ray can find it.
+    // THE MAGNET, on the gear only, and only on the pieces that need it:
+    // the SMALL ones (a cuff, a knuckle spike) and the THIN ones (a
+    // crest's fin plates, a mohawk's spikes, a halo's wire — edge-on from
+    // in front, a hair's breadth of target). A body or a skull is its own
+    // target. Each catch is the piece's own bounding BOX, swollen by the
+    // margin on every side — a box, not a sphere: a sphere round a fin
+    // plate the height of the skull swallowed the skull, and every aim at
+    // the head went to the crest — a child of its piece so it turns with
+    // the blank, drawing nothing (no colour, no depth), found only by the
+    // ray.
     for (const mesh of paint) {
       const part = mesh.userData.paintPart as string;
       if (!part.startsWith('gear') || !mesh.geometry) continue;
       const geo = mesh.geometry;
       if (!geo.boundingSphere) geo.computeBoundingSphere();
+      if (!geo.boundingBox) geo.computeBoundingBox();
       const bs = geo.boundingSphere;
-      if (!bs) continue;
+      const bb = geo.boundingBox;
+      if (!bs || !bb) continue;
       mesh.getWorldScale(_dir);
       const worldScale = Math.max(_dir.x, _dir.y, _dir.z) || 1;
       const worldR = bs.radius * worldScale;
-      if (worldR > BAY_MAGNET_MAX_R) continue;
-      const catchR = (worldR * 1.6 + BAY_MAGNET_MARGIN) / worldScale;
+      bb.getSize(_end);
+      const thinnest = Math.min(_end.x * _dir.x, _end.y * _dir.y, _end.z * _dir.z);
+      if (worldR > BAY_MAGNET_MAX_R && thinnest > BAY_MAGNET_THIN) continue;
+      const margin = BAY_MAGNET_MARGIN / worldScale;
       const proxy = new Mesh(
-        new SphereGeometry(1, 12, 8),
+        new BoxGeometry(_end.x + margin * 2, _end.y + margin * 2, _end.z + margin * 2),
         new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
       );
       proxy.name = 'bay-magnet';
-      proxy.position.copy(bs.center);
-      proxy.scale.setScalar(catchR);
+      bb.getCenter(proxy.position);
       proxy.userData.paintProxyFor = mesh;
       mesh.add(proxy);
       this.bayProxies.push(proxy);
@@ -2242,10 +2257,17 @@ export class MenuSystem extends createSystem({}) {
     const bs = target.geometry.boundingSphere;
     if (!bs) return null;
     target.localToWorld(_end.copy(bs.center));
-    for (const from of [hit.point, this.ray.ray.origin]) {
-      _dir.copy(_end).sub(from);
-      if (_dir.lengthSq() < 1e-8) continue;
-      this.magnetRay.set(from, _dir.normalize());
+    // Toward the piece's centre from the catch point, then from the hand;
+    // then straight on along the pointer's own line — a ring's centre is
+    // its hole, and a ray through the hole still crosses the far tube.
+    for (const from of [hit.point, this.ray.ray.origin, null]) {
+      if (from) {
+        _dir.copy(_end).sub(from);
+        if (_dir.lengthSq() < 1e-8) continue;
+        this.magnetRay.set(from, _dir.normalize());
+      } else {
+        this.magnetRay.set(hit.point, this.ray.ray.direction);
+      }
       const inner = this.magnetRay.intersectObject(target, false)[0];
       if (inner?.uv) return inner;
     }
