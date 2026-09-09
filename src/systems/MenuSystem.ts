@@ -12,7 +12,6 @@
 
 import { createSystem, InputComponent } from '@iwsdk/core';
 import {
-  BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
   Group,
@@ -137,6 +136,8 @@ import { requestRaveEntry, requestVenueEntry } from '../experience/clubNavigatio
 const _origin = new Vector3();
 const _dir = new Vector3();
 const _end = new Vector3();
+const _magnetU = new Vector3();
+const _magnetV = new Vector3();
 const _head = new Vector3();
 const _fwd = new Vector3();
 const BOARD_SCROLL_DEADZONE = 0.55;
@@ -182,13 +183,16 @@ interface Pointer {
   dot: Mesh;
 }
 
-/** THE MAGNET's law: a piece gets a catch box if it is SMALL (world
- *  bounding radius, m) or THIN (its slimmest side, m — a crest's fin
- *  plate, a mohawk's spike, a halo's wire), and the box reaches this far
- *  past the piece on every side. */
-const BAY_MAGNET_MAX_R = 0.09;
-const BAY_MAGNET_THIN = 0.035;
-const BAY_MAGNET_MARGIN = 0.03;
+/**
+ * THE MAGNET's law: when the pointer misses the gear, a CONE of rays
+ * round it is cast at the gear alone — two rings of eight, at these
+ * half-angles (degrees; the outer is ~5 cm across at the mirror) — and
+ * the nearest gear surface any of them finds wins, unless it sits deeper
+ * than the pointer's own hit by more than the slack (m): gear behind the
+ * body stays behind the body.
+ */
+const BAY_MAGNET_RINGS = [0.7, 1.5];
+const BAY_MAGNET_SLACK = 0.06;
 
 export class MenuSystem extends createSystem({}) {
   private menu!: Menu;
@@ -201,11 +205,10 @@ export class MenuSystem extends createSystem({}) {
   private ballsKey = '';
   private bayKey = '';
   private bayMeshes: Object3D[] = [];
-  /** THE MAGNET: an invisible catch sphere round every SMALL gear piece
-   *  on the mirror while the bay is open — a cuff is a five-centimetre
-   *  ring two metres off, a knuckle spike seven millimetres — so a ray
-   *  that lands near a piece is projected onto it (resolveBayHit). */
-  private bayProxies: Mesh[] = [];
+  /** THE MAGNET: the gear on the mirror, the only thing the cone is cast
+   *  at — a cuff is a five-centimetre ring two metres off, a horn a
+   *  curled tube two centimetres wide, a mohawk spike seven millimetres. */
+  private bayGear: Mesh[] = [];
   private magnetRay = new Raycaster();
   private bayGhostAt = 0;
   private bayGhostOn = false;
@@ -438,11 +441,26 @@ export class MenuSystem extends createSystem({}) {
       const obj = this.scene.getObjectByName(rootName);
       return obj ? wornGear(obj) : [];
     };
-    /** How many gear pieces THE MAGNET is guarding in the open bay, and
-     *  which slots they belong to. */
-    (window.__ff2 as unknown as Record<string, unknown>).bayMagnets = (): number => this.bayProxies.length;
-    (window.__ff2 as unknown as Record<string, unknown>).bayMagnetParts = (): string[] =>
-      this.bayProxies.map((p) => String((p.userData.paintProxyFor as Mesh).userData.paintPart));
+    /** THE MAGNET, tried headlessly: aim from the player's eye at the
+     *  named piece's centre, tilted off it by `offDeg` (a miss the width
+     *  of a finger at the mirror), and say what the bay would paint. */
+    (window.__ff2 as unknown as Record<string, unknown>).bayAim = (part: string, offDeg: number): string | null => {
+      const piece = this.bayGear.find((m) => m.userData.paintPart === part);
+      if (!piece) return null;
+      const geo = piece.geometry;
+      if (!geo.boundingSphere) geo.computeBoundingSphere();
+      const centre = piece.localToWorld(geo.boundingSphere!.center.clone());
+      const origin = new Vector3(0, 1.6, 0);
+      const dir = centre.clone().sub(origin).normalize();
+      const side = new Vector3(0, 1, 0).cross(dir).normalize();
+      dir.addScaledVector(side, Math.tan((offDeg * Math.PI) / 180)).normalize();
+      this.ray.set(origin, dir);
+      this.hits.length = 0;
+      const direct = this.ray.intersectObjects(this.bayMeshes, false, this.hits)[0];
+      const directPart = direct ? String(direct.object.userData?.paintPart ?? '') : '';
+      const on = this.bayAim(direct ? { ...direct } : undefined, origin, dir);
+      return on ? String(on.object.userData?.paintPart ?? '') + (directPart && directPart !== String(on.object.userData?.paintPart) ? ` (over ${directPart})` : '') : null;
+    };
     (window.__ff2 as unknown as Record<string, unknown>).paintSnap = (rootName: string, part: string): string => {
       const obj = this.scene.getObjectByName(rootName);
       let url = '';
@@ -661,17 +679,17 @@ export class MenuSystem extends createSystem({}) {
     }
     for (const hand of ['left', 'right'] as const) {
       const hit = this.updatePointer(hand, this.rayTargets);
-      if (!hit) continue;
-      const panel = this.menu.panels.find((p) => p.mesh === hit.object);
-      if (!panel) {
-        if (app.paintBayOpen) {
-          // A magnet catch resolves onto its piece; a bare paint surface
-          // is its own hit.
-          const on = this.resolveBayHit(hit);
-          if (on?.object.userData?.paintPart && on.uv) this.bayBodyHit(hand, on);
-        }
+      // THE PAINT BAY: anything that is not a panel — the blank, the
+      // gear, or the air beside them — goes through THE MAGNET, which
+      // may find a piece the pointer itself just missed.
+      if (app.paintBayOpen && !(hit && this.menu.panels.some((p) => p.mesh === hit.object))) {
+        const on = this.bayAim(hit, this.ray.ray.origin, this.ray.ray.direction);
+        if (on?.object.userData?.paintPart && on.uv) this.bayBodyHit(hand, on);
         continue;
       }
+      if (!hit) continue;
+      const panel = this.menu.panels.find((p) => p.mesh === hit.object);
+      if (!panel) continue;
       // The TOWN wing scrolls with the thumbstick: ladder rows on LADDER,
       // the article on NEWS.
       if (panel.id === 'duel' && wrapNav.town === 'ladder') {
@@ -2193,85 +2211,48 @@ export class MenuSystem extends createSystem({}) {
    *  gear it wears — becomes a target for the bay's ray. Re-collected when
    *  the gear changes, since a fresh piece is a fresh canvas. */
   private collectBayMeshes(): void {
-    for (const p of this.bayProxies) {
-      p.removeFromParent();
-      p.geometry.dispose();
-      (p.material as MeshBasicMaterial).dispose();
-    }
-    this.bayProxies = [];
     this.bayMeshes = [];
-    const paint: Mesh[] = [];
+    this.bayGear = [];
     this.mirror?.group.traverse((o) => {
-      if (o.userData?.paintPart) paint.push(o as Mesh);
+      if (!o.userData?.paintPart) return;
+      this.bayMeshes.push(o);
+      if (String(o.userData.paintPart).startsWith('gear')) this.bayGear.push(o as Mesh);
     });
-    this.bayMeshes.push(...paint);
-    // THE MAGNET, on the gear only, and only on the pieces that need it:
-    // the SMALL ones (a cuff, a knuckle spike) and the THIN ones (a
-    // crest's fin plates, a mohawk's spikes, a halo's wire — edge-on from
-    // in front, a hair's breadth of target). A body or a skull is its own
-    // target. Each catch is the piece's own bounding BOX, swollen by the
-    // margin on every side — a box, not a sphere: a sphere round a fin
-    // plate the height of the skull swallowed the skull, and every aim at
-    // the head went to the crest — a child of its piece so it turns with
-    // the blank, drawing nothing (no colour, no depth), found only by the
-    // ray.
-    for (const mesh of paint) {
-      const part = mesh.userData.paintPart as string;
-      if (!part.startsWith('gear') || !mesh.geometry) continue;
-      const geo = mesh.geometry;
-      if (!geo.boundingSphere) geo.computeBoundingSphere();
-      if (!geo.boundingBox) geo.computeBoundingBox();
-      const bs = geo.boundingSphere;
-      const bb = geo.boundingBox;
-      if (!bs || !bb) continue;
-      mesh.getWorldScale(_dir);
-      const worldScale = Math.max(_dir.x, _dir.y, _dir.z) || 1;
-      const worldR = bs.radius * worldScale;
-      bb.getSize(_end);
-      const thinnest = Math.min(_end.x * _dir.x, _end.y * _dir.y, _end.z * _dir.z);
-      if (worldR > BAY_MAGNET_MAX_R && thinnest > BAY_MAGNET_THIN) continue;
-      const margin = BAY_MAGNET_MARGIN / worldScale;
-      const proxy = new Mesh(
-        new BoxGeometry(_end.x + margin * 2, _end.y + margin * 2, _end.z + margin * 2),
-        new MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false, colorWrite: false }),
-      );
-      proxy.name = 'bay-magnet';
-      bb.getCenter(proxy.position);
-      proxy.userData.paintProxyFor = mesh;
-      mesh.add(proxy);
-      this.bayProxies.push(proxy);
-      this.bayMeshes.push(proxy);
-    }
   }
 
   /**
-   * A ray in the bay that landed in a magnet sphere is projected onto the
-   * piece it guards: from the catch point toward the piece's centre, and
-   * failing that from the hand itself — either way the paint lands on the
-   * piece's real surface with a real UV. Null if the piece is not under
-   * either line (a graze past its edge).
+   * THE MAGNET. The pointer's own hit stands if it is gear. Otherwise a
+   * cone of rays round the pointer is cast at the gear alone and the
+   * nearest gear surface any of them finds is taken — a real surface with
+   * a real UV, whatever the piece's shape: a cuff's ring, a horn's curl,
+   * a fin's edge, a spike. It loses only to a pointer hit that is closer
+   * by more than the slack, so gear behind the body stays behind the
+   * body. (Catch boxes and spheres came before this and each had a shape
+   * they were wrong for; a fat ray has none.)
    */
-  private resolveBayHit(hit: Intersection): Intersection | null {
-    const target = hit.object.userData?.paintProxyFor as Mesh | undefined;
-    if (!target) return hit;
-    const bs = target.geometry.boundingSphere;
-    if (!bs) return null;
-    target.localToWorld(_end.copy(bs.center));
-    // Toward the piece's centre from the catch point, then from the hand;
-    // then straight on along the pointer's own line — a ring's centre is
-    // its hole, and a ray through the hole still crosses the far tube.
-    for (const from of [hit.point, this.ray.ray.origin, null]) {
-      if (from) {
-        _dir.copy(_end).sub(from);
-        if (_dir.lengthSq() < 1e-8) continue;
-        this.magnetRay.set(from, _dir.normalize());
-      } else {
-        this.magnetRay.set(hit.point, this.ray.ray.direction);
+  private bayAim(direct: Intersection | undefined, origin: Vector3, dir: Vector3): Intersection | undefined {
+    if (direct && String(direct.object.userData?.paintPart ?? '').startsWith('gear')) return direct;
+    if (!this.bayGear.length) return direct;
+    // Two axes across the pointer.
+    _end.set(0, 1, 0);
+    if (Math.abs(dir.y) > 0.9) _end.set(1, 0, 0);
+    const u = _magnetU.crossVectors(dir, _end).normalize();
+    const v = _magnetV.crossVectors(dir, u).normalize();
+    let best: Intersection | undefined;
+    for (const deg of BAY_MAGNET_RINGS) {
+      const t = Math.tan((deg * Math.PI) / 180);
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        _dir.copy(dir).addScaledVector(u, Math.cos(a) * t).addScaledVector(v, Math.sin(a) * t).normalize();
+        this.magnetRay.set(origin, _dir);
+        this.hits.length = 0;
+        const h = this.magnetRay.intersectObjects(this.bayGear, false, this.hits)[0];
+        if (h?.uv && (!best || h.distance < best.distance)) best = { ...h };
       }
-      const inner = this.magnetRay.intersectObject(target, false)[0];
-      if (inner?.uv) return inner;
     }
-    return null;
+    if (!best) return direct;
+    if (direct && best.distance > direct.distance + BAY_MAGNET_SLACK) return direct;
+    return best;
   }
 
   /** The ray is ON the blank in the paint bay: ghost/adjust/place/lift. */

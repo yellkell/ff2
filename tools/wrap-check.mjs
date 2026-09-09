@@ -436,20 +436,26 @@ await page.evaluate(() => window.__ff2.gear.equip('cuffs'));
 // THE MAGNET: in the paint bay every small gear piece on the mirror gets a
 // catch sphere — a five-centimetre cuff two metres off was "hard to paint
 // on". Two cuffs, two magnets.
+// THE MAGNET: aimed from the eye a degree off a piece's centre — a miss
+// the width of a finger at the mirror — the bay paints the piece anyway,
+// whatever its shape: the cuffs' ring, the HORNS' curled tube ("still a
+// pain to paint on the horns"), the MOHAWK's spikes.
+await page.evaluate(() => window.__ff2.gear.equip('horns'));
 await wrap(`act('open-paintbay')`);
 await page.waitForTimeout(500);
-const magnets = await page.evaluate(() => window.__ff2.bayMagnets?.() ?? -1);
-check('the bay guards each worn cuff with a magnet', magnets >= 2, `${magnets} magnets`);
+const aimCuffs = await page.evaluate(() => window.__ff2.bayAim?.('gearHands', 1.0) ?? null);
+check('a finger off the cuffs, the bay paints the cuffs', (aimCuffs ?? '').startsWith('gearHands'), String(aimCuffs));
+const aimHorns = await page.evaluate(() => window.__ff2.bayAim?.('gearHead', 1.0) ?? null);
+check('a finger off the horns, the bay paints the horns', (aimHorns ?? '').startsWith('gearHead'), String(aimHorns));
+const aimDead = await page.evaluate(() => window.__ff2.bayAim?.('gearHands', 0) ?? null);
+check('dead on, the pointer\'s own hit stands', (aimDead ?? '').startsWith('gearHands'), String(aimDead));
 await wrap(`act('paintbay-close')`);
 await page.waitForTimeout(300);
-// And the THIN pieces: a MOHAWK is six spikes over the crown, edge-on and
-// a hair wide from in front — "we couldn't paint the mohawk". Every spike
-// gets a catch box of its own.
 await page.evaluate(() => window.__ff2.gear.equip('mohawk'));
 await wrap(`act('open-paintbay')`);
 await page.waitForTimeout(500);
-const parts = await page.evaluate(() => window.__ff2.bayMagnetParts?.() ?? []);
-check('the bay guards every spike of a MOHAWK too', parts.filter((p) => p === 'gearHead').length >= 6, `${parts.filter((p) => p === 'gearHead').length} head magnets of ${parts.length}`);
+const aimSpike = await page.evaluate(() => window.__ff2.bayAim?.('gearHead', 1.0) ?? null);
+check('a finger off a MOHAWK spike, the bay paints the spike', (aimSpike ?? '').startsWith('gearHead'), String(aimSpike));
 await wrap(`act('paintbay-close')`);
 await page.waitForTimeout(300);
 await page.evaluate(() => window.__ff2.gear.clear('head'));
