@@ -40,7 +40,7 @@
  * cast (the murk swallows the boundary).
  */
 
-import { createSystem } from '@iwsdk/core';
+import { createSystem, InputComponent } from '@iwsdk/core';
 import {
   Euler,
   Matrix4,
@@ -380,20 +380,35 @@ export class ClubMirrorSystem extends createSystem({}) {
         z = _fwd.z;
         // …and which way it faces, the same quaternion the floor streams.
         obj.getWorldQuaternion(_q);
+        // …and the squeeze, straight off the controller: the glass closes
+        // its fist the frame you do, not when your own pose comes back
+        // off the wire.
+        const gp = this.input.xr.gamepads[hand];
+        const trig = gp?.getButtonValue(InputComponent.Trigger) ?? 0;
+        const sq = gp?.getButtonValue(InputComponent.Squeeze) ?? 0;
         if (hand === 'left') {
           p.lqx = _q.x;
           p.lqy = _q.y;
           p.lqz = _q.z;
           p.lqw = _q.w;
+          p.lt = trig;
+          p.lg = sq;
         } else {
           p.rqx = _q.x;
           p.rqy = _q.y;
           p.rqz = _q.z;
           p.rqw = _q.w;
+          p.rt = trig;
+          p.rg = sq;
         }
       } else {
-        if (hand === 'left') p.lqw = 0;
-        else p.rqw = 0;
+        if (hand === 'left') {
+          p.lqw = 0;
+          p.lt = p.lg = undefined;
+        } else {
+          p.rqw = 0;
+          p.rt = p.rg = undefined;
+        }
         // No controllers (headless walks): the same resting-hands guess
         // pumpClubPose() streams, so the glass agrees with the room.
         x = p.hx + (hand === 'left' ? -0.25 : 0.25);

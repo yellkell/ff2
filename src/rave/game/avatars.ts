@@ -94,6 +94,15 @@ export interface DancerPose {
   rqy?: number;
   rqz?: number;
   rqw?: number;
+  /** Hand GRIP, as the controller's two analogue reads, 0 open … 1 closed:
+   *  `t` the trigger (curls the index), `g` the grip (curls the rest) —
+   *  see avatar/hands.ts setHandGrip. Present when the wire carries them
+   *  (the club floor does), absent on the ring and on any frame from
+   *  before the fingers moved; absent, the hand rests half-relaxed. */
+  lt?: number;
+  lg?: number;
+  rt?: number;
+  rg?: number;
   /** 0 dancing … 1 melted on the deck (eliminated). */
   slump: number;
 }

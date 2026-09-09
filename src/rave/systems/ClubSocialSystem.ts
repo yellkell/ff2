@@ -530,6 +530,11 @@ export class ClubSocialSystem extends createSystem({}) {
     if (s.rq) {
       [t.rqx, t.rqy, t.rqz, t.rqw] = s.rq;
     } else t.rqw = 0;
+    // …and their grip, when the frame has it; missing says "at rest".
+    if (s.lg) [t.lt, t.lg] = s.lg;
+    else t.lt = t.lg = undefined;
+    if (s.rg) [t.rt, t.rg] = s.rg;
+    else t.rt = t.rg = undefined;
     t.hx = s.hx;
     t.hy = s.hy;
     t.hz = s.hz;
@@ -575,6 +580,18 @@ export class ClubSocialSystem extends createSystem({}) {
       } else {
         d.push(0, 0, 0, 0);
       }
+    }
+    // THE FINGERS' SQUEEZE: trigger and grip per hand, so a fist made on
+    // the floor closes on every other headset. (The glass reads your own
+    // controllers directly — ClubMirrorSystem.readMyPose — rather than
+    // waiting for this frame to come back.) Two decimals is all a finger
+    // needs, and half the bytes of a raw float.
+    for (const hand of ['left', 'right'] as const) {
+      const gp = this.input.xr.gamepads[hand];
+      d.push(
+        Math.round((gp?.getButtonValue(InputComponent.Trigger) ?? 0) * 100) / 100,
+        Math.round((gp?.getButtonValue(InputComponent.Squeeze) ?? 0) * 100) / 100,
+      );
     }
     sendClubPose(d);
   }

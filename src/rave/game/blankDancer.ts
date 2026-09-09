@@ -34,7 +34,7 @@ import {
   Vector3,
 } from 'three';
 import { buildBoxer, setAvatarAccent, solveTorso } from '../../avatar/boxer.js';
-import { HAND_ADDUCTION } from '../../avatar/hands.js';
+import { HAND_ADDUCTION, HAND_REST_CURL, setHandCurl, setHandGrip } from '../../avatar/hands.js';
 import { toneSkinId, type BlankTone } from '../../avatar/mannequin.js';
 import { applyGear } from '../../avatar/gear.js';
 import { applyLook, type Look } from '../../avatar/paint.js';
@@ -236,6 +236,16 @@ export function buildDancer(hue: number, dress: BlankDress = {}): DancerRig {
         );
         glove.quaternion.copy(_handQ.multiply(HAND_ADDUCTION[side < 0 ? 0 : 1]));
       }
+      // THE FINGERS, when the pose carries the grip: the same curl your
+      // own hand makes of the same squeeze (setHandGrip), so a fist made
+      // on the floor is a fist in the glass and on every other headset.
+      // A pose that never learned it (the ring's, the MC's) leaves the
+      // hand in the blank's half-relaxed rest — set every frame, because
+      // the same rig can go from a floor pose to a ring pose.
+      const trig = side < 0 ? p.lt : p.rt;
+      const grip = side < 0 ? p.lg : p.rg;
+      if (trig !== undefined || grip !== undefined) setHandGrip(glove, trig ?? 0, grip ?? 0);
+      else setHandCurl(glove, ...HAND_REST_CURL);
     }
     if (crown) {
       crown.position.set(p.hx, p.hy + CROWN_RISE, p.hz);

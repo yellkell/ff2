@@ -31,6 +31,7 @@
  *    McSystem). Here the immunity is structural, for every figure at once.
  */
 
+import { HAND_REST_CURL } from '../../avatar/hands.js';
 import type { DancerPose } from './avatars.js';
 
 export interface MotionTuning {
@@ -70,6 +71,7 @@ export class PoseMotion {
     for (const k of EXPO_KEYS) pose[k] = sane(tgt[k], pose[k]);
     pose.yaw = sane(tgt.yaw, pose.yaw);
     for (const keys of QUAT_KEYS) for (const k of keys) pose[k] = tgt[k];
+    for (const k of GRIP_KEYS) pose[k] = tgt[k] === undefined ? undefined : sane(tgt[k], 0);
     for (let i = 0; i < HAND_KEYS.length; i++) {
       pose[HAND_KEYS[i]] = sane(tgt[HAND_KEYS[i]], pose[HAND_KEYS[i]]);
       this.vel[i] = 0;
@@ -159,6 +161,24 @@ export class PoseMotion {
       pose[kz] = pz;
       pose[kw] = pw;
     }
+
+    // The fingers: an exponential chase at the head's rate — a squeeze on
+    // a 10 Hz wire lands as one close, not a stutter, and a fist never
+    // overshoots into a clench. A target that never learned the grip
+    // (undefined) clears the pose's, so the hand goes back to rest; and a
+    // hand that WAS at rest starts its chase from the rest pose's own
+    // grip, so the first squeeze eases in rather than snapping open first.
+    for (let i = 0; i < GRIP_KEYS.length; i++) {
+      const key = GRIP_KEYS[i];
+      const want = tgt[key];
+      if (want === undefined) {
+        pose[key] = undefined;
+        continue;
+      }
+      let cur = pose[key];
+      if (cur === undefined || !Number.isFinite(cur)) cur = GRIP_REST[i];
+      pose[key] = cur + (sane(want, cur) - cur) * kq;
+    }
   }
 }
 
@@ -167,3 +187,10 @@ const QUAT_KEYS = [
   ['lqx', 'lqy', 'lqz', 'lqw'],
   ['rqx', 'rqy', 'rqz', 'rqw'],
 ] as const;
+
+/** The hands' grip keys: trigger and grip, left then right. */
+const GRIP_KEYS = ['lt', 'lg', 'rt', 'rg'] as const;
+/** Where a hand at rest starts chasing from, per GRIP_KEYS: the rest
+ *  pose's index curl stands in for the trigger, its other fingers' for
+ *  the grip (avatar/hands.ts HAND_REST_CURL). */
+const GRIP_REST = [HAND_REST_CURL[0], HAND_REST_CURL[1], HAND_REST_CURL[0], HAND_REST_CURL[1]] as const;

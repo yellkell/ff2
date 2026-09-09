@@ -26,6 +26,10 @@ export interface RemotePose {
    *  one (club poses do; ring poses never have). */
   lq?: [number, number, number, number];
   rq?: [number, number, number, number];
+  /** Each hand's grip as [trigger, grip], 0 open … 1 closed, when the
+   *  frame carried it (club poses do since the fingers moved). */
+  lg?: [number, number];
+  rg?: [number, number];
   /** Wall-clock ms of arrival (stale poses freeze rather than glide). */
   t: number;
 }

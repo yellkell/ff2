@@ -41,6 +41,11 @@ export const HAND_ADDUCTION: [Quaternion, Quaternion] = [
   new Quaternion().setFromAxisAngle(HAND_FORWARD_AXIS, -Math.PI / 2),
 ];
 
+/** The half-relaxed pose a hand nobody drives rests in — [index, others,
+ *  thumb] for setHandCurl. buildHand parks every hand here, and a dancer
+ *  whose pose never learned the grip goes back to it. */
+export const HAND_REST_CURL: readonly [number, number, number] = [0.25, 0.3, 0.45];
+
 /**
  * Build one hand. `side` mirrors the thumb: +1 = left hand (thumb on +x),
  * -1 = right hand (thumb on -x).
@@ -126,7 +131,7 @@ export function buildHand(side: 1 | -1): Group {
   hand.userData.joints = { fingers, thumb: [tRoot, tMid] } satisfies HandJoints;
   // Hands that nobody drives (remote punters, the barkeep, the mirror)
   // rest in a natural half-relaxed pose instead of rigor-mortis flat.
-  setHandCurl(hand, 0.25, 0.3, 0.45);
+  setHandCurl(hand, ...HAND_REST_CURL);
   return hand;
 }
 
@@ -147,4 +152,16 @@ export function setHandCurl(hand: Group, index: number, others: number, thumb: n
   });
   joints.thumb[0].rotation.x = -thumb * 0.7;
   joints.thumb[1].rotation.x = -thumb * 0.8;
+}
+
+/**
+ * Pose a hand from the two analogue reads a controller gives, 0 open … 1
+ * closed: the TRIGGER curls the index, the GRIP curls the rest, each
+ * borrowing a little of the other (a real fist never leaves one finger
+ * straight), and the thumb tucks across as either closes. The one formula
+ * behind your own hands, the pub's and the club's dancers — so a fist you
+ * make is the same fist in the glass and on every other headset.
+ */
+export function setHandGrip(hand: Group, trigger: number, squeeze: number): void {
+  setHandCurl(hand, Math.max(trigger, squeeze * 0.6), Math.max(squeeze, trigger * 0.45), 0.35 + Math.max(trigger, squeeze) * 0.55);
 }

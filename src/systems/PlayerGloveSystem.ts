@@ -12,7 +12,7 @@ import { createSystem, InputComponent } from '@iwsdk/core';
 import { Quaternion, type Group } from 'three';
 import { setGloveLit } from '../avatar/boxer.js';
 import { applyGear } from '../avatar/gear.js';
-import { buildHand, HAND_ADDUCTION, setHandCurl } from '../avatar/hands.js';
+import { buildHand, HAND_ADDUCTION, setHandGrip } from '../avatar/hands.js';
 import { applyLook, myLook } from '../avatar/paint.js';
 import { applyAvatarSkin } from '../avatar/skins.js';
 import { BallState, Fireball } from '../components/Fireball.js';
@@ -91,12 +91,7 @@ export class PlayerGloveSystem extends createSystem({
 
       // Fingers track the real squeeze: trigger curls the index, grip the
       // rest, thumb tucks across as either closes.
-      setHandCurl(
-        glove,
-        Math.max(trig, sq * 0.6),
-        Math.max(sq, trig * 0.45),
-        0.35 + Math.max(trig, sq) * 0.55,
-      );
+      setHandGrip(glove, trig, sq);
     }
   }
 }

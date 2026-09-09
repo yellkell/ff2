@@ -9,7 +9,7 @@
 import { createSystem, InputComponent } from '@iwsdk/core';
 import { Color, Group, MeshStandardMaterial, Quaternion, Vector3 } from 'three';
 import { buildBoxer } from '../../avatar/boxer.js';
-import { buildHand, HAND_ADDUCTION, setHandCurl } from '../../avatar/hands.js';
+import { buildHand, HAND_ADDUCTION, setHandGrip } from '../../avatar/hands.js';
 import { applyAvatarSkin, resolveAvatarSkin } from '../../avatar/skins.js';
 import { applyGear, cleanGear } from '../../avatar/gear.js';
 import { myAvatarSkin, customization, myGear, myPackedGear, myTone } from '../../menu/customization.js';
@@ -265,7 +265,7 @@ export class PubPlayerSystem extends createSystem({}) {
       if (!glove || !gp) return;
       const trig = gp.getButtonValue(InputComponent.Trigger);
       const sq = gp.getButtonValue(InputComponent.Squeeze);
-      setHandCurl(glove, Math.max(trig, sq * 0.6), Math.max(sq, trig * 0.45), 0.35 + Math.max(trig, sq) * 0.55);
+      setHandGrip(glove, trig, sq);
     });
 
     // --- paint sync ---------------------------------------------------------
