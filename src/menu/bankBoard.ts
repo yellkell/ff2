@@ -6,10 +6,11 @@
  *               pick flagged BEST VALUE; under them THE ACCOUNT strip —
  *               PROTECT WITH EMAIL and RECOVER for a bare headset, or the
  *               PROTECTED chip — and the terms in one honest line.
- *   THE CHECKOUT a QR of the short link on the left — scan it with a
- *               phone and pay there, the headset never leaves your face —
- *               and on the right the pack, the price, the state of play,
- *               OPEN ON THIS DEVICE for a flat-screen session, CANCEL.
+ *   THE CHECKOUT PAY THROUGH YOUR HEADSET (the checkout in the headset's
+ *               own browser) — or a QR of the short link: take a
+ *               screenshot, open it on your phone (the Meta app syncs
+ *               them) and tap the code. On the right the pack, the price,
+ *               the state of play, CANCEL.
  *               When the coins land the face says so, the wallet's readout
  *               counts them up, and PROTECT WITH EMAIL is offered right
  *               there, pre-filled with the email typed at the checkout.
@@ -263,7 +264,7 @@ function checkoutFace(co: NonNullable<typeof bank.checkout>, top: number, footY:
   const live = co.state === 'waiting';
   const p = bank.protecting;
   if (live) {
-    buttons.push({ id: 'bank-open', label: 'OPEN ON THIS DEVICE', sub: 'a tab, when the headset comes off', x: x0, y: top + 372, w: w0, h: 92, small: true });
+    buttons.push({ id: 'bank-open', label: 'PAY THROUGH YOUR HEADSET', sub: "opens the checkout in the headset's browser", x: x0, y: top + 372, w: w0, h: 92, small: true });
     buttons.push({ id: 'bank-cancel', label: 'CANCEL', x: x0, y: top + 486, w: 240, h: 72, small: true });
   } else if (co.state === 'paid') {
     const bare = !bank.account.protected && p.stage !== 'done';
@@ -293,14 +294,18 @@ function checkoutFace(co: NonNullable<typeof bank.checkout>, top: number, footY:
       // THE QR — or the plate it will sit on.
       if (co.state === 'waiting' && co.short) {
         drawQr(g, co.short, M, qy, QR_PX);
+        // The other way to pay: a headset screenshot lands on the phone
+        // (the Meta app syncs them), and the phone's gallery reads the
+        // code straight off the picture.
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.font = font(600, 21);
         g.fillStyle = KIT.dim;
-        g.fillText('scan with your phone to pay', M + QR_PX / 2, qy + QR_PX + 30);
-        g.font = font(500, 18);
+        g.fillText('or take a screenshot,', M + QR_PX / 2, qy + QR_PX + 28);
+        g.fillText('open it on your phone and tap the QR code', M + QR_PX / 2, qy + QR_PX + 54, QR_PX + 40);
+        g.font = font(500, 17);
         g.fillStyle = KIT.faint;
-        g.fillText(co.short.replace(/^https?:\/\//, ''), M + QR_PX / 2, qy + QR_PX + 58, QR_PX);
+        g.fillText(co.short.replace(/^https?:\/\//, ''), M + QR_PX / 2, qy + QR_PX + 84, QR_PX);
       } else {
         g.beginPath();
         g.roundRect(M, qy, QR_PX, QR_PX, 14);

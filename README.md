@@ -22,9 +22,9 @@ carried over verbatim: everything in it still applies to this code.
   BANK, and the YOU wing's purse is a door to it: four packs — 500 · 1300
   · 3000 · 7000 — a pack is its number and its price, nothing else to read.
   A tap asks THE ROOM SERVER's `/bank` (`server/bank.mjs`) for a
-  **Stripe Checkout** and the board shows it as a **QR** — scan it with
-  a phone, pay there, the headset never comes off — or OPEN ON THIS
-  DEVICE for a flat-screen session. Stripe's signed webhook credits
+  **Stripe Checkout**: PAY THROUGH YOUR HEADSET opens it in the headset's
+  browser, or the board shows it as a **QR** — take a screenshot, open it
+  on your phone (the Meta app syncs headset screenshots) and tap the code. Stripe's signed webhook credits
   **THE LEDGER** (`bank/{uid}` in Firestore: `credit`, `claimed`, a
   receipt per session so a retried webhook credits nothing twice — no
   client may write it, `firestore.rules`), and the headset **CLAIMS**
