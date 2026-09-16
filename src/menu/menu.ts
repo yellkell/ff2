@@ -171,6 +171,22 @@ export type MenuAction =
   | 'gear-body'
   | 'gear-hands'
   | 'tab-colour'
+  /** The PLATFORMS board's shelves (avatar/skins.ts DECK_SHELVES). */
+  | `shelf-${string}`
+  /** THE BANK: iron-dollars for money (net/bank.ts). `tab-bank` is the
+   *  store's chip; `open-bank` walks there from the YOU wing's purse. */
+  | 'tab-bank'
+  | 'open-bank'
+  | `bank-pack-${string}`
+  | 'bank-open'
+  | 'bank-cancel'
+  | 'bank-done'
+  /** THE ACCOUNT: protect this headset's uid with an email; recover one
+   *  protected elsewhere (the keyboard takes the email, then the code). */
+  | 'bank-protect'
+  | 'bank-recover'
+  | 'bank-code'
+  | 'bank-recover-cancel'
   /** Tap an avatar tile (equip) or a platform tile (buy if unowned, else equip). */
   | `shop-av-${number}`
   | `shop-pf-${number}`

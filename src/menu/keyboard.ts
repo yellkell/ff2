@@ -1,9 +1,14 @@
 /**
- * The in-game name keyboard — a kit panel of clickable keys, raycast by the
- * same menu pointers. It pops up ONCE per player: the first time they do
- * something that puts a name on the leaderboard (starting Aim Training or
- * queueing for multiplayer). The typed callsign is saved and shared by both
- * boards forever after.
+ * The in-game keyboard — a kit panel of clickable keys, raycast by the
+ * same menu pointers. It pops up ONCE per player for a callsign: the first
+ * time they do something that puts a name on the leaderboard (starting Aim
+ * Training or queueing for multiplayer). The typed callsign is saved and
+ * shared by both boards forever after. It also takes a profile note, a
+ * safety report, and THE BANK's email and recovery code (menu/bankBoard.ts).
+ *
+ * Three key sets: the callsign's (letters, digits, dash, space), an EMAIL
+ * set (lowercase, with @ . _ and no space) and a DIGITS set for a six-digit
+ * code. The caller picks with `open`'s options.
  *
  * It wears the wrap's own kit — the smoked-steel panel, the hairline
  * plates, hazard amber for the hot key and the caret — in the house face,
@@ -26,12 +31,19 @@ const KW = 704;
 const KH = 528;
 const MAX_LEN = 12;
 
-const ROWS: string[][] = [
+const NAME_ROWS: string[][] = [
   [...'1234567890'],
   [...'QWERTYUIOP'],
   [...'ASDFGHJKL'],
   [...'ZXCVBNM', '-'],
 ];
+const EMAIL_ROWS: string[][] = [
+  [...'1234567890'],
+  [...'QWERTYUIOP'],
+  [...'ASDFGHJKL'],
+  [...'ZXCVBNM', '-', '_'],
+];
+const DIGIT_ROWS: string[][] = [[...'1234567890']];
 
 interface KeyZone {
   id: string;
@@ -41,12 +53,20 @@ interface KeyZone {
   h: number;
 }
 
+export interface KeyboardOpts {
+  /** An email address: lowercase, @ and . on the bottom row, no space. */
+  email?: boolean;
+  /** A numeric code: the digit row alone. */
+  digits?: boolean;
+}
+
 export interface NameKeyboard {
   mesh: Mesh;
   /** Show the keyboard, prefilled (usually with the auto callsign). `prompt` is
    *  the heading line (defaults to the battle-name prompt); `maxLen` caps the
-   *  entry length (defaults to the 12-char name limit). */
-  open(initial: string, prompt?: string, maxLen?: number): void;
+   *  entry length (defaults to the 12-char name limit); `opts` picks the
+   *  key set. */
+  open(initial: string, prompt?: string, maxLen?: number, opts?: KeyboardOpts): void;
   close(): void;
   isOpen(): boolean;
   /** Map a hit UV to the key under it, or null. */
@@ -78,6 +98,7 @@ export function createNameKeyboard(scene: Scene): NameKeyboard {
   let text = '';
   let prompt = 'ENTER YOUR BATTLE NAME';
   let maxLen = MAX_LEN;
+  let mode: 'name' | 'email' | 'digits' = 'name';
   let hover: string | null = null;
   let zones: KeyZone[] = [];
 
@@ -166,7 +187,8 @@ export function createNameKeyboard(scene: Scene): NameKeyboard {
     const fieldW = KW - 80 - 48;
     let fs = 42;
     ctx.font = font(700, fs);
-    ctx.letterSpacing = '4px';
+    // A code reads best spaced out; an email needs every pixel.
+    ctx.letterSpacing = mode === 'digits' ? '12px' : mode === 'email' ? '1px' : '4px';
     let w = ctx.measureText(text).width;
     if (w > fieldW) {
       fs = Math.max(18, Math.floor((fs * fieldW) / w));
@@ -187,22 +209,28 @@ export function createNameKeyboard(scene: Scene): NameKeyboard {
     ctx.fillText(`${text.length}/${maxLen}`, KW - 40, 168);
 
     // The key grid.
+    const rows = mode === 'email' ? EMAIL_ROWS : mode === 'digits' ? DIGIT_ROWS : NAME_ROWS;
     const keyH = 58;
     const gap = 8;
     let y = 184;
-    for (const row of ROWS) {
+    for (const row of rows) {
       const keyW = 56;
       const total = row.length * keyW + (row.length - 1) * gap;
       let x = (KW - total) / 2;
       for (const k of row) {
-        key(k, x, y, keyW, keyH);
+        key(k, x, y, keyW, keyH, mode === 'email' ? k.toLowerCase() : k);
         x += keyW + gap;
       }
       y += keyH + gap;
     }
-    // Bottom row: DEL | SPACE | OK. Spaces are valid in both a name and a note.
+    // Bottom row: DEL | SPACE | OK — or, for an email, DEL | @ | . | OK.
     key('back', 64, y, 140, keyH, 'DEL', false, true);
-    key('space', 216, y, 272, keyH, 'SPACE');
+    if (mode === 'email') {
+      key('@', 216, y, 132, keyH);
+      key('.', 356, y, 132, keyH);
+    } else if (mode === 'name') {
+      key('space', 216, y, 272, keyH, 'SPACE');
+    }
     key('ok', 500, y, 140, keyH, 'OK', true);
 
     texture.needsUpdate = true;
@@ -215,9 +243,10 @@ export function createNameKeyboard(scene: Scene): NameKeyboard {
 
   return {
     mesh,
-    open(initial, p, max) {
+    open(initial, p, max, opts) {
+      mode = opts?.email ? 'email' : opts?.digits ? 'digits' : 'name';
       maxLen = max ?? MAX_LEN;
-      text = initial.slice(0, maxLen);
+      text = (mode === 'email' ? initial.toLowerCase() : initial).slice(0, maxLen);
       prompt = p ?? 'ENTER YOUR BATTLE NAME';
       hover = null;
       mesh.visible = true;
@@ -247,7 +276,7 @@ export function createNameKeyboard(scene: Scene): NameKeyboard {
         // No leading or double spaces — they'd only get stripped on save.
         if (text.length > 0 && !text.endsWith(' ') && text.length < maxLen) text += ' ';
       } else if (text.length < maxLen) {
-        text += k;
+        text += mode === 'email' ? k.toLowerCase() : k;
       }
       draw();
       return null;

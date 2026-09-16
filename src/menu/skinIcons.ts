@@ -177,6 +177,34 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         }
         ctx.fill();
         break;
+      case 'crown':
+        // A circlet with six points: the band, then the zigzag of points.
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.5, cy - r * 0.42);
+        ctx.lineTo(cx + r * 0.5, cy - r * 0.42);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.5, cy - r * 0.42);
+        for (let i = 0; i < 5; i++) {
+          const x0 = cx - r * 0.5 + i * r * 0.25;
+          const tall = i === 2 ? r * 0.55 : r * 0.34;
+          ctx.lineTo(x0 + r * 0.125, cy - r * 0.42 - tall);
+          ctx.lineTo(x0 + r * 0.25, cy - r * 0.42);
+        }
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case 'antlers':
+        for (const s of [-1, 1]) {
+          ctx.moveTo(cx + s * r * 0.3, cy - r * 0.42);
+          ctx.quadraticCurveTo(cx + s * r * 0.72, cy - r * 0.7, cx + s * r * 0.62, cy - r * 1.15);
+          ctx.moveTo(cx + s * r * 0.44, cy - r * 0.6);
+          ctx.lineTo(cx + s * r * 0.36, cy - r * 0.92);
+          ctx.moveTo(cx + s * r * 0.64, cy - r * 0.82);
+          ctx.lineTo(cx + s * r * 0.9, cy - r * 0.98);
+        }
+        ctx.stroke();
+        break;
       default: {
         // visorband: a wraparound plate across the eyes, with its slit.
         ctx.beginPath();
@@ -233,6 +261,20 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         ctx.quadraticCurveTo(cx + r * 0.6, cy + r * 0.6, cx + r * 0.74, cy + r * 0.52);
         ctx.stroke();
         break;
+      case 'wings':
+        // Two fans of plates off the shoulders, raked up and out.
+        for (const s of [-1, 1]) {
+          for (let i = 0; i < 3; i++) {
+            const len = r * (0.95 - i * 0.18);
+            const a = -0.95 + i * 0.28;
+            ctx.beginPath();
+            ctx.moveTo(cx + s * r * 0.4, cy - r * 0.45 + i * r * 0.1);
+            ctx.lineTo(cx + s * (r * 0.4 + Math.cos(a) * len), cy - r * 0.45 + i * r * 0.1 + Math.sin(a) * len);
+            ctx.lineWidth = line * (1.5 - i * 0.3);
+            ctx.stroke();
+          }
+        }
+        break;
       case 'belt':
         ctx.moveTo(cx - r * 0.42, cy + r * 0.32);
         ctx.lineTo(cx + r * 0.42, cy + r * 0.32);
@@ -280,6 +322,17 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
           ctx.beginPath();
           ctx.moveTo(cx - r * 0.3, y);
           ctx.lineTo(cx + r * 0.3, y);
+          ctx.stroke();
+        }
+        break;
+      case 'claws':
+        // Three talons off the knuckle line, hooking forward and down.
+        ctx.lineWidth = line * 1.2;
+        for (let i = -1; i <= 1; i++) {
+          const x = cx + i * r * 0.26;
+          ctx.beginPath();
+          ctx.moveTo(x, cy - r * 0.5);
+          ctx.quadraticCurveTo(x + i * r * 0.12, cy - r * 1.05, x + i * r * 0.3 + r * 0.06, cy - r * 1.02);
           ctx.stroke();
         }
         break;
@@ -580,5 +633,118 @@ function drawDeckSwatch(ctx: CanvasRenderingContext2D, deck: DeckStyle, cx: numb
         ctx.stroke();
       }
       break;
+    case 'copper': {
+      // Hammered: a field of dimples on warm metal, verdigris in the low corner.
+      const gg = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      gg.addColorStop(0, '#d98a52');
+      gg.addColorStop(1, '#8f4a2a');
+      ctx.fillStyle = gg;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      for (let i = 0; i < 4; i++) {
+        for (let j = 0; j < 4; j++) {
+          const dx = cx - r * 0.75 + i * r * 0.5 + (j % 2) * r * 0.25;
+          const dy = cy - r * 0.75 + j * r * 0.5;
+          const d = ctx.createRadialGradient(dx - r * 0.05, dy - r * 0.05, 0, dx, dy, r * 0.2);
+          d.addColorStop(0, 'rgba(60,25,10,0.45)');
+          d.addColorStop(0.7, 'rgba(60,25,10,0.08)');
+          d.addColorStop(1, 'rgba(255,200,150,0.25)');
+          ctx.fillStyle = d;
+          ctx.beginPath();
+          ctx.arc(dx, dy, r * 0.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.fillStyle = 'rgba(70,170,150,0.7)';
+      ctx.beginPath();
+      ctx.ellipse(cx - r * 0.45, cy + r * 0.5, r * 0.5, r * 0.32, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + r * 0.6, cy - r * 0.55, r * 0.28, r * 0.2, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    }
+    case 'basalt': {
+      // A honeycomb of dark columns, seamed.
+      fill('#2c2c31');
+      ctx.strokeStyle = '#0d0d10';
+      ctx.lineWidth = Math.max(1.2, r * 0.07);
+      const hr = r * 0.34;
+      for (let row = -2; row <= 2; row++) {
+        for (let col = -2; col <= 2; col++) {
+          const hx = cx + col * hr * 1.73 + (row % 2 ? hr * 0.866 : 0);
+          const hy = cy + row * hr * 1.5;
+          ctx.beginPath();
+          for (let k = 0; k < 6; k++) {
+            const a = Math.PI / 6 + (k * Math.PI) / 3;
+            const px = hx + Math.cos(a) * hr;
+            const py = hy + Math.sin(a) * hr;
+            if (k === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+          ctx.fillStyle = (row + col) % 2 ? '#34343a' : '#26262b';
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
+      break;
+    }
+    case 'magma': {
+      // Black crust, and the cracks lit from underneath.
+      fill('#0c0a0a');
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      const cracks: number[][][] = [
+        [[-0.9, -0.3], [-0.4, -0.1], [0.1, -0.4], [0.5, -0.2], [0.95, -0.5]],
+        [[-0.4, -0.1], [-0.5, 0.4], [-0.1, 0.9]],
+        [[0.1, -0.4], [0.3, 0.2], [0.8, 0.5], [0.9, 0.95]],
+        [[0.3, 0.2], [-0.1, 0.5]],
+      ];
+      for (const [glowW, colour, w] of [
+        [r * 0.28, 'rgba(255,90,20,0.35)', r * 0.16],
+        [r * 0.1, '#ff6a1a', r * 0.07],
+        [0, '#ffd27a', r * 0.028],
+      ] as Array<[number, string, number]>) {
+        ctx.shadowBlur = glowW;
+        ctx.shadowColor = '#ff6a1a';
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = Math.max(1, w);
+        for (const c of cracks) {
+          ctx.beginPath();
+          c.forEach(([u, v], k) => (k === 0 ? ctx.moveTo(cx + u * r, cy + v * r) : ctx.lineTo(cx + u * r, cy + v * r)));
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+      break;
+    }
+    case 'meteorite': {
+      // The Widmanstätten figure: three families of bright lamellae.
+      const gg = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r);
+      gg.addColorStop(0, '#8a8f99');
+      gg.addColorStop(1, '#4d525c');
+      ctx.fillStyle = gg;
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(225,232,245,0.7)';
+      ctx.lineWidth = Math.max(1, r * 0.05);
+      for (let k = 0; k < 3; k++) {
+        const a = (k * Math.PI) / 3 + 0.3;
+        const dx = Math.cos(a);
+        const dy = Math.sin(a);
+        for (let i = -3; i <= 3; i++) {
+          const ox = cx + -dy * i * r * 0.3;
+          const oy = cy + dx * i * r * 0.3;
+          const len = r * (0.5 + ((i + k) % 3) * 0.35);
+          ctx.beginPath();
+          ctx.moveTo(ox - dx * len, oy - dy * len);
+          ctx.lineTo(ox + dx * len, oy + dy * len);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+      break;
+    }
   }
 }

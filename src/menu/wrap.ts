@@ -558,8 +558,9 @@ function youBoard(): Face {
       },
       // The wallet, on its own and full width: the record and the rename
       // hint are gone (the card above already carries the name, and a
-      // lifetime W—L is a number nobody asked to be reminded of).
-      { id: 'you-coins', label: `$ ${coins.balance}`, sub: 'iron-dollars', x: X, y: 540, w: W, h: 110, display: true, small: true, tone: KIT.accent },
+      // lifetime W—L is a number nobody asked to be reminded of). It is a
+      // door now, not a readout: a tap opens THE BANK in the store.
+      { id: 'open-bank', label: `$ ${coins.balance}`, sub: lock ? 'iron-dollars' : 'iron-dollars · TOP UP', x: X, y: 540, w: W, h: 110, small: true, tone: KIT.accent, disabled: lock },
     ],
   };
 }

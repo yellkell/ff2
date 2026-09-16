@@ -48,6 +48,26 @@ export interface PlatformSkin {
   earnedBy?: string;
   /** One line for the tile. */
   blurb: string;
+  /** Which SHELF of the PLATFORMS board it stands on (menu/lockerFace.ts):
+   *  the woods, the stones, the forge. Earned pads stand on HONOURS
+   *  whatever this says — see platformShelf(). */
+  shelf?: DeckShelf;
+}
+
+/** The PLATFORMS board's shelves: seventeen pads on one board crushed the
+ *  tiles (the GEAR board learned the same lesson with its slots), so the
+ *  catalogue is shelved by what a deck is made of, plus the trophy shelf. */
+export type DeckShelf = 'timber' | 'stone' | 'forge' | 'honours';
+export const DECK_SHELVES: ReadonlyArray<[DeckShelf, string]> = [
+  ['timber', 'TIMBER'],
+  ['stone', 'STONE'],
+  ['forge', 'FORGE'],
+  ['honours', 'HONOURS'],
+];
+
+/** The shelf a pad stands on: earned pads are HONOURS, the rest say. */
+export function platformShelf(skin: PlatformSkin): DeckShelf {
+  return skin.earnedBy ? 'honours' : skin.shelf ?? 'stone';
 }
 
 /** The corner screws' metals. */
@@ -79,17 +99,22 @@ export const AVATAR_SKINS: AvatarSkin[] = [
 
 export const PLATFORM_SKINS: PlatformSkin[] = [
   // ── free: the three you're born with ──────────────────────────────────
-  { id: 'ember', name: 'SMOULDER', deck: 'charred', neon: PALETTE.ember, trim: TRIM.iron, blurb: 'charred oak, still warm underfoot' },
-  { id: 'azure', name: 'AZURE', deck: 'ash', neon: 0x4fb7ff, trim: TRIM.chrome, blurb: 'pale ash boards under a cold tube' },
-  { id: 'inferno', name: 'INFERNO', deck: 'redwood', neon: 0xff3b30, trim: TRIM.brass, blurb: 'redwood, red light' },
+  { id: 'ember', name: 'SMOULDER', deck: 'charred', neon: PALETTE.ember, trim: TRIM.iron, shelf: 'timber', blurb: 'charred oak, still warm underfoot' },
+  { id: 'azure', name: 'AZURE', deck: 'ash', neon: 0x4fb7ff, trim: TRIM.chrome, shelf: 'timber', blurb: 'pale ash boards under a cold tube' },
+  { id: 'inferno', name: 'INFERNO', deck: 'redwood', neon: 0xff3b30, trim: TRIM.brass, shelf: 'timber', blurb: 'redwood, red light' },
   // ── the shop: materials, cheap to precious ────────────────────────────
-  { id: 'walnut', name: 'WALNUT', deck: 'walnut', neon: 0xffb347, trim: TRIM.brass, price: 100, blurb: 'dark figured boards, waxed' },
-  { id: 'slate', name: 'SLATE', deck: 'slate', neon: 0x5ff2ff, trim: TRIM.iron, price: 150, blurb: 'quarried flagstones, cleaved' },
-  { id: 'marble', name: 'MARBLE', deck: 'marble', neon: 0xffd84a, trim: TRIM.brass, price: 250, blurb: 'grey-white stone, dark veins' },
-  { id: 'frost', name: 'FROST', deck: 'frost', neon: 0x8ae4ff, trim: TRIM.chrome, price: 400, blurb: 'river ice, bubbles frozen in' },
-  { id: 'obsidian', name: 'OBSIDIAN', deck: 'obsidian', neon: 0xb06bff, trim: TRIM.iron, price: 600, blurb: 'black glass, rippled where it cooled' },
-  { id: 'jade', name: 'JADE', deck: 'jade', neon: 0x7dffc2, trim: TRIM.brass, price: 800, blurb: 'green stone with a cloud in it' },
-  { id: 'bullion', name: 'BULLION', deck: 'bullion', neon: 0xfff1c9, trim: TRIM.gold, price: 2000, blurb: 'gold leaf, laid square by square' },
+  { id: 'walnut', name: 'WALNUT', deck: 'walnut', neon: 0xffb347, trim: TRIM.brass, price: 100, shelf: 'timber', blurb: 'dark figured boards, waxed' },
+  { id: 'slate', name: 'SLATE', deck: 'slate', neon: 0x5ff2ff, trim: TRIM.iron, price: 150, shelf: 'stone', blurb: 'quarried flagstones, cleaved' },
+  { id: 'marble', name: 'MARBLE', deck: 'marble', neon: 0xffd84a, trim: TRIM.brass, price: 250, shelf: 'stone', blurb: 'grey-white stone, dark veins' },
+  { id: 'frost', name: 'FROST', deck: 'frost', neon: 0x8ae4ff, trim: TRIM.chrome, price: 400, shelf: 'stone', blurb: 'river ice, bubbles frozen in' },
+  { id: 'obsidian', name: 'OBSIDIAN', deck: 'obsidian', neon: 0xb06bff, trim: TRIM.iron, price: 600, shelf: 'stone', blurb: 'black glass, rippled where it cooled' },
+  { id: 'jade', name: 'JADE', deck: 'jade', neon: 0x7dffc2, trim: TRIM.brass, price: 800, shelf: 'stone', blurb: 'green stone with a cloud in it' },
+  { id: 'bullion', name: 'BULLION', deck: 'bullion', neon: 0xfff1c9, trim: TRIM.gold, price: 2000, shelf: 'forge', blurb: 'gold leaf, laid square by square' },
+  // ── THE FORGE and the quarry's back room: the second wave ─────────────
+  { id: 'basalt', name: 'BASALT', deck: 'basalt', neon: 0xff6a3d, trim: TRIM.iron, price: 350, shelf: 'stone', blurb: 'cooled columns, six-sided' },
+  { id: 'copper', name: 'COPPER', deck: 'copper', neon: 0x3fe0c8, trim: TRIM.brass, price: 300, shelf: 'forge', blurb: 'hammered copper, going green' },
+  { id: 'magma', name: 'MAGMA', deck: 'magma', neon: 0xff7a18, trim: TRIM.iron, price: 1200, shelf: 'forge', blurb: 'black crust, fire in the cracks' },
+  { id: 'meteorite', name: 'METEORITE', deck: 'meteorite', neon: 0x9fd8ff, trim: TRIM.chrome, price: 1500, shelf: 'forge', blurb: 'iron from the sky, acid-etched' },
   // ── earned, never sold ────────────────────────────────────────────────
   // CHAMPION: the first fell of GOLIATH, king of the titan gauntlet.
   { id: 'champion', name: 'CHAMPION', deck: 'lacquer', neon: 0xfff3cf, trim: TRIM.gold, earnedBy: 'FELL GOLIATH', blurb: 'crimson lacquer, gold inlay' },
@@ -247,6 +272,7 @@ export function applyPlatformSkin(root: Object3D, skin: PlatformSkin): void {
           m.userData.deck = skin.deck;
           m.map = look.map;
           m.bumpMap = look.bump;
+          m.emissiveMap = look.emissiveMap ?? null;
           m.needsUpdate = true;
         }
         m.color.setHex(look.color);

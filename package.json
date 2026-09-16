@@ -13,6 +13,7 @@
     "server:ff": "node server/index.mjs",
     "server:pub": "node server/pub.mjs",
     "server:rave": "node server/rave.mjs",
+    "server:bank": "node server/bank.mjs",
     "check:wrap": "node tools/wrap-check.mjs",
     "check:paint": "node tools/paint-wire-check.mjs",
     "check:grammar": "node tools/grammar-check.mjs",
@@ -26,7 +27,8 @@
     "check:mirror": "node tools/mirror-check.mjs",
     "check:voidstep": "node tools/voidstep-check.mjs",
     "check:tv": "node tools/tv-check.mjs",
-    "check:promo": "node tools/promo-check.mjs"
+    "check:promo": "node tools/promo-check.mjs",
+    "check:bank": "node tools/bank-check.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "0.4.2",

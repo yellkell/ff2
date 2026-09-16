@@ -28,6 +28,11 @@ export function serve({ port, http, wss, onListen }) {
   // A client error with no listener is re-thrown as an uncaught exception.
   server.on('clientError', (_err, socket) => socket.destroy());
   server.on('upgrade', (req, socket, head) => {
+    // A relay with no socket side (the bank) has nothing to upgrade to.
+    if (!wss) {
+      socket.destroy();
+      return;
+    }
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   });
   server.listen(port, () => onListen?.(server));

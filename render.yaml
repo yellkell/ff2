@@ -56,3 +56,23 @@ services:
       # ADMIN_TOKEN is a pub nobody can be thrown out of.
       - key: ADMIN_TOKEN
         sync: false
+      # THE BANK (server/bank.mjs): iron-dollars for money. Real money
+      # needs the Stripe pair AND the service account; with any of them
+      # missing the bank runs in DEV mode — a fake checkout page and a
+      # ledger in memory — and charges nobody. See README, THE BANK.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # A service-account JSON (raw or base64) for the ff2 Firebase project:
+      # the ledger (bank/{uid}) is written with it and ID tokens verified.
+      - key: FIREBASE_SERVICE_ACCOUNT
+        sync: false
+      # ISO code of the currency to charge in (default gbp).
+      - key: BANK_CURRENCY
+        sync: false
+      # 1 = Stripe Managed Payments (Stripe as merchant of record: it charges
+      # and files the VAT wherever the buyer is). Only after activating it in
+      # the Stripe dashboard — Stripe refuses the flag until then.
+      - key: BANK_MANAGED
+        sync: false

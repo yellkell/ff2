@@ -9,28 +9,36 @@
  *
  * The tab grammar the wrap wears (MENUS 2) comes to the modals: LOCKER ·
  * STORE across the top, and under it the row of sub-boards each face
- * offers — PLATFORMS · GEAR · COLOUR in the locker, PLATFORMS · GEAR in
- * the store (there is nothing to buy about your own base tone).
+ * offers — PLATFORMS · GEAR · COLOUR in the locker, PLATFORMS · GEAR ·
+ * BANK in the store (there is nothing to buy about your own base tone,
+ * and the BANK — iron-dollars for money, menu/bankBoard.ts — is nothing
+ * to wear).
+ *
+ * Both catalogue boards carry a SHELF row under the chips: the GEAR board
+ * shows one slot at a time (HEAD · BODY · HANDS) and the PLATFORMS board
+ * one material at a time (TIMBER · STONE · FORGE · HONOURS), because a
+ * board of seventeen tiles crushed them until the prices fell off. Nine
+ * to a shelf at full size.
  *
  * The TILES are ghost buttons the body paints: the kit owns the plate, the
  * hover ease and the hit-test, while the artwork stays the bespoke icon
  * painters this game already had (menu/skinIcons.ts — a deck's grain, a
  * gear piece's silhouette). A tile in the store that is being TRIED ON
- * grows a real BUY button; the rest of its chrome is drawn.
+ * grows a real BUY button; the rest of its chrome is drawn. Hovering a
+ * tile reads its one line — what the thing IS — in place of the price.
  *
  * The COLOUR face is the BASE TONE and nothing else: all white or all
- * black. The hands' neon hue and lightness tracks that used to live under
- * it are gone — the glove accent is the house ember for everyone, and
- * everything past the base tone is PAINT (the bay, on the YOU wing).
+ * black. Everything past the base tone is PAINT (the bay, on the YOU wing).
  */
 
 import { KIT, type PanelButton } from '../ui/kit/panel.js';
 import { font } from '../ui/kit/fonts.js';
 import { customization, platformOwned, gearOwned } from './customization.js';
 import { canAfford, coins } from './wallet.js';
-import { PLATFORM_SKINS, type PlatformSkin } from '../avatar/skins.js';
+import { DECK_SHELVES, PLATFORM_SKINS, type PlatformSkin, platformShelf } from '../avatar/skins.js';
 import { GEAR as GEAR_CATALOGUE, type GearDef } from '../avatar/gear.js';
 import { drawGearIcon, drawPlatformIcon } from './skinIcons.js';
+import { bankBoard } from './bankBoard.js';
 
 export const LOCKER_W = 1024;
 export const LOCKER_H = 1024;
@@ -41,12 +49,12 @@ const TAB_Y = 36;
 const TAB_H = 76;
 const SUB_Y = 140;
 const SUB_H = 64;
-const GRID_TOP = 240;
-/** The GEAR board carries a shelf row under the board chips, so its grid
- *  starts lower — and holds at most six pieces, two rows at full size. */
+/** Every catalogue board carries a shelf row under the board chips, so the
+ *  grid starts below it — and holds at most nine tiles, three rows at
+ *  full size. */
 const SHELF_Y = 216;
 const SHELF_H = 52;
-const GEAR_GRID_TOP = SHELF_Y + SHELF_H + 24;
+const GRID_TOP = SHELF_Y + SHELF_H + 24;
 const COLS = 3;
 const GAP = 20;
 const TILE_W = (INNER - (COLS - 1) * GAP) / COLS;
@@ -71,13 +79,15 @@ export interface LockerFace {
 
 /* ── which board is showing ───────────────────────────────────────────── */
 
-type Board = 'platforms' | 'gear' | 'colour';
+type Board = 'platforms' | 'gear' | 'colour' | 'bank';
 
-/** COLOUR is the locker's alone; the store falls back to pads. */
+/** COLOUR is the locker's alone, the BANK the store's; the other face
+ *  falls back to pads. */
 function board(locker: boolean): Board {
   const t = customization.tab;
   if (!locker && t === 'colour') return 'platforms';
-  if (t === 'gear' || t === 'colour') return t;
+  if (locker && t === 'bank') return 'platforms';
+  if (t === 'gear' || t === 'colour' || t === 'bank') return t;
   return 'platforms';
 }
 
@@ -103,15 +113,15 @@ function tiles(locker: boolean): Tile[] {
     });
   } else if (b === 'platforms') {
     PLATFORM_SKINS.forEach((s, i) => {
-      if (platformOwned(s.id) === locker) picked.push({ kind: 'platform', def: s, index: i });
+      if (platformShelf(s) === customization.platformShelf && platformOwned(s.id) === locker) picked.push({ kind: 'platform', def: s, index: i });
     });
   }
-  const top = b === 'gear' ? GEAR_GRID_TOP : GRID_TOP;
+  const top = GRID_TOP;
   const rows = Math.max(1, Math.ceil(picked.length / COLS));
-  // Three rows fit at full height; a deeper catalogue shares the same span.
+  // Three rows fit at full height; a deeper shelf shares the same span.
   const span = FOOT_Y - 24 - top;
-  const step = rows <= 3 ? 250 : Math.floor(span / rows);
-  const h = Math.min(230, step - 20);
+  const step = rows <= 3 ? 196 : Math.floor(span / rows);
+  const h = Math.min(176, step - 20);
   return picked.map((p, i) => ({
     id: `shop-${p.kind === 'gear' ? 'gr' : 'pf'}-${p.index}`,
     ...p,
@@ -129,9 +139,9 @@ function previewed(t: Tile): boolean {
 
 const buyRect = (t: Tile): { x: number; y: number; w: number; h: number } => ({
   x: t.x + 14,
-  y: t.y + t.h - 62,
+  y: t.y + t.h - 58,
   w: t.w - 28,
-  h: 48,
+  h: 46,
 });
 
 /* ── the faces ────────────────────────────────────────────────────────── */
@@ -153,13 +163,13 @@ export function lockerFace(locker: boolean): LockerFace {
     : [
         ['platforms', 'PLATFORMS', 'tab-platforms'],
         ['gear', 'GEAR', 'tab-gear'],
+        ['bank', 'BANK', 'tab-bank'],
       ];
   const cw = (INNER - (boards.length - 1) * 16) / boards.length;
   boards.forEach(([key, label, id], i) => {
     buttons.push({ id, label, x: M + i * (cw + 16), y: SUB_Y, w: cw, h: SUB_H, small: true, selected: b === key });
   });
-  // THE SHELVES: the gear board shows one slot at a time — six pieces at
-  // most, two rows at full size, every price on its tile.
+  // THE SHELVES: one slot of gear, or one material of pad, at a time.
   if (b === 'gear') {
     const shelves: Array<['head' | 'body' | 'hands', string]> = [
       ['head', 'HEAD'],
@@ -177,22 +187,40 @@ export function lockerFace(locker: boolean): LockerFace {
         selected: customization.gearSlot === slot,
       });
     });
+  } else if (b === 'platforms') {
+    const sw = (INNER - (DECK_SHELVES.length - 1) * 16) / DECK_SHELVES.length;
+    DECK_SHELVES.forEach(([shelf, label], i) => {
+      buttons.push({
+        id: `shelf-${shelf}`,
+        label,
+        x: M + i * (sw + 16), y: SHELF_Y, w: sw, h: SHELF_H,
+        small: true,
+        px: 22,
+        selected: customization.platformShelf === shelf,
+      });
+    });
   }
 
   buttons.push({ id: 'custom-close', label: 'CLOSE', x: LOCKER_W - M - 240, y: FOOT_Y + 24, w: 240, h: 84, small: true });
   if (!locker) {
+    // The purse. On the catalogue boards it is a door to the BANK; on the
+    // bank board itself, the readout.
     buttons.push({
-      id: 'store-wallet',
+      id: b === 'bank' ? 'store-wallet' : 'tab-bank',
       label: `$ ${coins.balance}`,
-      sub: 'iron-dollars',
-      x: M, y: FOOT_Y + 24, w: 280, h: 84,
-      display: true,
+      sub: b === 'bank' ? 'iron-dollars' : 'iron-dollars · TOP UP',
+      x: M, y: FOOT_Y + 24, w: 300, h: 84,
+      display: b === 'bank',
       small: true,
       tone: KIT.accent,
     });
   }
 
   if (b === 'colour') return { title: TITLE, buttons: [...buttons, ...colourButtons()], body: colourBody };
+  if (b === 'bank') {
+    const bb = bankBoard(SHELF_Y, FOOT_Y);
+    return { title: TITLE, buttons: [...buttons, ...bb.buttons], body: bb.body };
+  }
 
   const shown = tiles(locker);
   for (const t of shown) {
@@ -223,9 +251,9 @@ export function lockerFace(locker: boolean): LockerFace {
         g.font = font(500, 26);
         g.fillStyle = KIT.faint;
         g.fillText(
-          locker ? 'nothing here yet — the STORE has the rest' : "you own every one of these",
+          locker ? 'nothing on this shelf yet — the STORE has the rest' : 'you own every one of these',
           LOCKER_W / 2,
-          (b === 'gear' ? GEAR_GRID_TOP : GRID_TOP) + 160,
+          GRID_TOP + 160,
         );
       }
     },
@@ -259,7 +287,7 @@ function drawTile(g: CanvasRenderingContext2D, t: Tile, locker: boolean, hover: 
 
   const cx = t.x + t.w / 2;
   const iconR = t.h * 0.24;
-  const iconY = t.y + t.h * (tryOn ? 0.3 : 0.34);
+  const iconY = t.y + t.h * (tryOn ? 0.27 : 0.34);
   if (gear) drawGearIcon(g, t.def as GearDef, cx, iconY, iconR, tint);
   else drawPlatformIcon(g, t.def as PlatformSkin, cx, iconY, iconR);
 
@@ -267,24 +295,28 @@ function drawTile(g: CanvasRenderingContext2D, t: Tile, locker: boolean, hover: 
   g.textBaseline = 'middle';
   g.font = font(700, 26);
   g.fillStyle = worn || tryOn || hot ? KIT.textHi : KIT.text;
-  g.fillText(t.def.name, cx, t.y + t.h * (tryOn ? 0.58 : 0.68), t.w - 28);
+  g.fillText(t.def.name, cx, t.y + t.h * (tryOn ? 0.54 : 0.68), t.w - 28);
 
-  // The footer line: worn, owned, earned, or priced.
+  // The footer line: the blurb on hover; otherwise worn, owned, earned, or priced.
   if (tryOn) return; // the BUY button owns the strip
   g.font = font(600, 20);
-  if (worn) {
+  if (hot) {
+    g.fillStyle = KIT.dim;
+    g.font = font(500, 19);
+    g.fillText(t.def.blurb, cx, t.y + t.h - 24, t.w - 24);
+  } else if (worn) {
     g.fillStyle = KIT.accent;
-    g.fillText(gear ? 'WORN' : 'EQUIPPED', cx, t.y + t.h - 26);
+    g.fillText(gear ? 'WORN' : 'EQUIPPED', cx, t.y + t.h - 24);
   } else if (owned) {
     g.fillStyle = KIT.faint;
-    g.fillText(gear ? 'tap to wear' : 'tap to stand on', cx, t.y + t.h - 26);
+    g.fillText(gear ? 'tap to wear' : 'tap to stand on', cx, t.y + t.h - 24);
   } else if (!gear && (t.def as PlatformSkin).earnedBy) {
     g.fillStyle = KIT.info;
-    g.fillText((t.def as PlatformSkin).earnedBy ?? 'EARNED', cx, t.y + t.h - 26, t.w - 24);
+    g.fillText((t.def as PlatformSkin).earnedBy ?? 'EARNED', cx, t.y + t.h - 24, t.w - 24);
   } else {
     const price = (t.def as { price?: number }).price ?? 0;
     g.fillStyle = canAfford(price) ? KIT.accent : KIT.disabled;
-    g.fillText(`$ ${price}`, cx, t.y + t.h - 26);
+    g.fillText(`$ ${price}`, cx, t.y + t.h - 24);
   }
 }
 

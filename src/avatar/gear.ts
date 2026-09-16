@@ -66,6 +66,13 @@ export const GEAR: GearDef[] = [
   { id: 'cuffs', name: 'CUFFS', slot: 'hands', price: 60, blurb: 'a ring at each wrist' },
   { id: 'knuckles', name: 'KNUCKLES', slot: 'hands', price: 120, blurb: 'four spikes over the fist' },
   { id: 'gauntlets', name: 'GAUNTLETS', slot: 'hands', price: 180, blurb: 'a plate over the back of each hand' },
+  // ── the second wave — APPENDED, because the store's tile ids are the
+  // catalogue indices and the probes (tools/wrap-check.mjs) know CUFFS as
+  // the tenth. A new piece goes on the end, never in among its slot. ──
+  { id: 'crown', name: 'CROWN', slot: 'head', price: 240, blurb: 'a circlet, six points rising' },
+  { id: 'antlers', name: 'ANTLERS', slot: 'head', price: 200, blurb: "a stag's pair, branched" },
+  { id: 'wings', name: 'WINGS', slot: 'body', price: 320, blurb: 'swept plates off the shoulder blades' },
+  { id: 'claws', name: 'CLAWS', slot: 'hands', price: 200, blurb: 'three talons over the knuckles' },
 ];
 
 export function gearDef(id: string): GearDef | undefined {
@@ -160,12 +167,17 @@ function taperedTube(pts: Vector3[], r0: number, r1: number, segs: number, sides
       uv.push(j / sides, t);
     }
   }
+  // Winding: a Frenet ring runs N → B, and T × dp/dθ points INTO the
+  // tube — so the quads are wound the other way round to face out. (They
+  // were inside out until the cacti were built on the same loft: a closed
+  // tube still shows its far inner wall, so the horns kept their shape,
+  // but every normal pointed in and the light sat on the wrong side.)
   const ring = sides + 1;
   for (let i = 0; i < segs; i++) {
     for (let j = 0; j < sides; j++) {
       const a = i * ring + j;
       const c = a + ring;
-      idx.push(a, c, a + 1, a + 1, c, c + 1);
+      idx.push(a, a + 1, c, a + 1, c + 1, c);
     }
   }
   // Caps: a centre vertex at each end fanned to its ring.
@@ -494,6 +506,91 @@ const BUILDERS: Record<string, Builder> = {
     return g;
   },
 };
+
+/* ── the second wave ─────────────────────────────────────────────────── */
+
+const MORE_BUILDERS: Record<string, Builder> = {
+  crown: (mat, _side, trimMat) => {
+    // A circlet on the brow — the band in the trim, so it reads as a ring
+    // of metal round the skull — with six points rising off it, the one
+    // dead ahead tallest, each leaning a touch outward.
+    const g = new Group();
+    const band = asTrim(new Mesh(new TorusGeometry(R * 0.86, R * 0.05, 8, 40), trimMat));
+    band.rotation.x = Math.PI / 2;
+    band.position.y = R * 0.62;
+    band.scale.set(0.9, 1, 1.02);
+    g.add(band);
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 - Math.PI / 2; // i = 0 sits at −z: the front
+      const x = Math.cos(a) * R * 0.86 * 0.9;
+      const z = Math.sin(a) * R * 0.86 * 1.02;
+      const front = 0.5 - 0.5 * Math.sin(a);
+      const h = R * (0.3 + front * 0.34);
+      const point = new Mesh(new ConeGeometry(R * 0.075, h, 8), mat);
+      point.position.set(x, R * 0.62 + h * 0.46, z);
+      point.rotation.set(Math.sin(a) * 0.22, 0, -Math.cos(a) * 0.22);
+      g.add(point);
+    }
+    return g;
+  },
+  antlers: (mat) => {
+    // A stag's pair: each a tapered beam off the temple, climbing up and
+    // back and curling in at the tip, with a brow tine forward and a
+    // second tine off the middle. Faceted like the horns.
+    const g = new Group();
+    const faceted = mat.clone();
+    faceted.flatShading = true;
+    const tube = (pts: number[][], s: number, r0: number, r1: number, segs: number): Mesh =>
+      new Mesh(taperedTube(pts.map(([x, y, z]) => new Vector3(s * x * R, y * R, z * R)), r0 * R, r1 * R, segs, 6), faceted);
+    for (const s of [-1, 1]) {
+      g.add(tube([[0.66, 0.6, -0.08], [0.92, 1.05, 0.05], [1.15, 1.55, 0.3], [1.2, 2.05, 0.55], [1.02, 2.45, 0.82]], s, 0.16, 0.03, 22));
+      g.add(tube([[0.82, 0.92, -0.02], [0.98, 1.22, -0.4], [1.02, 1.42, -0.7]], s, 0.09, 0.02, 12)); // the brow tine
+      g.add(tube([[1.12, 1.5, 0.28], [1.45, 1.75, 0.15], [1.7, 2.05, 0.05]], s, 0.09, 0.02, 12)); // the second tine
+    }
+    return g;
+  },
+  wings: (mat) => {
+    // Two fans of swept plates off the shoulder blades: three per side,
+    // the longest on top, each pivoting at the blade and raked up, out
+    // and back — a silhouette that reads from across the arena.
+    const g = new Group();
+    for (const s of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const len = 0.36 - i * 0.06;
+        const plate = new Mesh(new BoxGeometry(len, 0.072 - i * 0.012, 0.008), mat);
+        const pivot = new Group();
+        pivot.position.set(s * 0.11, 0.36 - i * 0.02, 0.09);
+        // Roll lifts the plate; yaw sweeps it back (the back is +z). The
+        // top plate stands nearly upright, the lower two fan out under it.
+        pivot.rotation.set(0, -s * (0.55 + i * 0.22), s * (1.15 - i * 0.34));
+        plate.position.x = (s * len) / 2;
+        pivot.add(plate);
+        g.add(pivot);
+      }
+    }
+    return g;
+  },
+  claws: (mat) => {
+    // Three talons rooted on the knuckle line, reaching forward past the
+    // fingers and hooking down to a point. The palm block's front face is
+    // at z ≈ −0.045; the roots sit just inside it.
+    const g = new Group();
+    const faceted = mat.clone();
+    faceted.flatShading = true;
+    for (const x of [-0.021, 0, 0.021]) {
+      const pts = [
+        [x, 0.014, -0.034],
+        [x * 1.15, 0.03, -0.062],
+        [x * 1.3, 0.022, -0.09],
+        [x * 1.4, -0.004, -0.108],
+        [x * 1.45, -0.03, -0.112],
+      ].map(([px, py, pz]) => new Vector3(px, py, pz));
+      g.add(new Mesh(taperedTube(pts, 0.009, 0.0012, 16, 6), faceted));
+    }
+    return g;
+  },
+};
+Object.assign(BUILDERS, MORE_BUILDERS);
 
 /** The rig groups gear can hang off, by the names buildBoxer gives them. */
 const SLOT_OF_NAME: Record<string, GearSlot> = {

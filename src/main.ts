@@ -53,6 +53,8 @@ import { DesertSystem } from './systems/DesertSystem.js';
 import { PlatformFXSystem } from './systems/PlatformFXSystem.js';
 import { PerfHudSystem } from './systems/PerfHudSystem.js';
 import { FOVEATION, warmRoomServer } from './config.js';
+import { claimPurchases } from './net/bank.js';
+import { initWalletSync } from './net/walletSync.js';
 
 installCrashTrap(); // headset playtests have no console — trap + persist crashes
 
@@ -147,6 +149,11 @@ World.create(container, {
 
   initLeaderboard(); // anonymous profile + first board fetch
   initGazette(); // pull the day's Gasket Gazette for the lobby paper button
+  // THE CLOUD WALLET: merge the coins and the locker with the profile's copy,
+  // then mirror every change. THE BANK: anything bought while this headset
+  // was off lands now.
+  initWalletSync();
+  void claimPurchases();
   // Check in. The doors (experience/clubNavigation.ts) hand presence on from
   // here as you move between the arena, the venue and the rave.
   enterRoom('arena', myName(), myPackedLook());

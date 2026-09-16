@@ -26,6 +26,9 @@ export default defineConfig({
         // RAVE RAID (src/rave/) — the rhythm game as a third page, reached
         // from the ARCADE tab and returning to the arena from its rail.
         rave: 'rave.html',
+        // THE BANK's recovery page: where the emailed sign-in link lands
+        // (net/bank.ts RECOVER). A phone opens it and reads off a code.
+        recover: 'recover.html',
       },
     },
     // Never inline a track — they must stay separate files so the browser

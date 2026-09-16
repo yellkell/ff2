@@ -18,6 +18,118 @@ plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 (DESIGN.md §10). [`FOUNDATION.md`](FOUNDATION.md) is FF1's own README,
 carried over verbatim: everything in it still applies to this code.
 
+- **THE BANK** — iron-dollars for money. The STORE has a third chip,
+  BANK, and the YOU wing's purse is a door to it: four packs (POCKET
+  CHANGE · THE PURSE · STRONGBOX · THE VAULT), coins big and price small.
+  A tap asks THE ROOM SERVER's `/bank` (`server/bank.mjs`) for a
+  **Stripe Checkout** and the board shows it as a **QR** — scan it with
+  a phone, pay there, the headset never comes off — or OPEN ON THIS
+  DEVICE for a flat-screen session. Stripe's signed webhook credits
+  **THE LEDGER** (`bank/{uid}` in Firestore: `credit`, `claimed`, a
+  receipt per session so a retried webhook credits nothing twice — no
+  client may write it, `firestore.rules`), and the headset **CLAIMS**
+  what it is owed (`src/net/bank.ts`) at every boot and every few
+  seconds while a checkout is up, so the coins land in the wallet within
+  a breath of paying. The client never sees a card and never names a
+  sum; the packs and prices are the server's. **Without
+  `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` + `FIREBASE_SERVICE_ACCOUNT`
+  on Render the bank runs in DEV mode** — a one-button fake checkout
+  page, a ledger in memory, a TEST MODE badge on the board — and charges
+  nobody; a Stripe key with no ledger to write is refused outright. To
+  go live: create the Stripe account, add the three secrets to the
+  Render service (`render.yaml` lists them; the webhook endpoint is
+  `https://<room server>/bank/webhook`, events
+  `checkout.session.completed` and
+  `checkout.session.async_payment_succeeded`), and make a service-account
+  key for the ff2 project. The bank charges in GBP by default
+  (`BANK_CURRENCY`), prices tax-inclusive. **`BANK_MANAGED=1`** turns on
+  Stripe **Managed Payments** — Stripe as the merchant of record, charging
+  and filing the VAT of wherever the buyer is — once it has been activated
+  in the Stripe dashboard (Settings › Managed Payments; every pack then
+  carries `BANK_TAX_CODE`, default the general electronically-supplied-
+  services code). Stripe refuses the flag until it is activated, so leave
+  it unset until then. `public/terms.html` carries the terms of purchase
+  (virtual currency, no cash value, non-refundable once delivered),
+  `public/paid.html` is where Stripe lands you after paying, and the
+  privacy page says what the ledger keeps. Probe: `npm run check:bank`
+  walks the whole loop against a dev-mode server with no money in it;
+  `--headset` (with `npm run dev` up) drives the STORE's board too.
+  **THE CLOUD WALLET** (`src/net/walletSync.ts`): the coins and the
+  locker are mirrored to `players/{uid}` (`coins`, `walletAt`,
+  `ownedPlatforms`, `ownedGear`, `ownedAvatars` — capped in the rules)
+  and merged at every boot (`src/net/walletMerge.ts`: the inventory is a
+  union, the coins go to whichever side changed last, a fresh browser
+  adopts the cloud), so a cleared browser gets everything back. Nobody
+  signs in to play: the anonymous uid every headset already has is the
+  account. **THE ACCOUNT** — for buyers only, never required: the PAID
+  face offers PROTECT WITH EMAIL, pre-filled with the email typed at the
+  checkout; the server attaches it to the anonymous uid (Admin SDK
+  `updateUser` — the uid never changes, nothing moves). On another
+  headset, the BANK board's RECOVER takes the email, Firebase emails a
+  sign-in link, the phone that opens it lands on `recover.html`, signs in
+  as that uid and shows a six-digit HANDOFF code (`/bank/handoff`), and
+  TYPE THE CODE in the headset redeems it (`/bank/redeem` → a custom
+  token → `signInWithCustomToken`) and restarts the game as the recovered
+  account, merging as an ADOPTION (the account's wallet plus whatever the
+  headset earned as a stranger). Opened on the headset's own browser, the
+  link signs the game itself in. **Firebase console, once:** switch on
+  the Email/Password provider with *Email link (passwordless sign-in)*,
+  add `ff2.web.app` to Authentication → Settings → Authorized domains, and
+  never enable the automatic clean-up of anonymous users (a protected
+  account is still an anonymous-provider user with an email on it).
+- **THE FORGE, and the second shelf of gear** — the PLATFORMS board is
+  SHELVED now (TIMBER · STONE · FORGE · HONOURS), like the GEAR board's
+  slots, so a catalogue of seventeen pads shows nine at a time at full
+  size; hovering any tile reads its one line in place of the price.
+  Four new decks (`arena/decks.ts`): **BASALT** (a honeycomb of
+  six-sided columns, seamed), **COPPER** (hammered, verdigris pooling in
+  the dimples), **MAGMA** (a black crust, and the cracks lit from
+  underneath — the first deck with an emissive map, so only the cracks
+  glow) and **METEORITE** (acid-etched iron-nickel, the Widmanstätten
+  figure). Four new pieces (`avatar/gear.ts`, appended so the store's
+  indices hold): a **CROWN** of six points, **ANTLERS** with brow tines,
+  **WINGS** — three swept plates off each shoulder blade — and **CLAWS**,
+  three talons over the knuckles.
+- **THE SAND, THE ROCKS AND THE CACTI** (DESERT 2.1) — the ground was
+  one sine ripple tiled seventy times, and read as corduroy to the
+  horizon; the mesas wore the boulders' skin scaled up, and read as
+  stacked orange cakes; the boulders were smooth potatoes in the same
+  stripes; the cacti were green capsules. Now:
+  - the sand is a skin that seams nowhere (`textures.ts` tileNoise —
+    asymmetric ripples in wandering fields, cross-ripples, grain) under
+    vertex-baked dune light, anisotropy 1 so the ripples melt by the
+    mid-distance, and **AERIAL PERSPECTIVE** (`arena/desert/haze.ts`) —
+    a directional fog in the far layer's materials only, hot toward the
+    dying sun and mauve away, thinning with height;
+  - the mesas are cut from ONE stratigraphy (`strata.ts`): the bed table
+    the skin paints (each bed its own sandstone, dark partings, vertical
+    joints, varnish) is the bed table the lathe steps by, so every ledge
+    is a bed boundary, the caprock overhangs, the plan is lobed and
+    elongated, the cliff fluted; the talus is its own scree material
+    with fallen blocks lying on it; buttes and spires stand between;
+  - the boulders are cleaved blocks (`rocks.ts` — sphere → rounded block
+    → lumps → random cleavage planes, flat-shaded), four shapes in four
+    instanced draws, in clusters, sunk and tilted, in a hide of grain and
+    hairline cracks;
+  - the cacti are ribbed lathes (`cactus.ts` ribbedTube — thirteen ribs,
+    areoles with spines on every crest from `cactusSkin`, arms bent out
+    of the trunk and up, a domed crown; the barrel fat and deep-ribbed
+    under a woolly crown and flowers). Fixing its winding also fixed the
+    gear tubes (horns, antlers, tail, claws), which had been inside out
+    and lit from the wrong side;
+  - `occupancy.ts` is the one list of taken ground: mesas and boulder
+    piles claim their footprints and every plant asks before it stands,
+    so nothing grows out of a rock any more.
+  **THE BONEYARD's wreck ring is centred on the pit now, at 14 m**
+  (`sites.ts`): every client stands at the origin and sees its
+  teammates on the 6 m circle around the pit at any bearing up to ±144°
+  from its own (`combat/layout.ts`), so the ring centred on the ORIGIN at
+  12.5 m used to stand a wall two metres behind the far raider's
+  platform. Nothing that stands up may be inside 9.5 m of the pit's
+  centre (a build-time warning says so). `npm run check:desert -- --shots`
+  renders the three sites, the far raider's spot from the origin, and
+  close-ups of a cactus, a boulder and a mesa (`env-preview.html` takes
+  `?focus=`, `?cam=`/`?look=` and `?seat=` now).
 - `public/stats.html` — **THE WORLDWIDE LEADERBOARD**, rebuilt on RAVE
   RAID's stats-page surface language (near-black glass, corner brackets,
   the rail with its eased marker, Rajdhani) with FIRE FIGHT's hazard amber

@@ -224,7 +224,7 @@ await wrap(`act('wrap:tab-town')`);
 
 console.log('\n=== the YOU wing: YOU · SETTINGS ===');
 you = await wrap(`buttons('info')`);
-check('YOU is PAINT, CUSTOMIZATION and the purse — nothing else', has(you, 'open-paintbay', 'open-custom', 'you-coins') && !you.includes('rename') && !you.includes('you-record') && !you.includes('you-tip'), notTabs(you).join(','));
+check('YOU is PAINT, CUSTOMIZATION and the purse (a door to THE BANK) — nothing else', has(you, 'open-paintbay', 'open-custom', 'open-bank') && !you.includes('you-coins') && !you.includes('rename') && !you.includes('you-record') && !you.includes('you-tip'), notTabs(you).join(','));
 save('you', await wrap(`snap('info')`));
 await wrap(`act('wrap:tab-settings')`);
 you = await wrap(`buttons('info')`);

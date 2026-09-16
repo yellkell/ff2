@@ -30,7 +30,11 @@ export type DeckStyle =
   | 'jade'
   | 'bullion'
   | 'lacquer'
-  | 'tide';
+  | 'tide'
+  | 'copper'
+  | 'basalt'
+  | 'magma'
+  | 'meteorite';
 
 export interface DeckLook {
   map: CanvasTexture;
@@ -45,6 +49,9 @@ export interface DeckLook {
   /** Self-glow, for decks that burn or shine from within. */
   emissive?: number;
   emissiveIntensity?: number;
+  /** Where the glow is: a deck that burns only in its cracks (MAGMA) glows
+   *  through its own colour map, so the crust stays black. */
+  emissiveMap?: CanvasTexture;
   /** Texture repeats per metre (ExtrudeGeometry UVs are in shape units). */
   repeat: [number, number];
   /** Rotate the map a quarter turn so boards run at the foe (planks only). */
@@ -257,6 +264,134 @@ function tideSkin(): { map: CanvasTexture; bump: CanvasTexture } {
   });
 }
 
+/* ── the forge: metal, stone and fire ───────────────────────────────── */
+
+function copperSkin(): { map: CanvasTexture; bump: CanvasTexture } {
+  // Hammered copper going green: a field of dimples (planished by hand,
+  // so no two the same), the metal warm and bright on the ridges between
+  // them, VERDIGRIS pooling in the low spots and spreading in blotches.
+  return skin('copper', 256, 3909, (x, y, n) => {
+    // Dimples: a jittered grid of shallow bowls.
+    const cells = 9;
+    const gx = x * cells;
+    const gy = y * cells;
+    const cx = Math.floor(gx);
+    const cy = Math.floor(gy);
+    let bowl = 0;
+    for (let oy = -1; oy <= 1; oy++) {
+      for (let ox = -1; ox <= 1; ox++) {
+        const ix = ((cx + ox) % cells + cells) % cells;
+        const iy = ((cy + oy) % cells + cells) % cells;
+        const jx = (Math.sin(ix * 12.9898 + iy * 78.233) * 43758.5453) % 1;
+        const jy = (Math.sin(ix * 93.9898 + iy * 47.233) * 24634.6345) % 1;
+        const px = cx + ox + 0.5 + (Math.abs(jx) - 0.5) * 0.7;
+        const py = cy + oy + 0.5 + (Math.abs(jy) - 0.5) * 0.7;
+        const d = Math.hypot(gx - px, gy - py);
+        bowl = Math.max(bowl, clamp01(1 - d / 0.62));
+      }
+    }
+    const depth = bowl * bowl * (3 - 2 * bowl); // smooth bowl profile
+    const patina = clamp01((n(x * 4, y * 4, 3) - 0.5) * 3 + depth * 0.5 - 0.35);
+    const sheen = n(x * 14, y * 14, 2);
+    const l = 0.62 + (1 - depth) * 0.3 + (sheen - 0.5) * 0.12;
+    const cu: [number, number, number] = [l, l * 0.58, l * 0.4];
+    const green: [number, number, number] = [0.32, 0.62, 0.55];
+    return [
+      cu[0] * (1 - patina) + green[0] * patina,
+      cu[1] * (1 - patina) + green[1] * patina,
+      cu[2] * (1 - patina) + green[2] * patina,
+      clamp01(0.7 - depth * 0.5 + (sheen - 0.5) * 0.06),
+    ];
+  });
+}
+
+function basaltSkin(): { map: CanvasTexture; bump: CanvasTexture } {
+  // Columnar basalt from above: a honeycomb of six-sided columns, each a
+  // touch higher or lower than its neighbours, a dark seam between.
+  return skin('basalt', 256, 4010, (x, y, n) => {
+    // Axial hex grid, 6 columns across the tile.
+    const s = 1 / 6;
+    const px = x / s;
+    const py = y / s;
+    const q = ((Math.sqrt(3) / 3) * px - (1 / 3) * py);
+    const r = (2 / 3) * py;
+    // Round to the nearest hex (cube rounding).
+    let rx = Math.round(q);
+    let rz = Math.round(r);
+    let ry = Math.round(-q - r);
+    const dx = Math.abs(rx - q);
+    const dy = Math.abs(ry - (-q - r));
+    const dz = Math.abs(rz - r);
+    if (dx > dy && dx > dz) rx = -ry - rz;
+    else if (dy > dz) ry = -rx - rz;
+    else rz = -rx - ry;
+    // The hex centre back in tile space, and the distance to the seam.
+    const hx = Math.sqrt(3) * (rx + rz / 2) * s;
+    const hy = 1.5 * rz * s;
+    const ex = px * s - hx;
+    const ey = py * s - hy;
+    // Hex "radius" distance (max over the three axes), 0 centre → 1 edge.
+    const a0 = Math.abs(ex);
+    const a1 = Math.abs(ex * 0.5 + ey * 0.866);
+    const a2 = Math.abs(ex * 0.5 - ey * 0.866);
+    const edge = Math.max(a0, a1, a2) / (s * 0.866);
+    const seam = clamp01((edge - 0.86) / 0.1);
+    const colTone = 0.85 + ((Math.sin(rx * 7.1 + rz * 13.7) * 0.5) % 1) * 0.3;
+    const grain = n(x * 18, y * 18, 3);
+    const l = 0.22 * colTone * (1 - seam * 0.7) + (grain - 0.5) * 0.06;
+    const h = clamp01(0.55 * colTone - seam * 0.8 + (grain - 0.5) * 0.1 - edge * 0.08);
+    return [l * 0.95, l * 0.97, l * 1.05, h];
+  });
+}
+
+function magmaSkin(): { map: CanvasTexture; bump: CanvasTexture } {
+  // A black crust cooling over fire: plates of dark rock, and between
+  // them the CRACKS — thin, branching, and lit from underneath. The
+  // colour map is also the emissive map, so only the cracks glow.
+  return skin('magma', 256, 4111, (x, y, n) => {
+    const w1 = n(x * 3, y * 3, 3);
+    const w2 = n(x * 3 + 7, y * 3 + 3, 3);
+    // Cracks: where a warped noise crosses its midline — a thin ridge.
+    const c1 = Math.abs(w1 - 0.5);
+    const c2 = Math.abs(w2 - 0.52);
+    const crack = Math.max(clamp01((0.028 - c1) / 0.028), clamp01((0.02 - c2) / 0.02) * 0.85);
+    const glowFade = 0.55 + 0.45 * n(x * 6, y * 6); // some cracks hotter
+    const crust = n(x * 12, y * 12, 3);
+    const dark = 0.06 + (crust - 0.5) * 0.05;
+    const heat = crack * glowFade;
+    // The crack's core is yellow-white, its shoulders red.
+    const core = clamp01((heat - 0.6) / 0.4);
+    const r = dark * (1 - heat) + (0.75 + core * 0.25) * heat;
+    const g = dark * (1 - heat) + (0.22 + core * 0.6) * heat;
+    const b = dark * 1.1 * (1 - heat) + (0.03 + core * 0.35) * heat;
+    return [r, g, b, clamp01(0.55 + (crust - 0.5) * 0.35 - crack * 0.6)];
+  });
+}
+
+function meteoriteSkin(): { map: CanvasTexture; bump: CanvasTexture } {
+  // Etched iron-nickel: the Widmanstätten figure — three families of
+  // parallel bands crossing at sixty degrees, each family a lattice of
+  // bright kamacite lamellae on a darker ground, wobbling a hair as a
+  // real etch does. Metal, so the light does the rest.
+  return skin('meteorite', 256, 4212, (x, y, n) => {
+    const wob = (n(x * 4, y * 4, 2) - 0.5) * 0.04;
+    let lam = 0;
+    for (let k = 0; k < 3; k++) {
+      const a = (k * Math.PI) / 3 + 0.3;
+      const u = x * Math.cos(a) + y * Math.sin(a) + wob;
+      // 7 bands per family per tile, each band a bright bar with soft sides.
+      const f = (u * 7) % 1;
+      const bar = clamp01(1 - Math.abs(((f + 1) % 1) - 0.5) / 0.22);
+      // Not every band runs the whole way: a mask breaks them into lamellae.
+      const mask = clamp01((n(x * 5 + k * 3, y * 5 + k * 7, 2) - 0.32) * 4);
+      lam = Math.max(lam, bar * mask);
+    }
+    const grain = n(x * 30, y * 30, 2);
+    const l = 0.42 + lam * 0.3 + (grain - 0.5) * 0.06;
+    return [l * 0.96, l * 0.97, l, clamp01(0.5 + lam * 0.2 + (grain - 0.5) * 0.05)];
+  });
+}
+
 /* ── the looks ───────────────────────────────────────────────────────── */
 
 const tuned = new Set<DeckStyle>();
@@ -307,5 +442,15 @@ function rawLook(style: DeckStyle): DeckLook {
       return { ...lacquerSkin(), color: 0xffffff, roughness: 0.18, metalness: 0.08, bumpScale: 0.15, envMapIntensity: 0.6, emissive: 0x3a0606, emissiveIntensity: 0.18, repeat: [0.5, 0.5], offset: [0.25, 0.25] };
     case 'tide':
       return { ...tideSkin(), color: 0xffffff, roughness: 0.2, metalness: 0.05, bumpScale: 0.3, envMapIntensity: 0.7, emissive: 0x0d3f2b, emissiveIntensity: 0.14, repeat: [0.8, 0.8] };
+    case 'copper':
+      return { ...copperSkin(), color: 0xffffff, roughness: 0.42, metalness: 0.7, bumpScale: 0.35, envMapIntensity: 0.8, repeat: [0.9, 0.9] };
+    case 'basalt':
+      return { ...basaltSkin(), color: 0xffffff, roughness: 0.82, metalness: 0.04, bumpScale: 0.6, envMapIntensity: 0.3, repeat: [1.1, 1.1] };
+    case 'magma': {
+      const s = magmaSkin();
+      return { ...s, color: 0xffffff, roughness: 0.75, metalness: 0.05, bumpScale: 0.5, envMapIntensity: 0.3, emissive: 0xffffff, emissiveIntensity: 1.1, emissiveMap: s.map, repeat: [0.8, 0.8] };
+    }
+    case 'meteorite':
+      return { ...meteoriteSkin(), color: 0xffffff, roughness: 0.34, metalness: 0.92, bumpScale: 0.12, envMapIntensity: 1.0, repeat: [0.7, 0.7] };
   }
 }

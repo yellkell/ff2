@@ -53,6 +53,19 @@ import { installWrap, wrapNav, type Wrap } from '../menu/wrap.js';
 import { clearReportSent, markReportSent, musicVolFromU, setCreditsOpen, sfxVolFromU } from '../menu/settingsFace.js';
 // MENUS 3: the modals are kit faces now, each in its own module.
 import { lockerFace, LOCKER_H, LOCKER_W } from '../menu/lockerFace.js';
+import {
+  bank,
+  cancelCheckout,
+  cancelRecovery,
+  claimPurchases,
+  loadPacks,
+  openCheckout,
+  protect,
+  redeemCode,
+  startCheckout,
+  startRecovery,
+  whoami,
+} from '../net/bank.js';
 import { campaignFace, campaignModal, CAMP_H, CAMP_W } from '../menu/campaignFace.js';
 import { lobbyFace, LOBBY_H, LOBBY_W } from '../menu/lobbyFace.js';
 import { ballsClick, ballsDrag, ballsFace, ballsFaceKey, ballsHit, BALLS_H, BALLS_W } from '../menu/ballsFace.js';
@@ -90,6 +103,8 @@ import { setVoiceEnabled, voiceEnabled } from '../audio/voicePref.js';
 import { buildBoxer, setAvatarAccent, solveTorso, type BoxerRig } from '../avatar/boxer.js';
 import {
   AVATAR_SKINS,
+  DECK_SHELVES,
+  type DeckShelf,
   OPPONENT_DEFAULT_PLATFORM,
   PLATFORM_SKINS,
   applyAvatarSkin,
@@ -231,8 +246,10 @@ export class MenuSystem extends createSystem({}) {
   private keyboard!: NameKeyboard;
   /** The action waiting behind the name keyboard. */
   private kbPending: MenuAction | null = null;
-  /** Whether the keyboard is editing your callsign or your profile note. */
-  private kbMode: 'name' | 'note' | 'report' = 'name';
+  /** What the keyboard is taking: your callsign, your profile note, a
+   *  safety report, or THE BANK's email (to protect, or to recover) and
+   *  its six-digit recovery code. */
+  private kbMode: 'name' | 'note' | 'report' | 'protect' | 'recover' | 'code' = 'name';
   private mirror?: { group: Group; rig: BoxerRig };
   /** THE PODIUM: your blank standing beside the YOU wing, always on show
    *  in the lobby — the avatar IS the menu's centrepiece now. */
@@ -298,6 +315,7 @@ export class MenuSystem extends createSystem({}) {
       mesh.full,
       mesh.names.join('|'),
       coins.balance,
+      bank.version, // a checkout opening, paying, failing — the BANK board's face
       profileHintActive(), // flips false when the hint expires — one repaint clears it
     ];
     const last = this.lastLive;
@@ -349,6 +367,20 @@ export class MenuSystem extends createSystem({}) {
     this.addModal('balls', 0.8, 0.8, BALLS_W, BALLS_H, ballsFace, [1.32, 1.18, -0.66], -0.6, (id) => ballsClick(id), ballsDrag);
     // THE MODALS, readable headlessly: what each one is offering, and its
     // canvas, so a probe can walk every face without a headset.
+    // __ff2.bank — THE BANK's probe verbs (tools/bank-check.mjs): the
+    // board's live state, and a claim on demand.
+    (window.__ff2 as unknown as Record<string, unknown>).bank = {
+      state: () => ({
+        status: bank.status,
+        mode: bank.mode,
+        packs: bank.packs.map((p) => p.id),
+        checkout: bank.checkout
+          ? { id: bank.checkout.id, state: bank.checkout.state, short: bank.checkout.short, paid: bank.checkout.paid, note: bank.checkout.note }
+          : null,
+        coins: coins.balance,
+      }),
+      claim: () => claimPurchases(),
+    };
     (window.__ff2 as unknown as Record<string, unknown>).modals = {
       buttons: (id: string): string[] => {
         const p = this.menu.panels.find((x) => x.id === id) as KitMenuPanel | undefined;
@@ -1350,6 +1382,48 @@ export class MenuSystem extends createSystem({}) {
       case 'tab-gear':
         customization.tab = 'gear';
         break;
+      // THE BANK (net/bank.ts): the store's third chip, and the door to it
+      // from the YOU wing's purse.
+      case 'tab-bank':
+        customization.tab = 'bank';
+        void loadPacks();
+        if (!bank.account.known) void whoami();
+        break;
+      case 'open-bank':
+        customization.open = true;
+        customization.shopOpen = true;
+        customization.tab = 'bank';
+        this.ensureMirror();
+        void loadPacks();
+        if (!bank.account.known) void whoami();
+        break;
+      case 'bank-open':
+        if (!openCheckout()) sfx.armorClank(); // the browser refused the tab
+        break;
+      case 'bank-cancel':
+      case 'bank-done':
+        cancelCheckout();
+        break;
+      // THE ACCOUNT: the keyboard takes the email (to protect this uid, or
+      // to have a recovery link sent) and the six-digit code off the phone.
+      case 'bank-protect':
+        this.kbPending = null;
+        this.kbMode = 'protect';
+        this.keyboard.open(bank.lastEmail, 'THE EMAIL YOU PAID WITH', 64, { email: true });
+        return;
+      case 'bank-recover':
+        this.kbPending = null;
+        this.kbMode = 'recover';
+        this.keyboard.open(bank.recovery.email, 'THE EMAIL YOU PROTECTED WITH', 64, { email: true });
+        return;
+      case 'bank-code':
+        this.kbPending = null;
+        this.kbMode = 'code';
+        this.keyboard.open('', 'THE CODE FROM YOUR PHONE', 6, { digits: true });
+        return;
+      case 'bank-recover-cancel':
+        cancelRecovery();
+        break;
       case 'gear-head':
       case 'gear-body':
       case 'gear-hands':
@@ -1363,6 +1437,20 @@ export class MenuSystem extends createSystem({}) {
         // diff-<tier>: the campaign difficulty picker sets the run difficulty
         // (persisted). raiddiff-<tier>: the raid host mirrors it to the squad.
         // hitTest only returns unlocked tiers, so no re-check is needed.
+        // shelf-<material>: the PLATFORMS board's shelf.
+        if (action.startsWith('shelf-')) {
+          const shelf = action.slice('shelf-'.length);
+          if (DECK_SHELVES.some(([id]) => id === shelf)) {
+            customization.tab = 'platforms';
+            customization.platformShelf = shelf as DeckShelf;
+          }
+          break;
+        }
+        // bank-pack-<id>: open a checkout for that pack of iron-dollars.
+        if (action.startsWith('bank-pack-')) {
+          void startCheckout(action.slice('bank-pack-'.length));
+          break;
+        }
         if (action.startsWith('raiddiff-')) {
           const tier = action.slice('raiddiff-'.length) as Difficulty;
           if (mesh.isHost() && (DIFFICULTY_ORDER as string[]).includes(tier)) mesh.setRaidDifficulty(tier);
@@ -1832,6 +1920,16 @@ export class MenuSystem extends createSystem({}) {
               void sendReport(done);
               markReportSent();
             }
+          } else if (this.kbMode === 'protect' || this.kbMode === 'recover') {
+            // An email: empty OK backs out; a non-address stays up to be fixed.
+            if (done.length > 0 && !done.includes('@')) return;
+            if (done.length > 0) {
+              if (this.kbMode === 'protect') void protect(done);
+              else void startRecovery(done);
+            }
+          } else if (this.kbMode === 'code') {
+            if (done.length > 0 && !/^\d{6}$/.test(done)) return; // six digits, or back out
+            if (done.length > 0) void redeemCode(done);
           } else if (this.kbMode === 'note') {
             setPlayerNote(done); // empty clears the note
             clearProfileKeyboardHint();

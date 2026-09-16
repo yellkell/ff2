@@ -72,6 +72,16 @@ service cloud.firestore {
       return !(field in request.resource.data) || num(request.resource.data[field], lo, hi);
     }
 
+    // THE CLOUD LOCKER: a list of owned ids, capped. The client writes what
+    // it owns (net/walletSync.ts); a cosmetics inventory a client can write
+    // is a cosmetics inventory a client can pad, which is exactly as true of
+    // the localStorage it mirrors — the point is a cleared browser or a new
+    // headset getting it BACK, not a court proving who owns what.
+    function optionalIds(field, max) {
+      return !(field in request.resource.data)
+        || (request.resource.data[field] is list && request.resource.data[field].size() <= max);
+    }
+
     match /players/{uid} {
       allow read: if true;
 
@@ -81,6 +91,10 @@ service cloud.firestore {
         && optionalNum('xp', 0, 100000000)
         && optionalNum('score', -100000, 100000000)
         && optionalNum('coins', 0, 100000000)
+        && optionalNum('walletAt', 0, 100000000000000)
+        && optionalIds('ownedPlatforms', 64)
+        && optionalIds('ownedGear', 64)
+        && optionalIds('ownedAvatars', 16)
         && optionalNum('elo', 0, 100000);
 
       allow delete: if false;
@@ -260,6 +274,25 @@ service cloud.firestore {
       allow delete: if mine(uid)
         || (signedIn()
             && (!(resource.data.expiresAt is timestamp) || resource.data.expiresAt < request.time));
+    }
+
+    /* ── bank — THE LEDGER of coins bought for money ──────────────────── */
+    // Written ONLY by THE ROOM SERVER's /bank with admin credentials
+    // (server/bank.mjs), which these rules do not bind: `credit` is what
+    // Stripe has been paid for, `claimed` what the headset has collected,
+    // and one receipt per checkout session is what makes a replayed
+    // webhook credit nothing twice. A player may READ their own — the
+    // number is theirs to see — and nobody may write from a client,
+    // because a wallet a client can write is a wallet a client can print.
+
+    match /bank/{uid} {
+      allow read: if mine(uid);
+      allow write: if false;
+
+      match /receipts/{receipt} {
+        allow read: if mine(uid);
+        allow write: if false;
+      }
     }
 
     /* ── probes — the device clock-skew measurement ───────────────────── */

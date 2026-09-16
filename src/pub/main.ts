@@ -25,6 +25,8 @@ import * as sfx from '../audio/sfx.js';
 import { customization, myPackedGear } from '../menu/customization.js';
 import { myPackedLook } from '../avatar/paint.js';
 import { enter as enterRoom } from '../net/presence.js';
+import { claimPurchases } from '../net/bank.js';
+import { initWalletSync } from '../net/walletSync.js';
 import { PUB, pubServerUrl } from './config.js';
 import { buildPub } from './environment.js';
 import { pubConnect } from './net.js';
@@ -151,6 +153,8 @@ World.create(container, {
   // so it never crosses the doors in experience/clubNavigation.ts and has to
   // check itself in.
   enterRoom('pub', pub.myName, myPackedLook());
+  initWalletSync(); // the one wallet, mirrored to the profile
+  void claimPurchases(); // the one wallet: bought coins land here too
   pubConnect(pubServerUrl(), pub.myName, customization.avatar, customization.platform, customization.colorHue, customization.colorLight, myPackedLook(), myPackedGear());
 
   // Browser-only moderation: hold Z+A+P to open the admin ban panel.

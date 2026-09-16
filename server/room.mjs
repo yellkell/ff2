@@ -25,6 +25,7 @@ import { handleHttp as ffHttp, wss as ffWss } from './index.mjs';
 import { handleHttp as pubHttp, wss as pubWss } from './pub.mjs';
 import { handleHttp as raveHttp, wss as raveWss } from './rave.mjs';
 import { handleHttp as tvHttp, wss as tvWss } from './tv.mjs';
+import { handleHttp as bankHttp } from './bank.mjs';
 import { discordWriteStatus } from './discord.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
@@ -34,6 +35,8 @@ const RELAYS = [
   { path: '/pub', name: 'iron-balls-pub', http: pubHttp, wss: pubWss },
   { path: '/ff', name: 'fire-fight', http: ffHttp, wss: ffWss },
   { path: '/tv', name: 'the-channel', http: tvHttp, wss: tvWss },
+  // THE BANK: iron-dollars for money — HTTP only, no socket (bank.mjs).
+  { path: '/bank', name: 'the-bank', http: bankHttp, wss: null },
 ];
 
 /** Which relay a URL belongs to, and the URL with its prefix stripped
@@ -53,6 +56,7 @@ function handleHttp(req, res) {
   const hit = route(req.url ?? '/');
   if (hit) {
     req.url = hit.url;
+    req.mountPath = hit.relay.path; // so a relay can spell its own links
     hit.relay.http(req, res);
     return;
   }
@@ -73,6 +77,10 @@ if (isMain(import.meta.url)) {
   server.on('upgrade', (req, socket, head) => {
     const hit = route(req.url ?? '/');
     const wss = hit ? hit.relay.wss : ffWss;
+    if (!wss) {
+      socket.destroy(); // an HTTP-only relay (the bank) has no socket side
+      return;
+    }
     if (hit) req.url = hit.url;
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   });

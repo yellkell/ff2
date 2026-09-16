@@ -8,6 +8,7 @@
 import {
   type AvatarSkin,
   avatarSkin,
+  type DeckShelf,
   FREE_AVATARS,
   FREE_PLATFORMS,
   platformSkin,
@@ -57,6 +58,28 @@ function loadOwnedPlatforms(): Set<string> {
 
 const ownedPlatforms = loadOwnedPlatforms();
 
+/** THE CLOUD LOCKER (net/walletSync.ts) listens here: every purchase is
+ *  announced, so the profile's copy of what you own keeps up. */
+type OwnedListener = () => void;
+const ownedListeners: OwnedListener[] = [];
+export function onOwnedChange(cb: OwnedListener): void {
+  ownedListeners.push(cb);
+}
+function announceOwned(): void {
+  for (const cb of ownedListeners) cb();
+}
+
+function saveOwnedPlatforms(): void {
+  try {
+    localStorage.setItem(
+      'ff-owned-platforms',
+      JSON.stringify([...ownedPlatforms].filter((p) => !FREE_PLATFORMS.includes(p))),
+    );
+  } catch {
+    /* session-only ownership */
+  }
+}
+
 /** Has the player unlocked this platform skin (free or purchased)? */
 export function platformOwned(id: string): boolean {
   return ownedPlatforms.has(id);
@@ -67,14 +90,8 @@ export function platformOwned(id: string): boolean {
 export function ownPlatform(id: string): void {
   if (ownedPlatforms.has(id)) return;
   ownedPlatforms.add(id);
-  try {
-    localStorage.setItem(
-      'ff-owned-platforms',
-      JSON.stringify([...ownedPlatforms].filter((p) => !FREE_PLATFORMS.includes(p))),
-    );
-  } catch {
-    /* session-only ownership */
-  }
+  saveOwnedPlatforms();
+  announceOwned();
 }
 
 /** Avatar skins the player has unlocked: the free set plus shop buys
@@ -92,6 +109,17 @@ function loadOwnedAvatars(): Set<string> {
 
 const ownedAvatars = loadOwnedAvatars();
 
+function saveOwnedAvatars(): void {
+  try {
+    localStorage.setItem(
+      'ff-owned-avatars',
+      JSON.stringify([...ownedAvatars].filter((a) => !FREE_AVATARS.includes(a))),
+    );
+  } catch {
+    /* session-only ownership */
+  }
+}
+
 /** Has the player unlocked this avatar skin (free or purchased)? */
 export function avatarOwned(id: string): boolean {
   return ownedAvatars.has(id);
@@ -102,14 +130,8 @@ export function avatarOwned(id: string): boolean {
 export function ownAvatar(id: string): void {
   if (ownedAvatars.has(id)) return;
   ownedAvatars.add(id);
-  try {
-    localStorage.setItem(
-      'ff-owned-avatars',
-      JSON.stringify([...ownedAvatars].filter((a) => !FREE_AVATARS.includes(a))),
-    );
-  } catch {
-    /* session-only ownership */
-  }
+  saveOwnedAvatars();
+  announceOwned();
 }
 
 /** GEAR the player has bought ('ff-owned-gear', a JSON id array). Nothing
@@ -132,15 +154,59 @@ export function gearOwned(id: string): boolean {
   return ownedGear.has(id);
 }
 
-/** Record a gear purchase (the coin debit is the caller's job). */
-export function ownGear(id: string): void {
-  if (!gearDef(id) || ownedGear.has(id)) return;
-  ownedGear.add(id);
+function saveOwnedGear(): void {
   try {
     localStorage.setItem('ff-owned-gear', JSON.stringify([...ownedGear]));
   } catch {
     /* session-only ownership */
   }
+}
+
+/** Record a gear purchase (the coin debit is the caller's job). */
+export function ownGear(id: string): void {
+  if (!gearDef(id) || ownedGear.has(id)) return;
+  ownedGear.add(id);
+  saveOwnedGear();
+  announceOwned();
+}
+
+/** What the player owns beyond the free issue — the cloud locker's shape. */
+export function ownedIds(): { platforms: string[]; gear: string[]; avatars: string[] } {
+  return {
+    platforms: [...ownedPlatforms].filter((p) => !FREE_PLATFORMS.includes(p)).sort(),
+    gear: [...ownedGear].sort(),
+    avatars: [...ownedAvatars].filter((a) => !FREE_AVATARS.includes(a)).sort(),
+  };
+}
+
+/** Take the cloud locker's union in (net/walletSync.ts): anything the
+ *  profile says is owned becomes owned here, silently — it came FROM the
+ *  cloud, so nothing pushes back. Unknown ids (a retired piece) are dropped. */
+export function adoptOwned(owned: { platforms: string[]; gear: string[]; avatars: string[] }): void {
+  let changed = false;
+  for (const id of owned.platforms) {
+    if (platformSkin(id).id === id && !ownedPlatforms.has(id)) {
+      ownedPlatforms.add(id);
+      changed = true;
+    }
+  }
+  for (const id of owned.gear) {
+    if (gearDef(id) && !ownedGear.has(id)) {
+      ownedGear.add(id);
+      changed = true;
+    }
+  }
+  for (const id of owned.avatars) {
+    if (avatarSkin(id).id === id && !ownedAvatars.has(id)) {
+      ownedAvatars.add(id);
+      changed = true;
+    }
+  }
+  if (!changed) return;
+  saveOwnedPlatforms();
+  saveOwnedGear();
+  saveOwnedAvatars();
+  customization.version += 1;
 }
 
 /** The worn set ('ff-gear', the packed wire form) — anything not owned any
@@ -171,8 +237,12 @@ export const customization = {
   open: false,
   /** The STORE face is up (a sub-modal of the locker); false = the LOCKER. */
   shopOpen: false,
-  /** Which tab the shop / locker shows. 'colour' and 'arena' are locker-only. */
-  tab: 'platforms' as 'avatars' | 'platforms' | 'gear' | 'colour' | 'arena',
+  /** Which tab the shop / locker shows. 'colour' and 'arena' are
+   *  locker-only; 'bank' (iron-dollars for money) is the store's alone. */
+  tab: 'platforms' as 'avatars' | 'platforms' | 'gear' | 'colour' | 'arena' | 'bank',
+  /** Which SHELF of the PLATFORMS board is out (avatar/skins.ts
+   *  DECK_SHELVES) — the woods, the stones, the forge, the honours. */
+  platformShelf: 'timber' as DeckShelf,
   /** Which of the GEAR board's three shelves is out — head, body or
    *  hands. Fifteen pieces on one board crushed the tiles until the
    *  prices fell off them; a shelf holds six at full size. */
