@@ -71,7 +71,10 @@ const CURRENCY = (process.env.BANK_CURRENCY || 'gbp').toLowerCase();
  * buyer pays, the way a UK shelf price is.
  */
 const MANAGED = process.env.BANK_MANAGED === '1';
-const TAX_CODE = process.env.BANK_TAX_CODE || 'txcd_10000000';
+// The category the account's Managed Payments setup declared: video games,
+// downloaded, non-subscription, permanent rights — the closest Stripe has
+// to a video game's own currency.
+const TAX_CODE = process.env.BANK_TAX_CODE || 'txcd_10201000';
 const PUBLIC_URL = (process.env.PUBLIC_URL || 'https://ff2.web.app').replace(/\/$/, '');
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || '';
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
