@@ -16,6 +16,7 @@
 
 import { CanvasTexture, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, SpriteMaterial } from 'three';
 import { makeRng, valueNoise2D } from './paper.js';
+import { bedAt } from './strata.js';
 
 interface Skin {
   map: CanvasTexture;
@@ -30,6 +31,42 @@ function wrap(c: HTMLCanvasElement, srgb: boolean): CanvasTexture {
   t.anisotropy = 4;
   if (srgb) t.colorSpace = SRGBColorSpace;
   return t;
+}
+
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+
+/** Sample position → [r, g, b, height], all 0..1. */
+type Texel = (x: number, y: number) => [number, number, number, number];
+
+/** Paint a colour + height pair from a per-texel function, cached by key. */
+function paint(key: string, size: number, texel: Texel): Skin {
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const col = document.createElement('canvas');
+  const hgt = document.createElement('canvas');
+  col.width = col.height = hgt.width = hgt.height = size;
+  const cc = col.getContext('2d')!;
+  const hc = hgt.getContext('2d')!;
+  const ci = cc.createImageData(size, size);
+  const hi = hc.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const [r, g, b, h] = texel(x / size, y / size);
+      const i = (y * size + x) * 4;
+      ci.data[i] = clamp01(r) * 255;
+      ci.data[i + 1] = clamp01(g) * 255;
+      ci.data[i + 2] = clamp01(b) * 255;
+      ci.data[i + 3] = 255;
+      const hv = clamp01(h) * 255;
+      hi.data[i] = hi.data[i + 1] = hi.data[i + 2] = hv;
+      hi.data[i + 3] = 255;
+    }
+  }
+  cc.putImageData(ci, 0, 0);
+  hc.putImageData(hi, 0, 0);
+  const s: Skin = { map: wrap(col, true), bump: wrap(hgt, false) };
+  cache.set(key, s);
+  return s;
 }
 
 /** Sample position → [r, g, b, height], all 0..1. */
@@ -57,46 +94,185 @@ function skin(key: string, size: number, seed: number, shade: Shader): Skin {
     }
     return v / sum;
   };
-  const col = document.createElement('canvas');
-  const hgt = document.createElement('canvas');
-  col.width = col.height = hgt.width = hgt.height = size;
-  const cc = col.getContext('2d')!;
-  const hc = hgt.getContext('2d')!;
-  const ci = cc.createImageData(size, size);
-  const hi = hc.createImageData(size, size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const [r, g, b, h] = shade(x / size, y / size, n);
-      const i = (y * size + x) * 4;
-      ci.data[i] = r * 255;
-      ci.data[i + 1] = g * 255;
-      ci.data[i + 2] = b * 255;
-      ci.data[i + 3] = 255;
-      const hv = h * 255;
-      hi.data[i] = hi.data[i + 1] = hi.data[i + 2] = hv;
-      hi.data[i + 3] = 255;
-    }
-  }
-  cc.putImageData(ci, 0, 0);
-  hc.putImageData(hi, 0, 0);
-  const s: Skin = { map: wrap(col, true), bump: wrap(hgt, false) };
-  cache.set(key, s);
-  return s;
+  return paint(key, size, (x, y) => shade(x, y, n));
 }
 
-const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
+/**
+ * TILEABLE value noise with its own cell count per axis: `kx` cells across
+ * the tile, `ky` down it, wrapping at both — so a sample at (x, y) in 0..1
+ * repeats seamlessly across every edge, and a tall thin cell count (48 × 6)
+ * gives STREAKS rather than blobs. The sand and the mesas are built on
+ * this: a tile that does not seam is the difference between a desert and
+ * a wallpaper.
+ */
+export function tileNoise(rng: () => number, kx: number, ky: number): (x: number, y: number) => number {
+  const grid = new Float32Array(kx * ky);
+  for (let i = 0; i < grid.length; i++) grid[i] = rng();
+  const at = (xi: number, yi: number): number => grid[(((yi % ky) + ky) % ky) * kx + (((xi % kx) + kx) % kx)];
+  const smooth = (t: number): number => t * t * (3 - 2 * t);
+  return (x: number, y: number) => {
+    const fx = x * kx;
+    const fy = y * ky;
+    const x0 = Math.floor(fx);
+    const y0 = Math.floor(fy);
+    const tx = smooth(fx - x0);
+    const ty = smooth(fy - y0);
+    const a = at(x0, y0);
+    const b = at(x0 + 1, y0);
+    const c = at(x0, y0 + 1);
+    const d = at(x0 + 1, y0 + 1);
+    return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
+  };
+}
+
+/** A shader over tileable noises: `T(kx, ky?)` hands back a cached noise
+ *  at that cell count (one per distinct size, drawn from the skin's seed). */
+type TileShader = (x: number, y: number, T: (kx: number, ky?: number) => (x: number, y: number) => number) => [number, number, number, number];
+
+function skinTiled(key: string, size: number, seed: number, shade: TileShader): Skin {
+  const hit = cache.get(key);
+  if (hit) return hit;
+  const rng = makeRng(seed);
+  const pool = new Map<string, (x: number, y: number) => number>();
+  const T = (kx: number, ky = kx): ((x: number, y: number) => number) => {
+    const k = `${kx}x${ky}`;
+    let f = pool.get(k);
+    if (!f) {
+      f = tileNoise(rng, kx, ky);
+      pool.set(k, f);
+    }
+    return f;
+  };
+  return paint(key, size, (x, y) => shade(x, y, T));
+}
 
 /* ── the skins ─────────────────────────────────────────────────────────── */
 
-/** Wind-rippled sand: long low ripples across x, fine grain everywhere.
- *  Tint-neutral (the dunes' vertex colour supplies the sand tone). */
+/**
+ * WIND-RIPPLED SAND, second try. The first was one sine across the tile:
+ * every ripple the same height, the same spacing, the same direction, over
+ * a whole desert — and tiled seventy times, a sheet of corduroy. Real
+ * ripples are asymmetric (a long gentle stoss side, a short steep lee
+ * face), they wander with the gusts, they live in FIELDS with smooth sand
+ * between, and finer cross-ripples run over them. All of that is here, and
+ * the whole tile seams nowhere. Tint-neutral: the dunes' vertex colour
+ * supplies the tone.
+ */
 export function sandSkin(): Skin {
-  return skin('sand', 256, 101, (x, y, n) => {
-    const ripple = 0.5 + 0.5 * Math.sin((y + n(x * 4, y * 4) * 0.12) * Math.PI * 2 * 9);
-    const grain = n(x * 32, y * 32, 3);
-    const h = ripple * 0.55 + grain * 0.45;
-    const l = 0.82 + (ripple - 0.5) * 0.14 + (grain - 0.5) * 0.16;
-    return [l, l * 0.985, l * 0.96, h];
+  return skinTiled('sand', 256, 101, (x, y, T) => {
+    // The ripple field bends with a slow warp, so no two ripples are parallel.
+    const warp = (T(3)(x, y) - 0.5) * 0.22 + (T(7)(x + 0.5, y) - 0.5) * 0.05;
+    const phase = (y + warp) * 11;
+    const saw = phase - Math.floor(phase);
+    // Stoss side rises over 72% of the wavelength; the lee drops over 28%.
+    const ripple = saw < 0.72 ? saw / 0.72 : 1 - (saw - 0.72) / 0.28;
+    // Where the ripples are: fields, with smooth sand between them.
+    const field = clamp01((T(4)(x + 0.25, y + 0.25) - 0.3) * 2.0);
+    // Cross-ripples: finer, fainter, at a different angle.
+    const cross = 0.5 + 0.5 * Math.sin((x * 23 + T(6)(x, y) * 1.4) * Math.PI * 2);
+    const grain = T(64)(x, y) * 0.55 + T(32)(x, y) * 0.45;
+    const mottle = T(5)(x, y) - 0.5;
+    const h = ripple * 0.5 * field + (1 - field) * 0.28 + cross * 0.1 + grain * 0.36;
+    const l = 0.85 + (ripple - 0.5) * 0.14 * field + (grain - 0.5) * 0.1 + mottle * 0.08;
+    return [l, l * 0.985, l * 0.955, h];
+  });
+}
+
+/**
+ * THE MESA FACE — the bed table (strata.ts) painted: each bed its own
+ * sandstone colour, a dark recessed parting at its top, a massive bed
+ * pale and proud, a shale seam thin and dark. Over that, the marks the
+ * weather leaves: VERTICAL JOINTS (the fracture lines a cliff breaks
+ * along, a few per tile, cutting the massive beds most), DESERT VARNISH
+ * (dark streaks water draws down the face) and grain. NOT tint-neutral —
+ * the colour is in the beds, so the geometry's vertex colour carries only
+ * shading and a per-mesa cast. One tile is TILE_M metres of cliff
+ * (rocks.ts lays the UVs in metres).
+ */
+export function mesaSkin(): Skin {
+  return skinTiled('mesa', 512, 202, (x, y, T) => {
+    const wob = (T(3)(x, y) - 0.5) * 0.014 + (T(24)(x, y) - 0.5) * 0.003;
+    const v = (((y + wob) % 1) + 1) % 1;
+    const bed = bedAt(v);
+    const bl = (v - bed.v0) / Math.max(1e-4, bed.v1 - bed.v0);
+    // The parting: the top edge of every bed, sharper on the massive ones.
+    const partW = bed.seam ? 0.35 : 0.08;
+    const parting = clamp01((bl - (1 - partW)) / partW) * (bed.hard ? 0.6 : 1);
+    // Joints: noise that varies only across → vertical lines where it peaks.
+    const j = T(18, 1)(x, y);
+    const jointMask = clamp01((T(5)(x, y + 0.5) - 0.42) * 4);
+    const joint = clamp01((0.045 - Math.abs(j - 0.5)) / 0.045) * jointMask * (bed.hard ? 1 : 0.45);
+    // Varnish: tall thin noise → streaks down the face, in some columns only.
+    const streak = T(48, 6)(x, y);
+    const varnish = clamp01((streak - 0.55) * 2.4) * (0.3 + 0.7 * T(4)(x + 0.3, y)) * (bed.hard ? 1 : 0.5);
+    const grain = T(96)(x, y) * 0.5 + T(48)(x, y) * 0.5;
+    const shade =
+      (1 + (bed.tone - 0.5) * 0.14) *
+      (1 - parting * 0.55) *
+      (1 - joint * 0.55) *
+      (1 - varnish * 0.42) *
+      (1 + (grain - 0.5) * 0.2);
+    const [r, g, b] = bed.colour;
+    const h = 0.5 - bed.inset * 2.5 - parting * 0.5 - joint * 0.35 + (grain - 0.5) * 0.2 - varnish * 0.04;
+    return [r * shade, g * shade, b * shade, h];
+  });
+}
+
+/**
+ * A BOULDER's hide: sandstone with no bedding to speak of at this size —
+ * fine grain, a few cracks, the pits weathering leaves, a lichen fleck or
+ * two. Tint-neutral; the instance colour and the vertex shading decide.
+ */
+export function boulderSkin(): Skin {
+  return skinTiled('boulder', 256, 606, (x, y, T) => {
+    const grain = T(64)(x, y) * 0.5 + T(32)(x, y) * 0.5;
+    const c1 = Math.abs(T(4)(x, y) - 0.5);
+    const c2 = Math.abs(T(6)(x + 0.5, y + 0.3) - 0.48);
+    // Cracks are hairlines that fade in and out, not inked outlines; lichen
+    // is a grey-green dusting in a few hollows, not paint.
+    const crackMask = clamp01((T(3)(x + 0.4, y + 0.1) - 0.35) * 2.5);
+    const crack = Math.max(clamp01((0.011 - c1) / 0.011), clamp01((0.009 - c2) / 0.009) * 0.7) * crackMask;
+    const pit = clamp01((T(20)(x, y) - 0.68) * 5);
+    const lichen = clamp01((T(9)(x + 0.2, y + 0.7) - 0.76) * 6) * (1 - crack);
+    const l = 0.84 + (grain - 0.5) * 0.16 - crack * 0.28 - pit * 0.16;
+    const h = 0.55 + (grain - 0.5) * 0.3 - crack * 0.5 - pit * 0.4;
+    return [l * (1 - lichen * 0.12), l * (1 - lichen * 0.02), l * (1 - lichen * 0.16) * 0.94, h];
+  });
+}
+
+/**
+ * CACTUS HIDE, one tile per RIB: u runs around one rib (the crest at the
+ * tile's centre, the troughs at its edges), v runs up the rib with an
+ * AREOLE every tile — the pale woolly dot with its fan of spines. The
+ * trough is shaded darker than the crest so the ribs read even where the
+ * light is flat. Tint-neutral: the plant's own green comes from the
+ * material and the vertex colour.
+ */
+export function cactusSkin(): Skin {
+  return skinTiled('cactus', 128, 808, (x, y, T) => {
+    // Across the rib: crest at x = 0.5, troughs at the edges.
+    const crest = 0.5 + 0.5 * Math.cos((x - 0.5) * Math.PI * 2);
+    const grain = T(24)(x, y) * 0.6 + T(12)(x, y) * 0.4;
+    // The areole: a pale dot on the crest, and spines fanning from it.
+    const dx = x - 0.5;
+    const dy = y - 0.5;
+    const d = Math.hypot(dx * 1.15, dy * 2.2);
+    const wool = clamp01((0.07 - d) / 0.03);
+    let spine = 0;
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2 + 0.3;
+      const ux = Math.cos(a);
+      const uy = Math.sin(a) * 0.5; // squashed by the tile's aspect
+      const along = dx * ux + dy * uy;
+      const across = Math.abs(dx * -uy * 2 + dy * ux * 0.5);
+      if (along > 0.02 && along < 0.25) spine = Math.max(spine, clamp01((0.012 - across) / 0.012) * (1 - along / 0.3));
+    }
+    const l = 0.62 + crest * 0.3 + (grain - 0.5) * 0.1;
+    const r = l * 0.86 + wool * 0.35 + spine * 0.4;
+    const g = l + wool * 0.28 + spine * 0.3;
+    const b = l * 0.7 + wool * 0.3 + spine * 0.25;
+    const h = 0.4 + crest * 0.35 + (grain - 0.5) * 0.12 + wool * 0.25;
+    return [r, g, b, h];
   });
 }
 
@@ -167,6 +343,11 @@ export interface SkinOpts {
   metalness?: number;
   bumpScale?: number;
   envMapIntensity?: number;
+  /** Anisotropic filtering on this use of the maps (default 4). The sand
+   *  takes 1: at a grazing angle the mip chain then blurs its ripples out
+   *  by the mid-distance, which is exactly where a tiled pattern turns into
+   *  corduroy if it stays sharp. */
+  anisotropy?: number;
 }
 
 /** A standard material wearing a skin: colour from `hex`, surface from the
@@ -178,6 +359,7 @@ export function skinned(s: Skin, hex: string | number, o: SkinOpts = {}): MeshSt
   const [rx, ry] = o.repeat ?? [1, 1];
   map.repeat.set(rx, ry);
   bump.repeat.set(rx, ry);
+  if (o.anisotropy !== undefined) map.anisotropy = bump.anisotropy = o.anisotropy;
   map.needsUpdate = bump.needsUpdate = true;
   return new MeshStandardMaterial({
     color: hex,
@@ -192,6 +374,10 @@ export function skinned(s: Skin, hex: string | number, o: SkinOpts = {}): MeshSt
 
 export const rockMat = (hex: string | number, o: SkinOpts = {}): MeshStandardMaterial =>
   skinned(rockSkin(), hex, { roughness: 0.94, bumpScale: 0.05, ...o });
+export const boulderMat = (hex: string | number, o: SkinOpts = {}): MeshStandardMaterial =>
+  skinned(boulderSkin(), hex, { roughness: 0.92, bumpScale: 0.06, envMapIntensity: 0.35, ...o });
+export const cactusMat = (hex: string | number, o: SkinOpts = {}): MeshStandardMaterial =>
+  skinned(cactusSkin(), hex, { roughness: 0.62, bumpScale: 0.02, envMapIntensity: 0.5, ...o });
 export const rustMat = (hex: string | number, o: SkinOpts = {}): MeshStandardMaterial =>
   skinned(rustSkin(), hex, { roughness: 0.68, metalness: 0.45, bumpScale: 0.02, envMapIntensity: 0.5, ...o });
 export const barkMat = (hex: string | number, o: SkinOpts = {}): MeshStandardMaterial =>

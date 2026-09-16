@@ -40,6 +40,15 @@ const VIEWS = [
   ['boneyard-front', 'site=boneyard&yaw=0&raid=1'],
   ['boneyard-left', 'site=boneyard&yaw=1.1&raid=1'],
   ['boneyard-right', 'site=boneyard&yaw=-1.1&raid=1'],
+  // THE FAR RAIDER'S SPOT: from the origin (where every client stands),
+  // the teammate on the far side of the pit is at bearing ±144° around
+  // it, (±3.5, −10.9). Nothing may stand up behind that platform.
+  ['boneyard-far-left', 'site=boneyard&raid=1&cam=0,1.6,0&look=-3.5,0.8,-10.9'],
+  ['boneyard-far-right', 'site=boneyard&raid=1&cam=0,1.6,0&look=3.5,0.8,-10.9'],
+  // The close-ups: a cactus, a boulder, a mesa foot.
+  ['flats-saguaro', 'site=flats&focus=saguaro&dist=5&h=1.4&lookY=1.8'],
+  ['flats-boulder', 'site=flats&focus=boulders&inst=0&dist=5&h=1.5&lookY=0.6'],
+  ['flats-mesa', 'site=flats&focus=mesas&inst=0&dist=40&h=1.6&lookY=12'],
 ];
 
 const browser = await launch();

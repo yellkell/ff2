@@ -8,9 +8,11 @@
       import {
         ACESFilmicToneMapping,
         Fog,
+        Matrix4,
         PerspectiveCamera,
         PMREMGenerator,
         Scene,
+        Vector3,
         WebGLRenderer,
       } from 'three';
       import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -52,6 +54,8 @@
         scene.fog = new Fog(env.skyColor.getHex(), 30, 700); // matches DesertSystem
       }
 
+      window.__env = env; // for a probe to poke at (dev-only page)
+
       // Show the fight pedestals so the raised-platform effect is visible.
       const mine = makePlatform(0xff7a18);
       scene.add(mine);
@@ -77,6 +81,55 @@
       camera.rotation.order = 'YXZ';
       camera.rotation.y = yaw;
       camera.rotation.x = pitch;
+      // ?seat=N (with raid=1): stand on raid seat N, facing the pit (+yaw).
+      const seat = params.get('seat');
+      if (seat !== null && raid) {
+        const s = MODE_LAYOUT.raid[Number(seat)];
+        camera.position.set(s.pos[0], 1.6, s.pos[2]);
+        camera.rotation.y = s.yaw + yaw;
+      }
+      // ?cam=x,y,z&look=x,y,z: a free camera, for overviews.
+      const cam = params.get('cam');
+      if (cam) {
+        const c = cam.split(',').map(Number);
+        const l = (params.get('look') ?? '0,0,0').split(',').map(Number);
+        camera.position.set(c[0], c[1], c[2]);
+        camera.lookAt(l[0], l[1], l[2]);
+      }
+      // ?focus=<object name>[&inst=N&dist=6&h=1.6&lookY=1]: stand `dist` m
+      // from the first object of that name (an instance of an InstancedMesh,
+      // or a spot listed in its userData.spots), on the arena side, looking
+      // at it — for close-ups of a cactus, a boulder, a mesa.
+      const focus = params.get('focus');
+      if (focus) {
+        env.root.updateMatrixWorld(true);
+        const inst = Number(params.get('inst') ?? 0);
+        const matches = [];
+        env.root.traverse((o) => {
+          if (o.name === focus) matches.push(o);
+        });
+        // The nth named object — or the first, whose nth instance/spot it is.
+        const target = matches.length > 1 ? matches[Math.min(inst, matches.length - 1)] : matches[0] ?? null;
+        if (target) {
+          const p = new Vector3();
+          if (target.isInstancedMesh) {
+            const m = new Matrix4();
+            target.getMatrixAt(inst, m);
+            p.setFromMatrixPosition(m).applyMatrix4(target.matrixWorld);
+          } else if (target.userData.spots) {
+            p.copy(target.userData.spots[inst]).applyMatrix4(target.matrixWorld);
+          } else {
+            target.getWorldPosition(p);
+          }
+          const dist = Number(params.get('dist') ?? 6);
+          const h = Number(params.get('h') ?? 1.6);
+          const dir = new Vector3(p.x, 0, p.z).normalize();
+          camera.position.set(p.x - dir.x * dist, p.y + h, p.z - dir.z * dist);
+          camera.lookAt(p.x, p.y + Number(params.get('lookY') ?? 1), p.z);
+        } else {
+          console.warn(`focus: nothing named ${focus}`);
+        }
+      }
 
       // A few frames so the living parts (fire, windmill) settle into motion.
       let frames = 0;

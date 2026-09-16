@@ -43,6 +43,7 @@ import { DustField } from './dustdevil.js';
 import { animateTumbleweeds, buildTumbleweeds, type Tumbleweed } from './tumbleweed.js';
 import { buildSites, SITE_YAW, type DesertSite } from './sites.js';
 import { useStands } from './audience.js';
+import { bindHazeSky, setHazeSun } from './haze.js';
 
 export type { DesertSite } from './sites.js';
 
@@ -259,7 +260,12 @@ export function buildDesert(): Desert {
   const e = CONFIG.mood.sunElevation * (Math.PI / 2);
   const sunDir = new Vector3(0.35 * Math.cos(e), Math.sin(e), -0.94 * Math.cos(e)).normalize();
 
-  far.add(makeSkyDome(sunDir));
+  const dome = makeSkyDome(sunDir);
+  far.add(dome);
+  // The haze (haze.ts) fades the far layer into the SAME band colours the
+  // dome paints, so a hazed mesa foot and the sky behind it agree.
+  const domeU = (dome.material as ShaderMaterial).uniforms;
+  bindHazeSky(domeU.horizon.value as Color, domeU.dusk.value as Color);
   far.add(makeStars());
 
   // The dying sun: deeper, lower, still the longest shadows in the game.
@@ -317,6 +323,7 @@ export function buildDesert(): Desert {
       desert.site = site;
       useStands(site); // the terraces a watcher can stand on here
       far.rotation.y = SITE_YAW[site];
+      setHazeSun(sunDir, SITE_YAW[site]); // the band swings round; so must the haze
       for (const [k, s] of Object.entries(sites)) s.root.visible = k === site;
     },
     update: (delta, time) => {

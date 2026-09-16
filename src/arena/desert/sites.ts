@@ -544,29 +544,40 @@ function buildBoneyard(yaw: number): SiteSet {
   root.visible = false;
   const rng = makeRng(CONFIG.terrain.seed * 41 + 13);
   const statics = new Group();
+  // Everything clears THE SQUAD'S RING. Every client stands at the origin
+  // facing the pit at (0, −6) and sees its teammates on the circle of
+  // radius 6 around THAT PIT, on any bearing up to ±144° from its own
+  // (combat/layout.ts) — so the far raider can stand nearly straight
+  // across the pit, eleven metres out. Nothing that stands up may be
+  // inside 9.5 m of the pit's centre. The wreck ring used to be centred
+  // on the ORIGIN at 12.5 m, which put its back plates two metres behind
+  // the far raider's platform: a wall in that player's face. It is
+  // centred on the pit now, at 14 m, and the front (+z, where you stand
+  // and the lobby-to-fight cut lands) stays open.
+  const PIT_X = 0;
+  const PIT_Z = -RAID_RING_RADIUS;
+  const KEEP_CLEAR = 9.5;
   const place = (o: Object3D, x: number, z: number, ry: number, into: Object3D = statics): void => {
+    const d = Math.hypot(x - PIT_X, z - PIT_Z);
+    if (d < KEEP_CLEAR) console.warn(`[boneyard] a prop at (${x.toFixed(1)}, ${z.toFixed(1)}) stands ${d.toFixed(1)} m from the pit — inside the squad's ring`);
     o.position.set(x, groundAt(x, z, yaw), z);
     o.rotation.y = ry;
     into.add(o);
   };
-  // Everything clears the RAID footprint: five seats out to (±5.7, −4.15),
-  // the pit pad at (0, −6) two-and-a-half metres across — nothing inside
-  // ten metres of the origin or six of the pit, and the front (+z) stays
-  // open so the lobby-to-fight cut never puts a wall at your back.
   const plates = [
     rustMat(0x5a4736, { roughness: 0.62 }),
     rustMat(0x474b55, { roughness: 0.6 }),
     rustMat(0x4a4256, { roughness: 0.7 }),
   ];
-  const ring = 12.5;
+  const ring = 14;
   for (let i = 0; i < 9; i++) {
-    const a = Math.PI + (i / 8 - 0.5) * Math.PI * 1.25; // the back arc, −z
-    const r = ring + (rng() - 0.5) * 2.5;
-    const x = Math.sin(a) * r;
-    const z = Math.cos(a) * r;
+    const a = Math.PI + (i / 8 - 0.5) * Math.PI * 1.35; // the whole way round but the front
+    const r = ring + (rng() - 0.5) * 2.4;
+    const x = PIT_X + Math.sin(a) * r;
+    const z = PIT_Z + Math.cos(a) * r;
     place(wreckPlate(rng, plates[i % plates.length]), x, z, -a + (rng() - 0.5) * 0.5);
   }
-  place(buriedHook(), -13.5, -13, 0.6);
+  place(buriedHook(), -15, -15, 0.6);
   // Drums: two LIT (the light budget), two just burning.
   const drums = [
     burningDrum(true, 1.7),

@@ -19,6 +19,19 @@ export const CONFIG = {
     viewDistance: 1500,
   },
 
+  /** AERIAL PERSPECTIVE (haze.ts): the far layer — sand, mesas, boulders —
+   *  melts toward the sky band with distance, hot toward the sun and cool
+   *  away from it. `near`/`far` in metres bound the ramp, `max` is how much
+   *  of the band a thing at `far` becomes, and `lift` is the height (m) at
+   *  which the haze has thinned to under half — so the skyline's caps keep
+   *  their edge while their feet sit in the dust. */
+  haze: {
+    near: 28,
+    far: 150,
+    max: 0.9,
+    lift: 48,
+  },
+
   /** The dusk sky (the inward-facing dome): a blood-orange band dying on
    *  one horizon, deep violet overhead, early stars above it. */
   sky: {
@@ -39,13 +52,15 @@ export const CONFIG = {
   /** The dusk palette: everything a step darker and richer, the pale
    *  things (bone, dust) left bright so they CATCH the dying light. */
   palette: {
-    sandLight: '#a3754e',
-    sandDark: '#5e3a2c',
+    sandLight: '#a9805c',
+    sandDark: '#5a3b2f',
+    /** Scree at a mesa's foot — the apron the cliff stands on. */
+    scree: '#4e2e23',
     sun: '#ff7c38',
-    rockStrata: ['#6e3524', '#84422a', '#95542f', '#7a3823', '#5f2c1d'],
-    boulder: ['#7c452b', '#6b3a24', '#8a6a44'],
-    cactus: '#48663c',
-    cactusDark: '#374f2f',
+    rockStrata: ['#73382a', '#9b5a3c', '#b4744d', '#6a3025', '#8a4a35', '#a8664a'],
+    boulder: ['#8a5236', '#74432c', '#9a7a55', '#7d6a58', '#a06a48'],
+    cactus: '#5f8a4c',
+    cactusDark: '#4a6e3c',
     flower: '#b04c62',
     tumbleweed: ['#7c6339', '#69512c', '#8f774f'],
     wood: '#5c3820',
@@ -67,17 +82,23 @@ export const CONFIG = {
   terrain: {
     seed: 23,
     size: 240, // width of the desert (meters)
-    segments: 96, // vertex density (smooth dunes want more to roll over)
-    duneHeight: 3.2,
+    segments: 128, // vertex density (smooth dunes want more to roll over)
+    duneHeight: 4.2,
     flatRadius: 14, // level clearing around the platforms
     platformReveal: 0.14, // lower the clearing so the platform slabs read as raised
   },
 
   /** Scattered boulders + the big horizon mesas. */
   rocks: {
-    boulders: 64,
+    /** Boulders come in clusters — a block and its fallen pieces — from
+     *  `variants` cleaved shapes (one instanced draw each). */
+    clusters: 26,
+    variants: 4,
     mesas: 7,
-    mesaRingMin: 70,
+    /** Buttes and spires between the mesas — the remnants the wind left
+     *  when it took the rest of the table. Narrower, some taller. */
+    buttes: 5,
+    mesaRingMin: 78,
     mesaRingMax: 112,
   },
 
