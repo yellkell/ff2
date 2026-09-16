@@ -42,13 +42,15 @@ carried over verbatim: everything in it still applies to this code.
   `checkout.session.completed` and
   `checkout.session.async_payment_succeeded`), and make a service-account
   key for the ff2 project. The bank charges in GBP by default
-  (`BANK_CURRENCY`), prices tax-inclusive. **`BANK_MANAGED=1`** turns on
-  Stripe **Managed Payments** — Stripe as the merchant of record, charging
-  and filing the VAT of wherever the buyer is — once it has been activated
-  in the Stripe dashboard (Settings › Managed Payments; every pack then
-  carries `BANK_TAX_CODE`, default the general electronically-supplied-
-  services code). Stripe refuses the flag until it is activated, so leave
-  it unset until then. `public/terms.html` carries the terms of purchase
+  (`BANK_CURRENCY`), prices tax-inclusive. **Managed Payments** — Stripe
+  as the merchant of record, charging and filing the VAT of wherever the
+  buyer is — is set up on the account (Settings › Managed Payments, one
+  eligible product, "enabled by default" for every Checkout Session);
+  `BANK_MANAGED=1` asks for it explicitly per session and every pack
+  carries `BANK_TAX_CODE` (default the video-games code the account
+  declared). On a deployed host with no `STRIPE_SECRET_KEY` the bank is
+  CLOSED — every door answers 503 — so a fresh deploy never runs the
+  laptop's fake-PAY dev mode in public. `public/terms.html` carries the terms of purchase
   (virtual currency, no cash value, non-refundable once delivered),
   `public/paid.html` is where Stripe lands you after paying, and the
   privacy page says what the ledger keeps. Probe: `npm run check:bank`
