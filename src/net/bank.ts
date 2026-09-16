@@ -41,14 +41,12 @@ import { markWalletAdopt } from './walletSync.js';
 
 export interface CoinPack {
   id: string;
-  name: string;
-  /** Iron-dollars delivered. */
+  /** Iron-dollars delivered — and the pack's whole name. */
   coins: number;
   /** Price in the currency's minor unit (cents, pence). */
   minor: number;
   /** The pack the shelf points at. */
   best?: boolean;
-  blurb: string;
 }
 
 export type BankMode = 'live' | 'test' | 'dev' | '';
@@ -73,10 +71,10 @@ export interface Checkout {
 /** What the board draws until the server's own list arrives. Keep in step
  *  with server/bank.mjs PACKS — the server's is the one that charges. */
 export const FALLBACK_PACKS: CoinPack[] = [
-  { id: 'pocket', name: 'POCKET CHANGE', coins: 500, minor: 199, blurb: 'a deck and a piece' },
-  { id: 'purse', name: 'THE PURSE', coins: 1300, minor: 449, blurb: 'most of a shelf' },
-  { id: 'strongbox', name: 'STRONGBOX', coins: 3000, minor: 899, best: true, blurb: 'the forge, and change' },
-  { id: 'vault', name: 'THE VAULT', coins: 7000, minor: 1799, blurb: 'the whole store, near enough' },
+  { id: 'pocket', coins: 500, minor: 199 },
+  { id: 'purse', coins: 1300, minor: 449 },
+  { id: 'strongbox', coins: 3000, minor: 899, best: true },
+  { id: 'vault', coins: 7000, minor: 1799 },
 ];
 
 /**

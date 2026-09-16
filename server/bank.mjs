@@ -91,11 +91,14 @@ const MAX_OPEN_PER_UID = 6;
  * this answers. `minor` is the price in the currency's minor unit.
  */
 export const PACKS = [
-  { id: 'pocket', name: 'POCKET CHANGE', coins: 500, minor: 199, blurb: 'a deck and a piece' },
-  { id: 'purse', name: 'THE PURSE', coins: 1300, minor: 449, blurb: 'most of a shelf' },
-  { id: 'strongbox', name: 'STRONGBOX', coins: 3000, minor: 899, best: true, blurb: 'the forge, and change' },
-  { id: 'vault', name: 'THE VAULT', coins: 7000, minor: 1799, blurb: 'the whole store, near enough' },
+  { id: 'pocket', coins: 500, minor: 199 },
+  { id: 'purse', coins: 1300, minor: 449 },
+  { id: 'strongbox', coins: 3000, minor: 899, best: true },
+  { id: 'vault', coins: 7000, minor: 1799 },
 ];
+
+/** What a pack is called everywhere a person reads it: the number. */
+const packName = (pack) => `${pack.coins} iron-dollars`;
 
 /* ── the ledger ──────────────────────────────────────────────────────── */
 
@@ -440,7 +443,7 @@ async function createCheckout(req, uid, pack) {
             unit_amount: pack.minor,
             tax_behavior: 'inclusive',
             product_data: {
-              name: `${pack.coins} iron-dollars — ${pack.name}`,
+              name: packName(pack),
               description: 'FIRE FIGHT 2 in-game currency. No cash value; not refundable once delivered.',
               tax_code: TAX_CODE,
             },
@@ -504,10 +507,10 @@ async function handleWebhook(req, res) {
 /* ── dev-pay: the fake checkout page ─────────────────────────────────── */
 
 function devPayPage(req, s, id, paid) {
-  const pack = PACKS.find((p) => p.id === s.pack) ?? { name: s.pack, coins: s.coins, minor: 0 };
+  const pack = PACKS.find((p) => p.id === s.pack) ?? { coins: s.coins, minor: 0 };
   const body = paid
     ? `<h1>PAID</h1><p class="big">+${pack.coins} <span class="sym">$</span></p><p>are on their way to the headset. You can close this.</p>`
-    : `<h1>TEST BANK</h1><p class="big">+${pack.coins} <span class="sym">$</span></p><p>${esc(pack.name)} · ${esc(price(pack.minor))} · <em>no real charge — this is the development bank</em></p>
+    : `<h1>TEST BANK</h1><p class="big">+${pack.coins} <span class="sym">$</span></p><p>${esc(packName(pack))} · ${esc(price(pack.minor))} · <em>no real charge — this is the development bank</em></p>
        <form method="post" action="${esc(req.mountPath ?? '')}/dev-pay"><input type="hidden" name="s" value="${esc(id)}"><button>PAY</button></form>`;
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FIRE FIGHT 2 — test bank</title>
 <style>body{margin:0;background:#101116;color:#e8ecf2;font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;text-align:center}

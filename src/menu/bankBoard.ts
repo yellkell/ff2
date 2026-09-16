@@ -221,30 +221,26 @@ function drawPack(g: CanvasRenderingContext2D, t: PackTile, hot: boolean, open: 
     g.fillText(tag, x + TILE_W - tw / 2 - 16, y + 30);
     g.letterSpacing = '0px';
   }
+  // A pack is its number and its price — nothing else to read.
   const dim = open ? 1 : 0.5;
   g.globalAlpha = dim;
-  coinMark(g, x + 74, y + 74, 38);
+  const cy = y + TILE_H / 2;
+  coinMark(g, x + 76, cy, 42);
   g.textAlign = 'left';
   g.textBaseline = 'middle';
-  g.font = font(700, 54);
+  g.font = font(700, 62);
   g.fillStyle = hot && open ? KIT.textHi : KIT.text;
-  g.fillText(String(pack.coins), x + 128, y + 70);
+  g.fillText(String(pack.coins), x + 134, cy - 2);
   const nw = g.measureText(String(pack.coins)).width;
-  g.font = font(700, 28);
+  g.font = font(700, 30);
   g.fillStyle = KIT.accent;
-  g.fillText('$', x + 128 + nw + 12, y + 64);
-  g.font = font(700, 24);
-  g.fillStyle = KIT.text;
-  g.fillText(pack.name, x + 30, y + 128, TILE_W - 200);
-  g.font = font(500, 20);
-  g.fillStyle = KIT.faint;
-  g.fillText(pack.blurb, x + 30, y + 157, TILE_W - 200);
-  // The price chip, bottom right.
+  g.fillText('$', x + 134 + nw + 12, cy - 8);
+  // The price chip, right.
   const price = priceLabel(pack.minor);
-  g.font = font(700, 26);
-  const pw = g.measureText(price).width + 36;
+  g.font = font(700, 28);
+  const pw = g.measureText(price).width + 40;
   g.beginPath();
-  g.roundRect(x + TILE_W - pw - 24, y + TILE_H - 64, pw, 46, 10);
+  g.roundRect(x + TILE_W - pw - 24, cy - 26, pw, 52, 10);
   g.fillStyle = KIT.well;
   g.fill();
   g.strokeStyle = KIT.accentDim;
@@ -252,7 +248,7 @@ function drawPack(g: CanvasRenderingContext2D, t: PackTile, hot: boolean, open: 
   g.stroke();
   g.textAlign = 'center';
   g.fillStyle = KIT.accent;
-  g.fillText(price, x + TILE_W - pw / 2 - 24, y + TILE_H - 41);
+  g.fillText(price, x + TILE_W - pw / 2 - 24, cy + 1);
   g.globalAlpha = 1;
 }
 
@@ -319,22 +315,19 @@ function checkoutFace(co: NonNullable<typeof bank.checkout>, top: number, footY:
         g.fillStyle = co.state === 'paid' ? KIT.positive : KIT.faint;
         g.fillText(co.state === 'opening' ? 'opening…' : co.state === 'paid' ? '✓' : '—', M + QR_PX / 2, qy + QR_PX / 2);
       }
-      // THE PACK, and the state of play.
+      // THE PACK — its number and its price — and the state of play.
       g.textAlign = 'left';
       g.textBaseline = 'middle';
-      g.font = font(700, 34);
-      g.fillStyle = KIT.text;
-      g.fillText(co.pack.name, x0, qy + 20, w0);
-      coinMark(g, x0 + 34, qy + 100, 34);
+      coinMark(g, x0 + 34, qy + 50, 34);
       g.font = font(700, 60);
       g.fillStyle = KIT.accent;
-      g.fillText(`+${co.paid || co.pack.coins}`, x0 + 84, qy + 98);
+      g.fillText(`+${co.paid || co.pack.coins}`, x0 + 84, qy + 48);
       const nw = g.measureText(`+${co.paid || co.pack.coins}`).width;
       g.font = font(700, 28);
-      g.fillText('$', x0 + 84 + nw + 12, qy + 92);
+      g.fillText('$', x0 + 84 + nw + 12, qy + 42);
       g.font = font(600, 24);
       g.fillStyle = KIT.dim;
-      g.fillText(priceLabel(co.pack.minor), x0, qy + 160);
+      g.fillText(`${priceLabel(co.pack.minor)} · iron-dollars`, x0, qy + 118);
       // The line that says where it stands.
       let line = '';
       let tone = KIT.info;
@@ -363,7 +356,7 @@ function checkoutFace(co: NonNullable<typeof bank.checkout>, top: number, footY:
       }
       g.font = font(600, 22);
       g.fillStyle = tone;
-      wrapText(g, line, x0, qy + 212, w0, 30, 3);
+      wrapText(g, line, x0, qy + 172, w0, 30, 3);
       terms(g, footY - 40);
     },
   };

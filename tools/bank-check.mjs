@@ -9,7 +9,7 @@
  * PART 1 starts THE ROOM SERVER in dev mode on a spare port (no Stripe
  * key, no service account: the fake checkout page and the memory ledger)
  * and walks the API as the headset would: the catalogue, a refused
- * checkout with no identity, a checkout for POCKET CHANGE, the short
+ * checkout with no identity, a checkout for the 500 pack, the short
  * link's redirect, the dev PAY, a replayed PAY that credits nothing
  * twice, a claim that hands over the coins once and then nothing.
  *
@@ -91,7 +91,7 @@ try {
     const go = await fetch(co.body.short, { redirect: 'manual' });
     check('the short link redirects to the checkout', go.status === 302 && go.headers.get('location') === co.body.url, `${go.status} ${go.headers.get('location')}`);
     const page = await fetch(co.body.url);
-    check('the dev checkout page shows the pack', page.status === 200 && (await page.text()).includes('POCKET CHANGE'), String(page.status));
+    check('the dev checkout page shows the pack', page.status === 200 && (await page.text()).includes('500 iron-dollars'), String(page.status));
 
     const c0 = await api('/claim', { method: 'POST', headers: who, body: '{}' });
     check('nothing owed before paying', c0.body?.coins === 0, JSON.stringify(c0.body));

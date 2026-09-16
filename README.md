@@ -19,8 +19,8 @@ plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 carried over verbatim: everything in it still applies to this code.
 
 - **THE BANK** — iron-dollars for money. The STORE has a third chip,
-  BANK, and the YOU wing's purse is a door to it: four packs (POCKET
-  CHANGE · THE PURSE · STRONGBOX · THE VAULT), coins big and price small.
+  BANK, and the YOU wing's purse is a door to it: four packs — 500 · 1300
+  · 3000 · 7000 — a pack is its number and its price, nothing else to read.
   A tap asks THE ROOM SERVER's `/bank` (`server/bank.mjs`) for a
   **Stripe Checkout** and the board shows it as a **QR** — scan it with
   a phone, pay there, the headset never comes off — or OPEN ON THIS
