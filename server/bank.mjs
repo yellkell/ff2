@@ -215,9 +215,18 @@ const DEV_ALLOWED = FORCE_DEV || !process.env.RENDER;
 export const MODE = stripe ? (STRIPE_KEY.startsWith('sk_live') ? 'live' : 'test') : DEV_ALLOWED ? 'dev' : 'closed';
 const DEV = MODE === 'dev';
 const CLOSED = MODE === 'closed';
+/** Why it is closed, in words the board can show — never a secret, only
+ *  which one is missing. */
+const CLOSED_WHY = !CLOSED
+  ? ''
+  : !STRIPE_KEY
+    ? 'no Stripe key on the server yet'
+    : !ledger.persistent
+      ? 'the server has a Stripe key but no usable Firebase service account'
+      : 'the Stripe library failed to load on the server';
 
 if (CLOSED) {
-  console.log('[bank] THE BANK is CLOSED — a deployed host with no STRIPE_SECRET_KEY answers 503 until the secrets are set (BANK_DEV=1 would force dev mode; do not, on a public host)');
+  console.log(`[bank] THE BANK is CLOSED — ${CLOSED_WHY}. A deployed host answers 503 until STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET and FIREBASE_SERVICE_ACCOUNT are all set (BANK_DEV=1 would force dev mode; do not, on a public host)`);
 } else {
   console.log(
     `[bank] THE BANK is open — ${MODE} mode, ${ledger.persistent ? 'firestore' : 'memory'} ledger, ${CURRENCY.toUpperCase()}${stripe ? (MANAGED ? ', Stripe as merchant of record' : ', you as merchant of record') : ''}`,
@@ -533,7 +542,7 @@ export function handleHttp(req, res) {
   const url = new URL(req.url ?? '/', 'http://localhost');
   const path = url.pathname.replace(/\/+$/, '') || '/';
 
-  if (CLOSED) return json(res, 503, { error: 'the bank is not open yet', mode: 'closed' });
+  if (CLOSED) return json(res, 503, { error: `the bank is not open yet — ${CLOSED_WHY}`, mode: 'closed' });
 
   if (req.method === 'GET' && (path === '/' || path === '/packs')) {
     return json(res, 200, { bank: 'iron-dollars', mode: MODE, currency: CURRENCY, managed: MANAGED, ledger: ledger.persistent ? 'firestore' : 'memory', packs: PACKS });

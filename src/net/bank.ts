@@ -219,7 +219,10 @@ export function loadPacks(): Promise<void> {
       bank.note = '';
     } catch (err) {
       bank.status = 'off';
-      bank.note = /abort/i.test(String(err)) ? 'the bank is not answering' : 'the bank is closed right now';
+      // The server says why it is closed (which secret is missing — never
+      // the secret); a timeout or a dead host has no words to offer.
+      const said = String((err as Error)?.message ?? '');
+      bank.note = /abort/i.test(said) ? 'the bank is not answering' : /not open yet/.test(said) ? said.replace(/^the bank is not open yet — /, '') : 'the bank is closed right now';
     } finally {
       loading = null;
       bump();
