@@ -302,8 +302,8 @@ The floor is the near tell; the titan's silhouette is the far one, and
 every grammar shape now has its own: the lane's POINT (one arm levelled
 down the strip, the other tucked), THE X's crossed arms, the rail's
 SCISSOR (wings out, snapping across), the gate's PRESS (arms spread, then
-closing either side of the gap that lives), the donut's RING (hands meeting
-overhead, up on the toes), THE ROUTINE's TEACH (the king points at each
+closing either side of the gap that lives), the donut's RING (arms up in a wide V framing the rim, hands a hoop apart, never
+meeting, up on the toes), THE ROUTINE's TEACH (the king points at each
 taught corner in turn), the wave's MARCH (the piston drumline pumping on
 the beat) and the duckdonut's blade (the sweep's own wind-out). Each is a
 pure function of the read's fill — the same seed animates the same pose on

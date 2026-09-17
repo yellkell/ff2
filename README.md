@@ -358,7 +358,7 @@ carried over verbatim: everything in it still applies to this code.
   THE FLOOR MANAGER — fully seeded for the raid wire, act-gated so easy
   bouts stay honest. And every shape has its GESTURE now
   (`src/campaign/gestures.ts`): the lane's point, THE X's crossed arms,
-  the rail's scissor, the gate's press, the donut's overhead ring, the
+  the rail's scissor, the gate's press, the donut's wide-V ring, the
   routine's teaching finger, the wave's piston march — windup, gaze,
   follow-through, per chassis. Probe: `npm run check:grammar` (add
   `--shots`; it also asserts seven distinct silhouettes).

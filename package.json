@@ -17,6 +17,7 @@
     "check:wrap": "node tools/wrap-check.mjs",
     "check:paint": "node tools/paint-wire-check.mjs",
     "check:grammar": "node tools/grammar-check.mjs",
+    "check:gestures": "node tools/gesture-check.mjs",
     "check:pages": "node tools/pages-check.mjs",
     "check:desert": "node tools/desert-check.mjs",
     "check:rave": "node tools/rave-check.mjs",

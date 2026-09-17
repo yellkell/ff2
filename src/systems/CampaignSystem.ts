@@ -50,6 +50,7 @@ import {
   type GrammarKind,
   type Park,
 } from '../campaign/grammar.js';
+import { keepArmsApart, type GuardMemo } from '../campaign/armGuard.js';
 import {
   ARM_REST,
   armFor,
@@ -3584,7 +3585,15 @@ export class CampaignSystem extends createSystem({
       this.curl[i] += (curl - this.curl[i]) * ease;
       for (const d of arm.digits) d.node.rotation.x = d.open + (d.closed - d.open) * this.curl[i];
     }
+    // THE CLEARANCE GUARD (armGuard.ts): whatever the easing above left
+    // mid-flight — the snapping strike arm crossing its ambling twin, a
+    // swung-through follow-through handed into THE X — the two fists never
+    // fuse on the midline. A no-op on every pose the language holds.
+    keepArmsApart(rig.arms, this.def.scale, this.armGuardMemo);
   }
+
+  /** The clearance guard's memory (armGuard.ts) — which way it last pushed. */
+  private readonly armGuardMemo: GuardMemo = { dir: 0 };
 
   // --- GOOPLIATH animation --------------------------------------------------------
 

@@ -11,10 +11,12 @@
  *
  *   THE GRAMMAR
  *   point    a lane: ONE arm levels down the strip, straight, finger out
- *   x        THE X: both forearms cross in front, fists closed
+ *   x        THE X: two straight bars cross in front, one over the other,
+ *            fists closed
  *   scissor  a rail: both arms flat out like wings, snapping across
  *   press    the gate: arms spread, then CLOSE toward the gap that lives
- *   ring     the donut: hands meet overhead, then slam down wide
+ *   ring     the donut: arms up in a wide V framing the rim, a hoop's
+ *            width apart, then slam down wide
  *   teach    THE LESSON: the king POINTS at each taught quarter in turn —
  *            and shows an open PALM for a hold
  *   conduct  THE RECITAL: forearms up like a conductor, the baton hand
@@ -31,8 +33,8 @@
  *            other hand bracing its elbow; the whole arm shakes as it cooks
  *   launcher the volley: arms swung back and folded, the body rocked back
  *            on its heels for the pods' recoil; every shot jolts it
- *   coil     the nova: both arms overhead, forearms winding round each
- *            other, wrists spiralling, up on the toes — then thrown wide
+ *   coil     the nova: wound in TIGHT — fists at the shoulders, elbows
+ *            folded shut, hunched and crouched, trembling — then thrown wide
  *   tilt     the seesaw: arms out flat like a balance beam that TIPS toward
  *            the half about to flood; the low hand slaps it down
  *   shove    the surge: both palms out at chest height, elbows drawn back,
@@ -50,6 +52,15 @@
  * CampaignSystem eases every joint toward the returned targets, so a pose
  * is a destination, never a keyframe — and a cascade whose next read
  * hasn't opened yet (fill 0) simply eases the arms home between steps.
+ *
+ * THE CLEARANCE LAW: no pose here — windup, follow-through, or the blend
+ * between — puts a fist within a fist's width of the other arm or the
+ * head. The elbow is a single hinge, so it can't fold a forearm sideways:
+ * the shapes that cross (THE X, the scissor's jaws) cross as two straight
+ * bars at staggered heights, and the shapes that used to meet overhead
+ * (the ring, the coil) frame the rim wide or wind in tight instead.
+ * tools/gesture-check.mjs measures every pose and every handover against
+ * the rig's real thicknesses; armGuard.ts holds the line mid-flight.
  */
 
 import type { GrammarKind } from './grammar.js';
@@ -256,8 +267,10 @@ export function grammarGesture(
       for (const i of [0, 1] as const) {
         const pointing = focus.side === 0 || i === lead;
         if (pointing) {
+          // A centre lane points BOTH — nearly parallel, a fist's width
+          // apart, not converging into one another down the strip.
           arms[i].x = -1.55 * e;
-          arms[i].z = -OUT[i] * 0.35 * e;
+          arms[i].z = -OUT[i] * (focus.side === 0 ? 0.18 : 0.35) * e;
           joints(arms[i], e, 0.05, 0.15, 0.1);
         } else {
           arms[i].x = 0.3 * e;
@@ -270,12 +283,21 @@ export function grammarGesture(
       break;
     }
     case 'x': {
-      // Both arms raised and the FOREARMS swung ACROSS each other, fists
-      // closed — the lattice made of iron before it's made of light.
+      // Both arms thrown STRAIGHT forward and ACROSS each other, fists
+      // closed — the lattice made of iron before it's made of light. One
+      // bar rides OVER the other: arm 0 high, arm 1 low, so the two cross
+      // in front of the face with air between them instead of fusing on
+      // the midline (a hinged elbow can't fold a forearm sideways, so the
+      // X is two straight bars, not two folded ones).
+      // The arms LIFT first, a little apart, to their staggered heights,
+      // then swing in across each other — so an arm arriving late never
+      // rises through the bar already in place.
+      const lift = smooth(fill / 0.55);
+      const cross = smooth((fill - 0.4) / 0.6);
       for (const i of [0, 1] as const) {
-        arms[i].x = -1.55 * e;
-        arms[i].z = -OUT[i] * 1.15 * e;
-        joints(arms[i], e, 0.85, 0.3, 1);
+        arms[i].x = (i === 0 ? -1.95 : -1.35) * lift;
+        arms[i].z = OUT[i] * 0.2 * lift - OUT[i] * 1.0 * cross;
+        joints(arms[i], lift, 0.15, 0.3, 1);
       }
       lean = -0.04 * e;
       break;
@@ -287,11 +309,15 @@ export function grammarGesture(
       // leads a touch higher.
       const close = smooth((fill - 0.66) / 0.34);
       for (const i of [0, 1] as const) {
-        const lead = (i === 0 ? 1 : -1) === focus.fwd ? 0.25 : 0;
-        // Higher than the press's level spread — wings, not a shelf.
-        arms[i].x = -(1.95 + lead) * e + 0.6 * close;
-        arms[i].z = OUT[i] * 1.3 * e - OUT[i] * 2.2 * close;
-        joints(arms[i], e, lerp(0.08, 0.7, close), lerp(-0.25, 0.35, close), 0.15);
+        // The rail's own wing rides higher — until the jaws close, when the
+        // stagger below owns the heights.
+        const lead = ((i === 0 ? 1 : -1) === focus.fwd ? 0.25 : 0) * (1 - close);
+        // Higher than the press's level spread — wings, not a shelf. The
+        // jaws close as two straight bars, one OVER the other (arm 0 high,
+        // arm 1 low), crossing in front of the face with air between them.
+        arms[i].x = -(1.95 + lead) * e + (i === 0 ? 0.0 : 0.6) * close;
+        arms[i].z = OUT[i] * 1.3 * e - OUT[i] * 2.1 * close;
+        joints(arms[i], e, lerp(0.08, 0.15, close), lerp(-0.25, 0.35, close), 0.15);
       }
       lean = 0.03 * e;
       gaze = 0.4;
@@ -321,13 +347,14 @@ export function grammarGesture(
       break;
     }
     case 'ring': {
-      // Both hands meet OVERHEAD, forearms folded in over the crown, wrists
-      // cocked back — the body goes up on its toes — the rim is what comes
-      // down when they part.
+      // The donut: both arms up and OUT in a wide V, forearms folded in
+      // over the crown, wrists cocked back — the hands FRAME the rim, a
+      // hoop's width apart, never touching — the body goes up on its toes —
+      // the rim is what comes down when they part.
       for (const i of [0, 1] as const) {
-        arms[i].x = -2.7 * e;
-        arms[i].z = -OUT[i] * 0.55 * e;
-        joints(arms[i], e, 1.15, -0.35, 0.6);
+        arms[i].x = -2.1 * e;
+        arms[i].z = OUT[i] * 0.45 * e;
+        joints(arms[i], e, 1.0, -0.35, 0.6);
       }
       rise = 0.08 * e;
       lean = -0.05 * e;
@@ -461,9 +488,11 @@ export function grammarGesture(
           arms[i].wrist = -0.35 * gather;
           arms[i].curl = lerp(ARM_REST.curl, 1, gather);
         } else {
-          arms[i].x = -0.6 * e;
-          arms[i].z = -OUT[i] * 0.5 * e;
-          joints(arms[i], e, 1.1, 0.2, 1);
+          // The off arm swings BACK and out off the cut as the
+          // counterweight — clear of the lane the blade whips through.
+          arms[i].x = 0.5 * e;
+          arms[i].z = OUT[i] * 0.4 * e;
+          joints(arms[i], e, 0.9, 0.2, 1);
         }
       }
       lean = -0.04 * e;
@@ -509,17 +538,18 @@ export function grammarGesture(
       break;
     }
     case 'coil': {
-      // THE NOVA. Both arms go OVERHEAD and the forearms wind round each
-      // other, the wrists spiralling in time — the machine up on its toes,
-      // wound like a spring — before everything is thrown wide at once.
+      // THE NOVA. Wound like a spring: both arms drawn in TIGHT to the
+      // body, elbows folded right up so the fists sit at the shoulders,
+      // the machine hunched over them and crouched, the whole coil
+      // trembling in time — before everything is thrown wide at once.
       const spin = Math.sin(beatPhase * Math.PI * 2) * e;
       for (const i of [0, 1] as const) {
-        arms[i].x = -2.4 * e;
-        arms[i].z = -OUT[i] * 0.85 * e + OUT[i] * 0.12 * spin;
-        joints(arms[i], e, 1.2, -0.4 + 0.3 * spin, 1);
+        arms[i].x = -0.55 * e + 0.05 * spin;
+        arms[i].z = OUT[i] * 0.1 * e;
+        joints(arms[i], e, 2.25 + 0.1 * spin, 0.35, 1);
       }
-      rise = 0.07 * e;
-      lean = -0.05 * e;
+      rise = -0.06 * e;
+      lean = 0.07 * e;
       break;
     }
     case 'tilt': {
@@ -585,23 +615,25 @@ export function grammarFollowThrough(shape: GestureShape, k: number, arm: 0 | 1,
     case 'point': {
       const lead = focus.side === 0 ? arm : armFor(focus.side);
       arms[lead].x = -1.9 * k;
-      arms[lead].z = -OUT[lead] * 0.5 * k;
+      arms[lead].z = -OUT[lead] * 0.3 * k;
       strike(arms[lead], 0, 0.5, 0.2); // the jab: arm locked, hand chopping down the strip
       break;
     }
     case 'x':
     case 'scissor':
+      // The jaws CROSS — two straight bars, one over the other, the
+      // windup's own stagger, so they pass with air between them.
       for (const i of [0, 1] as const) {
-        arms[i].x = -1.2 * k;
-        arms[i].z = -OUT[i] * 1.3 * k;
-        strike(arms[i], 0.9, 0.4, 1);
+        arms[i].x = (i === 0 ? -1.85 : -1.2) * k;
+        arms[i].z = -OUT[i] * 0.9 * k;
+        strike(arms[i], 0.1, 0.4, 1);
       }
       break;
     case 'press':
       for (const i of [0, 1] as const) {
         arms[i].x = -1.3 * k;
-        arms[i].z = -OUT[i] * 0.55 * k + focus.side * 0.3 * k;
-        strike(arms[i], 1.0, 0.5, 0.1); // the clap
+        arms[i].z = -OUT[i] * 0.42 * k + focus.side * 0.3 * k;
+        strike(arms[i], 1.0, 0.5, 0.1); // the clap — stopped a fist's width short
       }
       break;
     case 'ring':
@@ -643,8 +675,10 @@ export function grammarFollowThrough(shape: GestureShape, k: number, arm: 0 | 1,
     case 'blade':
       // Swung hard across the body (the classic sweep's own follow-through),
       // the arm whipping straight.
-      arms[arm].z = -OUT[arm] * 1.4 * k;
-      arms[arm].x = 0.3 * k;
+      // Swung through at chest height, in FRONT of the body, so the fist
+      // clears the other arm's girder instead of passing through it.
+      arms[arm].z = -OUT[arm] * 1.2 * k;
+      arms[arm].x = -0.9 * k;
       strike(arms[arm], 0.05, 0.3, 1);
       break;
 
@@ -659,8 +693,10 @@ export function grammarFollowThrough(shape: GestureShape, k: number, arm: 0 | 1,
       break;
     case 'scythe':
       // Swung THROUGH: across the body, the arm whipping straight.
-      arms[arm].z = -OUT[arm] * 1.4 * k;
-      arms[arm].x = 0.3 * k;
+      // Swung through at chest height, in FRONT of the body, so the fist
+      // clears the other arm's girder instead of passing through it.
+      arms[arm].z = -OUT[arm] * 1.2 * k;
+      arms[arm].x = -0.9 * k;
       strike(arms[arm], 0.05, 0.3, 1);
       break;
     case 'cannon':
