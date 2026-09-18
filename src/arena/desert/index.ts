@@ -17,7 +17,6 @@ import {
   BufferAttribute,
   BufferGeometry,
   CanvasTexture,
-  CircleGeometry,
   Color,
   CylinderGeometry,
   DirectionalLight,
@@ -32,7 +31,7 @@ import {
   Vector3,
 } from 'three';
 import { CONFIG } from './config.js';
-import { makePaperDouble, makeRng } from './paper.js';
+import { makeRng } from './paper.js';
 import { buildTerrain } from './terrain.js';
 import { buildBoulders, buildMesas } from './rocks.js';
 import { buildCacti } from './cactus.js';
@@ -44,6 +43,7 @@ import { animateTumbleweeds, buildTumbleweeds, type Tumbleweed } from './tumblew
 import { buildSites, SITE_YAW, type DesertSite } from './sites.js';
 import { useStands } from './audience.js';
 import { bindHazeSky, setHazeSun } from './haze.js';
+import { makeSun } from './sun.js';
 
 export type { DesertSite } from './sites.js';
 
@@ -103,6 +103,13 @@ function makeSkyDome(sunDir: Vector3): Mesh {
         vec3 c = h > 0.0
           ? mix(band, top, smoothstep(0.0, reach, h))
           : mix(band, bottom, smoothstep(0.0, -0.35, h));
+        // THE SUN'S LIGHT IN THE AIR: a hot bloom close round it and a long warm
+        // wash far out, both dying below the horizon line. This is what stops
+        // the sun (sun.ts) being a sticker on the sky — the sky itself is lit.
+        float s = max(dot(normalize(vDir), normalize(sun)), 0.0);
+        float lit = smoothstep(-0.10, 0.04, h);
+        c += vec3(1.0, 0.50, 0.20) * (0.34 * pow(s, 90.0) + 0.16 * pow(s, 14.0)) * lit;
+        c += vec3(0.55, 0.12, 0.05) * 0.10 * pow(s, 3.0) * lit;
         gl_FragColor = vec4(c, 1.0);
       }
     `,
@@ -286,16 +293,11 @@ export function buildDesert(): Desert {
   far.add(new AmbientLight(new Color('#332c4a'), 0.3)); // night creeping in
   far.add(new HemisphereLight(new Color(CONFIG.ibl.sky), new Color(CONFIG.ibl.ground), 0.55));
 
-  // The dying sun on the horizon, swollen the way a sunset sun reads,
-  // with a wide ember halo bleeding into the haze behind it.
-  const halo = new Mesh(new CircleGeometry(52, 36), makePaperDouble('#e86a34', 0.5));
-  halo.position.copy(sunDir).multiplyScalar(602);
-  halo.lookAt(0, halo.position.y, 0);
-  far.add(halo);
-  const disc = new Mesh(new CircleGeometry(30, 32), makePaperDouble(CONFIG.palette.sun, 1.25));
-  disc.position.copy(sunDir).multiplyScalar(600);
-  disc.lookAt(0, disc.position.y, 0);
-  far.add(disc);
+  // The dying sun on the horizon, swollen the way a sunset sun reads
+  // (sun.ts): one clean disc, gold heart to ember rim, and a corona
+  // bleeding into the glow the dome paints round it.
+  const sunDisc = makeSun(sunDir);
+  far.add(sunDisc.mesh);
 
   // The world itself.
   buildTerrain(far);
