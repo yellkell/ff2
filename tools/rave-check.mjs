@@ -46,6 +46,7 @@ await page.addInitScript(() => {
   localStorage.setItem('gdr-hue', '0.5');
   localStorage.setItem('ff-coins', '120');
   localStorage.removeItem('gdr-name');
+  localStorage.removeItem('gdr-seats');
 });
 
 await page.goto(`${base}/rave.html`, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => page.goto(`${base}/rave.html`));
@@ -72,6 +73,7 @@ const who = await page.evaluate(() => ({ name: window.__gdr.net.state.members, s
 const name = await page.evaluate(() => localStorage.getItem('ff-player-name'));
 const hue = await page.evaluate(() => window.__gdr.match.players[0]?.hue ?? null);
 check('the rave opens on its tour map', who.screen === 'tour', who.screen);
+check('a fresh profile defaults to four dancers', await page.evaluate(() => window.__gdr.match.seats === 4));
 check("the dancer's name is the arena's callsign", name === 'PROBE-ONE', String(name));
 const railHasFF = await page.evaluate(() => window.__gdr.menu.boardButtons?.().includes('tab-ff'));
 check('the rail offers FIRE FIGHT (the way back)', railHasFF === true, String(railHasFF));

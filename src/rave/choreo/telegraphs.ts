@@ -26,6 +26,8 @@ export interface Telegraph {
   group: Group;
   /** fill: 0..1 charge progress; time: seconds for the pulse. */
   update(fill: number, time: number): void;
+  /** Independent placement/visibility, shared GPU resources and beat uniforms. */
+  fork(): Telegraph;
   dispose(): void;
 }
 
@@ -403,20 +405,39 @@ function makeTelegraph(meshes: Mesh[], mats: ShaderMaterial[]): Telegraph {
     m.renderOrder = 20;
     group.add(m);
   }
-  return {
-    group,
-    update(fill, time) {
-      for (const mat of mats) {
-        mat.uniforms.uFill.value = fill;
-        mat.uniforms.uTime.value = time;
-      }
-    },
-    dispose() {
-      for (const m of meshes) m.geometry.dispose();
-      for (const mat of mats) mat.dispose();
-      group.removeFromParent();
-    },
+  let users = 0;
+  let lastFill = NaN;
+  let lastTime = NaN;
+  const handle = (placement: Group): Telegraph => {
+    users++;
+    let disposed = false;
+    return {
+      group: placement,
+      update(fill, time) {
+        if (disposed || (fill === lastFill && time === lastTime)) return;
+        lastFill = fill;
+        lastTime = time;
+        for (const mat of mats) {
+          mat.uniforms.uFill.value = fill;
+          mat.uniforms.uTime.value = time;
+        }
+      },
+      fork() {
+        if (disposed) throw new Error('Cannot fork a disposed telegraph');
+        return handle(placement.clone(true));
+      },
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        placement.removeFromParent();
+        if (--users === 0) {
+          for (const m of meshes) m.geometry.dispose();
+          for (const mat of mats) mat.dispose();
+        }
+      },
+    };
   };
+  return handle(group);
 }
 
 /**
@@ -546,6 +567,7 @@ export function sweepTelegraph(
   bladeY: number,
   thickness: number,
   fromSide: 1 | -1,
+  detailed = true,
 ): Telegraph {
   const meshes: Mesh[] = [];
   const mats: ShaderMaterial[] = [];
@@ -554,7 +576,8 @@ export function sweepTelegraph(
   // the lower shimmers at your chest — you are visibly INSIDE the amber;
   // duck and the whole stack is overhead. A single pane at the line is
   // edge-on from standing eye height and carries nothing.
-  for (const dy of [0, 0.55]) {
+  // Other decks need the silhouette, not the extra first-person overhead layer.
+  for (const dy of detailed ? [0, 0.55] : [0]) {
     const roofMat = warnMat(ROOF_FRAG);
     const roof = new Mesh(new PlaneGeometry(width, depth), roofMat);
     roof.rotation.x = -Math.PI / 2;
@@ -576,11 +599,15 @@ export function sweepTelegraph(
     const blade = new Mesh(new PlaneGeometry(width, thickness * 2), bladeMat);
     blade.position.set(0, bladeY, dz);
     blade.scale.x = -fromSide;
-    const duckMat = warnMat(DUCK_FRAG);
-    const duck = new Mesh(new PlaneGeometry(width * 0.85, duckH), duckMat);
-    duck.position.set(0, bladeY - duckH / 2, dz);
-    meshes.push(blade, duck);
-    mats.push(bladeMat, duckMat);
+    meshes.push(blade);
+    mats.push(bladeMat);
+    if (detailed) {
+      const duckMat = warnMat(DUCK_FRAG);
+      const duck = new Mesh(new PlaneGeometry(width * 0.85, duckH), duckMat);
+      duck.position.set(0, bladeY - duckH / 2, dz);
+      meshes.push(duck);
+      mats.push(duckMat);
+    }
   }
   return makeTelegraph(meshes, mats);
 }

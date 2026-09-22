@@ -13,34 +13,31 @@
 
 import {
   AdditiveBlending,
-  BoxGeometry,
   CanvasTexture,
   Color,
-  CylinderGeometry,
   DoubleSide,
   Group,
   HemisphereLight,
+  InstancedMesh,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
   PlaneGeometry,
   PointLight,
-  RingGeometry,
   Scene,
   Vector3,
 } from 'three';
 import {
   OCTAGON_VERTICES,
-  PALETTE,
   PLATFORM,
-  RING,
   hueToColor,
   ringRadius,
 } from '../config.js';
 import { danceHue } from '../game/profile.js';
 import { seatLocal } from '../game/ring.js';
-import { glowSprite, glowTexture } from '../materials/glow.js';
+import { glowSprite } from '../materials/glow.js';
 import { octagonBand, octagonSlab } from './octagon.js';
+import { buildStage } from './stage.js';
 import { font } from '../ui/fonts.js';
 
 export interface PlatformHandle {
@@ -72,15 +69,9 @@ export interface Arena {
   platforms: PlatformHandle[];
   /** The stage podium root (boss stands on top). */
   stage: Group;
-  stageRingMat: MeshBasicMaterial;
-  /** The chasing LED tick ring (DiscoSystem spins + pulses it). */
-  stageChase: Group;
-  /** The counter-rotating inner dash ring. */
-  stageChase2: Group;
-  stageTickMat: MeshBasicMaterial;
-  stageInnerMat: MeshBasicMaterial;
-  /** The apron light pool on the void floor. */
-  stagePoolMat: MeshBasicMaterial;
+  stageFootlightMat: MeshStandardMaterial;
+  stageNeonMat: MeshStandardMaterial;
+  stageHaloMat: MeshBasicMaterial;
   /** Stage top surface height (boss feet). */
   stageTopY: number;
   dispose(): void;
@@ -218,138 +209,6 @@ function buildPlatform(seat: number, name: string, isMine: boolean): PlatformHan
   return { seat, root, rimMat, rimCoreMat, slabMat, nameTag, nameMat, pedestal, lift: 0 };
 }
 
-interface StageBuild {
-  stage: Group;
-  ringMat: MeshBasicMaterial;
-  chase: Group;
-  chase2: Group;
-  tickMat: MeshBasicMaterial;
-  innerMat: MeshBasicMaterial;
-  poolMat: MeshBasicMaterial;
-  topY: number;
-}
-
-/**
- * The centre stage — the MC's (and later the GOOPLIATH's) platform. It used
- * to be one flat magenta circle on a puck; now it's a layered light-floor:
- * the identity ring stays, but under it live a chasing LED tick ring, a
- * counter-rotating dash ring, an apron of light pooling on the void floor and a
- * lip of footlight glints. The CENTRE stays clean — somebody performs there.
- * DiscoSystem drives all the moving parts through the handles returned here.
- */
-function buildStage(): StageBuild {
-  const stage = new Group();
-  stage.name = 'goop-stage';
-  const r = RING.stageRadius;
-  const topY = RING.stageHeight;
-
-  const podium = new Mesh(
-    new CylinderGeometry(r, r * 1.06, RING.stageHeight, 48),
-    new MeshStandardMaterial({ color: 0x0e1116, metalness: 0.9, roughness: 0.3 }),
-  );
-  podium.position.y = RING.stageHeight / 2;
-  stage.add(podium);
-
-  // The identity ring — the pink circle keeps its job as the stage's
-  // signature; everything new happens around it.
-  const ringMat = new MeshBasicMaterial({
-    color: PALETTE.magenta,
-    transparent: true,
-    opacity: 0.95,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    side: DoubleSide,
-  });
-  const ring = new Mesh(new RingGeometry(r * 0.94, r * 1.05, 64), ringMat);
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = topY + 0.012;
-  stage.add(ring);
-
-  // Dancefloor plate on the podium top.
-  const tiles = new Mesh(
-    new CylinderGeometry(r * 0.92, r * 0.92, 0.01, 48),
-    new MeshStandardMaterial({ color: 0x161a22, metalness: 0.6, roughness: 0.25, emissive: 0x0a0d14 }),
-  );
-  tiles.position.y = topY;
-  stage.add(tiles);
-
-  // LED tick ring: 32 bars that CHASE around the stage (DiscoSystem turns
-  // the group with the beat and snaps its hue with the bars).
-  const chase = new Group();
-  chase.position.y = topY + 0.011;
-  const tickMat = new MeshBasicMaterial({
-    color: PALETTE.cyan,
-    transparent: true,
-    opacity: 0.7,
-    blending: AdditiveBlending,
-    depthWrite: false,
-  });
-  const tickGeo = new BoxGeometry(0.05, 0.012, 0.2);
-  const TICKS = 32;
-  for (let i = 0; i < TICKS; i++) {
-    const tick = new Mesh(tickGeo, tickMat);
-    const a = (i / TICKS) * Math.PI * 2;
-    tick.position.set(Math.sin(a) * r * 0.84, 0, Math.cos(a) * r * 0.84);
-    tick.rotation.y = a;
-    chase.add(tick);
-  }
-  stage.add(chase);
-
-  // Counter-rotating DASH ring: eight equal segments, eight equal gaps —
-  // the turn stays visible (the gaps carry it) but the shape is symmetric
-  // from every seat. The first cut was one 270° arc, and a single wandering
-  // hole read as a mistake rather than machinery.
-  const chase2 = new Group();
-  chase2.position.y = topY + 0.009;
-  const innerMat = new MeshBasicMaterial({
-    color: PALETTE.violet,
-    transparent: true,
-    opacity: 0.6,
-    blending: AdditiveBlending,
-    depthWrite: false,
-    side: DoubleSide,
-  });
-  const DASHES = 8;
-  const slice = (Math.PI * 2) / DASHES;
-  // One shared arc, laid flat in the geometry so each copy spins in-plane
-  // with a plain rotation.y.
-  const dashGeo = new RingGeometry(r * 0.62, r * 0.665, 10, 1, 0, slice * 0.68);
-  dashGeo.rotateX(-Math.PI / 2);
-  for (let i = 0; i < DASHES; i++) {
-    const dash = new Mesh(dashGeo, innerMat);
-    dash.rotation.y = i * slice;
-    chase2.add(dash);
-  }
-  stage.add(chase2);
-
-  // The apron: a soft pool of light spilling off the stage onto the void
-  // floor — the stage LIGHTS the ground it stands on.
-  const poolMat = new MeshBasicMaterial({
-    map: glowTexture(),
-    color: PALETTE.magenta,
-    transparent: true,
-    opacity: 0.2,
-    blending: AdditiveBlending,
-    depthWrite: false,
-  });
-  const pool = new Mesh(new PlaneGeometry(r * 3.9, r * 3.9), poolMat);
-  pool.rotation.x = -Math.PI / 2;
-  pool.position.y = 0.004;
-  stage.add(pool);
-
-  // Footlights: small hot glints around the lip, like the cans on a real
-  // stage edge.
-  const LIGHTS = 8;
-  for (let i = 0; i < LIGHTS; i++) {
-    const a = (i / LIGHTS) * Math.PI * 2 + Math.PI / LIGHTS;
-    const glint = glowSprite(PALETTE.whiteHot, 0.3, 0.5);
-    glint.position.set(Math.sin(a) * r * 1.02, topY + 0.03, Math.cos(a) * r * 1.02);
-    stage.add(glint);
-  }
-
-  return { stage, ringMat, chase, chase2, tickMat, innerMat, poolMat, topY };
-}
-
 /**
  * (Re)build the whole floor for a seat count. Call on entering the lobby and
  * whenever the roster's seat count changes.
@@ -363,9 +222,8 @@ export function buildArena(scene: Scene, seats: number, mySeat: number, names: (
   // The void brings no light — we bring the club's.
   const hemi = new HemisphereLight(0xbfd4ff, 0x0c0a14, 0.75);
   root.add(hemi);
-  const stageLight = new PointLight(0xffffff, 1.4, 26, 1.6);
-  stageLight.position.set(0, 3.2, -ringRadius(seats));
-  root.add(stageLight);
+  const stageLight = new PointLight(0xd3e5ff, 4.5, 26, 1.6);
+  stageLight.position.set(0, 3.8, 0);
 
   const platforms: PlatformHandle[] = [];
   const at = new Vector3();
@@ -378,7 +236,9 @@ export function buildArena(scene: Scene, seats: number, mySeat: number, names: (
     platforms.push(handle);
   }
 
-  const { stage, ringMat, chase, chase2, tickMat, innerMat, poolMat, topY } = buildStage();
+  const { stage, footlightMat, neonMat, haloMat, topY, dispose: disposeStage } = buildStage();
+  // The practical wash travels with the riser when ranking lowers the room.
+  stage.add(stageLight);
   stage.position.set(0, 0, -ringRadius(seats));
   root.add(stage);
 
@@ -388,17 +248,16 @@ export function buildArena(scene: Scene, seats: number, mySeat: number, names: (
     root,
     platforms,
     stage,
-    stageRingMat: ringMat,
-    stageChase: chase,
-    stageChase2: chase2,
-    stageTickMat: tickMat,
-    stageInnerMat: innerMat,
-    stagePoolMat: poolMat,
+    stageFootlightMat: footlightMat,
+    stageNeonMat: neonMat,
+    stageHaloMat: haloMat,
     stageTopY: topY,
     dispose() {
       root.removeFromParent();
+      disposeStage();
       root.traverse((o) => {
         const m = o as Mesh;
+        if (m instanceof InstancedMesh) m.dispose();
         m.geometry?.dispose?.();
         const mat = m.material as MeshBasicMaterial | MeshBasicMaterial[] | undefined;
         if (Array.isArray(mat)) mat.forEach((x) => x.dispose());

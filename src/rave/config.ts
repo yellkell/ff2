@@ -70,7 +70,7 @@ export const RING = {
    *  so the DEFAULT sits where the frame is comfortable and the big rings
    *  are something a room opts into. (`detailRadius` below is what keeps
    *  the opt-in affordable.) */
-  defaultSeats: 8,
+  defaultSeats: 4,
   /** Centre-to-centre air between neighbouring platforms on the circle. */
   seatSpacing: 2.7,
   /** The ring never tightens below this radius even with 4 dancers. */
@@ -87,10 +87,9 @@ export const RING = {
   detailRadius: 8,
   /** The boss stage: a round dance floor in the middle. */
   stageRadius: 2.6,
-  /** Deliberately LOW: the goop dances ON the common floor, not a riser —
-   *  so the stage top reads as the experience-floor plane, and rank sinks
-   *  (RankSystem) read true instead of the podium height eating them. */
-  stageHeight: 0.06,
+  /** Low concert riser: enough depth for skirting and two shallow steps,
+   *  keeping the performer near eye level. Rank lifts remain relative. */
+  stageHeight: 0.42,
 };
 
 /** Ring radius for a seat count: keep neighbour spacing honest. */

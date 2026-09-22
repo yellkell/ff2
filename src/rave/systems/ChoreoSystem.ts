@@ -514,6 +514,9 @@ export class ChoreoSystem extends createSystem({}) {
     });
     sfx.gooCharge(chargeBeats * match.beatLen * 0.9);
 
+    // Same landing, same clock: build its GPU resources once for the ring.
+    // Nova remains per seat because its safe wedge uses a world bearing.
+    const sharedTelegraphs = new Map<string, Telegraph | null>();
     for (const dancer of match.players) {
       if (!dancer.alive) continue;
       // Remote platforms still get the show — judgement stays theirs.
@@ -527,7 +530,15 @@ export class ChoreoSystem extends createSystem({}) {
       // from positions, so what a far deck DRAWS changes no outcome.
       const near = seatIsNear(match.mySeat, dancer.seat, match.seats);
       move.landings.forEach((landing, landingIdx) => {
-        const tg = this.buildTelegraph(landing.zone, dancer.seat, move.index, landingIdx);
+        let tg: Telegraph | null;
+        const variant = landing.zone.kind === 'sweep' && dancer.seat === match.mySeat ? 'local' : 'ring';
+        const sharedKey = `${landingIdx}:${variant}`;
+        if (landing.zone.kind !== 'nova' && sharedTelegraphs.has(sharedKey)) {
+          tg = sharedTelegraphs.get(sharedKey)?.fork() ?? null;
+        } else {
+          tg = this.buildTelegraph(landing.zone, dancer.seat, move.index, landingIdx);
+          if (landing.zone.kind !== 'nova') sharedTelegraphs.set(sharedKey, tg);
+        }
         if (tg) parent.add(tg.group);
         // Staged shapes open their own telegraph window instead of riding
         // the move's: a chained pie appears exactly as the last one goes
@@ -640,6 +651,7 @@ export class ChoreoSystem extends createSystem({}) {
           CHOREO.sweepY,
           CHOREO.sweepThickness,
           sweepSide(moveIdx, landingIdx),
+          seat === match.mySeat,
         );
         return tg;
       }
