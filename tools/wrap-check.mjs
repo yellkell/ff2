@@ -8,9 +8,9 @@
  * Boots the game in headless Chromium (the IWSDK dev plugin's IWER
  * emulator provides WebXR), enters the arena, and drives the TABBED wrap
  * (MENUS 2) through its dev hook (window.__ff2.wrap): the center slab's
- * FIGHT · ARCADE · CLUB tabs and FIGHT's drill-down flows, the TOWN wing's
- * TOWN · LADDER · NEWS (the leaderboard and the paper live there now), the
- * YOU wing's YOU · SETTINGS, and THE PROFILE chip + card above the right
+ * PLAY / PRACTICE / SOCIAL tabs and PLAY's game families, the left wing's
+ * ACTIVITY / RANKINGS / NEWS, the right wing's LOCKER / STORE / SETTINGS,
+ * and THE PROFILE chip + card above the right
  * wing. --shots saves each face's canvas as a PNG beside this script.
  */
 
@@ -90,17 +90,17 @@ const has = (ids, ...want) => want.every((w) => ids.includes(w));
 console.log('\n=== the strips: tabs across the top of every panel ===');
 const tutorialDone = await page.evaluate(() => localStorage.getItem('ff-tutorial-done') === '1');
 let slab = await wrap(`buttons('train')`);
-check('the slab wears FIGHT · ARCADE · CLUB', has(slab, 'wrap:tab-fight', 'wrap:tab-arcade', 'wrap:tab-club'), tabsOf(slab).join(','));
+check('the slab wears PLAY / PRACTICE / SOCIAL', has(slab, 'wrap:tab-fight', 'wrap:tab-practice', 'wrap:tab-club'), tabsOf(slab).join(','));
 let town = await wrap(`buttons('duel')`);
-check('the TOWN wing wears TOWN · LADDER · NEWS', has(town, 'wrap:tab-town', 'wrap:tab-ladder', 'wrap:tab-news'), tabsOf(town).join(','));
+check('the left wing wears ACTIVITY / RANKINGS / NEWS', has(town, 'wrap:tab-town', 'wrap:tab-ladder', 'wrap:tab-news'), tabsOf(town).join(','));
 let you = await wrap(`buttons('info')`);
-check('the YOU wing wears YOU · SETTINGS', has(you, 'wrap:tab-you', 'wrap:tab-settings'), tabsOf(you).join(','));
+check('the right wing wears LOCKER / STORE / SETTINGS', has(you, 'wrap:tab-you', 'wrap:tab-store', 'wrap:tab-settings'), tabsOf(you).join(','));
 if (!tutorialDone) {
   check('a fresh save leads with the tutorial', slab.includes('start-tutorial'), slab.join(','));
   const live = notTabs(await wrap(`live('train')`));
   check('and ONLY the tutorial answers on the slab', live.length === 1 && live[0] === 'start-tutorial', live.join(','));
   const liveTabs = tabsOf(await wrap(`live('train')`));
-  check('ARCADE and CLUB tabs are sealed too', !liveTabs.includes('wrap:tab-arcade') && !liveTabs.includes('wrap:tab-club'), liveTabs.join(','));
+  check('Practice and Social tabs are sealed too', !liveTabs.includes('wrap:tab-practice') && !liveTabs.includes('wrap:tab-club'), liveTabs.join(','));
   const liveTown = tabsOf(await wrap(`live('duel')`));
   check('the LADDER is sealed, the paper is not', !liveTown.includes('wrap:tab-ladder') && liveTown.includes('wrap:tab-news'), liveTown.join(','));
   // Unseal for the rest of the walk.
@@ -109,19 +109,30 @@ if (!tutorialDone) {
   slab = await wrap(`buttons('train')`);
 }
 
-console.log('\n=== the slab: FIGHT · ARCADE · CLUB ===');
+console.log('\n=== the slab: PLAY / PRACTICE / SOCIAL ===');
 let nav = await wrap(`nav()`);
 check('the slab opens on FIGHT', nav.center === 'fight' && !nav.club, JSON.stringify(nav));
 check('the TOWN wing opens on NEWS (the paper first)', nav.town === 'news', nav.town);
 check('FIGHT: modes + the demoted ONLY BOTS, no BACK', has(slab, 'quick-match', 'ranked-match', 'private-open', 'arcade-2v2', 'arcade-ffa', 'toggle-onlybots') && !slab.includes('wrap:back'), notTabs(slab).join(','));
 save('fight', await wrap(`snap('train')`));
-await wrap(`act('wrap:tab-arcade')`);
+await wrap(`act('wrap:play-titans')`);
 slab = await wrap(`buttons('train')`);
 nav = await wrap(`nav()`);
-check('ARCADE tab: modes + the demoted SHOOT BACK', nav.center === 'arcade' && has(slab, 'start-tutorial', 'open-campaign', 'open-raid', 'start-training', 'toggle-shootback'), notTabs(slab).join(','));
-check('ARCADE tab: the door to RAVE RAID', slab.includes('open-rave'), String(slab.includes('open-rave')));
-save('arcade', await wrap(`snap('train')`));
-// CLUB is a TAB carrying one door: pressing the tab shows ENTER CLUB, and
+check('PLAY / TITANS groups campaign and co-op raid', nav.play === 'titans' && has(slab, 'open-campaign', 'open-raid') && !has(slab, 'start-tutorial'), slab.join(','));
+save('titans', await wrap(`snap('train')`));
+await wrap(`act('wrap:play-rave')`);
+slab = await wrap(`buttons('train')`);
+check('PLAY / RAVE has its own entry', slab.includes('open-rave') && !slab.includes('open-raid'), slab.join(','));
+save('rave', await wrap(`snap('train')`));
+await wrap(`act('wrap:tab-practice')`);
+slab = await wrap(`buttons('train')`);
+nav = await wrap(`nav()`);
+check('PRACTICE groups tutorial and aim, with the scoped shoot-back option', nav.center === 'practice' && has(slab, 'start-tutorial', 'start-training', 'toggle-shootback') && !slab.includes('open-campaign'), slab.join(','));
+save('practice', await wrap(`snap('train')`));
+await wrap(`act('wrap:tab-fight')`);
+check('returning to PLAY remembers the game family', (await wrap(`nav()`)).play === 'rave');
+await wrap(`act('wrap:play-duels')`);
+// SOCIAL carries the venue door: pressing the tab shows ENTER CLUB, and
 // that button crosses to the venue's floor in-session (tools/venue-check.mjs
 // walks that place properly — here we only prove the tab shows the door,
 // the door opens, and the arena comes back whole).
@@ -129,7 +140,7 @@ await page.evaluate(() => localStorage.setItem('gdr-server', 'ws://127.0.0.1:1')
 await wrap(`act('wrap:tab-club')`);
 nav = await wrap(`nav()`);
 const clubFace = notTabs(await wrap(`buttons('train')`));
-check('CLUB tab: one door, and nothing else on the board', nav.club && clubFace.length === 1 && clubFace[0] === 'open-pub', JSON.stringify({ nav, face: clubFace }));
+check('SOCIAL groups the club with private games for friends', nav.club && has(clubFace, 'open-pub', 'private-open'), JSON.stringify({ nav, face: clubFace }));
 save('club', await wrap(`snap('train')`));
 await wrap(`act('open-pub')`);
 const crossed = await page
@@ -154,9 +165,37 @@ check('keypad face on the slab', has(face, 'kp-5', 'kp-join', 'kp-del'), notTabs
 save('keypad', await wrap(`snap('train')`));
 await wrap(`act('private-back')`);
 face = await wrap(`buttons('train')`);
+check('keypad BACK returns to private-room setup', has(face, 'private-create', 'private-enter'));
+await wrap(`act('private-back')`);
+face = await wrap(`buttons('train')`);
 check('BACK lands on the FIGHT root', face.includes('quick-match') || face.includes('cancel-queue'), notTabs(face).join(','));
 
-console.log('\n=== the TOWN wing: TOWN · LADDER · NEWS ===');
+// Simulate a pending search without opening a live public room.
+await page.evaluate(async () => {
+  const { app } = await import('/src/menu/appState.ts');
+  app.state = 'queueing';
+  window.__ff2.wrap.redraw();
+});
+const pending = await wrap(`live('train')`);
+check('pending search keeps Cancel visible and blocks other activities', pending.includes('cancel-queue') && !pending.includes('wrap:tab-practice') && !pending.includes('wrap:tab-club') && !pending.includes('wrap:play-titans'));
+await wrap(`act('wrap:tab-practice')`);
+await wrap(`act('wrap:play-rave')`);
+check('pending search also guards direct navigation', (await wrap(`nav()`)).center === 'fight' && (await wrap(`nav()`)).play === 'duels');
+await wrap(`act('cancel-queue')`);
+
+await wrap(`act('toggle-onlybots')`);
+await wrap(`act('wrap:play-titans')`);
+check('bots-only explains the raid restriction and offers its toggle', !(await wrap(`live('train')`)).includes('open-raid') && (await wrap(`live('train')`)).includes('toggle-onlybots'));
+await wrap(`act('toggle-onlybots')`);
+check('online raid becomes available again', (await wrap(`live('train')`)).includes('open-raid'));
+await wrap(`act('wrap:play-duels')`);
+
+await wrap(`act('wrap:tab-club')`);
+await wrap(`act('private-open')`);
+check('Social private-game shortcut selects its owning Play context', (await wrap(`nav()`)).center === 'fight' && (await wrap(`buttons('train')`)).includes('private-create'));
+await wrap(`act('private-back')`);
+
+console.log('\n=== the left wing: ACTIVITY / RANKINGS / NEWS ===');
 await wrap(`act('wrap:tab-town')`); // the wing opens on NEWS now — walk to TOWN first
 town = await wrap(`buttons('duel')`);
 check('TOWN: the live chips, nothing pressable', has(town, 'town-queue', 'town-raids', 'town-club') && notTabs(await wrap(`live('duel')`)).length === 0, notTabs(town).join(','));
@@ -222,10 +261,20 @@ await wrap(`act('wrap:tab-town')`);
   await page.evaluate(() => window.__ff2.gazette.close());
 }
 
-console.log('\n=== the YOU wing: YOU · SETTINGS ===');
+console.log('\n=== the right wing: LOCKER / STORE / SETTINGS ===');
 you = await wrap(`buttons('info')`);
-check('YOU is PAINT, CUSTOMIZATION and the purse (a door to THE BANK) — nothing else', has(you, 'open-paintbay', 'open-custom', 'open-bank') && !you.includes('you-coins') && !you.includes('rename') && !you.includes('you-record') && !you.includes('you-tip'), notTabs(you).join(','));
+check('LOCKER contains gear, paint and career without currency sales', has(you, 'open-paintbay', 'open-custom', 'profile-toggle') && !you.includes('open-bank') && !you.includes('you-coins') && !you.includes('rename') && !you.includes('you-record') && !you.includes('you-tip'), notTabs(you).join(','));
 save('you', await wrap(`snap('info')`));
+await wrap(`act('wrap:tab-store')`);
+you = await wrap(`buttons('info')`);
+check('STORE owns shopping and the bank', has(you, 'open-shop', 'open-bank', 'store-balance') && !you.includes('open-paintbay'));
+save('store-wing', await wrap(`snap('info')`));
+await wrap(`act('open-shop')`);
+await page.waitForTimeout(200);
+check('STORE catalogue opens directly from the wing', await page.evaluate(() => window.__ff2.modals.up('shop')));
+await wrap(`act('custom-close')`);
+check('closing the catalogue returns to STORE', (await wrap(`nav()`)).you === 'store');
+
 await wrap(`act('wrap:tab-settings')`);
 you = await wrap(`buttons('info')`);
 nav = await wrap(`nav()`);

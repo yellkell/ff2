@@ -1,32 +1,6 @@
-/**
- * THE WRAP — FIRE FIGHT 2's wrap-around three-panel lobby, built on the
- * panel kit ported from RAVE RAID (src/ui/kit/).
- *
- * MENUS 2 — the tab grammar (Overwatch / Fortnite): every panel wears a
- * strip of horizontal tabs across its top, and where you are is always one
- * glance away. Nothing hangs behind you any more.
- *
- *   CENTER   FIGHT · ARCADE · CLUB        (the doors became tabs)
- *   LEFT     TOWN · LADDER · NEWS         (the leaderboard and the paper
- *                                          came in off the back wall)
- *   RIGHT    YOU · SETTINGS               (the gear disc became a tab)
- *
- * Above the right wing, THE PROFILE pop-out — what the floating coin
- * readout became: a chip with your name, rank and iron-dollars that drops
- * your card out over the wing (rename lives there now).
- *
- * The few-doors law still holds inside each tab: FIGHT's flows (private →
- * keypad, ranked browser) drill in and BACK out on the slab; ONLY BOTS
- * lives inside FIGHT, SHOOT BACK inside ARCADE.
- *
- * HOW IT PLUGS IN: each wrap panel implements FF1's `MenuPanel` contract
- * and replaces the legacy 'train' / 'duel' / 'info' plates in place. The
- * adapters use MenuPanel's optional `click()` so the wrap can own its
- * LOCAL navigation (`wrap:*` ids) while global ids — real MenuAction
- * strings — go through MenuSystem.run via the dispatcher installWrap is
- * handed. `wrapNav` is the wrap's tab state; MenuSystem writes it when a
- * global action lands on a tab (open-gazette → NEWS, open-settings →
- * SETTINGS).
+/** FF2 lobby: player intent owns the top level; game families live under PLAY.
+ * See docs/menu-research.md for the audit, evidence and navigation contract.
+ * The three existing VR panels retain their physical sizes and ray targets.
  */
 
 import type { Menu, MenuAction, MenuPanel, PanelId } from './menu.js';
@@ -102,13 +76,15 @@ export class KitMenuPanel implements MenuPanel {
 
 /* ── the wrap's tab state ─────────────────────────────────────────────── */
 
-export type CenterTab = 'fight' | 'arcade' | 'club';
+export type CenterTab = 'fight' | 'practice' | 'club';
+export type PlayTab = 'duels' | 'titans' | 'rave';
 export type TownTab = 'town' | 'ladder' | 'news';
-export type YouTab = 'you' | 'settings';
+export type YouTab = 'you' | 'store' | 'settings';
 
 /** Which tab each panel is on. */
 export const wrapNav = {
   center: 'fight' as CenterTab,
+  play: 'duels' as PlayTab,
   // The wing opens on the PAPER: the day's edition — or the welcome, for a
   // newcomer — is the first thing on the wall, not a chip count.
   town: 'news' as TownTab,
@@ -151,7 +127,7 @@ const both =
     for (const f of fns) f?.(g, hover);
   };
 
-/* ── CENTER — FIGHT · ARCADE · CLUB ───────────────────────────────────── */
+/* Center: Play, Practice and Social. */
 
 const CW = 1536; // canvas
 const M = 96; // margin
@@ -162,21 +138,19 @@ const C2 = M + COL + 32; // right column x
 const clubUp = (): boolean => wrapNav.center === 'club';
 
 function centerTabs(): PanelButton[] {
-  const lock = sealed();
-  const club = clubUp();
   return [
-    { id: 'wrap:tab-fight', label: 'FIGHT', tab: true, x: 400, y: TAB_Y, w: 220, h: TAB_H, selected: wrapNav.center === 'fight' },
-    { id: 'wrap:tab-arcade', label: 'ARCADE', tab: true, x: 640, y: TAB_Y, w: 240, h: TAB_H, selected: wrapNav.center === 'arcade', disabled: lock },
-    {
-      id: 'wrap:tab-club',
-      label: 'CLUB',
-      tab: true,
-      x: 900, y: TAB_Y, w: 220, h: TAB_H,
-      selected: club,
-      disabled: lock,
-      badge: !lock && app.pubCount > 0,
-    },
+    { id: 'wrap:tab-fight', label: 'PLAY', tab: true, x: 430, y: TAB_Y, w: 200, h: TAB_H, selected: wrapNav.center === 'fight' },
+    { id: 'wrap:tab-practice', label: 'PRACTICE', tab: true, x: 660, y: TAB_Y, w: 260, h: TAB_H, selected: wrapNav.center === 'practice', disabled: sealed() || app.state === 'queueing' },
+    { id: 'wrap:tab-club', label: 'SOCIAL', tab: true, x: 950, y: TAB_Y, w: 240, h: TAB_H, selected: clubUp(), disabled: sealed() || app.state === 'queueing', badge: !sealed() && app.pubCount > 0 },
   ];
+}
+
+function playTabs(): PanelButton[] {
+  return (['duels', 'titans', 'rave'] as const).map((id, i) => ({
+    id: `wrap:play-${id}`, label: id === 'rave' ? 'RAVE RAID' : id === 'duels' ? 'VERSUS' : 'TITANS',
+    x: M + i * 456, y: 144, w: 432, h: 72, small: true,
+    selected: wrapNav.play === id, disabled: app.state === 'queueing' && id !== 'duels',
+  }));
 }
 
 const BACK: PanelButton = { id: 'wrap:back', label: 'BACK', x: M, y: 888, w: 320, h: 84, small: true };
@@ -184,7 +158,7 @@ const BACK: PanelButton = { id: 'wrap:back', label: 'BACK', x: M, y: 888, w: 320
 function sealedFace(): Face {
   return {
     title: 'FIRE FIGHT 2',
-    body: note('the tutorial unseals the town', 900, CW),
+    body: () => {},
     buttons: [
       {
         id: 'start-tutorial',
@@ -208,33 +182,36 @@ function fightRoot(): Face {
           id: 'cancel-queue',
           label: 'CANCEL SEARCH',
           sub: app.searching > 0 ? `${app.searching} in the queue` : 'searching…',
-          x: M, y: 160, w: COL, h: 200,
+          x: M, y: 260, w: COL, h: 170,
           tone: KIT.danger,
         }
       : {
           id: 'quick-match',
           label: 'QUICK MATCH',
-          x: M, y: 160, w: COL, h: 200,
+          sub: app.onlyBots ? '1v1 against a bot' : '1v1 - play a bot while finding a rival',
+          x: M, y: 260, w: COL, h: 170,
           primary: true,
         },
     {
       id: 'ranked-match',
       label: 'RANKED',
-      x: M, y: 390, w: COL, h: 150,
+      sub: app.onlyBots ? 'Turn off BOTS ONLY to play ranked' : 'Competitive 1v1 rooms',
+      x: M, y: 460, w: COL, h: 170,
       disabled: app.onlyBots || queueing,
     },
     {
       id: 'private-open',
-      label: 'PRIVATE MATCH',
-      x: M, y: 570, w: COL, h: 150,
+      label: 'CUSTOM GAMES',
+      x: M, y: 660, w: COL, h: 170,
       disabled: queueing,
     },
-    { id: 'arcade-2v2', label: '2V2', x: C2, y: 160, w: COL, h: 170, disabled: queueing },
-    { id: 'arcade-ffa', label: 'FFA', x: C2, y: 360, w: COL, h: 170, disabled: queueing },
+    { id: 'arcade-2v2', label: '2V2', sub: 'Team battles', x: C2, y: 260, w: COL, h: 170, disabled: queueing },
+    { id: 'arcade-ffa', label: 'FREE FOR ALL', sub: 'Four fighters - every player for themselves', x: C2, y: 460, w: COL, h: 170, disabled: queueing },
     {
       id: 'toggle-onlybots',
-      label: 'ONLY BOTS',
-      x: C2, y: 590, w: COL, h: 110,
+      label: 'BOTS ONLY',
+      sub: 'Quick match / 2v2 / free for all',
+      x: C2, y: 660, w: COL, h: 110,
       small: true,
       selected: app.onlyBots,
       toggle: true,
@@ -242,8 +219,6 @@ function fightRoot(): Face {
   ];
   return {
     title: 'FIRE FIGHT 2',
-    // No note under the buttons: the main menu says what it is, and the
-    // wallet on the YOU wing already says what a bout pays.
     body: () => {},
     buttons,
   };
@@ -281,7 +256,7 @@ function privateFace(): Face {
   );
   return {
     title: 'FIRE FIGHT 2',
-    body: both(crumb('PRIVATE', CW), note('pick a format on the right, then create or enter', 800, CW)),
+    body: crumb('CUSTOM GAMES', CW),
     buttons,
   };
 }
@@ -319,7 +294,7 @@ function keypadFace(): Face {
 function hostingFace(): Face {
   return {
     title: 'FIRE FIGHT 2',
-    body: both(crumb('PRIVATE', CW), note('the room launches itself once the seats fill', 700, CW)),
+    body: both(crumb('CUSTOM GAMES', CW), note('the room launches itself once the seats fill', 700, CW)),
     buttons: [
       {
         id: 'code-live',
@@ -360,42 +335,39 @@ function browserFace(): Face {
   };
 }
 
-function arcadeFace(): Face {
-  const buttons: PanelButton[] = [
-    { id: 'start-tutorial', label: 'TUTORIAL', x: M, y: 160, w: COL, h: 200 },
-    { id: 'open-campaign', label: 'CAMPAIGN', x: C2, y: 160, w: COL, h: 200 },
-    {
-      id: 'open-raid',
-      label: 'RAID',
-      x: M, y: 390, w: COL, h: 200,
-      tone: app.raidsOpen > 0 ? KIT.positive : undefined,
-    },
-    { id: 'start-training', label: 'AIM TRAINING', x: C2, y: 390, w: COL, h: 200 },
-    {
-      id: 'open-rave',
-      label: 'RAVE RAID',
-      x: M, y: 620, w: COL, h: 200,
-      tone: KIT.info,
-    },
-    {
-      id: 'toggle-shootback',
-      label: 'SHOOT BACK',
-      x: C2, y: 630, w: COL, h: 110,
-      small: true,
-      selected: app.shootBack,
-      toggle: true,
-    },
-  ];
+function titansFace(): Face {
   return {
     title: 'FIRE FIGHT 2',
     body: () => {},
-    buttons,
+    buttons: [
+      { id: 'open-campaign', label: 'CAMPAIGN', sub: 'Solo bosses, gauntlet and challenge runs', x: M, y: 280, w: COL, h: 230, primary: true },
+      { id: 'open-raid', label: 'CO-OP RAID', sub: app.onlyBots ? 'Turn off BOTS ONLY to form a raid' : app.raidsOpen > 0 ? `${app.raidsOpen} squads forming` : 'Host or join a squad against the titans', x: C2, y: 280, w: COL, h: 230, disabled: app.onlyBots },
+      { id: 'toggle-onlybots', label: 'BOTS ONLY', sub: 'Turn off for online ranked and raids', x: C2, y: 550, w: COL, h: 110, small: true, selected: app.onlyBots, toggle: true },
+    ],
   };
 }
 
-/** THE CLUB TAB — one door, the size of the board. The tab used to walk
- *  you straight through it, which meant the top bar had a button that
- *  wasn't a tab; now CLUB shows you the way in and you take it. */
+function raveFace(): Face {
+  return {
+    title: 'FIRE FIGHT 2',
+    body: () => {},
+    buttons: [{ id: 'open-rave', label: 'ENTER RAVE RAID', sub: 'Tour, solo tracks and multiplayer', x: M + 180, y: 300, w: WIDE - 360, h: 240, primary: true }],
+  };
+}
+
+function practiceFace(): Face {
+  return {
+    title: 'FIRE FIGHT 2',
+    body: () => {},
+    buttons: [
+      { id: 'start-tutorial', label: 'TUTORIAL', sub: 'Replay the guided basics', x: M, y: 210, w: COL, h: 230 },
+      { id: 'start-training', label: 'AIM TRAINING', sub: 'Target practice with optional return fire', x: C2, y: 210, w: COL, h: 230, primary: true },
+      { id: 'toggle-shootback', label: 'SHOOT BACK', sub: 'Aim training only', x: C2, y: 480, w: COL, h: 110, small: true, selected: app.shootBack, toggle: true },
+    ],
+  };
+}
+
+/** Social destinations: gather in the venue or arrange a private game. */
 function clubFace(): Face {
   // THE DOOR, HELD. ENTER CLUB no longer drops the curtain at once: the
   // arena first gets the venue's floor to answer — the room server sleeps
@@ -406,19 +378,16 @@ function clubFace(): Face {
   const waiting = app.venueStatus !== '';
   return {
     title: 'FIRE FIGHT 2',
-    // The headcount is the only thing worth saying here, and only when
-    // there IS one — a board with one button doesn't need a caption, and
-    // the held door's readout says all the waiting has to say.
-    body: !waiting && app.pubCount > 0 ? crumb(`${app.pubCount} INSIDE RIGHT NOW`, CW) : () => {},
+    body: !waiting && app.pubCount > 0 ? note(`${app.pubCount} in the club right now`, 650, CW) : () => {},
     buttons: [
       {
         id: 'open-pub',
         label: waiting ? 'WAKING THE HOUSE' : 'ENTER CLUB',
-        sub: waiting ? app.venueStatus : undefined,
+        sub: waiting ? app.venueStatus : 'Hang out, meet players and explore the venue',
         // A button the size of the board reads as the board. This is a
         // button: the same height as the ones on every other face, sitting
         // in the same first-row slot, just wider because it's alone.
-        x: M + 220, y: 300, w: WIDE - 440, h: 200,
+        x: M, y: 240, w: COL, h: 240,
         primary: !waiting,
         // While the door is held it is a live readout, not a dead button
         // (the kit's `disabled` grey reads as broken; `display` reads as
@@ -426,6 +395,7 @@ function clubFace(): Face {
         display: waiting,
         tone: waiting ? KIT.accent : undefined,
       },
+      { id: 'private-open', label: 'CUSTOM GAMES', sub: 'Create or enter a code for 1v1, 2v2 or free for all', x: C2, y: 240, w: COL, h: 240, disabled: waiting },
     ],
   };
 }
@@ -433,7 +403,7 @@ function clubFace(): Face {
 function centerFace(): Face {
   let face: Face;
   if (clubUp() && !sealed()) face = clubFace();
-  else if (wrapNav.center === 'arcade' && !sealed()) face = arcadeFace();
+  else if (wrapNav.center === 'practice' && !sealed()) face = practiceFace();
   else {
     switch (app.duelView) {
       case 'private':
@@ -449,24 +419,25 @@ function centerFace(): Face {
         face = browserFace();
         break;
       default:
-        face = fightRoot();
+        face = sealed() ? sealedFace() : wrapNav.play === 'titans' ? titansFace() : wrapNav.play === 'rave' ? raveFace() : fightRoot();
     }
   }
-  return { ...face, buttons: [...centerTabs(), ...face.buttons] };
+  const families = !sealed() && wrapNav.center === 'fight' && app.duelView === 'root' ? playTabs() : [];
+  return { ...face, buttons: [...centerTabs(), ...families, ...face.buttons] };
 }
 
-/* ── LEFT WING — TOWN · LADDER · NEWS ─────────────────────────────────── */
+/* Left wing: Activity, Rankings and News. */
 
 const LW = 832;
 
 function townTabs(): PanelButton[] {
   const lock = sealed();
   return [
-    { id: 'wrap:tab-town', label: 'TOWN', tab: true, x: 48, y: TAB_Y, w: 190, h: TAB_H, selected: wrapNav.town === 'town' },
-    { id: 'wrap:tab-ladder', label: 'LADDER', tab: true, x: 248, y: TAB_Y, w: 220, h: TAB_H, selected: wrapNav.town === 'ladder', disabled: lock },
+    { id: 'wrap:tab-town', label: 'ACTIVITY', tab: true, x: 36, y: TAB_Y, w: 230, h: TAB_H, selected: wrapNav.town === 'town' },
+    { id: 'wrap:tab-ladder', label: 'RANKINGS', tab: true, x: 276, y: TAB_Y, w: 260, h: TAB_H, selected: wrapNav.town === 'ladder', disabled: lock },
     // The pip says "a new edition you haven't seen" — pointless while the
     // paper is the very thing on the wing (MenuSystem marks it read there).
-    { id: 'wrap:tab-news', label: 'NEWS', tab: true, x: 478, y: TAB_Y, w: 190, h: TAB_H, selected: wrapNav.town === 'news', badge: gazette.unread && wrapNav.town !== 'news' },
+    { id: 'wrap:tab-news', label: 'NEWS', tab: true, x: 546, y: TAB_Y, w: 190, h: TAB_H, selected: wrapNav.town === 'news', badge: gazette.unread && wrapNav.town !== 'news' },
   ];
 }
 
@@ -477,7 +448,7 @@ function townBoard(): Face {
   });
   return {
     title: '',
-    body: note('the ladder and the paper are a tab away', 940, LW),
+    body: () => {},
     buttons: [
       chip('town-queue', n(app.searching), 'searching for a fight', 190, app.searching > 0 ? KIT.positive : undefined),
       chip('town-raids', n(app.raidsOpen), 'raid squads forming', 390, app.raidsOpen > 0 ? KIT.positive : undefined),
@@ -524,49 +495,44 @@ function townFace(): Face {
   return { ...face, buttons: [...townTabs(), ...face.buttons] };
 }
 
-/* ── RIGHT WING — YOU · SETTINGS ──────────────────────────────────────── */
+/* Right wing: Locker, Store and Settings. */
 
 function youTabs(): PanelButton[] {
   return [
-    { id: 'wrap:tab-you', label: 'YOU', tab: true, x: 48, y: TAB_Y, w: 170, h: TAB_H, selected: wrapNav.you === 'you' },
-    { id: 'wrap:tab-settings', label: 'SETTINGS', tab: true, x: 228, y: TAB_Y, w: 250, h: TAB_H, selected: wrapNav.you === 'settings' },
+    { id: 'wrap:tab-you', label: 'LOCKER', tab: true, x: 36, y: TAB_Y, w: 230, h: TAB_H, selected: wrapNav.you === 'you' },
+    { id: 'wrap:tab-store', label: 'STORE', tab: true, x: 276, y: TAB_Y, w: 190, h: TAB_H, selected: wrapNav.you === 'store', disabled: sealed() },
+    { id: 'wrap:tab-settings', label: 'SETTINGS', tab: true, x: 476, y: TAB_Y, w: 300, h: TAB_H, selected: wrapNav.you === 'settings' },
   ];
 }
 
 function youBoard(): Face {
   const lock = sealed();
-  const X = 96;
-  const W = LW - 192;
   return {
     title: '',
     body: () => {},
     buttons: [
-      {
-        id: 'open-paintbay',
-        label: 'PAINT',
-        sub: lock ? SEAL_SUB : undefined,
-        x: X, y: 170, w: W, h: 160,
-        primary: !lock,
-        disabled: lock,
-      },
-      {
-        id: 'open-custom',
-        label: 'CUSTOMIZATION',
-        sub: lock ? SEAL_SUB : undefined,
-        x: X, y: 360, w: W, h: 130,
-        disabled: lock,
-      },
-      // The wallet, on its own and full width: the record and the rename
-      // hint are gone (the card above already carries the name, and a
-      // lifetime W—L is a number nobody asked to be reminded of). It is a
-      // door now, not a readout: a tap opens THE BANK in the store.
-      { id: 'open-bank', label: `$ ${coins.balance}`, sub: lock ? 'iron-dollars' : 'iron-dollars · TOP UP', x: X, y: 540, w: W, h: 110, small: true, tone: KIT.accent, disabled: lock },
+      { id: 'open-custom', label: 'GEAR & LOADOUT', sub: lock ? SEAL_SUB : 'Equip what you own', x: 96, y: 190, w: 640, h: 190, primary: !lock, disabled: lock },
+      { id: 'open-paintbay', label: 'PAINT STUDIO', sub: lock ? SEAL_SUB : 'Paint your fighter by hand', x: 96, y: 420, w: 640, h: 170, disabled: lock },
+      { id: 'profile-toggle', label: 'CAREER PROFILE', sub: 'Rank, XP, achievements and identity', x: 96, y: 640, w: 640, h: 130, small: true },
+    ],
+  };
+}
+
+function storeBoard(): Face {
+  return {
+    title: '',
+    body: () => {},
+    buttons: [
+      { id: 'open-shop', label: 'BROWSE COSMETICS', sub: 'Gear and platform finishes', x: 96, y: 190, w: 640, h: 210 },
+      { id: 'open-bank', label: 'BANK', sub: 'Top up or recover your purchases', x: 96, y: 450, w: 640, h: 150, small: true },
+      { id: 'store-balance', label: `$ ${coins.balance}`, sub: 'iron-dollars available', x: 96, y: 650, w: 640, h: 110, small: true, display: true },
     ],
   };
 }
 
 function youFace(): Face {
-  const face: Face = wrapNav.you === 'settings' ? { title: '', ...settingsFace() } : youBoard();
+  const face: Face = wrapNav.you === 'settings' ? { title: '', ...settingsFace() }
+    : wrapNav.you === 'store' && !sealed() ? storeBoard() : youBoard();
   return { ...face, buttons: [...youTabs(), ...face.buttons] };
 }
 
@@ -586,7 +552,7 @@ declare global {
         snap: (id: string) => string;
         act: (action: string) => void;
         redraw: () => void;
-        nav: () => { center: CenterTab; town: TownTab; you: YouTab; club: boolean };
+        nav: () => { center: CenterTab; play: PlayTab; town: TownTab; you: YouTab; club: boolean };
         visible: (id: string) => boolean;
       };
     };
@@ -605,13 +571,30 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
   const dispatch = (id: string): void => {
     switch (id) {
       case 'wrap:tab-fight':
-      case 'wrap:tab-arcade':
+        wrapNav.center = 'fight';
+        return;
+      case 'wrap:tab-practice':
       case 'wrap:tab-club':
-        wrapNav.center = id === 'wrap:tab-fight' ? 'fight' : id === 'wrap:tab-arcade' ? 'arcade' : 'club';
-        // Opening the CLUB tab is the moment before pressing ENTER CLUB:
-        // knock on the room server now, so a sleeping host has a head
-        // start on the door (config.ts warmRoomServer).
-        if (wrapNav.center === 'club') warmRoomServer();
+        if (sealed() || app.state === 'queueing') return;
+        wrapNav.center = id === 'wrap:tab-practice' ? 'practice' : 'club';
+        if (clubUp()) warmRoomServer();
+        return;
+      case 'wrap:tab-arcade': // legacy deep link: boss activities now live in PLAY
+        if (sealed() || app.state === 'queueing') return;
+        wrapNav.center = 'fight';
+        wrapNav.play = 'titans';
+        app.duelView = 'root';
+        return;
+      case 'wrap:play-duels':
+      case 'wrap:play-titans':
+      case 'wrap:play-rave':
+        if (sealed() || app.state === 'queueing') return;
+        wrapNav.play = id.slice('wrap:play-'.length) as PlayTab;
+        return;
+      case 'wrap:tab-store':
+        if (sealed()) return;
+        act?.('settings-close');
+        wrapNav.you = 'store';
         return;
       case 'wrap:tab-town':
         wrapNav.town = 'town';
@@ -633,6 +616,10 @@ export function installWrap(menu: Menu, act?: (action: MenuAction) => void): Wra
       case 'wrap:back':
         return;
       default:
+        if (['private-open', 'ranked-match', 'quick-match'].includes(id)) {
+          wrapNav.center = 'fight';
+          wrapNav.play = 'duels';
+        }
         act?.(id as MenuAction);
     }
   };

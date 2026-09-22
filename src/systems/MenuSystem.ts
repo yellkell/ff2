@@ -1176,7 +1176,7 @@ export class MenuSystem extends createSystem({}) {
         break;
       case 'private-back':
         net.cancel();
-        app.duelView = 'root';
+        app.duelView = app.duelView === 'keypad' ? 'private' : 'root';
         app.codeEntry = '';
         break;
       case 'kp-del':
@@ -1361,7 +1361,10 @@ export class MenuSystem extends createSystem({}) {
         clearShopPreview(); // the try-on goes back on the rack
         break;
       case 'open-shop':
+        customization.open = true;
         customization.shopOpen = true;
+        if (customization.tab === 'bank' || customization.tab === 'colour') customization.tab = 'platforms';
+        this.ensureMirror();
         break;
       case 'open-locker':
         customization.shopOpen = false;
