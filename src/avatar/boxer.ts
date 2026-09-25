@@ -144,6 +144,10 @@ const BODY_ACCENT_TINT = 0.5;
  * slider.
  */
 export function setAvatarAccent(root: Object3D, color: number): void {
+  // Remembered on the root, so a piece of GEAR dressed on later (it can
+  // arrive over the wire long after the accent did) lights in it too —
+  // avatar/gear.ts applyGear reads it.
+  root.userData.accentColor = color;
   root.traverse((o) => {
     const mesh = o as Mesh;
     if (!mesh.isMesh) return;

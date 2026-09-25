@@ -445,6 +445,16 @@ carried over verbatim: everything in it still applies to this code.
   enough for every frame. The SPLOTCH is retired (owned and worn ones
   became dots), the TRIANGLE joins (wire format 4), and bought dots and
   squares no longer vanish from the locker on a restart.
+- **GEAR: THE GLOW, EACH HAND ITS OWN, AND A FOURTH WAVE**. Every piece
+  carries one element lit in the wearer's ACCENT (the halo's lip, the
+  visor's slit, the feelers' bulbs, the pads' lower rims, a core in the
+  chestplate…): the `accent: 'glow'` finish setAvatarAccent already
+  drives, remembered on the rig so gear dressed later lights too — never
+  paint. The right hand's gear is its own paint surface (`gearHandsR`,
+  wire format 6; older hand-gear marks are copied onto both hands). New:
+  V-CREST ($180), EAR FINS ($140), THRUSTERS ($300), WRIST BLADES ($220).
+  The chestplate's sternum ridge is gone. `npm run gear:gallery` takes an
+  accent (`... out.png ids 4fb7ff`).
 - **GEAR, THE ART PASS** (`avatar/gear.ts`, `avatar/gearAtlas.ts`). Every
   piece rebuilt to read as kit, not primitives, in one detail language —
   primer where it takes paint, trim where it is fixed: mounts, collars,

@@ -60,8 +60,10 @@ export const PAINT_KINDS: readonly PaintKind[] = ['stripe', 'dot', 'square', 'tr
  *  cuff share one material, so a stripe lands on the whole hand — both of
  *  them. Legacy 'chest'/'pelvis' units fold into the body's v range on
  *  read, so paint made before the merge survives it. */
-export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand';
-export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand'];
+export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand' | 'gearHandsR';
+/** 'gearHands' is the LEFT hand's gear, 'gearHandsR' the right's (they
+ *  were one surface, both hands wearing the same paint, until wire 6). */
+export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR'];
 
 export interface PlacedPaint {
   kind: PaintKind;
@@ -91,13 +93,22 @@ const KEY = 'ff2-look';
  *  mesh of the piece in its own UVs"; from 2 it is a decal placed on the
  *  gear atlas (avatar/gearAtlas.ts). Older gear units are kept as they
  *  were — flagged LEGACY_GEAR — so nobody's paint moves under them. */
-const LOOK_VERSION = 2;
+const LOOK_VERSION = 3;
 
 /** A gear surface: laid out by the atlas, painted as decals. */
-export const isGearPart = (part: PaintPart): boolean => part === 'gearHead' || part === 'gearBody' || part === 'gearHands';
+export const isGearPart = (part: PaintPart): boolean =>
+  part === 'gearHead' || part === 'gearBody' || part === 'gearHands' || part === 'gearHandsR';
 /** `variant` bit: a gear unit placed before the atlas (see LOOK_VERSION). */
 const LEGACY_GEAR = 0x80;
 const markLegacy = (p: PlacedPaint): PlacedPaint => (isGearPart(p.part) ? { ...p, variant: p.variant | LEGACY_GEAR } : p);
+
+/** Before the hands' gear was split (LOOK_VERSION 3, wire 6), one mark on
+ *  'gearHands' was worn by BOTH hands — so an older look gets a copy of
+ *  each on the right hand's surface, and reads exactly as it did. */
+function splitHandGear(paint: PlacedPaint[]): PlacedPaint[] {
+  const right = paint.filter((p) => p.part === 'gearHands').map((p) => ({ ...p, part: 'gearHandsR' as PaintPart }));
+  return [...paint, ...right].slice(0, PAINT.maxUnits);
+}
 
 /** Bumped on every look change — applyOwnSkins repaints when it moves. */
 export const paintState = { version: 1 };
@@ -150,7 +161,8 @@ export function myLook(): Look {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { v?: number; paint?: unknown[] };
     paint = (raw.paint ?? []).map(cleanUnit).filter((p): p is PlacedPaint => p !== null).slice(0, PAINT.maxUnits);
-    if (raw.v !== LOOK_VERSION) paint = paint.map(markLegacy);
+    if ((raw.v ?? 1) < 2) paint = paint.map(markLegacy);
+    if ((raw.v ?? 1) < 3) paint = splitHandGear(paint);
   } catch {
     /* fresh body */
   }
@@ -197,9 +209,9 @@ export function clearLook(): void {
  * A SPLOTCH in any of them reads as a dot (cleanUnit). So a look packed
  * before any of this still paints the fighter it was made for.
  */
-const WIRE_FORMAT = 5;
+const WIRE_FORMAT = 6;
 /** Part order ON THE WIRE — append-only. */
-const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand'];
+const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR'];
 /** Format 2's part order (the merged body, before gear was paintable). */
 const WIRE_PARTS_V2: PaintPart[] = ['head', 'body'];
 /** Format 1's part order, kept only to read looks packed before the merge. */
@@ -254,8 +266,10 @@ export function unpackLook(wire: unknown): Look {
   const format = bin.charCodeAt(0);
   if (format < 1 || format > WIRE_FORMAT) return bare;
   const parts: readonly string[] = format === 1 ? WIRE_PARTS_V1 : format === 2 ? WIRE_PARTS_V2 : WIRE_PARTS;
-  // FORMAT 5 is format 4's layout; it says the gear units are atlas
-  // decals. A gear unit in anything older is flagged LEGACY_GEAR.
+  // FORMATS 5 and 6 are format 4's layout: 5 says the gear units are
+  // atlas decals (a gear unit in anything older is flagged LEGACY_GEAR),
+  // 6 that the hands' gear is split (older 'gearHands' marks are copied
+  // onto the right hand too).
   const kindBits = format >= 4 ? 7 : format === 3 ? 3 : 1;
   const partShift = format >= 4 ? 3 : format === 3 ? 2 : 1;
   const count = Math.min((bin.length - 1) / 8, PAINT.maxUnits);
@@ -276,7 +290,7 @@ export function unpackLook(wire: unknown): Look {
     });
     if (unit) paint.push(format < 5 ? markLegacy(unit) : unit);
   }
-  return { paint };
+  return { paint: format < 6 ? splitHandGear(paint) : paint };
 }
 
 let packedCache = { version: -1, wire: '' };

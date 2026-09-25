@@ -577,6 +577,8 @@ export class MenuSystem extends createSystem({}) {
       },
       /** Where the mirror's hips are, in its own frame (gear is placed off them). */
       hips: (): number[] => this.mirror?.rig.body.position.toArray() ?? [],
+      /** The mirror's two hands (left, right), in its own frame. */
+      gloves: (): number[][] => this.mirror?.rig.gloves.map((g) => g.position.toArray()) ?? [],
       /** Aim at the mirror's gear from `from` toward `to` (its own frame):
        *  what the ray hits, and which placed mark (index) is under it. */
       hit: (from: number[], to: number[]) => {

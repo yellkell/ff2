@@ -53,11 +53,15 @@ console.log('=== the wire: pack / unpack ===');
   page.on('pageerror', (e) => errors.push(e.message));
   // Boot into the lobby (again, for the restart checks below).
   const enter = async () => {
-    await page.goto(base, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => page.goto(base));
+    await page.goto(base, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => page.goto(base));
     await page.evaluate(() => localStorage.setItem('ff-tutorial-done', '1'));
+    // THE COVE bakes its sky over the first frames and can hold the main
+    // thread for seconds on a slow machine: wait until the page answers
+    // before pressing anything, or the click lands in the freeze.
+    await page.waitForFunction(() => true, undefined, { timeout: 60000 });
     await page.waitForTimeout(800);
-    await page.click('#enter-vr');
-    await page.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 20000 });
+    await page.click('#enter-vr', { timeout: 60000 });
+    await page.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 60000 });
     await page.waitForFunction(() => !!window.__ff2?.paint, { timeout: 10000 });
   };
   await enter();
@@ -234,6 +238,32 @@ console.log('=== the wire: pack / unpack ===');
     check(`${id}: a few merged surfaces, not dozens of parts`, pads.gear >= 1 && pads.gear <= 3, JSON.stringify(pads));
     check(`${id}: a dot on one pad is on that pad, not the other`, pads.a && pads.b && pads.placed && pads.onA === 0 && pads.onB === -1, JSON.stringify(pads));
   }
+  // EACH HAND ITS OWN: the right hand's gear is its own surface
+  // ('gearHandsR'), so a mark on the left cuff is not on the right one —
+  // and a look from before the split still wears its hand marks on both.
+  await page.evaluate(() => window.__ff2.gear.equip('cuffs'));
+  await page.waitForTimeout(700);
+  const cuffs = await page.evaluate(() => {
+    const g = window.__ff2.bayGearProbe;
+    const p = window.__ff2.paint;
+    p.clear();
+    const [L, Rt] = g.gloves();
+    const aimAt = ([x, y, z]) => g.hit([x, y + 0.5, z + 0.1], [x, y + 0.02, z + 0.1]);
+    const a = aimAt(L);
+    const b = aimAt(Rt);
+    p.grant('dot', 11);
+    const placed = !!a && p.take('dot', 11) && p.place(a.part, a.u, a.v);
+    const after = [aimAt(L)?.at, aimAt(Rt)?.at];
+    // A wire-5 look with one mark on the (then shared) hand gear.
+    const unit = [(4 << 3) | 2, 9, 0, 128, 128, 0, 60, 60];
+    const old = p.unpack(btoa(String.fromCharCode(5, ...unit))).paint.map((u) => u.part);
+    return { partL: a?.part, partR: b?.part, placed, onL: after[0], onR: after[1], old };
+  });
+  check('the two hands\' gear are two surfaces (gearHands · gearHandsR)', cuffs.partL === 'gearHands' && cuffs.partR === 'gearHandsR', JSON.stringify(cuffs));
+  check('a dot on the LEFT cuff is not on the RIGHT cuff', cuffs.placed && cuffs.onL === 0 && cuffs.onR === -1, JSON.stringify(cuffs));
+  check('a hand-gear mark from before the split is worn on both hands', cuffs.old.join(',') === 'gearHands,gearHandsR', cuffs.old.join(','));
+  await page.evaluate(() => window.__ff2.gear.clear('hands'));
+
   // THE FACING SPLIT: an extruded piece (the CREST's fin) gave its two
   // faces the same UVs, so a mark on one face could never show. A dot on
   // the fin's left face is on the left face, and not through on the right.

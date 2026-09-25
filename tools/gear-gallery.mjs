@@ -3,7 +3,8 @@
  * THE GEAR GALLERY — every piece in the shop, worn, on one contact sheet.
  *
  *   npm run dev                                  # terminal 1
- *   node tools/gear-gallery.mjs [out.png] [ids]  # ids: comma list, default all
+ *   node tools/gear-gallery.mjs [out.png] [ids] [accent]
+ *     ids: comma list (default all) · accent: hex the glow is lit in
  *
  * Each piece is dressed on a white blank (buildBoxer + applyGear, the
  * same path the mirror uses) and shot twice — three-quarter front and
@@ -21,6 +22,8 @@ const base = process.env.PREVIEW_BASE ?? 'http://localhost:5173';
 const here = dirname(fileURLToPath(import.meta.url));
 const out = process.argv[2] ?? join(here, 'gear-gallery.png');
 const only = process.argv[3] ? process.argv[3].split(',') : null;
+// The accent the rig is lit in (hex, e.g. 4fb7ff) — the gear's GLOW takes it.
+const accent = parseInt(process.argv[4] ?? process.env.GEAR_ACCENT ?? 'ff7a18', 16);
 
 async function launch() {
   const args = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
@@ -42,7 +45,7 @@ await page.evaluate(() => Promise.all([import('/src/avatar/gear.ts'), import('/s
 await page.waitForLoadState('load');
 await page.waitForTimeout(1500);
 
-const sheet = await page.evaluate(async (only) => {
+const sheet = await page.evaluate(async ([only, accent]) => {
   document.body.innerHTML = '';
   const T = await import('/node_modules/.vite/deps/three.js');
   const B = await import('/src/avatar/boxer.ts');
@@ -81,6 +84,7 @@ const sheet = await page.evaluate(async (only) => {
     rig.gloves[0].position.set(-0.2, 1.1, -0.26);
     rig.gloves[1].position.set(0.2, 1.1, -0.26);
     S.applyAvatarSkin(fig, S.resolveAvatarSkin('blank', 0));
+    B.setAvatarAccent(fig, accent);
     G.applyGear(fig, [id], 'white');
     scene.add(fig);
     // Frame the slot: head pieces close on the head, hand pieces on the hands.
@@ -107,7 +111,7 @@ const sheet = await page.evaluate(async (only) => {
     scene.remove(fig);
   }
   return canvas.toDataURL('image/png');
-}, only);
+}, [only, accent]);
 
 writeFileSync(out, Buffer.from(sheet.split(',')[1], 'base64'));
 console.log(`wrote ${out}${errors.length ? ` — page errors: ${errors.join(' | ')}` : ''}`);

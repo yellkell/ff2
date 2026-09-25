@@ -78,6 +78,11 @@ export const GEAR: GearDef[] = [
   { id: 'claws', name: 'CLAWS', slot: 'hands', price: 200, blurb: 'three talons over the knuckles' },
   // ── the third wave (appended, as ever) ──
   { id: 'spikepads', name: 'SPIKED PADS', slot: 'body', price: 220, blurb: 'layered plates, three spikes a side' },
+  // ── the fourth wave ──
+  { id: 'vcrest', name: 'V-CREST', slot: 'head', price: 180, blurb: 'twin blades in a V off a brow emblem' },
+  { id: 'earfins', name: 'EAR FINS', slot: 'head', price: 140, blurb: 'swept fins at the temples' },
+  { id: 'thrusters', name: 'THRUSTERS', slot: 'body', price: 300, blurb: 'a jet pack, two lit nozzles' },
+  { id: 'wristblades', name: 'WRIST BLADES', slot: 'hands', price: 220, blurb: 'a blade along each forearm' },
 ];
 
 export function gearDef(id: string): GearDef | undefined {
@@ -138,6 +143,37 @@ function trim(tone: BlankTone): MeshStandardMaterial {
 function asTrim<T extends Mesh>(m: T): T {
   m.userData.trim = true;
   return m;
+}
+
+/**
+ * THE GLOW — the third finish, and the only colour gear carries that the
+ * wearer didn't paint: their own ACCENT, the hue they picked for their
+ * fighter. One element per piece takes it — a halo's lip, a visor's slit,
+ * a feeler's bulbs, a pad's rim — lit, not painted. Tagged
+ * `accent: 'glow'`, so setAvatarAccent (avatar/boxer.ts) sets it with the
+ * rest of the rig, and applyGear lights a freshly built piece in whatever
+ * accent its rig already wears. Never a paint surface.
+ */
+const GLOW_DEFAULT = 0xff7a18;
+function glow(): MeshStandardMaterial {
+  const m = new MeshStandardMaterial({ color: GLOW_DEFAULT, emissive: GLOW_DEFAULT, emissiveIntensity: 1.15, roughness: 0.35, metalness: 0 });
+  m.userData.accent = 'glow';
+  return m;
+}
+
+/** Mark a mesh as glow: lit in the accent, left alone by the paint bake. */
+function asGlow<T extends Mesh>(m: T): T {
+  m.userData.trim = true;
+  m.userData.glow = true;
+  return m;
+}
+
+/** The accent a rig piece (or any ancestor) was last lit in, if any. */
+function accentOf(o: Object3D): number | null {
+  for (let p: Object3D | null = o; p; p = p.parent) {
+    if (typeof p.userData.accentColor === 'number') return p.userData.accentColor as number;
+  }
+  return null;
 }
 
 /**
@@ -311,6 +347,21 @@ function plate(shape: Shape, depth: number, bevel: number, mat: MeshStandardMate
   return m;
 }
 
+/** Place `o` at `at` with its +z along `n` and its +y kept upright. */
+function face(o: Object3D, at: Vector3, n: Vector3): void {
+  o.position.copy(at);
+  o.lookAt(at.clone().add(n));
+}
+
+/** An outline from a list of [x, y] points, straight segments. */
+function outline(pts: Array<[number, number]>): Shape {
+  const sh = new Shape();
+  sh.moveTo(pts[0][0], pts[0][1]);
+  for (const [x, y] of pts.slice(1)) sh.lineTo(x, y);
+  sh.closePath();
+  return sh;
+}
+
 /** A rounded rectangle outline, centred, w × h. */
 function roundRect(w: number, h: number, c: number): Shape {
   const sh = new Shape();
@@ -338,7 +389,7 @@ function roundRect(w: number, h: number, c: number): Shape {
  * rests on the body instead of standing clear of it like a shell.
  * `k` scales the whole pad; `spikes` studs the cap (the SPIKED PADS).
  */
-function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, s: 1 | -1, k: number, spikes: boolean): Group {
+function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial, s: 1 | -1, k: number, spikes: boolean): Group {
   const pad = new Group();
   pad.position.set(s * 0.2, 0.388, 0.004);
   pad.rotation.z = -s * 0.36;
@@ -357,8 +408,8 @@ function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, s
   lame.position.y = capY - 0.012 * k;
   pad.add(lame);
   // THE RIMS: a thin roll of trim along each plate's lower edge.
-  const rim = (theta: number, sx: number, sz: number, y: number): void => {
-    const ring = asTrim(new Mesh(new TorusGeometry(1, 0.045, 5, 32), trimMat));
+  const rim = (theta: number, sx: number, sz: number, y: number, lit = false): void => {
+    const ring = lit ? asGlow(new Mesh(new TorusGeometry(1, 0.045, 5, 32), glowMat)) : asTrim(new Mesh(new TorusGeometry(1, 0.045, 5, 32), trimMat));
     ring.rotation.x = Math.PI / 2;
     const rr = Math.sin(theta);
     ring.scale.set(sx * rr, sz * rr, 0.1 * k);
@@ -366,7 +417,7 @@ function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, s
     pad.add(ring);
   };
   rim(Math.PI * 0.43, a, c, capY);
-  rim(Math.PI * 0.57, a * 1.07, c * 1.06, capY - 0.012 * k);
+  rim(Math.PI * 0.57, a * 1.07, c * 1.06, capY - 0.012 * k, true); // the lower edge is lit
   // Rivets round the lame's outer face, where it is fixed to the cap.
   for (const deg of [-64, -32, 0, 32, 64]) {
     const f = (deg * Math.PI) / 180;
@@ -420,13 +471,13 @@ function bladeShape(len: number, w: number, s: 1 | -1): Shape {
   return sh;
 }
 
-type Builder = (mat: MeshStandardMaterial, side: 1 | -1, trim: MeshStandardMaterial) => Group;
+type Builder = (mat: MeshStandardMaterial, side: 1 | -1, trim: MeshStandardMaterial, glow: MeshStandardMaterial) => Group;
 
 const BUILDERS: Record<string, Builder> = {
   /* head — origin at the head centre, front −z. Modelled on the old EGG
    * skull, R×(0.84, 1.08, 0.93) (mannequin.ts EGG_SCALE); applyGear
    * stretches the whole piece onto whatever the skull is now. */
-  crest: (mat, _side, trimMat) => {
+  crest: (mat, _side, trimMat, glowMat) => {
     // ONE FIN, sculpted: its foot follows the skull's midline from the
     // brow over the crown to the nape, its crest rises off the brow,
     // peaks behind the crown and sweeps down the back, and the back half
@@ -466,9 +517,18 @@ const BUILDERS: Record<string, Builder> = {
       rail.push(m.p.addScaledVector(m.n, 0.012 * R));
     }
     g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(rail), 48, 0.05 * R, 8), trimMat)));
+    // THE GLOW: a lit inlay run through the fin, below its teeth, showing
+    // on both faces.
+    const inlay: Vector3[] = [];
+    for (let i = 2; i <= N - 2; i++) {
+      const t = i / N;
+      const { p, n } = eggMid(th0 + (th1 - th0) * t);
+      inlay.push(p.clone().addScaledVector(n, R * (0.02 + 0.3 * Math.sin(Math.PI * Math.pow(t, 0.75)))));
+    }
+    g.add(asGlow(new Mesh(new TubeGeometry(new CatmullRomCurve3(inlay), 40, 0.062 * R, 6), glowMat)));
     return g;
   },
-  antennae: (mat, _side, trimMat) => {
+  antennae: (mat, _side, trimMat, glowMat) => {
     // A pair of FEELERS: each rises from a trim boss on the temple, a
     // tapered stalk that bows up, out and forward, banded twice in trim,
     // ending in a faceted bulb on a collar. (They were straight sticks
@@ -492,13 +552,13 @@ const BUILDERS: Record<string, Builder> = {
       for (const band of tubeBands(trimMat, pts, r0, r1, [0.3, 0.62])) g.add(band);
       const tip = tubeAt(pts, r0, r1, 1);
       g.add(collar(trimMat, tip.p, tip.tan, 0.035 * R, 0.014 * R));
-      const bulb = new Mesh(new IcosahedronGeometry(0.13 * R, 1), mat);
+      const bulb = asGlow(new Mesh(new IcosahedronGeometry(0.13 * R, 1), glowMat)); // the lit bulbs
       bulb.position.copy(tip.p).addScaledVector(tip.tan, 0.1 * R);
       g.add(bulb);
     }
     return g;
   },
-  horns: (mat, _side, trimMat) => {
+  horns: (mat, _side, _trimMat, glowMat) => {
     // THE RAM'S CURL. Each horn is ONE tapered tube along a spline: it
     // roots thick at the temple, climbs out and up, rolls BACK over the
     // ear, drops behind the jaw and sweeps FORWARD again so the point
@@ -528,7 +588,7 @@ const BUILDERS: Record<string, Builder> = {
       ].map(([x, y, z]) => new Vector3(s * x * R, y * R, z * R));
       g.add(new Mesh(taperedTube(pts, R * 0.44, R * 0.05, 34, 7), faceted));
       // Two bands of trim just out from the root, where a horn is bound.
-      for (const band of tubeBands(trimMat, pts, R * 0.44, R * 0.05, [0.13, 0.2], 0.09, 1.0)) g.add(band);
+      for (const band of tubeBands(glowMat, pts, R * 0.44, R * 0.05, [0.13, 0.2], 0.09, 1.0)) g.add(band); // lit bindings
       // A boss where the horn meets the skull, so the root reads as seated.
       const boss = new Mesh(new SphereGeometry(R * 0.46, 9, 7), faceted);
       boss.position.copy(pts[0]);
@@ -537,7 +597,7 @@ const BUILDERS: Record<string, Builder> = {
     }
     return g;
   },
-  halo: (mat, _side, trimMat) => {
+  halo: (mat, _side, trimMat, glowMat) => {
     // A BAND of light's metal, not a wire: a flat ring with a rounded
     // section, tipped back a little, a lip of trim round its inside edge
     // and twelve studs round its top.
@@ -546,7 +606,7 @@ const BUILDERS: Record<string, Builder> = {
     const r1 = 0.9 * R;
     const ring = new Mesh(new LatheGeometry(roundRectProfile(r0, r1, -0.03 * R, 0.03 * R, 0.022 * R), 48), mat);
     g.add(ring);
-    const lip = asTrim(new Mesh(new TorusGeometry(r0, 0.018 * R, 5, 48), trimMat));
+    const lip = asGlow(new Mesh(new TorusGeometry(r0, 0.022 * R, 5, 48), glowMat)); // the lit inner edge
     lip.rotation.x = Math.PI / 2;
     g.add(lip);
     for (let i = 0; i < 12; i++) {
@@ -558,7 +618,7 @@ const BUILDERS: Record<string, Builder> = {
     g.rotation.x = 0.15; // the front a touch higher: tipped back
     return g;
   },
-  mohawk: (mat, _side, trimMat) => {
+  mohawk: (mat, _side, _trimMat, glowMat) => {
     // A row of BLADES down the midline: seven flattened spikes, thin side
     // to side and raked back, tallest over the crown, each set into a
     // rolled rail of trim. (They were round cones standing bolt upright.)
@@ -570,7 +630,8 @@ const BUILDERS: Record<string, Builder> = {
       const m = eggMid(th0 + ((th1 - th0) * i) / 20);
       rail.push(m.p.addScaledVector(m.n, 0.012 * R));
     }
-    g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(rail), 40, 0.06 * R, 8), trimMat)));
+    // The rail the blades are set in is the lit part.
+    g.add(asGlow(new Mesh(new TubeGeometry(new CatmullRomCurve3(rail), 40, 0.06 * R, 8), glowMat)));
     const count = 7;
     for (let i = 0; i < count; i++) {
       const t = i / (count - 1);
@@ -585,7 +646,7 @@ const BUILDERS: Record<string, Builder> = {
     }
     return g;
   },
-  visorband: (mat, _side, trimMat) => {
+  visorband: (mat, _side, trimMat, glowMat) => {
     // A VISOR: a thick wraparound lens across the eyes — its section
     // swells in the middle and eases to rounded edges, so it has a real
     // edge to catch the light — hinged at each temple on a trim disc,
@@ -607,10 +668,10 @@ const BUILDERS: Record<string, Builder> = {
     ];
     const body = new Mesh(new LatheGeometry(lens, 48, phi0, arc), mat);
     g.add(body);
-    const glassMat = trimMat.clone();
+    // The slit is the lit part: the visor's eye.
+    const glassMat = glowMat.clone();
     glassMat.side = DoubleSide;
-    glassMat.roughness = 0.08;
-    const glass = asTrim(new Mesh(new CylinderGeometry(1.071 * R, 1.071 * R, 0.085 * R, 44, 1, true, Math.PI - arc * 0.4, arc * 0.8), glassMat));
+    const glass = asGlow(new Mesh(new CylinderGeometry(1.071 * R, 1.071 * R, 0.085 * R, 44, 1, true, Math.PI - arc * 0.4, arc * 0.8), glassMat));
     g.add(glass);
     for (const phi of [phi0, phi0 + arc]) {
       const hinge = asTrim(new Mesh(new CylinderGeometry(0.15 * R, 0.15 * R, 0.07 * R, 20), trimMat));
@@ -627,15 +688,15 @@ const BUILDERS: Record<string, Builder> = {
   },
 
   /* body — origin at the hips, +y up, front −z, shoulders at (±0.126, 0.395) */
-  pauldrons: (mat, _side, trimMat) => {
+  pauldrons: (mat, _side, trimMat, glowMat) => {
     // Plate on both shoulders — cap, lame and rims (shoulderPad), seated
     // on the shoulder. (They were bare half-spheres standing clear of the
     // body, and read as a pair of shells.)
     const g = new Group();
-    for (const s of [-1, 1] as const) g.add(shoulderPad(mat, trimMat, s, 1, false));
+    for (const s of [-1, 1] as const) g.add(shoulderPad(mat, trimMat, glowMat, s, 1, false));
     return g;
   },
-  chestplate: (mat, _side, trimMat) => {
+  chestplate: (mat, _side, trimMat, glowMat) => {
     const g = new Group();
     // A shell LOFTED over the chest's own profile (the body's ring table,
     // shoulder line to waist), pushed a whisker proud of the surface and
@@ -722,8 +783,7 @@ const BUILDERS: Record<string, Builder> = {
     g.add(new Mesh(slab, slabMat));
     // The plate was the body's own white laid on the body's own white, and
     // read as nothing but its edge. A roll of TRIM round all four edges
-    // draws its outline, and a raised RIDGE down the sternum
-    // (in the plate's primer, so it takes paint) gives it a keel.
+    // draws its outline; the face stays clean — one open plate to paint.
     const along = (row: number | null, col: number | null, out: number): Vector3[] => {
       const pts: Vector3[] = [];
       const count = row !== null ? cols + 1 : rowsN;
@@ -741,10 +801,21 @@ const BUILDERS: Record<string, Builder> = {
     for (const pts of edges) {
       g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(pts), pts.length * 3, 0.0055, 6), trimMat)));
     }
-    g.add(new Mesh(new TubeGeometry(new CatmullRomCurve3(along(null, cols / 2, 0.002)), 16, 0.007, 8), mat));
+    // THE CORE: a lit disc set into the plate over the sternum, in a trim
+    // bezel — the plate's heart.
+    const coreAt = along(3, null, 0.004)[cols / 2];
+    const out = new Vector3(coreAt.x, 0, coreAt.z).normalize();
+    const bezel = asTrim(new Mesh(new CylinderGeometry(0.024, 0.026, 0.006, 24), trimMat));
+    bezel.position.copy(coreAt);
+    aim(bezel, out);
+    g.add(bezel);
+    const core = asGlow(new Mesh(new CylinderGeometry(0.017, 0.017, 0.004, 24), glowMat));
+    core.position.copy(coreAt).addScaledVector(out, 0.002);
+    aim(core, out);
+    g.add(core);
     return g;
   },
-  tail: (mat, _side, trimMat) => {
+  tail: (mat, _side, _trimMat, glowMat) => {
     // A TAIL, where a dorsal ridge used to be. ONE tapered tube along a
     // spline (the horns' own taperedTube), rooted INSIDE the small of the
     // back so it grows out of the surface with no seam and no boss to
@@ -775,7 +846,7 @@ const BUILDERS: Record<string, Builder> = {
     g.add(new Mesh(taperedTube(pts, 0.046, 0.0015, 34, 7), faceted));
     // Segmented by three bands of trim down its length, and tipped with a
     // flat BLADE — the devil's arrowhead — along the flick.
-    for (const band of tubeBands(trimMat, pts, 0.046, 0.0015, [0.2, 0.38, 0.56], 0.14, 1.0)) g.add(band);
+    for (const band of tubeBands(glowMat, pts, 0.046, 0.0015, [0.2, 0.38, 0.56], 0.14, 1.0)) g.add(band); // lit
     const tip = tubeAt(pts, 0.046, 0.0015, 0.97);
     const blade = new Mesh(new ConeGeometry(0.024, 0.06, 4), faceted);
     blade.scale.set(1, 1, 0.3);
@@ -784,7 +855,7 @@ const BUILDERS: Record<string, Builder> = {
     g.add(blade);
     return g;
   },
-  belt: (mat, _side, trimMat) => {
+  belt: (mat, _side, trimMat, glowMat) => {
     // A BAND round the waist, not a hoop: an open ring the shape of the
     // waist pinch itself (BODY_RINGS: ±0.090 by ±0.074 at y 0.13) set a
     // centimetre proud, flaring a touch to the hips, with a rolled edge
@@ -808,13 +879,13 @@ const BUILDERS: Record<string, Builder> = {
     const frame = asTrim(new Mesh(new BoxGeometry(0.042, 0.032, 0.008), trimMat));
     frame.position.set(0, 0.13, -D - 0.004);
     g.add(frame);
-    const plate = new Mesh(new BoxGeometry(0.03, 0.02, 0.004), mat);
-    plate.position.set(0, 0.13, -D - 0.009);
-    g.add(plate);
+    const buckle = asGlow(new Mesh(new BoxGeometry(0.03, 0.02, 0.004), glowMat)); // the lit buckle
+    buckle.position.set(0, 0.13, -D - 0.009);
+    g.add(buckle);
     return g;
   },
   /* hands — palm at the origin, fingers −z, cuff +z (hands.ts) */
-  cuffs: (mat, _side, trimMat) => {
+  cuffs: (mat, _side, trimMat, glowMat) => {
     // A BRACER round the wrist: a short band with a squared, rounded
     // section (lathed), flattened to the hand's own wrist, rolled edges of
     // trim either side and four rivets round its face. (It was a torus —
@@ -831,7 +902,7 @@ const BUILDERS: Record<string, Builder> = {
     for (let i = 0; i < 4; i++) {
       const a = Math.PI / 4 + (i * Math.PI) / 2;
       const out = new Vector3(Math.sin(a), 0, Math.cos(a));
-      bracer.add(rivet(trimMat, out.clone().multiplyScalar(0.047), out, 0.0036));
+      bracer.add(asGlow(rivet(glowMat, out.clone().multiplyScalar(0.047), out, 0.0036))); // lit studs
     }
     bracer.rotation.x = Math.PI / 2; // the lathe's axis along the arm
     bracer.scale.set(1, 1, 0.62); // flattened top to bottom, like a wrist
@@ -839,7 +910,7 @@ const BUILDERS: Record<string, Builder> = {
     g.add(bracer);
     return g;
   },
-  knuckles: (mat, side, trimMat) => {
+  knuckles: (mat, side, _trimMat, glowMat) => {
     // A KNUCKLE-DUSTER: a bar across the knuckles, a spike rising off it
     // over each, each spike set in a trim collar. (They were four cones
     // floating over the fingers.)
@@ -853,11 +924,11 @@ const BUILDERS: Record<string, Builder> = {
       const spike = new Mesh(new ConeGeometry(0.0068, 0.03, 8), mat);
       spike.position.set(x, 0.016 + 0.0078 + 0.013, -0.046);
       g.add(spike);
-      g.add(collar(trimMat, new Vector3(x, 0.016 + 0.0074, -0.046), UP, 0.0072, 0.0019));
+      g.add(asGlow(collar(glowMat, new Vector3(x, 0.016 + 0.0074, -0.046), UP, 0.0072, 0.0019))); // lit collars
     }
     return g;
   },
-  gauntlets: (mat, _side, trimMat) => {
+  gauntlets: (mat, _side, trimMat, glowMat) => {
     // A GAUNTLET, not a tile balanced on the hand: a back plate hugging
     // the top of the palm (palm block is 0.078 × 0.024 × 0.09, top face
     // at y = 0.012), three knuckle ridges across its leading edge, and a
@@ -870,7 +941,7 @@ const BUILDERS: Record<string, Builder> = {
     g.add(back);
     // Three ridges across its leading edge, rolled, not boxed.
     for (let i = 0; i < 3; i++) {
-      const ridge = asTrim(new Mesh(new CapsuleGeometry(0.0036, 0.076, 3, 8), trimMat));
+      const ridge = asGlow(new Mesh(new CapsuleGeometry(0.0036, 0.076, 3, 8), glowMat)); // lit ridges
       ridge.rotation.z = Math.PI / 2;
       ridge.position.set(0, 0.0235, -0.024 + i * 0.017);
       g.add(ridge);
@@ -896,7 +967,7 @@ const BUILDERS: Record<string, Builder> = {
 /* ── the second wave ─────────────────────────────────────────────────── */
 
 const MORE_BUILDERS: Record<string, Builder> = {
-  crown: (mat, _side, trimMat) => {
+  crown: (mat, _side, trimMat, glowMat) => {
     // A circlet on the brow — the band in the trim, so it reads as a ring
     // of metal round the skull — with six points rising off it, the one
     // dead ahead tallest, each leaning a touch outward.
@@ -922,7 +993,7 @@ const MORE_BUILDERS: Record<string, Builder> = {
       point.rotation.set(Math.sin(a) * 0.22, Math.PI / 4 - a, -Math.cos(a) * 0.22, 'YXZ');
       g.add(point);
       const out = new Vector3(Math.cos(a) * 0.9, 0, Math.sin(a) * 1.02).normalize();
-      g.add(rivet(trimMat, new Vector3(x * 1.07, R * 0.62, z * 1.05), out, R * 0.05));
+      g.add(asGlow(rivet(glowMat, new Vector3(x * 1.07, R * 0.62, z * 1.05), out, R * 0.055))); // a lit gem under each point
     }
     return g;
   },
@@ -946,7 +1017,7 @@ const MORE_BUILDERS: Record<string, Builder> = {
     }
     return g;
   },
-  wings: (mat, _side, trimMat) => {
+  wings: (mat, _side, _trimMat, glowMat) => {
     // Two fans of swept blades off the shoulder blades: three per side,
     // the longest on top, each pivoting at the blade and raked up, out
     // and back — a silhouette that reads from across the arena.
@@ -975,7 +1046,7 @@ const MORE_BUILDERS: Record<string, Builder> = {
         pivot.add(plate);
         g.add(pivot);
         // Each blade turns on a HINGE — a knuckle of trim at its root.
-        g.add(rivet(trimMat, pivot.position.clone(), new Vector3(s * 0.4, 0.2, 1), 0.012));
+        g.add(asGlow(rivet(glowMat, pivot.position.clone(), new Vector3(s * 0.4, 0.2, 1), 0.012))); // lit hinges
       }
     }
     // THE MOUNT: a plate across the shoulder blades both fans hang from.
@@ -984,7 +1055,7 @@ const MORE_BUILDERS: Record<string, Builder> = {
     g.add(mount);
     return g;
   },
-  claws: (mat, _side, trimMat) => {
+  claws: (mat, _side, _trimMat, glowMat) => {
     // Three talons rooted on the knuckle line, reaching forward past the
     // fingers and hooking down to a point. The palm block's front face is
     // at z ≈ −0.045; the roots sit just inside it.
@@ -992,7 +1063,7 @@ const MORE_BUILDERS: Record<string, Builder> = {
     const faceted = mat.clone();
     faceted.flatShading = true;
     // The talons are MOUNTED: a trim bar across the knuckles they grow from.
-    const mount = asTrim(new Mesh(new CapsuleGeometry(0.0065, 0.05, 3, 10), trimMat));
+    const mount = asGlow(new Mesh(new CapsuleGeometry(0.0065, 0.05, 3, 10), glowMat)); // lit
     mount.rotation.z = Math.PI / 2;
     mount.position.set(0, 0.015, -0.036);
     g.add(mount);
@@ -1012,17 +1083,144 @@ const MORE_BUILDERS: Record<string, Builder> = {
 /* ── the third wave ──────────────────────────────────────────────────── */
 
 const THIRD_BUILDERS: Record<string, Builder> = {
-  spikepads: (mat, _side, trimMat) => {
+  spikepads: (mat, _side, trimMat, glowMat) => {
     // SPIKED PADS: the pauldron's cap-lame-rim armour a size up, with
     // three spikes driven up through each cap from trim collars — the big
     // one off the top, leaning out over the arm, one fore, one aft.
     const g = new Group();
-    for (const s of [-1, 1] as const) g.add(shoulderPad(mat, trimMat, s, 1.14, true));
+    for (const s of [-1, 1] as const) g.add(shoulderPad(mat, trimMat, glowMat, s, 1.14, true));
     return g;
   },
 };
 
-Object.assign(BUILDERS, MORE_BUILDERS, THIRD_BUILDERS);
+/* ── the fourth wave ─────────────────────────────────────────────────── */
+
+const FOURTH_BUILDERS: Record<string, Builder> = {
+  vcrest: (mat, _side, trimMat, glowMat) => {
+    // A V-CREST — the kuwagata of a samurai's helm: a shield-shaped
+    // EMBLEM on the brow, framed in trim with a lit gem at its heart, and
+    // two long blades rising from behind it in a V, sweeping up and out
+    // and leaning back with the brow.
+    const g = new Group();
+    const { p, n } = eggPoint(new Vector3(0, 0.36, -1));
+    const brow = new Group();
+    face(brow, p, n);
+    g.add(brow);
+    const shield: Array<[number, number]> = [
+      [-0.17 * R, 0.13 * R], [0.17 * R, 0.13 * R], [0.15 * R, -0.05 * R], [0, -0.19 * R], [-0.15 * R, -0.05 * R],
+    ];
+    const emblem = plate(outline(shield), 0.05 * R, 0.012 * R, mat);
+    emblem.position.z = 0.05 * R;
+    brow.add(emblem);
+    const frame = asTrim(plate(outline(shield.map(([x, y]) => [x * 1.2, y * 1.2 + 0.005 * R] as [number, number])), 0.03 * R, 0.008 * R, trimMat));
+    frame.position.z = 0.025 * R;
+    brow.add(frame);
+    const gem = asGlow(plate(outline([[0, 0.07 * R], [0.06 * R, 0], [0, -0.08 * R], [-0.06 * R, 0]]), 0.02 * R, 0.006 * R, glowMat));
+    gem.position.z = 0.09 * R;
+    brow.add(gem);
+    for (const s of [-1, 1] as const) {
+      const sh = new Shape();
+      sh.moveTo(s * 0.04 * R, 0.02 * R);
+      sh.quadraticCurveTo(s * 0.42 * R, 0.22 * R, s * 1.02 * R, 1.38 * R); // the outer edge, out to the tip
+      sh.quadraticCurveTo(s * 0.34 * R, 0.62 * R, s * 0.02 * R, 0.16 * R); // and back down the inner
+      sh.closePath();
+      const blade = plate(sh, 0.04 * R, 0.01 * R, mat);
+      blade.position.z = 0.01 * R;
+      brow.add(blade);
+    }
+    return g;
+  },
+  earfins: (mat, _side, trimMat, glowMat) => {
+    // EAR FINS — a winged helm's: at each temple a fin of three swept
+    // feathers, splayed out as they run back, on a trim boss with a lit hub.
+    const g = new Group();
+    for (const s of [-1, 1] as const) {
+      const { p, n } = eggPoint(new Vector3(s, 0.14, 0.08));
+      const boss = asTrim(new Mesh(new CylinderGeometry(0.16 * R, 0.19 * R, 0.07 * R, 20), trimMat));
+      boss.position.copy(p).addScaledVector(n, 0.02 * R);
+      aim(boss, n);
+      g.add(boss);
+      const hub = asGlow(new Mesh(new CylinderGeometry(0.08 * R, 0.08 * R, 0.02 * R, 16), glowMat));
+      hub.position.copy(p).addScaledVector(n, 0.06 * R);
+      aim(hub, n);
+      g.add(hub);
+      // The fin's outline in its own plane (x = back along the head, y = up).
+      const feathers: Array<[number, number]> = [
+        [-0.22 * R, 0.14 * R], [0.2 * R, 0.34 * R], [1.08 * R, 0.86 * R], [0.46 * R, 0.36 * R],
+        [0.98 * R, 0.44 * R], [0.42 * R, 0.14 * R], [0.8 * R, 0.02 * R], [0.14 * R, -0.12 * R], [-0.2 * R, -0.06 * R],
+      ];
+      const fin = plate(outline(feathers), 0.05 * R, 0.012 * R, mat);
+      fin.rotation.y = -Math.PI / 2; // the outline's x onto the head's z (back)
+      const splay = new Group();
+      splay.rotation.y = s * 0.32; // the back of the fin further out than its root
+      splay.add(fin);
+      splay.position.copy(p).addScaledVector(n, 0.07 * R);
+      g.add(splay);
+    }
+    return g;
+  },
+  thrusters: (mat, _side, trimMat, glowMat) => {
+    // THRUSTERS — a JET PACK between the shoulder blades: a bevelled
+    // pack, two bell nozzles hung under it on trim necks, their throats
+    // and lips LIT, and a pair of lit rails down its back.
+    const g = new Group();
+    const pack = plate(roundRect(0.15, 0.17, 0.028), 0.045, 0.006, mat);
+    pack.position.set(0, 0.3, 0.13);
+    g.add(pack);
+    for (const x of [-0.045, 0.045]) {
+      const rail = asGlow(new Mesh(new CapsuleGeometry(0.005, 0.12, 3, 8), glowMat)); // lit rails down the pack
+      rail.position.set(x, 0.3, 0.16);
+      g.add(rail);
+      const neck = asTrim(new Mesh(new CylinderGeometry(0.012, 0.015, 0.03, 14), trimMat));
+      neck.position.set(x, 0.205, 0.132);
+      g.add(neck);
+      const bell = new Mesh(
+        new LatheGeometry(
+          [
+            new Vector2(0.014, 0.02), new Vector2(0.02, 0.0), new Vector2(0.03, -0.032), new Vector2(0.036, -0.046),
+            new Vector2(0.031, -0.046), new Vector2(0.025, -0.032), new Vector2(0.016, 0.0), new Vector2(0.011, 0.02),
+            new Vector2(0.014, 0.02),
+          ],
+          24,
+        ),
+        mat,
+      );
+      bell.position.set(x, 0.175, 0.132);
+      g.add(bell);
+      const core = asGlow(new Mesh(new CylinderGeometry(0.022, 0.022, 0.004, 20), glowMat)); // the lit throat
+      core.position.set(x, 0.148, 0.132);
+      g.add(core);
+      const lip = asGlow(new Mesh(new TorusGeometry(0.0335, 0.003, 5, 24), glowMat)); // and a lit lip, seen from anywhere
+      lip.rotation.x = Math.PI / 2;
+      lip.position.set(x, 0.175 - 0.046, 0.132);
+      g.add(lip);
+    }
+    return g;
+  },
+  wristblades: (mat, side, trimMat, glowMat) => {
+    // WRIST BLADES — a blade along the outside of each forearm, rooted at
+    // the wrist on a trim bracket and running forward past the knuckles,
+    // with a lit line down its spine.
+    const g = new Group();
+    const x = -side * 0.05; // the little-finger side (the thumb is on +side)
+    const sh = outline([[0.07, 0.013], [-0.02, 0.021], [-0.128, 0.0], [-0.03, -0.012], [0.07, -0.01]]);
+    const blade = plate(sh, 0.004, 0.0012, mat);
+    blade.rotation.y = -Math.PI / 2; // the outline's x onto the hand's z (the tip toward the fingers)
+    blade.position.set(x, 0.004, 0);
+    g.add(blade);
+    const bracket = asTrim(new Mesh(new CapsuleGeometry(0.006, 0.03, 3, 8), trimMat));
+    bracket.rotation.x = Math.PI / 2;
+    bracket.position.set(x - side * 0.004, 0.002, 0.055);
+    g.add(bracket);
+    const spine = asGlow(new Mesh(new CapsuleGeometry(0.0042, 0.09, 3, 6), glowMat)); // proud of both faces
+    spine.rotation.x = Math.PI / 2;
+    spine.position.set(x, 0.006, -0.01);
+    g.add(spine);
+    return g;
+  },
+};
+
+Object.assign(BUILDERS, MORE_BUILDERS, THIRD_BUILDERS, FOURTH_BUILDERS);
 
 /** The rig groups gear can hang off, by the names buildBoxer gives them. */
 const SLOT_OF_NAME: Record<string, GearSlot> = {
@@ -1073,7 +1271,13 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     const build = BUILDERS[id];
     if (!build) return;
     const side: 1 | -1 = (o.userData.gearSide as 1 | -1 | undefined) ?? (o.name.endsWith('-right') ? -1 : 1);
-    const g = build(primer(tone), side, trim(tone));
+    const glowMat = glow();
+    const accent = accentOf(o);
+    if (accent !== null) {
+      glowMat.color.set(accent);
+      glowMat.emissive.set(accent);
+    }
+    const g = build(primer(tone), side, trim(tone), glowMat);
     g.name = 'gear';
     g.userData.gear = id;
     // The head pieces were modelled on the old egg skull; refit them.
@@ -1084,7 +1288,9 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     // spike takes paint of its own, and a mark is placed in 3D where it
     // was aimed. Each mesh takes its own material (the bake sets a map per
     // mesh) and the piece is NOT collapsed — the merge would drop the UVs.
-    const part = slot === 'head' ? 'gearHead' : slot === 'body' ? 'gearBody' : 'gearHands';
+    // Each HAND's gear is its own surface — the right hand's is
+    // 'gearHandsR' — so a pair of cuffs can be painted two ways.
+    const part = slot === 'head' ? 'gearHead' : slot === 'body' ? 'gearBody' : side === -1 ? 'gearHandsR' : 'gearHands';
     const paintable: Mesh[] = [];
     g.traverse((m) => {
       const mesh = m as Mesh;

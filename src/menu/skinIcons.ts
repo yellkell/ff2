@@ -140,6 +140,36 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
     ctx.lineWidth = line;
     ctx.beginPath();
     switch (def.id) {
+      case 'vcrest':
+        // The V off a brow emblem.
+        for (const sgn of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(cx + sgn * r * 0.04, cy - r * 0.32);
+          ctx.quadraticCurveTo(cx + sgn * r * 0.28, cy - r * 0.55, cx + sgn * r * 0.62, cy - r * 1.05);
+          ctx.quadraticCurveTo(cx + sgn * r * 0.22, cy - r * 0.62, cx + sgn * r * 0.02, cy - r * 0.42);
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.12, cy - r * 0.42);
+        ctx.lineTo(cx + r * 0.12, cy - r * 0.42);
+        ctx.lineTo(cx, cy - r * 0.24);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case 'earfins':
+        // Swept fins off each temple.
+        for (const sgn of [-1, 1]) {
+          for (const [len, lift] of [[0.62, 0.55], [0.52, 0.3], [0.4, 0.08]] as const) {
+            ctx.beginPath();
+            ctx.moveTo(cx + sgn * r * 0.42, cy - r * 0.02);
+            ctx.lineTo(cx + sgn * r * (0.42 + len), cy - r * lift);
+            ctx.lineTo(cx + sgn * r * 0.46, cy + r * 0.12);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        break;
       case 'crest':
         ctx.moveTo(cx - r * 0.4, cy - r * 0.35);
         ctx.quadraticCurveTo(cx, cy - r * 1.15, cx + r * 0.45, cy - r * 0.3);
@@ -239,6 +269,19 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
       case 'pauldrons':
         for (const s of [-1, 1]) ctx.ellipse(cx + s * r * 0.58, cy - r * 0.5, r * 0.26, r * 0.18, 0, Math.PI, Math.PI * 2);
         ctx.fill();
+        break;
+      case 'thrusters':
+        // Two bells hung under a pack, off the body's shoulder.
+        ctx.fillRect(cx + r * 0.3, cy - r * 0.5, r * 0.3, r * 0.42);
+        for (const dx of [0.36, 0.54]) {
+          ctx.beginPath();
+          ctx.moveTo(cx + r * (dx - 0.04), cy - r * 0.06);
+          ctx.lineTo(cx + r * (dx + 0.04), cy - r * 0.06);
+          ctx.lineTo(cx + r * (dx + 0.09), cy + r * 0.14);
+          ctx.lineTo(cx + r * (dx - 0.09), cy + r * 0.14);
+          ctx.closePath();
+          ctx.fill();
+        }
         break;
       case 'spikepads':
         // The pads, with three spikes rising off each.
@@ -341,6 +384,16 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
           ctx.lineTo(cx + r * 0.3, y);
           ctx.stroke();
         }
+        break;
+      case 'wristblades':
+        // A blade along the outside of the fist, past the knuckles.
+        ctx.moveTo(cx - r * 0.5, cy + r * 0.5);
+        ctx.lineTo(cx - r * 0.42, cy - r * 0.2);
+        ctx.lineTo(cx - r * 0.5, cy - r * 0.9);
+        ctx.lineTo(cx - r * 0.6, cy - r * 0.15);
+        ctx.lineTo(cx - r * 0.58, cy + r * 0.5);
+        ctx.closePath();
+        ctx.fill();
         break;
       case 'claws':
         // Three talons off the knuckle line, hooking forward and down.
