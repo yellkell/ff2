@@ -60,6 +60,7 @@ import defenseUrl from '../assets/music/defense.m4a';
 import awakeningUrl from '../assets/music/awakening.m4a';
 import passionUrl from '../assets/music/passion.m4a';
 import finalUrl from '../assets/music/final.m4a';
+import overtimeUrl from '../assets/music/overtime.m4a';
 import type { MoveKind } from '../config.js';
 
 /** Where a record is allowed to play. 'credits' is a role of one: the
@@ -480,6 +481,24 @@ export const TRACKS: Track[] = [
     // on the off-beat hats; the kick is the beat, so the kick's phase wins.
     // The longest record in the box at five minutes, and it starts on the
     // one — bar 1 beat 1 is 48 ms in.
+    roles: ['raid'],
+  },
+  {
+    id: 'overtime',
+    title: 'OVERTIME',
+    url: overtimeUrl,
+    bpm: 145.0,
+    downbeat: 0.049,
+    seconds: 220.15,
+    lufs: -10.5,
+    // The autocorrelation's loudest peak is 73 — the half-time kick — but
+    // the phase lock is three times stronger at 145 and holds flat end to
+    // end (145.000 and 145.005 tie; the grid is a DAW's integer). Eighths
+    // ride the hats on every half-beat. The heaviest kick votes the one,
+    // and the one is the first thing in the file: sound starts 45 ms in,
+    // the same encoder lead-in as FINAL, so bar 1 beat 1 sits at 49 ms
+    // (calibrated against FINAL's and SAKUPENED's measured downbeats). No
+    // intro to skip.
     roles: ['raid'],
   },
   {

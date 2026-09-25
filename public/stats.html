@@ -2769,7 +2769,9 @@
          shelf the lobby offers (tracksFor('raid')). A lobby or credits
          track never gets raided, so it can never hold a record, and listing
          it here just offers an empty board. Anything the board carries that
-         isn't listed still shows, under its own id. */
+         isn't listed still shows, under its own id. `npm run
+         check:stats-tracks` (in CI) fails when this list drifts from the
+         shelf. */
       const RR_TRACKS = [
         ['sakupened', 'SAKUPENED'], ['combat', 'COMBAT'], ['discoball', 'DISCO BALL'],
         ['loop', 'LOOP'], ['capture', 'CAPTURE'], ['morning', 'MORNING'],
@@ -2779,6 +2781,7 @@
         ['vone', 'ORIGINAL'], ['fusion', 'FUSION'], ['braineater', 'BRAIN EATER'],
         ['futurevibe', 'FUTURE VIBE'], ['vfall', 'BREAKCORE V4'],
         ['defense', 'DEFENSE'], ['awakening', 'AWAKENING'],
+        ['passion', 'PASSION'], ['final', 'FINAL'], ['overtime', 'OVERTIME'],
       ];
       const RR_DIFFS = [
         { id: '0', label: 'Easy' }, { id: '1', label: 'Normal' },
