@@ -56,9 +56,9 @@ function paintColours(wire, max = 3) {
     return [];
   }
   // Wire format 1 (chest + pelvis parts), 2 (one body), 3 (gear surfaces,
-  // dots and squares) or 4 (the triangle) — the colour byte sits in the same
-  // place in all four (docs/paint.md §3).
-  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || bytes[0] < 1 || bytes[0] > 4) return [];
+  // dots and squares), 4 (the triangle) or 5 (gear marks as decals) — the
+  // colour byte sits in the same place in all five (docs/paint.md §3).
+  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || bytes[0] < 1 || bytes[0] > 5) return [];
   const tally = new Map();
   for (let o = 1; o + 8 <= bytes.length; o += 8) {
     const c = bytes[o + 1];

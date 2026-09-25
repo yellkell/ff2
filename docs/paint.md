@@ -141,9 +141,26 @@ round the ring → u), and each paint surface gets a **paint canvas**
    by the arc round its ring, down by the arc of its own meridian), and
    the shape is a signed distance in those metres, antialiased over the
    texel's own size. A dot is round wherever it lands, a stripe keeps its
-   width round the side, a mark on the crown is a disc. Gear and hands
-   have no chart and keep the flat canvas measure. Crossing the u-seam
-   is free: the measure wraps.
+   width round the side, a mark on the crown is a disc. Crossing the
+   u-seam is free: the measure wraps. The hands have no chart and keep
+   the flat canvas measure.
+   **GEAR is painted as DECALS** (P8, `avatar/gearAtlas.ts`). Gear is built
+   from plain primitives that each mapped the WHOLE texture onto
+   themselves, so a mark on one crest plate landed on all eleven, a
+   pauldron's twin wore its paint, and the chestplate (no UVs) took none.
+   Now, when a piece is built, every mesh — and every face of a box, the
+   side and caps of a cylinder — gets its own cell of the slot's canvas,
+   sized by its real surface area, and every texel records the surface
+   point, normal and texel size under it. A gear unit's (u, v) is the
+   texel the ray hit; it paints every texel whose surface point lies
+   inside its outline in the plane of the surface there (metres; a len of
+   1 is 0.2 m), facing the same way and not through the far side — so a
+   stripe crosses neighbouring plates at true size, and each pad, plate
+   and spike takes paint of its own. Gear canvases filter without mips
+   (an atlas bleeds between cells when mipped). A gear mark made before
+   the atlas (wire format ≤ 4, or a saved look before LOOK_VERSION 2) is
+   flagged and still stamped on every island in its own UVs, as it
+   always was, until it is lifted or undone.
 3. Upload once as the part material's `map`.
 
 A repaint happens **only when the look changes** — placing in the bay,
@@ -307,3 +324,18 @@ Free placement can draw things we don't want in a room:
    SQUARE bought vanished on the next boot — it reads every kind now.
    Probed in `npm run check:paint`: formats 2–3 read with splotch → dot,
    the locker survives a restart, a stripe picks at its end.
+8. **P8 — gear as decals, and a rounder head.** **SHIPPED**: THE GEAR
+   ATLAS (§4): every gear mesh and face its own patch of canvas, a map of
+   the surface under every texel, and gear marks painted as 3D decals —
+   the two PAULDRONS (horns, antennae, cuffs' pair aside: a hand piece is
+   still one canvas for both hands) paint separately, the CHESTPLATE
+   paints at all, a stripe runs across crest plates or mohawk spikes the
+   way it was aimed instead of stamping itself on every one. Wire format
+   5 (format 4's layout) says a gear unit is a decal; older gear units
+   keep their old stamped look. The head is nearly round now
+   (mannequin.ts HEAD_SCALE, from the old 0.84 × 1.08 × 0.93 egg to
+   0.94 × 1.0 × 0.97), the head gear refitted to it (applyGear scales the
+   piece by HEAD_SCALE / EGG_SCALE) and the neck seat computed from it.
+   Probed in `npm run check:paint`: the pads are two patches, a dot on
+   the left pad is not on the right, the chestplate takes a triangle, a
+   format-4 gear mark reads as a stamp.

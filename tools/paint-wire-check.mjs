@@ -208,6 +208,46 @@ console.log('=== the wire: pack / unpack ===');
   const handSnap = await page.evaluate(() => window.__ff2.paintSnap('mirror-avatar', 'hand'));
   check("the MIRROR's hand bakes the paint", handSnap.startsWith('data:image/png'), handSnap.slice(0, 22));
   if (handSnap) writeFileSync(join(here, 'paint-hand.png'), Buffer.from(handSnap.split(',')[1], 'base64'));
+  // THE GEAR ATLAS: each piece of gear is laid out so every mesh has its
+  // own patch of the canvas — the two PAULDRONS take paint separately —
+  // and a gear mark is a decal on the piece, found where it was placed.
+  console.log('\n=== the gear atlas: each pad its own ===');
+  await page.evaluate(() => window.__ff2.gear.equip('pauldrons'));
+  await page.waitForTimeout(700); // the rig re-dresses, the bay re-collects
+  const pads = await page.evaluate(() => {
+    const g = window.__ff2.bayGearProbe;
+    const p = window.__ff2.paint;
+    p.clear();
+    const n = g.count();
+    const a = g.spot(0);
+    const b = g.spot(1);
+    p.grant('dot', 9);
+    const placed = !!a && p.take('dot', 9) && p.place(a.part, a.u, a.v);
+    return { n, placed, onA: g.at(0), onB: g.at(1), distinct: !!a && !!b && (Math.abs(a.u - b.u) > 0.02 || Math.abs(a.v - b.v) > 0.02) };
+  });
+  check('the pauldrons are two paintable pieces with their own patches of canvas', pads.n === 2 && pads.distinct, JSON.stringify(pads));
+  check('a dot on the LEFT pad is on the left pad, not the right', pads.placed && pads.onA === 0 && pads.onB === -1, JSON.stringify(pads));
+  await page.evaluate(() => window.__ff2.gear.equip('chestplate'));
+  await page.waitForTimeout(700);
+  const plate = await page.evaluate(() => {
+    const g = window.__ff2.bayGearProbe;
+    const p = window.__ff2.paint;
+    p.clear();
+    const s = g.spot(0);
+    p.grant('triangle', 13);
+    const placed = !!s && p.take('triangle', 13) && p.place(s.part, s.u, s.v);
+    return { spot: !!s, placed, on: g.at(0) };
+  });
+  check('the CHESTPLATE takes paint (it had no UVs to paint by)', plate.spot && plate.placed && plate.on === 0, JSON.stringify(plate));
+  // A gear mark from before the atlas keeps its old look: flagged on read.
+  const legacyGear = await page.evaluate(() => {
+    const P = window.__ff2.paint;
+    const unit = [(3 << 3) | 2, 9, 0, 128, 128, 0, 60, 60]; // format 4: a dot on gearBody
+    return P.unpack(btoa(String.fromCharCode(4, ...unit))).paint[0]?.variant ?? -1;
+  });
+  check('a format-4 gear mark is read as a pre-atlas stamp (kept as it was)', legacyGear >= 128, String(legacyGear));
+  await page.evaluate(() => window.__ff2.gear.clear('body'));
+
   await page.evaluate(() => {
     window.__ff2.paint.clear();
     window.__ff2.wrap.act('paintbay-close');

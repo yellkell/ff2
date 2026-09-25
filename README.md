@@ -445,6 +445,16 @@ carried over verbatim: everything in it still applies to this code.
   enough for every frame. The SPLOTCH is retired (owned and worn ones
   became dots), the TRIANGLE joins (wire format 4), and bought dots and
   squares no longer vanish from the locker on a restart.
+- **PAINT P8 — gear as decals, and a rounder head** (docs/paint.md §4,
+  P8; `avatar/gearAtlas.ts`). Every piece of gear lays out its own paint
+  atlas when it is built — each mesh and each face a patch sized by its
+  real area, with the surface point under every texel mapped — and a mark
+  on gear is a 3D decal placed where you aimed: each PAULDRON paints on
+  its own, a stripe runs across crest plates instead of stamping itself on
+  all eleven, and the CHESTPLATE can be painted at all (it had no UVs).
+  Old gear paint keeps its old look until it's lifted. The head is nearly
+  round (it was an egg, 0.84 × 1.08 × 0.93 of its radius; now
+  0.94 × 1.0 × 0.97) and the head gear is refitted onto it.
 - **THE SHOULDERS, SQUARED** (`solveTorso`, avatar/boxer.ts): the body
   now follows a LOOK and ignores a GLANCE by time — a look held 0.4 s
   (or a swing past 34°) turns the shoulders all the way round, to within

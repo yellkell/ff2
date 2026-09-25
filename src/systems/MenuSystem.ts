@@ -76,6 +76,7 @@ import { crowd } from '../audio/crowd.js';
 import { currentVoiceContext, VOICE_RULES, voiceAllowed, hearAllowed } from '../net/voiceRules.js';
 import { applyGhost, applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, undoLast, unitAt, type PaintPart } from '../avatar/paint.js';
 import { pulseHand } from '../input/haptics.js';
+import type { GearMap } from '../avatar/gearAtlas.js';
 import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
 import { botGradeLine, botLive, installBotBrainDevHook } from '../combat/botBrain.js';
@@ -259,7 +260,7 @@ export class MenuSystem extends createSystem({}) {
     left: { o: new Vector3(), d: new Vector3(), live: false },
     right: { o: new Vector3(), d: new Vector3(), live: false },
   };
-  private bayTrail: Record<'left' | 'right', Array<{ t: number; part: PaintPart; u: number; v: number }>> = { left: [], right: [] };
+  private bayTrail: Record<'left' | 'right', Array<{ t: number; part: PaintPart; u: number; v: number; map?: GearMap }>> = { left: [], right: [] };
   /** Which hands' rays are on the body this frame. */
   private bayOnBody = { left: false, right: false };
   /** The blank's turn as shown (eased toward bayFaceState.yaw). */
@@ -532,6 +533,35 @@ export class MenuSystem extends createSystem({}) {
       const directPart = direct ? String(direct.object.userData?.paintPart ?? '') : '';
       const on = this.bayAim(direct ? { ...direct } : undefined, origin, dir);
       return on ? String(on.object.userData?.paintPart ?? '') + (directPart && directPart !== String(on.object.userData?.paintPart) ? ` (over ${directPart})` : '') : null;
+    };
+    // THE GEAR ATLAS, headless: the paintable gear on the mirror, a spot
+    // on each piece's surface (the middle triangle's centre, in its atlas
+    // UVs), and which placed mark (index) is under that spot.
+    const gearSpot = (i: number): { part: PaintPart; u: number; v: number; map?: GearMap } | null => {
+      const m = this.bayGear[i];
+      const uv = m?.geometry.getAttribute('uv');
+      const idx = m?.geometry.getIndex();
+      if (!m || !uv) return null;
+      const tri = Math.floor((idx ? idx.count : uv.count) / 6) * 3;
+      let u = 0;
+      let v = 0;
+      for (let k = 0; k < 3; k++) {
+        const vi = idx ? idx.getX(tri + k) : tri + k;
+        u += uv.getX(vi) / 3;
+        v += uv.getY(vi) / 3;
+      }
+      return { part: m.userData.paintPart as PaintPart, u, v, map: m.userData.paintMap as GearMap | undefined };
+    };
+    (window.__ff2 as unknown as Record<string, unknown>).bayGearProbe = {
+      count: (): number => this.bayGear.length,
+      spot: (i: number) => {
+        const s = gearSpot(i);
+        return s ? { part: s.part, u: s.u, v: s.v } : null;
+      },
+      at: (i: number): number => {
+        const s = gearSpot(i);
+        return s ? unitAt(s.part, s.u, s.v, s.map) : -2;
+      },
     };
     (window.__ff2 as unknown as Record<string, unknown>).paintSnap = (rootName: string, part: string): string => {
       const obj = this.scene.getObjectByName(rootName);
@@ -2454,14 +2484,17 @@ export class MenuSystem extends createSystem({}) {
     const part = hit.object.userData.paintPart as PaintPart;
     const u = hit.uv!.x;
     const v = hit.uv!.y;
+    // A gear piece's atlas map (avatar/gearAtlas.ts): gear marks are
+    // decals, measured in 3D on the piece.
+    const map = hit.object.userData.paintMap as GearMap | undefined;
     bay.hover = { part, u, v };
     const now = performance.now();
     const trail = this.bayTrail[hand];
-    trail.push({ t: now, part, u, v });
+    trail.push({ t: now, part, u, v, map });
     while (trail.length > 1 && now - trail[0].t > 250) trail.shift();
     // Empty-handed over a mark: the dot turns blue and swells — this one
     // lifts.
-    if (!bay.held && unitAt(part, u, v) >= 0) {
+    if (!bay.held && unitAt(part, u, v, map) >= 0) {
       const dot = this.pointers[hand].dot;
       (dot.material as MeshBasicMaterial).color.setHex(0x4fb7ff);
       dot.scale.setScalar(1.7);
@@ -2487,7 +2520,7 @@ export class MenuSystem extends createSystem({}) {
       } else {
         sfx.armorClank(); // the look is full
       }
-    } else if (handLift(at.part, at.u, at.v)) {
+    } else if (handLift(at.part, at.u, at.v, at.map)) {
       sfx.uiClick();
       pulseHand(session, hand, 0.3, 18);
     }

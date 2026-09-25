@@ -39,9 +39,10 @@
  * unpainted texels ARE the base tone.
  */
 
-import { CanvasTexture, Mesh, MeshStandardMaterial, SRGBColorSpace, type Object3D } from 'three';
+import { CanvasTexture, LinearFilter, Mesh, MeshStandardMaterial, SRGBColorSpace, type Object3D } from 'three';
 import { BODY_IK, PAINT } from '../config.js';
 import { BODY_RINGS, BODY_V_SPLIT, HEAD_SCALE } from './mannequin.js';
+import type { GearMap } from './gearAtlas.js';
 
 /**
  * The shapes. SPLOTCH is retired: nothing sells it, and a splotch anyone
@@ -86,6 +87,17 @@ export interface Look {
 /* ── the store ────────────────────────────────────────────────────────── */
 
 const KEY = 'ff2-look';
+/** The saved look's shape. Before 2, a unit on GEAR meant "stamp on every
+ *  mesh of the piece in its own UVs"; from 2 it is a decal placed on the
+ *  gear atlas (avatar/gearAtlas.ts). Older gear units are kept as they
+ *  were — flagged LEGACY_GEAR — so nobody's paint moves under them. */
+const LOOK_VERSION = 2;
+
+/** A gear surface: laid out by the atlas, painted as decals. */
+export const isGearPart = (part: PaintPart): boolean => part === 'gearHead' || part === 'gearBody' || part === 'gearHands';
+/** `variant` bit: a gear unit placed before the atlas (see LOOK_VERSION). */
+const LEGACY_GEAR = 0x80;
+const markLegacy = (p: PlacedPaint): PlacedPaint => (isGearPart(p.part) ? { ...p, variant: p.variant | LEGACY_GEAR } : p);
 
 /** Bumped on every look change — applyOwnSkins repaints when it moves. */
 export const paintState = { version: 1 };
@@ -136,8 +148,9 @@ export function myLook(): Look {
   if (current) return current;
   let paint: PlacedPaint[] = [];
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { paint?: unknown[] };
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? '{}') as { v?: number; paint?: unknown[] };
     paint = (raw.paint ?? []).map(cleanUnit).filter((p): p is PlacedPaint => p !== null).slice(0, PAINT.maxUnits);
+    if (raw.v !== LOOK_VERSION) paint = paint.map(markLegacy);
   } catch {
     /* fresh body */
   }
@@ -148,7 +161,7 @@ export function myLook(): Look {
 export function setLook(look: Look): void {
   current = { paint: look.paint.map(cleanUnit).filter((p): p is PlacedPaint => p !== null).slice(0, PAINT.maxUnits) };
   try {
-    localStorage.setItem(KEY, JSON.stringify(current));
+    localStorage.setItem(KEY, JSON.stringify({ v: LOOK_VERSION, paint: current.paint }));
   } catch {
     /* private mode — the look lives for the session */
   }
@@ -184,7 +197,7 @@ export function clearLook(): void {
  * A SPLOTCH in any of them reads as a dot (cleanUnit). So a look packed
  * before any of this still paints the fighter it was made for.
  */
-const WIRE_FORMAT = 4;
+const WIRE_FORMAT = 5;
 /** Part order ON THE WIRE — append-only. */
 const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand'];
 /** Format 2's part order (the merged body, before gear was paintable). */
@@ -241,8 +254,10 @@ export function unpackLook(wire: unknown): Look {
   const format = bin.charCodeAt(0);
   if (format < 1 || format > WIRE_FORMAT) return bare;
   const parts: readonly string[] = format === 1 ? WIRE_PARTS_V1 : format === 2 ? WIRE_PARTS_V2 : WIRE_PARTS;
-  const kindBits = format === 4 ? 7 : format === 3 ? 3 : 1;
-  const partShift = format === 4 ? 3 : format === 3 ? 2 : 1;
+  // FORMAT 5 is format 4's layout; it says the gear units are atlas
+  // decals. A gear unit in anything older is flagged LEGACY_GEAR.
+  const kindBits = format >= 4 ? 7 : format === 3 ? 3 : 1;
+  const partShift = format >= 4 ? 3 : format === 3 ? 2 : 1;
   const count = Math.min((bin.length - 1) / 8, PAINT.maxUnits);
   const paint: PlacedPaint[] = [];
   for (let i = 0; i < count; i++) {
@@ -259,7 +274,7 @@ export function unpackLook(wire: unknown): Look {
       len: bin.charCodeAt(o + 6) / 255,
       wid: bin.charCodeAt(o + 7) / 255,
     });
-    if (unit) paint.push(unit);
+    if (unit) paint.push(format < 5 ? markLegacy(unit) : unit);
   }
   return { paint };
 }
@@ -434,7 +449,8 @@ export function handPlace(part: PaintPart, u: number, v: number): boolean {
   if (look.paint.length >= PAINT.maxUnits) return false;
   const { kind, angle, len, wid } = bay.held;
   lastPose[kind] = { angle, len, wid };
-  setLook({ paint: [...look.paint, { ...bay.held, part, u, v }] });
+  // A mark placed now is a fresh decal, whatever it was lifted as.
+  setLook({ paint: [...look.paint, { ...bay.held, part, u, v, variant: 0 }] });
   bay.held = null;
   bay.version += 1;
   return true;
@@ -446,8 +462,9 @@ export function handPlace(part: PaintPart, u: number, v: number): boolean {
  * is within a finger's width. -1 for none. A thin stripe is picked by its
  * outline, not by how far its centre is.
  */
-export function unitAt(part: PaintPart, u: number, v: number): number {
+export function unitAt(part: PaintPart, u: number, v: number, map?: GearMap): number {
   const look = myLook();
+  if (isGearPart(part)) return map ? gearUnitAt(look, part, u, v, map) : -1;
   const chart = chartOf(part);
   const slack = 0.035 * chart.S;
   let best = -1;
@@ -467,9 +484,9 @@ export function unitAt(part: PaintPart, u: number, v: number): number {
 }
 
 /** Lift the placed unit under (part, u, v) back into the hand. */
-export function handLift(part: PaintPart, u: number, v: number): boolean {
+export function handLift(part: PaintPart, u: number, v: number, map?: GearMap): boolean {
   if (bay.held) return false;
-  const i = unitAt(part, u, v);
+  const i = unitAt(part, u, v, map);
   if (i < 0) return false;
   const paint = [...myLook().paint];
   const [unit] = paint.splice(i, 1);
@@ -939,6 +956,186 @@ function bakePart(look: Look, part: PaintPart, fill: string, W: number, H: numbe
   return img;
 }
 
+/* ── gear: decals on the atlas ────────────────────────────────────────── */
+//
+// A gear unit's (u, v) is the atlas texel the ray hit. Its centre is that
+// texel's surface point, its plane the surface there; every texel whose
+// surface point lies inside the shape's outline in that plane — and faces
+// the same way, and is not on the far side of the piece — takes the ink.
+// Sizes are metres: a len of 1 is GEAR_S.
+
+const GEAR_S = 0.2;
+
+/** The nearest texel with surface under it, or -1. */
+function texelNear(map: GearMap, u: number, v: number): number {
+  const i0 = Math.min(map.W - 1, Math.max(0, Math.floor(u * map.W)));
+  const j0 = Math.min(map.H - 1, Math.max(0, Math.floor((1 - v) * map.H)));
+  for (let r = 0; r <= 4; r++) {
+    for (let dj = -r; dj <= r; dj++) {
+      for (let di = -r; di <= r; di++) {
+        if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
+        const i = i0 + di;
+        const j = j0 + dj;
+        if (i < 0 || j < 0 || i >= map.W || j >= map.H) continue;
+        if (map.ts[j * map.W + i] > 0) return j * map.W + i;
+      }
+    }
+  }
+  return -1;
+}
+
+/** A decal's frame at texel k: origin, normal, and the turned across/down
+ *  axes in the surface's plane ("up" is the piece's +y, or its front where
+ *  the surface faces straight up or down). */
+interface DecalFrame {
+  o: [number, number, number];
+  n: [number, number, number];
+  x: [number, number, number];
+  y: [number, number, number];
+}
+
+function decalFrame(map: GearMap, k: number, angle: number): DecalFrame {
+  const o: [number, number, number] = [map.pos[k * 3], map.pos[k * 3 + 1], map.pos[k * 3 + 2]];
+  const n: [number, number, number] = [map.nrm[k * 3], map.nrm[k * 3 + 1], map.nrm[k * 3 + 2]];
+  let up: [number, number, number] = Math.abs(n[1]) > 0.92 ? [0, 0, -1] : [0, 1, 0];
+  const d = up[0] * n[0] + up[1] * n[1] + up[2] * n[2];
+  up = [up[0] - n[0] * d, up[1] - n[1] * d, up[2] - n[2] * d];
+  const ul = Math.hypot(up[0], up[1], up[2]) || 1;
+  up = [up[0] / ul, up[1] / ul, up[2] / ul];
+  // across = n × up; down = −up.
+  const ac: [number, number, number] = [n[1] * up[2] - n[2] * up[1], n[2] * up[0] - n[0] * up[2], n[0] * up[1] - n[1] * up[0]];
+  const a = angle * Math.PI * 2;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  // Turned the way unitSdf turns a body unit: lx = dx·c + dy·s, ly = −dx·s + dy·c.
+  const x: [number, number, number] = [ac[0] * c - up[0] * s, ac[1] * c - up[1] * s, ac[2] * c - up[2] * s];
+  const y: [number, number, number] = [-ac[0] * s - up[0] * c, -ac[1] * s - up[1] * c, -ac[2] * s - up[2] * c];
+  return { o, n, x, y };
+}
+
+/** How far off the plane (metres) a texel may be and still take the mark:
+ *  enough to wrap a curved piece, not enough to reach its far side. */
+const decalDepth = (reach: number): number => reach * 0.6 + 0.004;
+
+function rasterGearUnit(data: Uint8ClampedArray, map: GearMap, p: PlacedPaint, alpha = 1): void {
+  if (p.variant & LEGACY_GEAR) return rasterLegacyGear(data, map, p, alpha);
+  const c = texelNear(map, p.u, p.v);
+  if (c < 0) return;
+  const f = decalFrame(map, c, p.angle);
+  const size = unitSize(p, GEAR_S);
+  const reach = unitReach(p, GEAR_S);
+  const r2 = (reach + 0.004) ** 2;
+  const depth = decalDepth(reach);
+  const [cr, cg, cb] = rgbOf(PAINT.colours[p.colour] ?? 0xffffff);
+  const { pos, nrm, ts } = map;
+  for (let k = 0; k < ts.length; k++) {
+    const t = ts[k];
+    if (t <= 0) continue;
+    const dx = pos[k * 3] - f.o[0];
+    const dy = pos[k * 3 + 1] - f.o[1];
+    const dz = pos[k * 3 + 2] - f.o[2];
+    if (dx * dx + dy * dy + dz * dz > r2) continue;
+    if (Math.abs(dx * f.n[0] + dy * f.n[1] + dz * f.n[2]) > depth) continue;
+    const facing = nrm[k * 3] * f.n[0] + nrm[k * 3 + 1] * f.n[1] + nrm[k * 3 + 2] * f.n[2];
+    if (facing < 0.1) continue;
+    const lx = dx * f.x[0] + dy * f.x[1] + dz * f.x[2];
+    const ly = dx * f.y[0] + dy * f.y[1] + dz * f.y[2];
+    const d = shapeSdf(p.kind, size, lx, ly);
+    const cov = Math.min(1, 0.5 - d / t) * alpha * Math.min(1, facing * 5);
+    if (cov <= 0) continue;
+    const o = k * 4;
+    data[o] += (cr - data[o]) * cov;
+    data[o + 1] += (cg - data[o + 1]) * cov;
+    data[o + 2] += (cb - data[o + 2]) * cov;
+  }
+}
+
+/** A gear mark made before the atlas: stamped flat on EVERY island in its
+ *  own UVs, as it always was, so an old look reads the same. */
+function rasterLegacyGear(data: Uint8ClampedArray, map: GearMap, p: PlacedPaint, alpha: number): void {
+  const [cr, cg, cb] = rgbOf(PAINT.colours[p.colour] ?? 0xffffff);
+  const a = p.angle * Math.PI * 2;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  for (const [rx, ry, rw, rh] of map.rects) {
+    const S = rw * map.W; // the island's cell was the whole canvas, once
+    const size = unitSize(p, S);
+    const reach = unitReach(p, S) + 1;
+    const cx = (rx + p.u * rw) * map.W;
+    const cy = (1 - (ry + p.v * rh)) * map.H;
+    const x0 = Math.max(Math.floor(rx * map.W), Math.floor(cx - reach));
+    const x1 = Math.min(Math.ceil((rx + rw) * map.W) - 1, Math.ceil(cx + reach));
+    const y0 = Math.max(Math.floor((1 - ry - rh) * map.H), Math.floor(cy - reach));
+    const y1 = Math.min(Math.ceil((1 - ry) * map.H) - 1, Math.ceil(cy + reach));
+    for (let j = y0; j <= y1; j++) {
+      for (let i = x0; i <= x1; i++) {
+        const dx = i + 0.5 - cx;
+        const dy = j + 0.5 - cy;
+        const d = shapeSdf(p.kind, size, dx * ca + dy * sa, -dx * sa + dy * ca);
+        const cov = Math.min(1, 0.5 - d) * alpha;
+        if (cov <= 0) continue;
+        const o = (j * map.W + i) * 4;
+        data[o] += (cr - data[o]) * cov;
+        data[o + 1] += (cg - data[o + 1]) * cov;
+        data[o + 2] += (cb - data[o + 2]) * cov;
+      }
+    }
+  }
+}
+
+/** Bake one gear piece's canvas: the fill, then every unit on its part. */
+function bakeGear(look: Look, part: PaintPart, fill: string, map: GearMap): ImageData {
+  const img = new ImageData(map.W, map.H);
+  const [r, g, b] = rgbOf(parseInt(fill.replace('#', ''), 16) || 0);
+  new Uint32Array(img.data.buffer).fill(((255 << 24) | (b << 16) | (g << 8) | r) >>> 0);
+  for (const p of look.paint) if (p.part === part) rasterGearUnit(img.data, map, p);
+  return img;
+}
+
+/** unitAt for a gear surface: by the decal's outline in 3D, topmost first;
+ *  an old stamped mark by its outline on the island under the point. */
+function gearUnitAt(look: Look, part: PaintPart, u: number, v: number, map: GearMap): number {
+  const k = texelNear(map, u, v);
+  if (k < 0) return -1;
+  const P = [map.pos[k * 3], map.pos[k * 3 + 1], map.pos[k * 3 + 2]];
+  const N = [map.nrm[k * 3], map.nrm[k * 3 + 1], map.nrm[k * 3 + 2]];
+  let best = -1;
+  let bestD = 0.006;
+  for (let i = look.paint.length - 1; i >= 0; i--) {
+    const p = look.paint[i];
+    if (p.part !== part) continue;
+    let d = Infinity;
+    if (p.variant & LEGACY_GEAR) {
+      for (const [rx, ry, rw, rh] of map.rects) {
+        if (u < rx || u > rx + rw || v < ry || v > ry + rh) continue;
+        const S = rw * map.W;
+        const a = p.angle * Math.PI * 2;
+        const dx = ((u - rx) / rw - p.u) * S;
+        const dy = -((v - ry) / rh - p.v) * S;
+        // Pixels on the island, as metres at the texel's own size.
+        d = shapeSdf(p.kind, unitSize(p, S), dx * Math.cos(a) + dy * Math.sin(a), -dx * Math.sin(a) + dy * Math.cos(a)) * map.ts[k];
+        break;
+      }
+    } else {
+      const c = texelNear(map, p.u, p.v);
+      if (c < 0) continue;
+      const f = decalFrame(map, c, p.angle);
+      const dx = P[0] - f.o[0];
+      const dy = P[1] - f.o[1];
+      const dz = P[2] - f.o[2];
+      if (N[0] * f.n[0] + N[1] * f.n[1] + N[2] * f.n[2] < 0.1) continue;
+      if (Math.abs(dx * f.n[0] + dy * f.n[1] + dz * f.n[2]) > decalDepth(unitReach(p, GEAR_S))) continue;
+      d = shapeSdf(p.kind, unitSize(p, GEAR_S), dx * f.x[0] + dy * f.x[1] + dz * f.x[2], dx * f.y[0] + dy * f.y[1] + dz * f.y[2]);
+    }
+    if (d <= 0) return i;
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
 interface PaintStore {
   canvas: HTMLCanvasElement;
   tex: CanvasTexture;
@@ -961,6 +1158,12 @@ function storeFor(mesh: Mesh, part: PaintPart): PaintStore {
     // The body is seen edge-on round its sides; a little anisotropy keeps
     // the paint's edges from going to mush there.
     tex.anisotropy = 4;
+    // A gear canvas is an atlas of little cells: mip levels would bleed
+    // one cell into the next, so it filters flat.
+    if (mesh.userData.paintMap) {
+      tex.generateMipmaps = false;
+      tex.minFilter = LinearFilter;
+    }
     store = { canvas, tex, base: null, scratch: null, ghost: false };
     mesh.userData.paintStore = store;
   }
@@ -984,10 +1187,11 @@ export function applyLook(root: Object3D, look: Look): void {
     const size = store.canvas.width;
     const tone = (mesh.userData.paintTone as string) ?? 'white';
     const fill = (mat.userData?.paintFill as string) ?? TONE_FILL[tone] ?? TONE_FILL.white;
-    const key = `${part}|${fill}|${size}`;
+    const map = mesh.userData.paintMap as GearMap | undefined;
+    const key = `${part}|${fill}|${size}|${map?.key ?? ''}`;
     let img = memo.get(key);
     if (!img) {
-      img = bakePart(look, part, fill, size, size);
+      img = map ? bakeGear(look, part, fill, map) : bakePart(look, part, fill, size, size);
       memo.set(key, img);
     }
     store.base = img;
@@ -1037,8 +1241,9 @@ export function applyGhost(root: Object3D, unit: PlacedPaint | null): void {
       const H = store.canvas.height;
       if (!store.scratch || store.scratch.width !== W) store.scratch = new ImageData(W, H);
       store.scratch.data.set(store.base.data);
-      const g = gridOf(part, W, H);
-      rasterUnit(store.scratch.data, g, chartOf(part).S, unit, GHOST_ALPHA);
+      const map = o.userData.paintMap as GearMap | undefined;
+      if (map) rasterGearUnit(store.scratch.data, map, unit, GHOST_ALPHA);
+      else rasterUnit(store.scratch.data, gridOf(part, W, H), chartOf(part).S, unit, GHOST_ALPHA);
       g2d.putImageData(store.scratch, 0, 0);
       store.ghost = true;
       store.tex.needsUpdate = true;

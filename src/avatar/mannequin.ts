@@ -150,9 +150,19 @@ function loft(rings: readonly Ring[], mat: MeshStandardMaterial): Mesh {
  * leaning the stub back hides it. Disconnected, the joint can never bind —
  * and a floating head is a mannequin's honest silhouette anyway.
  */
-/** The egg's stretch of a sphere of BODY_IK.headRadius (x, y, z) — THE
- *  PAINT's chart (avatar/paint.ts) measures the skull from it. */
-export const HEAD_SCALE: readonly [number, number, number] = [0.84, 1.08, 0.93];
+/**
+ * The skull's stretch of a sphere of BODY_IK.headRadius (x, y, z). It was
+ * an EGG — 0.84 wide, 1.08 tall, 0.93 deep: narrow and long, so the head
+ * read as a lightbulb on a neck. It is nearly round now, a whisker
+ * narrower side to side than front to back so it still has a face. THE
+ * PAINT's chart (avatar/paint.ts) measures the skull from this, the head
+ * GEAR is refitted to it (avatar/gear.ts, EGG_SCALE), and the neck seat
+ * (boxer.ts) sits under it.
+ */
+export const HEAD_SCALE: readonly [number, number, number] = [0.94, 1.0, 0.97];
+/** The egg the head gear was modelled on, kept so applyGear can refit it
+ *  to whatever HEAD_SCALE is now. */
+export const EGG_SCALE: readonly [number, number, number] = [0.84, 1.08, 0.93];
 
 export function buildMannequinHead(tone: BlankTone): Group {
   const r = BODY_IK.headRadius;

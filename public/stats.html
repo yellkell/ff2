@@ -3465,10 +3465,10 @@
         try { bin = atob(wire); } catch { return []; }
         if (bin.length < 9 || (bin.length - 1) % 8 !== 0) return [];
         const format = bin.charCodeAt(0);
-        if (format < 1 || format > 4) return [];
+        if (format < 1 || format > 5) return [];
         const parts = format === 1 ? WIRE_PARTS_V1 : format === 2 ? WIRE_PARTS_V2 : WIRE_PARTS;
-        const kindBits = format === 4 ? 7 : format === 3 ? 3 : 1;
-        const partShift = format === 4 ? 3 : format === 3 ? 2 : 1;
+        const kindBits = format >= 4 ? 7 : format === 3 ? 3 : 1;
+        const partShift = format >= 4 ? 3 : format === 3 ? 2 : 1;
         const count = Math.min((bin.length - 1) / 8, 64);
         const paint = [];
         for (let i = 0; i < count; i++) {

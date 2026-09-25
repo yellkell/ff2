@@ -23,7 +23,7 @@ import {
   RepeatWrapping,
   Vector3,
 } from 'three';
-import { buildMannequinBody, buildMannequinHead } from './mannequin.js';
+import { HEAD_SCALE, buildMannequinBody, buildMannequinHead } from './mannequin.js';
 import { BODY_IK, PALETTE, teamColor } from '../config.js';
 import { collapseStatic } from '../arena/merge.js';
 import { buildHand } from './hands.js';
@@ -347,9 +347,10 @@ const UP = new Vector3(0, 1, 0);
 /** Platform top in the solve's local space — the torso never sinks below it. */
 const GROUND_Y = 0.14;
 /** Hips to the head's centre when the neck SEATS: the loft's top ring
- *  (mannequin.ts BODY_RINGS, 0.488) plus the egg's half-height and a
- *  hair of air, so the head floats just clear of the collar. */
-const NECK_SEAT = 0.64;
+ *  (mannequin.ts BODY_RINGS, 0.488) plus the skull's half-height (it sits
+ *  a twentieth of a radius high in its group) and a hair of air, so the
+ *  head floats just clear of the collar. */
+const NECK_SEAT = 0.488 + BODY_IK.headRadius * (HEAD_SCALE[1] - 0.05) + 0.018;
 /** How much of the head's offset from the platform centre the hips hang
  *  back toward it (a lean), and the most they ever hang back, in metres:
  *  past that the body is not leaning but STEPPING, and steps with the

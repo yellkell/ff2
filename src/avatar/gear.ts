@@ -32,8 +32,9 @@
  */
 
 import { BoxGeometry, BufferGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, type Object3D, SphereGeometry, TorusGeometry, Vector3 } from 'three';
-import { BODY_IK } from '../config.js';
-import type { BlankTone } from './mannequin.js';
+import { BODY_IK, PAINT } from '../config.js';
+import { EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
+import { atlasGear } from './gearAtlas.js';
 
 export type GearSlot = 'head' | 'body' | 'hands';
 export const GEAR_SLOTS: readonly GearSlot[] = ['head', 'body', 'hands'];
@@ -205,7 +206,9 @@ const R = BODY_IK.headRadius;
 type Builder = (mat: MeshStandardMaterial, side: 1 | -1, trim: MeshStandardMaterial) => Group;
 
 const BUILDERS: Record<string, Builder> = {
-  /* head — origin at the head centre, front −z, skull ~R×(0.84, 1.08, 0.93) */
+  /* head — origin at the head centre, front −z. Modelled on the old EGG
+   * skull, R×(0.84, 1.08, 0.93) (mannequin.ts EGG_SCALE); applyGear
+   * stretches the whole piece onto whatever the skull is now. */
   crest: (mat) => {
     const g = new Group();
     // A fin from the brow over the crown to the nape: eleven plates, each
@@ -380,10 +383,11 @@ const BUILDERS: Record<string, Builder> = {
         }
       }
     });
-    // A rolled edge along the rim so the plate has a visible thickness.
-    // The plate's THICKNESS: a second, inner skin 10 mm behind the outer
+    // The plate's THICKNESS: a second, inner skin 12 mm behind the outer
     // one, and a wall of quads joining their rims — a closed slab that
-    // casts a real edge.
+    // casts a real edge. Three islands for THE PAINT's atlas (outer skin,
+    // inner skin, the walls on vertices of their own), each with UVs laid
+    // across its grid, so the plate can be painted like any other piece.
     const inner: number[] = [];
     for (let i = 0; i < pos.length; i += 3) {
       const x = pos[i];
@@ -393,13 +397,23 @@ const BUILDERS: Record<string, Builder> = {
       inner.push(x - (x / len) * 0.012, y, z - (z / len) * 0.012);
     }
     const n = pos.length / 3;
-    const all = [...pos, ...inner];
-    const tri = [...idx, ...idx.map((i) => i + n).reverse()];
-    // Side walls around the outline: top row, bottom row, and both edge columns.
-    const wall = (a0: number, a1: number): void => {
-      tri.push(a0, a1, a0 + n, a1, a1 + n, a0 + n);
-    };
     const rowsN = rows.length;
+    const gridUv: number[] = [];
+    for (let r = 0; r < rowsN; r++) for (let c = 0; c <= cols; c++) gridUv.push(c / cols, r / (rowsN - 1));
+    const all = [...pos, ...inner];
+    const uvs = [...gridUv, ...gridUv];
+    const outerTri = idx;
+    const innerTri = idx.map((i) => i + n).reverse();
+    // Side walls around the outline, each quad on four fresh vertices.
+    const wallTri: number[] = [];
+    let run = 0;
+    const wall = (a0: number, a1: number): void => {
+      const base = all.length / 3;
+      for (const v of [a0, a1, a0 + n, a1 + n]) all.push(all[v * 3], all[v * 3 + 1], all[v * 3 + 2]);
+      uvs.push(run, 0, run + 1, 0, run, 1, run + 1, 1);
+      run += 1;
+      wallTri.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+    };
     for (let c = 0; c < cols; c++) {
       wall(c + 1, c); // bottom edge (y = rows[0])
       const top = (rowsN - 1) * (cols + 1);
@@ -409,9 +423,14 @@ const BUILDERS: Record<string, Builder> = {
       wall(r * (cols + 1), (r + 1) * (cols + 1)); // left column
       wall((r + 1) * (cols + 1) + cols, r * (cols + 1) + cols); // right column
     }
+    for (let i = uvs.length - run * 8; i < uvs.length; i += 2) uvs[i] /= run; // walls: one strip, 0..1
     const slab = new BufferGeometry();
     slab.setAttribute('position', new Float32BufferAttribute(all, 3));
-    slab.setIndex(tri);
+    slab.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+    slab.setIndex([...outerTri, ...innerTri, ...wallTri]);
+    slab.addGroup(0, outerTri.length, 0);
+    slab.addGroup(outerTri.length, innerTri.length, 0);
+    slab.addGroup(outerTri.length + innerTri.length, wallTri.length, 0);
     slab.computeVertexNormals();
     const slabMat = mat.clone();
     slabMat.side = DoubleSide; // the hand-wound slab must never cull itself away
@@ -644,12 +663,16 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     const g = build(primer(tone), side, trim(tone));
     g.name = 'gear';
     g.userData.gear = id;
-    // A PAINT SURFACE (avatar/paint.ts): every mesh of the piece wears its
-    // slot's canvas, so the bay can place stripes, dots and squares on it
-    // and a pauldron's twin gets the same paint. Each mesh takes its own
-    // material (the bake sets a map per mesh) and the piece is NOT
-    // collapsed — the merge would drop the UVs the paint samples by.
+    // The head pieces were modelled on the old egg skull; refit them.
+    if (slot === 'head') g.scale.set(HEAD_SCALE[0] / EGG_SCALE[0], HEAD_SCALE[1] / EGG_SCALE[1], HEAD_SCALE[2] / EGG_SCALE[2]);
+    // A PAINT SURFACE (avatar/paint.ts): the piece shares its slot's
+    // canvas, laid out by THE GEAR ATLAS (avatar/gearAtlas.ts) — every
+    // mesh and every face its own patch of it, so each pauldron, plate and
+    // spike takes paint of its own, and a mark is placed in 3D where it
+    // was aimed. Each mesh takes its own material (the bake sets a map per
+    // mesh) and the piece is NOT collapsed — the merge would drop the UVs.
     const part = slot === 'head' ? 'gearHead' : slot === 'body' ? 'gearBody' : 'gearHands';
+    const paintable: Mesh[] = [];
     g.traverse((m) => {
       const mesh = m as Mesh;
       if (!mesh.isMesh) return;
@@ -658,7 +681,10 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
       if (mesh.userData.trim) return;
       mesh.userData.paintPart = part;
       mesh.userData.paintTone = tone;
+      paintable.push(mesh);
     });
+    const map = atlasGear(g, paintable, `${id}|${side}`, PAINT.canvas[part] ?? 256);
+    for (const mesh of paintable) mesh.userData.paintMap = map;
     o.add(g);
   });
 }
