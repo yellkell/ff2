@@ -100,6 +100,12 @@ import {
 import { PointerRay } from '../ui/pointer.js';
 
 const TRACK_KEY = 'gdr-track';
+/** The song list's window: rows are sized to be READ from a step back, so
+ *  the shelf scrolls rather than shrinking every title to fit. */
+const SONG_Y0 = 96;
+const SONG_PITCH = 61;
+const SONG_ROW_H = 55;
+const SONG_VISIBLE = 12;
 const DIFF_KEY = 'gdr-diff';
 
 /** Club figures track the wire critically damped — real people's motion
@@ -222,6 +228,11 @@ export class ClubSocialSystem extends createSystem({}) {
   private callError = '';
   private songsOpen = false;
   private songsKey = '';
+  /** First row of the song list's window. */
+  private songScroll = 0;
+  /** Thumbstick scroll needs a rest between steps or one flick runs the
+   *  whole list past you. */
+  private stickCool = 0;
   /** THE TIER LIST: the titan raid's difficulty, flown out beside the desk
    *  the way the records are — the row on the FIGHT tab opens it. */
   private tiers!: Panel;
@@ -617,6 +628,7 @@ export class ClubSocialSystem extends createSystem({}) {
     // Pointer: either controller ray; trigger clicks the hovered button.
     let hover: string | null = null;
     let clicked: string | null = null;
+    let songHand: 'left' | 'right' | null = null;
     for (const hand of ['left', 'right'] as const) {
       const p = this.pointers[hand];
       const rayObj = this.world.playerSpaceEntities?.raySpaces?.[hand]?.object3D;
@@ -638,6 +650,7 @@ export class ClubSocialSystem extends createSystem({}) {
       const hit = this.ray.intersectObjects(surfaces, false)[0];
       const owner = hit?.object === this.songs.mesh ? this.songs : hit?.object === this.tiers.mesh ? this.tiers : this.panel;
       const id = hit?.uv ? owner.buttonAt(hit.uv.x, hit.uv.y) : null;
+      if (hit?.object === this.songs.mesh) songHand = hand;
       p.update(delta, _o, hit ? hit.point : null, Boolean(id));
       if (!id) continue;
       hover = id;
@@ -658,6 +671,20 @@ export class ClubSocialSystem extends createSystem({}) {
       this.act(clicked);
     }
 
+    // Thumbstick scrolling on the song list — the stick of the hand that's
+    // POINTING at it, a row per flick, held deflection repeats on a
+    // cadence. The ▲▼ page by a screenful; this is the fine adjustment.
+    this.stickCool = Math.max(0, this.stickCool - delta);
+    const axes = songHand ? this.input.xr.gamepads[songHand]?.getAxesValues(InputComponent.Thumbstick) : undefined;
+    const sy = axes?.y ?? 0;
+    const flick = Math.abs(sy) > 0.6 ? (sy > 0 ? 1 : -1) : 0;
+    if (flick !== 0 && this.stickCool <= 0) {
+      this.stickCool = 0.16;
+      this.scrollSongs(flick);
+    } else if (flick === 0) {
+      this.stickCool = 0;
+    }
+
     this.paint();
     if (this.songsOpen) this.paintSongs();
     if (this.tiersOpen) this.paintTiers();
@@ -671,6 +698,10 @@ export class ClubSocialSystem extends createSystem({}) {
     (onList ? this.songs : onTiers ? this.tiers : this.panel).press(id);
     if (onList) {
       const pick = id.slice(5);
+      if (pick === 'up' || pick === 'down') {
+        this.scrollSongs(pick === 'up' ? -SONG_VISIBLE : SONG_VISIBLE);
+        return;
+      }
       if (pick !== 'close') this.setTrack(pick === 'shuffle' ? '' : pick);
       this.closeSongs();
     } else if (onTiers) {
@@ -830,7 +861,10 @@ export class ClubSocialSystem extends createSystem({}) {
     this.songs.setShown(on);
     this.songsKey = '';
     this.paintKey = '';
-    if (on) this.paintSongs();
+    if (on) {
+      this.revealCuedSong();
+      this.paintSongs();
+    }
   }
 
   private closeSongs(): void {
@@ -849,34 +883,87 @@ export class ClubSocialSystem extends createSystem({}) {
     preload(trackById(id) ?? pickRaidTrack(match.seed));
   }
 
+  /** SHUFFLE, then the raid shelf alphabetically — the same order as the
+   *  foyer's SELECT SONG, because the list is for FINDING a record. */
+  private songRows(): { id: string; title: string; bpm: string }[] {
+    const pool = [...tracksFor('raid')].sort((a, b) => a.title.localeCompare(b.title));
+    return [
+      { id: 'shuffle', title: 'SHUFFLE', bpm: '' },
+      ...pool.map((t) => ({ id: t.id, title: t.title, bpm: `${Math.round(t.bpm)} BPM` })),
+    ];
+  }
+
+  private songTop(total: number): number {
+    return Math.max(0, Math.min(this.songScroll, total - SONG_VISIBLE));
+  }
+
+  private scrollSongs(by: number): void {
+    const total = this.songRows().length;
+    const next = Math.max(0, Math.min(this.songScroll + by, Math.max(0, total - SONG_VISIBLE)));
+    if (next === this.songScroll) return;
+    this.songScroll = next;
+    this.songsKey = '';
+  }
+
+  /** Scroll the list so the cued record is inside the window. */
+  private revealCuedSong(): void {
+    const rows = this.songRows();
+    const cur = match.preferredTrack || 'shuffle';
+    const at = rows.findIndex((r) => r.id === cur);
+    if (at < 0) return;
+    const max = Math.max(0, rows.length - SONG_VISIBLE);
+    if (at < this.songScroll) this.songScroll = Math.min(at, max);
+    else if (at >= this.songScroll + SONG_VISIBLE) this.songScroll = Math.min(at - SONG_VISIBLE + 1, max);
+  }
+
   private paintSongs(): void {
-    const pool = tracksFor('raid');
+    const rows = this.songRows();
     const cur = match.preferredTrack || '';
-    const key = `${cur}#${this.hover ?? ''}#${pool.length}`;
+    const top = this.songTop(rows.length);
+    const key = `${cur}#${this.hover ?? ''}#${rows.length}#${top}`;
     if (key === this.songsKey) return;
     this.songsKey = key;
 
-    const Y0 = 104;
     const CLOSE_Y = 848;
-    const rows: { id: string; title: string; bpm: string }[] = [
-      { id: 'shuffle', title: 'SHUFFLE', bpm: '—' },
-      ...pool.map((t) => ({ id: t.id, title: t.title, bpm: String(Math.round(t.bpm)) })),
-    ];
-    // The whole shelf fits on one surface, however long the shelf gets: the
-    // pitch tightens rather than running a record off the bottom edge.
-    const PITCH = Math.min(46, (CLOSE_Y - Y0) / rows.length);
-    const ROW_H = PITCH - 4;
+    const scrolls = rows.length > SONG_VISIBLE;
+    const shown = rows.slice(top, top + SONG_VISIBLE);
     // Ghost hit-areas: the body paints the rows itself so the title and the
-    // BPM can share one line (the kit's label/sub would stack them).
-    const buttons: PanelButton[] = rows.map((r, i) => ({
+    // BPM can share one line (the kit's label/sub would stack them). Only
+    // the rows inside the window get one — a row scrolled out of sight is
+    // not a row you can point at.
+    const buttons: PanelButton[] = shown.map((r, i) => ({
       id: `song:${r.id}`,
       label: r.title,
       ghost: true,
       x: 16,
-      y: Y0 + i * PITCH,
-      w: 408,
-      h: ROW_H,
+      y: SONG_Y0 + i * SONG_PITCH,
+      w: 400,
+      h: SONG_ROW_H,
     }));
+    if (scrolls) {
+      buttons.push({
+        id: 'song:up',
+        label: '▲',
+        small: true,
+        px: 20,
+        disabled: top <= 0,
+        x: 328,
+        y: 26,
+        w: 46,
+        h: 44,
+      });
+      buttons.push({
+        id: 'song:down',
+        label: '▼',
+        small: true,
+        px: 20,
+        disabled: top >= rows.length - SONG_VISIBLE,
+        x: 378,
+        y: 26,
+        w: 46,
+        h: 44,
+      });
+    }
     buttons.push({
       id: 'song:close',
       label: 'CLOSE',
@@ -895,22 +982,17 @@ export class ClubSocialSystem extends createSystem({}) {
         g.font = font(600, 22);
         g.letterSpacing = '4px';
         g.fillStyle = UI.dim;
-        g.fillText('SELECT SONG', 22, 50);
-        g.letterSpacing = '1.5px';
-        g.font = font(500, 15);
-        g.fillStyle = UI.faint;
-        g.textAlign = 'right';
-        g.fillText('BPM', 424, 50);
+        g.fillText('SELECT SONG', 22, 48);
         g.letterSpacing = '0px';
         g.fillStyle = UI.lineFaint;
-        g.fillRect(22, 76, 402, 2);
+        g.fillRect(22, 80, 402, 2);
 
-        rows.forEach((r, i) => {
-          const y = Y0 + i * PITCH;
+        shown.forEach((r, i) => {
+          const y = SONG_Y0 + i * SONG_PITCH;
           const selected = cur === (r.id === 'shuffle' ? '' : r.id);
           const hov = this.songs.hoverOf(`song:${r.id}`);
           g.beginPath();
-          g.roundRect(16, y, 408, ROW_H, 9);
+          g.roundRect(16, y, 400, SONG_ROW_H, 10);
           g.fillStyle = selected ? UI.accentFaint : `rgba(255,255,255,${(0.03 + 0.05 * hov).toFixed(3)})`;
           g.fill();
           if (selected) {
@@ -919,21 +1001,37 @@ export class ClubSocialSystem extends createSystem({}) {
             g.stroke();
             g.fillStyle = UI.accent;
             g.beginPath();
-            g.roundRect(21, y + 8, 4, ROW_H - 16, 2);
+            g.roundRect(21, y + 9, 4, SONG_ROW_H - 18, 2);
             g.fill();
           }
-          const cy = y + ROW_H / 2 + 1;
+          const cy = y + SONG_ROW_H / 2 + 1;
           g.textAlign = 'left';
-          g.font = font(600, Math.min(23, ROW_H - 19));
+          g.font = font(600, 29);
           g.letterSpacing = '1px';
           g.fillStyle = selected ? UI.textHi : UI.text;
-          g.fillText(r.title, 38, cy, 286);
+          g.fillText(r.title, 36, cy, 262);
           g.letterSpacing = '0px';
           g.textAlign = 'right';
-          g.font = font(500, 20);
+          g.font = font(500, 18);
           g.fillStyle = UI.dim;
-          g.fillText(r.bpm, 408, cy);
+          g.fillText(r.bpm, 404, cy);
         });
+
+        // The scrollbar: where the window sits on the whole shelf.
+        if (scrolls) {
+          const trackY = SONG_Y0;
+          const trackH = SONG_VISIBLE * SONG_PITCH - (SONG_PITCH - SONG_ROW_H);
+          const thumbH = Math.max(36, (trackH * SONG_VISIBLE) / rows.length);
+          const thumbY = trackY + ((trackH - thumbH) * top) / (rows.length - SONG_VISIBLE);
+          g.fillStyle = UI.lineFaint;
+          g.beginPath();
+          g.roundRect(422, trackY, 5, trackH, 2.5);
+          g.fill();
+          g.fillStyle = UI.dim;
+          g.beginPath();
+          g.roundRect(422, thumbY, 5, thumbH, 2.5);
+          g.fill();
+        }
       },
       buttons,
       this.hover,
