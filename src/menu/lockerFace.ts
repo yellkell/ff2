@@ -117,7 +117,12 @@ function tiles(locker: boolean): Tile[] {
     });
   }
   const top = GRID_TOP;
-  const rows = Math.max(1, Math.ceil(picked.length / COLS));
+  // Three across; a shelf of more than nine goes FOUR across, so every
+  // tile keeps its full height (squeezed into a fourth row, a tile's name
+  // and price ran into each other).
+  const cols = picked.length > COLS * 3 ? COLS + 1 : COLS;
+  const tileW = cols === COLS ? TILE_W : (INNER - (cols - 1) * GAP) / cols;
+  const rows = Math.max(1, Math.ceil(picked.length / cols));
   // Three rows fit at full height; a deeper shelf shares the same span.
   const span = FOOT_Y - 24 - top;
   const step = rows <= 3 ? 196 : Math.floor(span / rows);
@@ -125,9 +130,9 @@ function tiles(locker: boolean): Tile[] {
   return picked.map((p, i) => ({
     id: `shop-${p.kind === 'gear' ? 'gr' : 'pf'}-${p.index}`,
     ...p,
-    x: M + (i % COLS) * (TILE_W + GAP),
-    y: top + Math.floor(i / COLS) * step,
-    w: TILE_W,
+    x: M + (i % cols) * (tileW + GAP),
+    y: top + Math.floor(i / cols) * step,
+    w: tileW,
     h,
   }));
 }
