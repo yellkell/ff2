@@ -212,21 +212,25 @@ console.log('=== the wire: pack / unpack ===');
   // own patch of the canvas — the two PAULDRONS take paint separately —
   // and a gear mark is a decal on the piece, found where it was placed.
   console.log('\n=== the gear atlas: each pad its own ===');
-  await page.evaluate(() => window.__ff2.gear.equip('pauldrons'));
-  await page.waitForTimeout(700); // the rig re-dresses, the bay re-collects
-  const pads = await page.evaluate(() => {
-    const g = window.__ff2.bayGearProbe;
-    const p = window.__ff2.paint;
-    p.clear();
-    const n = g.count();
-    const a = g.spot(0);
-    const b = g.spot(1);
-    p.grant('dot', 9);
-    const placed = !!a && p.take('dot', 9) && p.place(a.part, a.u, a.v);
-    return { n, placed, onA: g.at(0), onB: g.at(1), distinct: !!a && !!b && (Math.abs(a.u - b.u) > 0.02 || Math.abs(a.v - b.v) > 0.02) };
-  });
-  check('the pauldrons are two paintable pieces with their own patches of canvas', pads.n === 2 && pads.distinct, JSON.stringify(pads));
-  check('a dot on the LEFT pad is on the left pad, not the right', pads.placed && pads.onA === 0 && pads.onB === -1, JSON.stringify(pads));
+  // Each pad is a CAP and a LAME (its rims are trim), left pad first.
+  for (const id of ['pauldrons', 'spikepads']) {
+    await page.evaluate((g) => window.__ff2.gear.equip(g), id);
+    await page.waitForTimeout(700); // the rig re-dresses, the bay re-collects
+    const pads = await page.evaluate(() => {
+      const g = window.__ff2.bayGearProbe;
+      const p = window.__ff2.paint;
+      p.clear();
+      const n = g.count();
+      const half = Math.floor(n / 2);
+      const a = g.spot(0);
+      const b = g.spot(half);
+      p.grant('dot', 9);
+      const placed = !!a && p.take('dot', 9) && p.place(a.part, a.u, a.v);
+      return { n, placed, onA: g.at(0), onB: g.at(half), distinct: !!a && !!b && (Math.abs(a.u - b.u) > 0.02 || Math.abs(a.v - b.v) > 0.02) };
+    });
+    check(`${id}: the two pads have their own patches of canvas`, pads.n >= 4 && pads.n % 2 === 0 && pads.distinct, JSON.stringify(pads));
+    check(`${id}: a dot on one pad is on that pad, not the other`, pads.placed && pads.onA === 0 && pads.onB === -1, JSON.stringify(pads));
+  }
   await page.evaluate(() => window.__ff2.gear.equip('chestplate'));
   await page.waitForTimeout(700);
   const plate = await page.evaluate(() => {

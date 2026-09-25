@@ -445,6 +445,18 @@ carried over verbatim: everything in it still applies to this code.
   enough for every frame. The SPLOTCH is retired (owned and worn ones
   became dots), the TRIANGLE joins (wire format 4), and bought dots and
   squares no longer vanish from the locker on a restart.
+- **GEAR, POLISHED — and SPIKED PADS** (`avatar/gear.ts`). New on the
+  BODY shelf: **SPIKED PADS** ($220) — layered shoulder plate, a size up
+  from the pauldrons, three spikes a side driven up through each cap from
+  trim collars. The PAULDRONS share their build (`shoulderPad`): a domed
+  cap, a lame overlapping from under it and a trim rim on each edge,
+  SEATED on the shoulder's slope instead of standing clear of it as a
+  pair of shells. The CHESTPLATE is framed in trim with a raised ridge down
+  the sternum, so it reads against the body; the BELT is a band shaped to
+  the waist pinch with rolled edges and a buckle, not a hoop; the WINGS
+  are tapered blades, not slats; the GAUNTLETS' cuff hugs the wrist; the
+  CROWN's band is a band, not a wire. `npm run gear:gallery` renders every
+  piece worn, front and back, on one sheet.
 - **PAINT P8 — gear as decals, and a rounder head** (docs/paint.md §4,
   P8; `avatar/gearAtlas.ts`). Every piece of gear lays out its own paint
   atlas when it is built — each mesh and each face a patch sized by its

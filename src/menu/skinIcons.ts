@@ -240,6 +240,23 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         for (const s of [-1, 1]) ctx.ellipse(cx + s * r * 0.58, cy - r * 0.5, r * 0.26, r * 0.18, 0, Math.PI, Math.PI * 2);
         ctx.fill();
         break;
+      case 'spikepads':
+        // The pads, with three spikes rising off each.
+        for (const s of [-1, 1]) ctx.ellipse(cx + s * r * 0.58, cy - r * 0.48, r * 0.3, r * 0.2, 0, Math.PI, Math.PI * 2);
+        ctx.fill();
+        for (const s of [-1, 1]) {
+          for (const [dx, h, w] of [[0.06, 0.5, 0.07], [-0.14, 0.32, 0.055], [0.26, 0.32, 0.055]] as const) {
+            const bx = cx + s * r * (0.58 + dx);
+            const by = cy - r * 0.6;
+            ctx.beginPath();
+            ctx.moveTo(bx - r * w, by);
+            ctx.lineTo(bx + s * r * 0.1, by - r * h);
+            ctx.lineTo(bx + r * w, by);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        break;
       case 'chestplate':
         ctx.moveTo(cx - r * 0.3, cy - r * 0.35);
         ctx.lineTo(cx + r * 0.3, cy - r * 0.35);

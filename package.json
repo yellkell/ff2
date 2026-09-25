@@ -30,7 +30,8 @@
     "check:voidstep": "node tools/voidstep-check.mjs",
     "check:tv": "node tools/tv-check.mjs",
     "check:promo": "node tools/promo-check.mjs",
-    "check:bank": "node tools/bank-check.mjs"
+    "check:bank": "node tools/bank-check.mjs",
+    "gear:gallery": "node tools/gear-gallery.mjs"
   },
   "dependencies": {
     "@iwsdk/core": "0.4.2",

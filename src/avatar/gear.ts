@@ -2,8 +2,10 @@
  * GEAR — the attachments shop (DESIGN.md §5.2: "shapes, never colour").
  *
  * Coins buy SHAPES that bolt onto THE BLANK: crests, antennae, horns and
- * halos for the head; pauldrons, a chestplate, a TAIL and a belt for the
- * body; knuckle spikes and cuffs for the hands. (A COLLAR and a dorsal
+ * halos for the head; pauldrons, SPIKED PADS, a chestplate, a TAIL and a
+ * belt for the body; knuckle spikes and cuffs for the hands. Every piece
+ * can be seen worn, front and back, on one sheet: `npm run gear:gallery`
+ * (tools/gear-gallery.mjs, with the dev server up). (A COLLAR and a dorsal
  * RIDGE were sold for a while and withdrawn — the collar never sat right
  * on the loft, and the ridge was a 24 mm strip laid along the spine using
  * the loft's half-depths while ignoring the forward LEAN of its upper
@@ -31,7 +33,7 @@
  * toward −z, the cuff toward +z.
  */
 
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, DoubleSide, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, type Object3D, SphereGeometry, TorusGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, type Object3D, Quaternion, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
 import { BODY_IK, PAINT } from '../config.js';
 import { EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
 import { atlasGear } from './gearAtlas.js';
@@ -74,6 +76,8 @@ export const GEAR: GearDef[] = [
   { id: 'antlers', name: 'ANTLERS', slot: 'head', price: 200, blurb: "a stag's pair, branched" },
   { id: 'wings', name: 'WINGS', slot: 'body', price: 320, blurb: 'swept plates off the shoulder blades' },
   { id: 'claws', name: 'CLAWS', slot: 'hands', price: 200, blurb: 'three talons over the knuckles' },
+  // ── the third wave (appended, as ever) ──
+  { id: 'spikepads', name: 'SPIKED PADS', slot: 'body', price: 220, blurb: 'layered plates, three spikes a side' },
 ];
 
 export function gearDef(id: string): GearDef | undefined {
@@ -202,6 +206,91 @@ function taperedTube(pts: Vector3[], r0: number, r1: number, segs: number, sides
 }
 
 const R = BODY_IK.headRadius;
+const UP = new Vector3(0, 1, 0);
+
+/**
+ * ONE SHOULDER'S ARMOUR — the pauldron both pads are built from. A domed
+ * CAP over the shoulder point, a LAME (a second, wider band of plate)
+ * overlapping out from under its edge, and a rim of trim along each lower
+ * edge so the plates read as plates and not as one lump. It is SEATED:
+ * centred just inside the shoulder point (BODY_RINGS' widest ring is
+ * ±0.252 at y 0.395) and tilted to the slope of the shoulder, so it
+ * rests on the body instead of standing clear of it like a shell.
+ * `k` scales the whole pad; `spikes` studs the cap (the SPIKED PADS).
+ */
+function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, s: 1 | -1, k: number, spikes: boolean): Group {
+  const pad = new Group();
+  pad.position.set(s * 0.2, 0.388, 0.004);
+  pad.rotation.z = -s * 0.36;
+  // THE CAP: an ellipsoid dome, (a, b, c) its half-extents.
+  const a = 0.104 * k;
+  const b = 0.07 * k;
+  const c = 0.118 * k;
+  const capY = -0.018 * k;
+  const cap = new Mesh(new SphereGeometry(1, 28, 10, 0, Math.PI * 2, 0, Math.PI * 0.43), mat);
+  cap.scale.set(a, b, c);
+  cap.position.y = capY;
+  pad.add(cap);
+  // THE LAME: a band of the same dome, a size up, lower, overlapping.
+  const lame = new Mesh(new SphereGeometry(1, 28, 4, 0, Math.PI * 2, Math.PI * 0.4, Math.PI * 0.17), mat);
+  lame.scale.set(a * 1.07, b, c * 1.06);
+  lame.position.y = capY - 0.012 * k;
+  pad.add(lame);
+  // THE RIMS: a thin roll of trim along each plate's lower edge.
+  const rim = (theta: number, sx: number, sz: number, y: number): void => {
+    const ring = asTrim(new Mesh(new TorusGeometry(1, 0.045, 6, 40), trimMat));
+    ring.rotation.x = Math.PI / 2;
+    const rr = Math.sin(theta);
+    ring.scale.set(sx * rr, sz * rr, 0.1 * k);
+    ring.position.y = y + Math.cos(theta) * b;
+    pad.add(ring);
+  };
+  rim(Math.PI * 0.43, a, c, capY);
+  rim(Math.PI * 0.57, a * 1.07, c * 1.06, capY - 0.012 * k);
+  if (spikes) {
+    // Three spikes up out of the cap: the big one off the top, leaning
+    // out over the arm, and a smaller one fore and aft. Each rises along
+    // the dome's own normal from a trim collar, so it looks driven
+    // through the plate, not glued to it.
+    const spec: Array<[number, number, number, number]> = [
+      [s * 0.42, 1, 0, 0.1],
+      [s * 0.62, 0.8, -0.62, 0.07],
+      [s * 0.62, 0.8, 0.62, 0.07],
+    ];
+    for (const [dx, dy, dz, len] of spec) {
+      const dir = new Vector3(dx, dy, dz).normalize();
+      // Where that direction leaves the ellipsoid, and the normal there.
+      const t = 1 / Math.sqrt((dir.x / a) ** 2 + (dir.y / b) ** 2 + (dir.z / c) ** 2);
+      const at = dir.clone().multiplyScalar(t).add(new Vector3(0, capY, 0));
+      const n = new Vector3((dir.x * t) / (a * a), (dir.y * t) / (b * b), (dir.z * t) / (c * c)).normalize();
+      const q = new Quaternion().setFromUnitVectors(UP, n);
+      const L = len * k;
+      const spike = new Mesh(new ConeGeometry(0.014 * k, L, 12), mat);
+      spike.quaternion.copy(q);
+      spike.position.copy(at).addScaledVector(n, L / 2 - 0.003);
+      pad.add(spike);
+      const collar = asTrim(new Mesh(new TorusGeometry(0.0155 * k, 0.0035 * k, 6, 16), trimMat));
+      collar.quaternion.copy(q).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2));
+      collar.position.copy(at).addScaledVector(n, 0.002);
+      pad.add(collar);
+    }
+  }
+  return pad;
+}
+
+/** A feather-blade outline, root at the origin, tip at +x (mirrored for
+ *  s = −1): full near the root, tapering to a point that lifts a hair. */
+function bladeShape(len: number, w: number, s: 1 | -1): Shape {
+  const sh = new Shape();
+  const X = (x: number): number => x * s;
+  sh.moveTo(X(0), -w * 0.32);
+  sh.quadraticCurveTo(X(len * 0.2), -w * 0.56, X(len * 0.62), -w * 0.34);
+  sh.quadraticCurveTo(X(len * 0.9), -w * 0.18, X(len), w * 0.08);
+  sh.quadraticCurveTo(X(len * 0.72), w * 0.5, X(len * 0.2), w * 0.5);
+  sh.quadraticCurveTo(X(len * 0.04), w * 0.46, X(0), w * 0.3);
+  sh.closePath();
+  return sh;
+}
 
 type Builder = (mat: MeshStandardMaterial, side: 1 | -1, trim: MeshStandardMaterial) => Group;
 
@@ -339,18 +428,15 @@ const BUILDERS: Record<string, Builder> = {
   },
 
   /* body — origin at the hips, +y up, front −z, shoulders at (±0.126, 0.395) */
-  pauldrons: (mat) => {
+  pauldrons: (mat, _side, trimMat) => {
+    // Plate on both shoulders — cap, lame and rims (shoulderPad), seated
+    // on the shoulder. (They were bare half-spheres standing clear of the
+    // body, and read as a pair of shells.)
     const g = new Group();
-    for (const s of [-1, 1]) {
-      const pad = new Mesh(new SphereGeometry(0.1, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), mat);
-      pad.scale.set(1.1, 0.8, 1.05);
-      pad.position.set(s * 0.215, 0.385, 0);
-      pad.rotation.z = -s * 0.45;
-      g.add(pad);
-    }
+    for (const s of [-1, 1] as const) g.add(shoulderPad(mat, trimMat, s, 1, false));
     return g;
   },
-  chestplate: (mat) => {
+  chestplate: (mat, _side, trimMat) => {
     const g = new Group();
     // A shell LOFTED over the chest's own profile (the body's ring table,
     // shoulder line to waist), pushed a whisker proud of the surface and
@@ -435,6 +521,28 @@ const BUILDERS: Record<string, Builder> = {
     const slabMat = mat.clone();
     slabMat.side = DoubleSide; // the hand-wound slab must never cull itself away
     g.add(new Mesh(slab, slabMat));
+    // The plate was the body's own white laid on the body's own white, and
+    // read as nothing but its edge. A roll of TRIM round all four edges
+    // draws its outline, and a raised RIDGE down the sternum
+    // (in the plate's primer, so it takes paint) gives it a keel.
+    const along = (row: number | null, col: number | null, out: number): Vector3[] => {
+      const pts: Vector3[] = [];
+      const count = row !== null ? cols + 1 : rowsN;
+      for (let i = 0; i < count; i++) {
+        const v = row !== null ? row * (cols + 1) + i : i * (cols + 1) + (col as number);
+        const x = pos[v * 3];
+        const z = pos[v * 3 + 2];
+        const len = Math.hypot(x, z) || 1;
+        pts.push(new Vector3(x + (x / len) * out, pos[v * 3 + 1], z + (z / len) * out));
+      }
+      return pts;
+    };
+    // All four edges: a frame, so the plate's outline reads from any side.
+    const edges: Vector3[][] = [along(0, null, 0.002), along(rowsN - 1, null, 0.002), along(null, 0, 0.002), along(null, cols, 0.002)];
+    for (const pts of edges) {
+      g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(pts), pts.length * 3, 0.0055, 6), trimMat)));
+    }
+    g.add(new Mesh(new TubeGeometry(new CatmullRomCurve3(along(null, cols / 2, 0.002)), 16, 0.007, 8), mat));
     return g;
   },
   tail: (mat) => {
@@ -468,16 +576,33 @@ const BUILDERS: Record<string, Builder> = {
     g.add(new Mesh(taperedTube(pts, 0.046, 0.0015, 34, 7), faceted));
     return g;
   },
-  belt: (mat) => {
+  belt: (mat, _side, trimMat) => {
+    // A BAND round the waist, not a hoop: an open ring the shape of the
+    // waist pinch itself (BODY_RINGS: ±0.090 by ±0.074 at y 0.13) set a
+    // centimetre proud, flaring a touch to the hips, with a rolled edge
+    // top and bottom and a buckle — a trim frame round a primer plate —
+    // on the front. (It was a torus scaled to an ellipse: from anywhere
+    // but square on it read as a hula hoop.)
     const g = new Group();
-    const band = new Mesh(new TorusGeometry(0.058, 0.016, 8, 40), mat);
-    band.rotation.x = Math.PI / 2;
-    band.scale.set(1.68, 1, 1.38);
-    band.position.set(0, 0.13, 0);
+    const W = 0.101;
+    const D = 0.085;
+    const band = new Mesh(new CylinderGeometry(1, 1.035, 0.034, 56, 1, true), mat);
+    band.scale.set(W, 1, D);
+    band.position.y = 0.13;
     g.add(band);
-    const buckle = new Mesh(new BoxGeometry(0.04, 0.034, 0.014), mat);
-    buckle.position.set(0, 0.13, -0.086);
-    g.add(buckle);
+    for (const [y, k] of [[0.147, 1.0], [0.113, 1.035]] as const) {
+      const edge = new Mesh(new TorusGeometry(1, 0.0042 / W, 6, 56), mat);
+      edge.rotation.x = Math.PI / 2;
+      edge.scale.set(W * k, D * k, W);
+      edge.position.y = y;
+      g.add(edge);
+    }
+    const frame = asTrim(new Mesh(new BoxGeometry(0.042, 0.032, 0.008), trimMat));
+    frame.position.set(0, 0.13, -D - 0.004);
+    g.add(frame);
+    const plate = new Mesh(new BoxGeometry(0.03, 0.02, 0.004), mat);
+    plate.position.set(0, 0.13, -D - 0.009);
+    g.add(plate);
     return g;
   },
   /* hands — palm at the origin, fingers −z, cuff +z (hands.ts) */
@@ -515,12 +640,16 @@ const BUILDERS: Record<string, Builder> = {
       g.add(ridge);
     }
     // The cuff: a short frustum open at both ends, wider toward the arm.
-    const cuff = asTrim(new Mesh(new CylinderGeometry(0.052, 0.06, 0.05, 24, 1, true), trimMat));
+    // FITTED to the wrist: flattened top to bottom (its local z is the
+    // hand's vertical once it is laid along the arm) so it hugs the
+    // hand's own cuff box, 0.07 × 0.032, instead of hanging round it as
+    // a dark hoop twice its height.
+    const cuff = asTrim(new Mesh(new CylinderGeometry(0.04, 0.045, 0.03, 28, 1, true), trimMat));
     cuff.material = trimMat.clone();
     (cuff.material as MeshStandardMaterial).side = DoubleSide;
     cuff.rotation.x = Math.PI / 2;
-    cuff.position.set(0, 0.0, 0.066);
-    cuff.scale.set(1, 0.72, 1);
+    cuff.position.set(0, 0.0, 0.07);
+    cuff.scale.set(1, 1, 0.5);
     g.add(cuff);
     return g;
   },
@@ -534,9 +663,12 @@ const MORE_BUILDERS: Record<string, Builder> = {
     // of metal round the skull — with six points rising off it, the one
     // dead ahead tallest, each leaning a touch outward.
     const g = new Group();
-    const band = asTrim(new Mesh(new TorusGeometry(R * 0.86, R * 0.05, 8, 40), trimMat));
-    band.rotation.x = Math.PI / 2;
-    band.position.y = R * 0.62;
+    // The band is a band — a short open ring a hair wider at its foot,
+    // the shape of the brow it sits on — where it was a wire.
+    const bandMat = trimMat.clone();
+    bandMat.side = DoubleSide;
+    const band = asTrim(new Mesh(new CylinderGeometry(R * 0.84, R * 0.89, R * 0.17, 44, 1, true), bandMat));
+    band.position.y = R * 0.64;
     band.scale.set(0.9, 1, 1.02);
     g.add(band);
     for (let i = 0; i < 6; i++) {
@@ -569,20 +701,30 @@ const MORE_BUILDERS: Record<string, Builder> = {
     return g;
   },
   wings: (mat) => {
-    // Two fans of swept plates off the shoulder blades: three per side,
+    // Two fans of swept blades off the shoulder blades: three per side,
     // the longest on top, each pivoting at the blade and raked up, out
     // and back — a silhouette that reads from across the arena.
     const g = new Group();
-    for (const s of [-1, 1]) {
+    for (const s of [-1, 1] as const) {
       for (let i = 0; i < 3; i++) {
         const len = 0.36 - i * 0.06;
-        const plate = new Mesh(new BoxGeometry(len, 0.072 - i * 0.012, 0.008), mat);
+        // A BLADE, not a slat: full at the root, tapering to a lifted
+        // point, a few millimetres thick with its edges eased.
+        const blade = new ExtrudeGeometry(bladeShape(len, 0.08 - i * 0.012, s), {
+          depth: 0.005,
+          bevelEnabled: true,
+          bevelThickness: 0.0015,
+          bevelSize: 0.0015,
+          bevelSegments: 1,
+          curveSegments: 10,
+        });
+        blade.translate(0, 0, -0.0025);
+        const plate = new Mesh(blade, mat);
         const pivot = new Group();
         pivot.position.set(s * 0.11, 0.36 - i * 0.02, 0.09);
         // Roll lifts the plate; yaw sweeps it back (the back is +z). The
         // top plate stands nearly upright, the lower two fan out under it.
         pivot.rotation.set(0, -s * (0.55 + i * 0.22), s * (1.15 - i * 0.34));
-        plate.position.x = (s * len) / 2;
         pivot.add(plate);
         g.add(pivot);
       }
@@ -609,7 +751,20 @@ const MORE_BUILDERS: Record<string, Builder> = {
     return g;
   },
 };
-Object.assign(BUILDERS, MORE_BUILDERS);
+/* ── the third wave ──────────────────────────────────────────────────── */
+
+const THIRD_BUILDERS: Record<string, Builder> = {
+  spikepads: (mat, _side, trimMat) => {
+    // SPIKED PADS: the pauldron's cap-lame-rim armour a size up, with
+    // three spikes driven up through each cap from trim collars — the big
+    // one off the top, leaning out over the arm, one fore, one aft.
+    const g = new Group();
+    for (const s of [-1, 1] as const) g.add(shoulderPad(mat, trimMat, s, 1.14, true));
+    return g;
+  },
+};
+
+Object.assign(BUILDERS, MORE_BUILDERS, THIRD_BUILDERS);
 
 /** The rig groups gear can hang off, by the names buildBoxer gives them. */
 const SLOT_OF_NAME: Record<string, GearSlot> = {

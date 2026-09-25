@@ -72,7 +72,7 @@ function paintColours(wire, max = 3) {
 const GEAR_WORDS = {
   crest: 'a CREST bolted nose to nape',
   antennae: 'twin ANTENNAE off the temples',
-  horns: 'a bull\'s pair of HORNS',
+  horns: 'a ram\'s curl of HORNS',
   halo: 'a HALO, floating on nothing',
   mohawk: 'a MOHAWK of spikes',
   visorband: 'a VISOR BAND across the eyes',
@@ -84,6 +84,12 @@ const GEAR_WORDS = {
   cuffs: 'CUFFS at the wrists',
   knuckles: 'KNUCKLE spikes',
   gauntlets: 'GAUNTLETS over the fists',
+  tail: 'a TAIL off the small of the back',
+  crown: 'a CROWN, six points',
+  antlers: 'a stag\'s ANTLERS',
+  wings: 'WINGS off the shoulder blades',
+  claws: 'CLAWS over the knuckles',
+  spikepads: 'SPIKED PADS on both shoulders',
 };
 const PAD_WORDS = {
   ember: 'SMOULDER (charred oak)',
