@@ -158,10 +158,12 @@ export type MenuAction =
   /** The body's ONE choice: start all white, or all black. */
   | 'base-white'
   | 'base-black'
-  /** Open / close THE PAINT BAY (the stripe-and-splotch modal). */
+  /** The customization plate's PAINT tab (menu/paintbay.ts), and CLOSE
+   *  from it — which closes the whole plate, like the other two faces'. */
   | 'open-paintbay'
   | 'paintbay-close'
-  /** The header tab pair: STORE (all items) ⇄ LOCKER (your inventory). */
+  /** The header tabs: LOCKER (what you own) · STORE (what you don't) ·
+   *  PAINT (the paint tab above). */
   | 'open-shop'
   | 'open-locker'
   /** Switch the shop / locker tab. */
@@ -172,6 +174,8 @@ export type MenuAction =
   | 'gear-body'
   | 'gear-hands'
   | 'tab-colour'
+  /** The STORE's paint racks (its `pb:buy-*` ids route through paintbay.ts). */
+  | 'tab-paint'
   /** The PLATFORMS board's shelves (avatar/skins.ts DECK_SHELVES). */
   | `shelf-${string}`
   /** THE BANK: iron-dollars for money (net/bank.ts). `tab-bank` is the

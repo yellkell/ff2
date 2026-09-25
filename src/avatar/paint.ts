@@ -1,26 +1,38 @@
 /**
- * THE PAINT, phase P1 — the render pipeline (docs/paint.md §4, §7).
+ * THE PAINT — the model, the wire, the locker and the bake (docs/paint.md).
  *
  * A LOOK is the base tone plus an ordered list of placed paint units —
- * stripes and splotches — each quantized to bytes by construction (u, v,
- * angle, len, wid all live in 0..255; colour and variant are indices), so
- * the caps ARE the validation and the same data renders the same
- * everywhere. This module owns:
+ * stripes, dots, squares and triangles — each quantized to bytes by
+ * construction (u, v, angle, len, wid all live in 0..255; colour and
+ * variant are indices), so the caps ARE the validation and the same data
+ * renders the same everywhere. This module owns:
  *
- *   - the Look model + localStorage persistence (yours only, for now —
- *     the wire ride is P3),
- *   - the BAKE: each mannequin paint surface (the skull and the one body
- *     loft — meshes tagged `userData.paintPart`, exempted from the static
- *     collapse) gets a per-part canvas painted base-tone-first, then
- *     every unit oldest-first, uploaded ONCE as the material's map. A
- *     repaint happens only when the look changes; at runtime a painted
- *     fighter costs exactly what a blank costs.
+ *   - the Look model + localStorage persistence,
+ *   - the wire form every room carries,
+ *   - the locker (owned, unplaced units) and THE HAND (the unit on the ray),
+ *   - the BAKE: each paint surface (meshes tagged `userData.paintPart`)
+ *     gets a per-part canvas, base tone first, then every unit oldest
+ *     first, uploaded ONCE as the material's map. A repaint happens only
+ *     when the look changes; at runtime a painted fighter costs exactly
+ *     what a blank costs.
  *
- * Wrap handling: u runs 0..1 around the body (the lofts carry
- * seam-duplicated cylindrical UVs; the head is a plain sphere unwrap), so
- * every unit draws three times at u−1, u, u+1 and seams never cut a
- * stripe. Front of the body sits at u = 0.75 (the lofts start on +x and
- * wind through −z at three-quarters).
+ * TRUE TO SIZE (THE CHART). The body's texture is not square on the body:
+ * u runs round each ring by ANGLE, so the front of the shoulders spans
+ * almost twice the metres per texel that its height does, the waist a
+ * good deal less, and the skull pinches to nothing at the crown. A shape
+ * drawn flat on that canvas came out stretched — dots as ovals, squares
+ * as oblongs, a stripe fat in one place and thin in the next. So every
+ * unit is now rasterized in METRES: each surface carries a chart of its
+ * own geometry (ring size and arc length per v), every texel near a unit
+ * is measured back to the unit's centre along the surface, and the shape
+ * is a signed distance in those metres, antialiased by the texel's own
+ * size. A dot is round wherever it lands, a stripe keeps its width round
+ * the side, and a mark on the crown is a disc, not a smear. Gear and the
+ * hands have no chart (their UVs are the generators' own) and keep the
+ * flat canvas measure they always had.
+ *
+ * Front of the body sits at u = 0.75 (the lofts start on +x and wind
+ * through −z at three-quarters).
  *
  * The bake keys off the material's own tone tag (`userData.paintTone`),
  * so a look bakes correctly onto the white body and the onyx body alike —
@@ -28,11 +40,17 @@
  */
 
 import { CanvasTexture, Mesh, MeshStandardMaterial, SRGBColorSpace, type Object3D } from 'three';
-import { PAINT } from '../config.js';
-import { BODY_V_SPLIT } from './mannequin.js';
+import { BODY_IK, PAINT } from '../config.js';
+import { BODY_RINGS, BODY_V_SPLIT, HEAD_SCALE } from './mannequin.js';
 
-export type PaintKind = 'stripe' | 'splotch' | 'dot' | 'square';
-export const PAINT_KINDS: readonly PaintKind[] = ['stripe', 'splotch', 'dot', 'square'];
+/**
+ * The shapes. SPLOTCH is retired: nothing sells it, and a splotch anyone
+ * already owns or wears reads as a DOT from now on (cleanUnit, loadInv) —
+ * a clean mark where there was a smudge. TRIANGLE is the newest: the
+ * simplest shape the kit was missing, and the one that points.
+ */
+export type PaintKind = 'stripe' | 'dot' | 'square' | 'triangle';
+export const PAINT_KINDS: readonly PaintKind[] = ['stripe', 'dot', 'square', 'triangle'];
 /** The paint surfaces: THE BLANK's head and its one body loft, the three
  *  GEAR slots (avatar/gear.ts), and YOUR HANDS (avatar/hands.ts) — the
  *  ones you punch with, which are the only part of you you look at all
@@ -91,7 +109,10 @@ function bandV(v: number, band: 'upper' | 'lower'): number {
 function cleanUnit(raw: unknown): PlacedPaint | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const r = raw as Record<string, unknown>;
-  const kind = (PAINT_KINDS as readonly unknown[]).includes(r.kind) ? (r.kind as PaintKind) : null;
+  // A retired SPLOTCH comes back as a DOT of about the same reach (a
+  // splotch's radius was 0.3 of its len, a dot's is 0.5).
+  const splotch = r.kind === 'splotch';
+  const kind = splotch ? 'dot' : (PAINT_KINDS as readonly unknown[]).includes(r.kind) ? (r.kind as PaintKind) : null;
   // 'chest'/'pelvis' are the pre-merge parts: fold them onto the body,
   // upper band and lower band, so a saved look keeps its picture.
   const legacy = r.part === 'chest' ? 'upper' : r.part === 'pelvis' ? 'lower' : null;
@@ -106,7 +127,7 @@ function cleanUnit(raw: unknown): PlacedPaint | null {
     u: clamp01(r.u),
     v: legacy ? bandV(clamp01(r.v), legacy) : clamp01(r.v),
     angle: clamp01(r.angle),
-    len: clamp01(r.len),
+    len: splotch ? clamp01(r.len) * 0.6 : clamp01(r.len),
     wid: clamp01(r.wid),
   };
 }
@@ -142,7 +163,7 @@ export function clearLook(): void {
 //
 // One unit is exactly 8 bytes, every field quantized by construction:
 //
-//   b0  kind (bits 0..1) | part index (bits 2..7 — see WIRE_PARTS)
+//   b0  kind (bits 0..2) | part index (bits 3..7 — see WIRE_PARTS)
 //   b1  colour index          b2  variant
 //   b3  u ·255   b4  v ·255   b5  angle ·255   b6  len ·255   b7  wid ·255
 //
@@ -154,23 +175,26 @@ export function clearLook(): void {
 // bare base tone — never to an error.
 
 /**
- * FORMAT 3 — four kinds, five parts. b0 carries the kind in two bits and
- * the part index above them. Every older string still reads:
+ * FORMAT 4 — the TRIANGLE needed a fifth kind, so the kind takes three
+ * bits and the part the five above them. Every older string still reads:
+ *   v3 (four kinds, six parts): kind in bits 0..1, part in bits 2+;
  *   v2 (the merged body): kind in bit 0, part in bits 1+ over head/body;
  *   v1 (three lofts): the same layout over head/chest/pelvis — cleanUnit
  *      folds chest/pelvis onto the body's upper and lower bands.
- * So a look packed before any of this still paints the fighter it was
- * made for.
+ * A SPLOTCH in any of them reads as a dot (cleanUnit). So a look packed
+ * before any of this still paints the fighter it was made for.
  */
-const WIRE_FORMAT = 3;
+const WIRE_FORMAT = 4;
 /** Part order ON THE WIRE — append-only. */
 const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand'];
 /** Format 2's part order (the merged body, before gear was paintable). */
 const WIRE_PARTS_V2: PaintPart[] = ['head', 'body'];
 /** Format 1's part order, kept only to read looks packed before the merge. */
 const WIRE_PARTS_V1 = ['head', 'chest', 'pelvis'];
-/** Kind order on the wire (v1/v2 knew only the first two, in bit 0). */
-const WIRE_KINDS: PaintKind[] = ['stripe', 'splotch', 'dot', 'square'];
+/** Kind order on the wire — append-only; index 1 is the retired splotch,
+ *  never written again but still read (as a dot). v1/v2 knew only the
+ *  first two, in bit 0; v3 the first four, in bits 0..1. */
+const WIRE_KINDS = ['stripe', 'splotch', 'dot', 'square', 'triangle'];
 /** Longest base64 string unpackLook will even look at (a maxed look is ~700). */
 const WIRE_MAX_CHARS = 1024;
 
@@ -184,7 +208,7 @@ export function packLook(look: Look): string {
   bytes[0] = WIRE_FORMAT;
   units.forEach((p, i) => {
     const o = 1 + i * 8;
-    bytes[o] = Math.max(0, WIRE_KINDS.indexOf(p.kind)) | (Math.max(0, WIRE_PARTS.indexOf(p.part)) << 2);
+    bytes[o] = Math.max(0, WIRE_KINDS.indexOf(p.kind)) | (Math.max(0, WIRE_PARTS.indexOf(p.part)) << 3);
     bytes[o + 1] = Math.min(255, p.colour);
     bytes[o + 2] = p.variant % 256;
     bytes[o + 3] = q255(p.u);
@@ -215,18 +239,18 @@ export function unpackLook(wire: unknown): Look {
   }
   if (bin.length < 1 + 8 || (bin.length - 1) % 8 !== 0) return bare;
   const format = bin.charCodeAt(0);
-  if (format !== WIRE_FORMAT && format !== 2 && format !== 1) return bare;
+  if (format < 1 || format > WIRE_FORMAT) return bare;
   const parts: readonly string[] = format === 1 ? WIRE_PARTS_V1 : format === 2 ? WIRE_PARTS_V2 : WIRE_PARTS;
-  const kindBits = format === WIRE_FORMAT ? 3 : 1;
-  const partShift = format === WIRE_FORMAT ? 2 : 1;
+  const kindBits = format === 4 ? 7 : format === 3 ? 3 : 1;
+  const partShift = format === 4 ? 3 : format === 3 ? 2 : 1;
   const count = Math.min((bin.length - 1) / 8, PAINT.maxUnits);
   const paint: PlacedPaint[] = [];
   for (let i = 0; i < count; i++) {
     const o = 1 + i * 8;
     const b0 = bin.charCodeAt(o);
     const unit = cleanUnit({
-      kind: WIRE_KINDS[b0 & kindBits],
-      part: parts[b0 >> partShift], // out of range → undefined → dropped
+      kind: WIRE_KINDS[b0 & kindBits], // out of range → undefined → dropped
+      part: parts[b0 >> partShift],
       colour: bin.charCodeAt(o + 1),
       variant: bin.charCodeAt(o + 2),
       u: bin.charCodeAt(o + 3) / 255,
@@ -298,14 +322,27 @@ let inv: Record<string, number> | null = null;
 function loadInv(): Record<string, number> {
   if (inv) return inv;
   inv = {};
+  let migrated = false;
   try {
     const raw = JSON.parse(localStorage.getItem(INV_KEY) ?? '{}') as Record<string, unknown>;
     for (const [k, v] of Object.entries(raw)) {
-      if (typeof v === 'number' && v > 0 && /^(stripe|splotch):\d+$/.test(k)) inv[k] = Math.min(999, Math.floor(v));
+      // Every kind the shop has EVER sold reads back. (This read only
+      // knew stripes and splotches, so every DOT and SQUARE anyone bought
+      // vanished from the tray the next time the game started.)
+      const m = /^(stripe|splotch|dot|square|triangle):(\d+)$/.exec(k);
+      if (typeof v !== 'number' || v <= 0 || !m) continue;
+      const colour = Number(m[2]);
+      if (colour >= PAINT.colours.length) continue;
+      // A retired SPLOTCH comes back as a DOT of its colour, one for one.
+      const kind = m[1] === 'splotch' ? 'dot' : m[1];
+      if (kind !== m[1]) migrated = true;
+      const key = `${kind}:${colour}`;
+      inv[key] = Math.min(999, (inv[key] ?? 0) + Math.floor(v));
     }
   } catch {
     /* empty locker */
   }
+  if (migrated) saveInv();
   return inv;
 }
 
@@ -354,26 +391,33 @@ export const bay = {
   version: 1,
 };
 
+/** A fresh unit's size, per kind — modest; the stick sizes it from here. */
+const DEFAULT_LEN: Record<PaintKind, number> = { stripe: 0.3, dot: 0.12, square: 0.16, triangle: 0.16 };
+
 /** Take a fresh unit from the locker into the hand (returns any held unit
- *  first). Default pose: modest size, upright. */
+ *  first). It keeps the pose of the last unit of its kind you placed, so a
+ *  row of matching marks doesn't need re-sizing each time. */
 export function handTake(kind: PaintKind, colour: number): boolean {
   if (bay.held) handReturn();
   if (!takeUnit(kind, colour)) return false;
+  const last = lastPose[kind];
   bay.held = {
     kind,
     colour,
-    variant: Math.floor(Math.random() * 8),
+    variant: 0,
     part: 'body',
     u: 0.75,
     v: 0.5,
-    angle: 0,
-    // Default sizes per kind — modest; the stick sizes them from here.
-    len: kind === 'stripe' ? 0.3 : kind === 'splotch' ? 0.35 : kind === 'dot' ? 0.16 : 0.2,
-    wid: kind === 'stripe' ? 0.12 : 0.5,
+    angle: last?.angle ?? 0,
+    len: last?.len ?? DEFAULT_LEN[kind],
+    wid: last?.wid ?? (kind === 'stripe' ? 0.12 : 0.5),
   };
   bay.version += 1;
   return true;
 }
+
+/** The pose of the last unit of each kind placed (see handTake). */
+const lastPose: Partial<Record<PaintKind, { angle: number; len: number; wid: number }>> = {};
 
 /** Put the held unit back in the locker. */
 export function handReturn(): void {
@@ -388,34 +432,63 @@ export function handPlace(part: PaintPart, u: number, v: number): boolean {
   if (!bay.held) return false;
   const look = myLook();
   if (look.paint.length >= PAINT.maxUnits) return false;
+  const { kind, angle, len, wid } = bay.held;
+  lastPose[kind] = { angle, len, wid };
   setLook({ paint: [...look.paint, { ...bay.held, part, u, v }] });
   bay.held = null;
   bay.version += 1;
   return true;
 }
 
-/** Lift the placed unit nearest (part, u, v) into the hand. u distance
- *  wraps; the pick radius is generous — a stripe is a thin target. */
-export function handLift(part: PaintPart, u: number, v: number): boolean {
-  if (bay.held) return false;
+/**
+ * Which placed unit is under (part, u, v): the TOPMOST one the point is
+ * inside, measured on the surface in metres — else the nearest whose edge
+ * is within a finger's width. -1 for none. A thin stripe is picked by its
+ * outline, not by how far its centre is.
+ */
+export function unitAt(part: PaintPart, u: number, v: number): number {
   const look = myLook();
+  const chart = chartOf(part);
+  const slack = 0.035 * chart.S;
   let best = -1;
-  let bestD = 0.16; // pick radius in uv space
-  look.paint.forEach((p, i) => {
-    if (p.part !== part) return;
-    const du = Math.min(Math.abs(p.u - u), 1 - Math.abs(p.u - u));
-    const d = Math.hypot(du, p.v - v);
+  let bestD = slack;
+  for (let i = look.paint.length - 1; i >= 0; i--) {
+    const p = look.paint[i];
+    if (p.part !== part) continue;
+    const [dx, dy] = chartOffset(chart, p.u, p.v, u, v);
+    const d = unitSdf(p, dx, dy, chart.S);
+    if (d <= 0) return i;
     if (d < bestD) {
       bestD = d;
       best = i;
     }
-  });
-  if (best < 0) return false;
-  const paint = [...look.paint];
-  const [unit] = paint.splice(best, 1);
+  }
+  return best;
+}
+
+/** Lift the placed unit under (part, u, v) back into the hand. */
+export function handLift(part: PaintPart, u: number, v: number): boolean {
+  if (bay.held) return false;
+  const i = unitAt(part, u, v);
+  if (i < 0) return false;
+  const paint = [...myLook().paint];
+  const [unit] = paint.splice(i, 1);
   setLook({ paint });
   bay.held = unit;
   bay.version += 1;
+  return true;
+}
+
+/** UNDO: the most recently placed unit comes off the body and back into
+ *  the locker. (Placing appends and lifting removes, so the last unit in
+ *  the look is always the newest mark.) */
+export function undoLast(): boolean {
+  const look = myLook();
+  if (!look.paint.length) return false;
+  const paint = [...look.paint];
+  const unit = paint.pop()!;
+  setLook({ paint });
+  grantUnit(unit.kind, unit.colour);
   return true;
 }
 
@@ -430,7 +503,421 @@ export function grantGraduationStripe(onyxBase: boolean): void {
   grantUnit('stripe', onyxBase ? 0 : 1); // white on onyx, black on white
 }
 
-/* ── the bake ─────────────────────────────────────────────────────────── */
+/* ── the chart: every surface measured in metres ──────────────────────── */
+//
+// A chart says, for one paint surface, what ring each row of its unwrap
+// is: half-width w and half-depth d (u runs round it by angle: x = w·cos,
+// z = d·sin + z0), and the ring's height h. From those, any texel can be
+// measured back to a unit's centre ALONG the surface: across by the arc
+// round its own ring, down by the arc of its own meridian — which differs
+// round the body: the top of the shoulders is a steep slope at the front
+// and nearly level at the sides, so height is measured column by column.
+// `S` turns a unit's len/wid (0..1 on the wire) into metres.
+//
+// Gear and hands carry a unit chart (w = d = 1/2π, h = v, S = 1): the
+// flat canvas measure they always had, since their UVs are whatever their
+// generators laid out.
+
+interface Chart {
+  /** Metres that a len/wid of 1 spans on this surface. */
+  S: number;
+  /** Rows sampled at v = k / n, k = 0..n (v = 0 is the bottom). */
+  n: number;
+  w: Float32Array;
+  d: Float32Array;
+  h: Float32Array;
+  z: Float32Array;
+}
+
+const CHART_ROWS = 256;
+
+function newChart(S: number, n: number): Chart {
+  return { S, n, w: new Float32Array(n + 1), d: new Float32Array(n + 1), h: new Float32Array(n + 1), z: new Float32Array(n + 1) };
+}
+
+function flatChart(): Chart {
+  const c = newChart(1, 2);
+  for (let k = 0; k <= c.n; k++) {
+    c.w[k] = c.d[k] = 1 / (2 * Math.PI);
+    c.h[k] = k / c.n;
+  }
+  return c;
+}
+
+/** THE BODY: the one loft, rings interpolated along its own v (which the
+ *  loft laid by cumulative profile arc, mannequin.ts). */
+function bodyChart(): Chart {
+  const rings = BODY_RINGS;
+  const arc: number[] = [0];
+  for (let k = 1; k < rings.length; k++) {
+    const a = rings[k - 1];
+    const b = rings[k];
+    arc.push(arc[k - 1] + Math.hypot(b.y - a.y, (b.w + b.d - (a.w + a.d)) / 2));
+  }
+  const total = arc[arc.length - 1] || 1;
+  // A len of 1 is 0.9 m: close to what the old flat canvas made of a mark
+  // on the chest, so a look painted before the chart keeps its scale.
+  const c = newChart(0.9, CHART_ROWS);
+  for (let k = 0; k <= c.n; k++) {
+    const at = (1 - k / c.n) * total;
+    let seg = 0;
+    while (seg < rings.length - 2 && arc[seg + 1] < at) seg++;
+    const t = Math.max(0, Math.min(1, (at - arc[seg]) / (arc[seg + 1] - arc[seg] || 1)));
+    const r0 = rings[seg];
+    const r1 = rings[seg + 1];
+    c.w[k] = r0.w + (r1.w - r0.w) * t;
+    c.d[k] = r0.d + (r1.d - r0.d) * t;
+    c.h[k] = r0.y + (r1.y - r0.y) * t;
+    c.z[k] = (r0.z ?? 0) + ((r1.z ?? 0) - (r0.z ?? 0)) * t;
+  }
+  return c;
+}
+
+/** THE SKULL: three's sphere unwrap (θ = (1 − v)·π down from the crown,
+ *  φ = u·2π round) stretched into the egg. */
+function headChart(): Chart {
+  const r = BODY_IK.headRadius;
+  const [sx, sy, sz] = HEAD_SCALE;
+  const c = newChart(0.55, CHART_ROWS);
+  for (let k = 0; k <= c.n; k++) {
+    const th = (1 - k / c.n) * Math.PI;
+    c.w[k] = sx * r * Math.sin(th);
+    c.d[k] = sz * r * Math.sin(th);
+    c.h[k] = sy * r * Math.cos(th);
+  }
+  return c;
+}
+
+const charts = new Map<PaintPart, Chart>();
+function chartOf(part: PaintPart): Chart {
+  let c = charts.get(part);
+  if (!c) {
+    c = part === 'body' ? bodyChart() : part === 'head' ? headChart() : flatChart();
+    charts.set(part, c);
+  }
+  return c;
+}
+
+/** The ring at any v: [w, d, h, z]. */
+function ringAt(c: Chart, v: number): [number, number, number, number] {
+  const f = Math.max(0, Math.min(1, v)) * c.n;
+  const k = Math.min(c.n - 1, Math.floor(f));
+  const t = f - k;
+  const L = (a: Float32Array): number => a[k] + (a[k + 1] - a[k]) * t;
+  return [L(c.w), L(c.d), L(c.h), L(c.z)];
+}
+
+/** How fast the surface runs round a ring of (w, d), metres per unit u. */
+const ringSpeed = (w: number, d: number, u: number): number => {
+  const t = u * Math.PI * 2;
+  return Math.PI * 2 * Math.sqrt(w * w * Math.sin(t) ** 2 + d * d * Math.cos(t) ** 2);
+};
+
+/** Where the surface point (u, ring) sits, in the ring's own plane + height. */
+function surfacePoint(u: number, ring: [number, number, number, number]): [number, number, number] {
+  const t = u * Math.PI * 2;
+  return [Math.cos(t) * ring[0], ring[2], Math.sin(t) * ring[1] + ring[3]];
+}
+
+/** Arc round a ring from u0 to u1 the short way (signed, metres). */
+function ringArc(w: number, d: number, u0: number, u1: number): number {
+  let du = u1 - u0;
+  du -= Math.round(du);
+  const steps = 24;
+  let sum = 0;
+  for (let i = 0; i < steps; i++) sum += ringSpeed(w, d, u0 + (du * (i + 0.5)) / steps);
+  return (sum / steps) * du;
+}
+
+/** Arc down the meridian at u from v0 to v1 (signed: + is downward). */
+function meridianArc(c: Chart, u: number, v0: number, v1: number): number {
+  const steps = 24;
+  let sum = 0;
+  let prev = surfacePoint(u, ringAt(c, v0));
+  for (let i = 1; i <= steps; i++) {
+    const p = surfacePoint(u, ringAt(c, v0 + ((v1 - v0) * i) / steps));
+    sum += Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]);
+    prev = p;
+  }
+  return v1 < v0 ? sum : -sum;
+}
+
+/** (u, v) measured from a unit's centre (u0, v0) on the surface, metres:
+ *  across along the ring at v, down the meridian at u. */
+function chartOffset(c: Chart, u0: number, v0: number, u: number, v: number): [number, number] {
+  const [w, d] = ringAt(c, v);
+  return [ringArc(w, d, u0, u), meridianArc(c, u, v0, v)];
+}
+
+/* ── the shapes, as signed distances (metres; x across, y down) ───────── */
+
+/** The shape's extent in metres, by kind: [length, thickness]. */
+function unitSize(p: PlacedPaint, S: number): [number, number] {
+  switch (p.kind) {
+    case 'stripe':
+      return [Math.max(0.01, p.len * S), Math.max(0.004, p.wid * S * 0.35)];
+    case 'dot':
+      return [Math.max(0.006, p.len * S * 0.5), 0];
+    case 'square':
+      return [Math.max(0.01, p.len * S * 0.6), 0];
+    default:
+      return [Math.max(0.012, p.len * S * 0.75), 0];
+  }
+}
+
+/** Distance from (dx, dy) — already measured from the unit's centre — to
+ *  the unit's edge; ≤ 0 is inside. */
+function unitSdf(p: PlacedPaint, dx: number, dy: number, S: number): number {
+  const a = p.angle * Math.PI * 2;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  return shapeSdf(p.kind, unitSize(p, S), dx * c + dy * s, -dx * s + dy * c);
+}
+
+function shapeSdf(kind: PaintKind, size: [number, number], x: number, y: number): number {
+  const L = size[0];
+  if (kind === 'dot') return Math.sqrt(x * x + y * y) - L;
+  if (kind === 'stripe') {
+    // A capsule: rounded ends, the old roundRect's.
+    const r = size[1] / 2;
+    const qx = Math.max(Math.abs(x) - Math.max(L / 2 - r, 0), 0);
+    return Math.sqrt(qx * qx + y * y) - r;
+  }
+  if (kind === 'square') {
+    // Cut, not sprayed: a hair of corner radius.
+    const rr = L * 0.06;
+    const h = L / 2 - rr;
+    const qx = Math.abs(x) - h;
+    const qy = Math.abs(y) - h;
+    const ox = Math.max(qx, 0);
+    const oy = Math.max(qy, 0);
+    return Math.sqrt(ox * ox + oy * oy) + Math.min(Math.max(qx, qy), 0) - rr;
+  }
+  // TRIANGLE: equilateral, point UP (y runs down), centred on its
+  // centroid, the corners eased a touch so it reads as cut card.
+  const rr = L * 0.05;
+  const r = L / 2 - rr * 1.7;
+  const k = 1.7320508;
+  let px = Math.abs(x) - r;
+  let py = -y + r / k;
+  if (px + k * py > 0) {
+    const nx = (px - k * py) / 2;
+    py = (-k * px - py) / 2;
+    px = nx;
+  }
+  px -= Math.max(-2 * r, Math.min(0, px));
+  return -Math.sqrt(px * px + py * py) * Math.sign(py) - rr;
+}
+
+/** Half-extents of the shape's box before it is turned: [across, down]. */
+function unitBox(p: PlacedPaint, S: number): [number, number] {
+  const [L, T] = unitSize(p, S);
+  switch (p.kind) {
+    case 'stripe':
+      return [L / 2, T / 2];
+    case 'dot':
+      return [L, L];
+    case 'square':
+      return [L / 2, L / 2];
+    default:
+      return [L / 2, L * 0.6];
+  }
+}
+
+/** The farthest any part of the shape reaches from its centre. */
+function unitReach(p: PlacedPaint, S: number): number {
+  const [L, T] = unitSize(p, S);
+  switch (p.kind) {
+    case 'stripe':
+      return L / 2 + T / 2;
+    case 'dot':
+      return L;
+    case 'square':
+      return L * 0.71;
+    default:
+      return L * 0.6;
+  }
+}
+
+/* ── the raster ───────────────────────────────────────────────────────── */
+
+/** A chart laid onto one canvas size: at every texel centre, X (arc
+ *  round its ring from u = 0) and Y (arc down its column's meridian from
+ *  the top), plus each row's circumference. Built once per part and size,
+ *  kept for the session. */
+interface Grid {
+  part: PaintPart;
+  W: number;
+  H: number;
+  x: Float32Array;
+  y: Float32Array;
+  c: Float32Array;
+  /** The largest texel on the sheet, metres — the antialiasing margin. */
+  maxTexel: number;
+}
+
+const grids = new Map<string, Grid>();
+function gridOf(part: PaintPart, W: number, H: number): Grid {
+  const key = `${part}|${W}x${H}`;
+  let g = grids.get(key);
+  if (g) return g;
+  const chart = chartOf(part);
+  const x = new Float32Array(W * H);
+  const y = new Float32Array(W * H);
+  const c = new Float32Array(H);
+  const rings: [number, number, number, number][] = [];
+  for (let j = 0; j < H; j++) rings.push(ringAt(chart, 1 - (j + 0.5) / H));
+  let maxTexel = 0;
+  for (let j = 0; j < H; j++) {
+    const [w, d] = rings[j];
+    let acc = 0;
+    for (let i = 0; i < W; i++) {
+      const sp = ringSpeed(w, d, (i + 0.5) / W) / W;
+      x[j * W + i] = acc + sp / 2;
+      acc += sp;
+      if (sp > maxTexel) maxTexel = sp;
+    }
+    c[j] = acc;
+  }
+  const top = ringAt(chart, 1);
+  for (let i = 0; i < W; i++) {
+    const u = (i + 0.5) / W;
+    let prev = surfacePoint(u, top);
+    let acc = 0;
+    for (let j = 0; j < H; j++) {
+      const p = surfacePoint(u, rings[j]);
+      const step = Math.hypot(p[0] - prev[0], p[1] - prev[1], p[2] - prev[2]);
+      acc += step;
+      y[j * W + i] = acc;
+      prev = p;
+      if (j > 0 && step > maxTexel) maxTexel = step;
+    }
+  }
+  g = { part, W, H, x, y, c, maxTexel };
+  grids.set(key, g);
+  return g;
+}
+
+/** Y (down column i's meridian) at a fractional v. */
+function yAt(g: Grid, i: number, v: number): number {
+  const f = Math.max(0, Math.min(g.H - 1, (1 - v) * g.H - 0.5));
+  const j = Math.min(g.H - 2, Math.floor(f));
+  const t = f - j;
+  const a = g.y[j * g.W + i];
+  return a + (g.y[(j + 1) * g.W + i] - a) * t;
+}
+
+/** X at a fractional u in row j, wrapping past the seam. */
+function xAt(g: Grid, j: number, u: number): number {
+  const f = u * g.W - 0.5;
+  const i = Math.floor(f);
+  const t = f - i;
+  const row = j * g.W;
+  const C = g.c[j];
+  const at = (k: number): number => (k < 0 ? g.x[row + k + g.W] - C : k >= g.W ? g.x[row + k - g.W] + C : g.x[row + k]);
+  return at(i) + (at(i + 1) - at(i)) * t;
+}
+
+const rgbOf = (hex: number): [number, number, number] => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+
+/**
+ * Rasterize one unit into an RGBA buffer laid out on `g`. Every texel the
+ * unit could reach is measured back to its centre along the surface and
+ * covered by its signed distance, antialiased over the texel's own size.
+ * `alpha` < 1 is the ghost: the held unit, not yet placed.
+ */
+function rasterUnit(data: Uint8ClampedArray, g: Grid, S: number, p: PlacedPaint, alpha = 1): void {
+  const [cr, cg, cb] = rgbOf(PAINT.colours[p.colour] ?? 0xffffff);
+  const reach = unitReach(p, S) + g.maxTexel * 1.5;
+  const size = unitSize(p, S);
+  const kind = p.kind;
+  const a = p.angle * Math.PI * 2;
+  const ca = Math.cos(a);
+  const sa = Math.sin(a);
+  const { W, H, x: X, y: Y, c: Cs } = g;
+  const ic = Math.min(W - 1, Math.max(0, Math.floor(p.u * W)));
+  // The centre's own row on its own meridian; rows further than reach
+  // (with slack for meridians that run longer than the centre's) are out.
+  const yc = yAt(g, ic, p.v);
+  // Each column's Y at the centre's v, computed once per column touched.
+  const y0 = new Float32Array(W).fill(NaN);
+  const shade = (j: number, i: number, dx: number): void => {
+    const k = j * W + i;
+    let yy = y0[i];
+    if (yy !== yy) yy = y0[i] = yAt(g, i, p.v);
+    const dy = Y[k] - yy;
+    const lx = dx * ca + dy * sa;
+    const ly = -dx * sa + dy * ca;
+    const d = shapeSdf(kind, size, lx, ly);
+    // Antialias over this texel: its width round the ring, its height
+    // down the meridian.
+    const tx = (i + 1 < W ? X[k + 1] : Cs[j] + X[j * W]) - X[k];
+    const ty = j + 1 < H ? Y[k + W] - Y[k] : Y[k] - Y[k - W];
+    const px = Math.max(tx, ty, 1e-5);
+    const cov = Math.min(1, 0.5 - d / px) * alpha;
+    if (cov <= 0) return;
+    const o = k * 4;
+    data[o] += (cr - data[o]) * cov;
+    data[o + 1] += (cg - data[o + 1]) * cov;
+    data[o + 2] += (cb - data[o + 2]) * cov;
+  };
+  // THE ROW BAND: the turned box, cut by this row, is an interval of dx.
+  // Long thin shapes (a stripe down the spine) would otherwise scan a
+  // disc as wide as they are long.
+  const [ex, ey] = unitBox(p, S);
+  const slack = g.maxTexel * 2 + reach * 0.04;
+  const band = (dy: number): [number, number] => {
+    let lo = -Infinity;
+    let hi = Infinity;
+    // |lx| ≤ ex, lx = dx·ca + dy·sa;  |ly| ≤ ey, ly = −dx·sa + dy·ca.
+    const cut = (k: number, off: number, e: number): void => {
+      if (Math.abs(k) < 1e-6) {
+        if (Math.abs(off) > e + slack) lo = Infinity;
+        return;
+      }
+      const a0 = (-e - slack - off) / k;
+      const a1 = (e + slack - off) / k;
+      lo = Math.max(lo, Math.min(a0, a1));
+      hi = Math.min(hi, Math.max(a0, a1));
+    };
+    cut(ca, dy * sa, ex);
+    cut(-sa, dy * ca, ey);
+    return [lo, hi];
+  };
+  for (let j = 0; j < H; j++) {
+    const dyc = Y[j * W + ic] - yc;
+    if (Math.abs(dyc) > reach * 1.6) continue;
+    const [lo, hi] = band(dyc);
+    if (lo > hi) continue;
+    const C = Cs[j];
+    const row = j * W;
+    const x0 = xAt(g, j, p.u);
+    if (2 * reach >= C) {
+      // The whole ring is in reach (a mark round the neck, the crown).
+      for (let i = 0; i < W; i++) {
+        let dx = X[row + i] - x0;
+        dx -= Math.round(dx / C) * C;
+        if (dx >= lo && dx <= hi) shade(j, i, dx);
+      }
+      continue;
+    }
+    // Otherwise walk out from the centre column each way until past the band.
+    for (let s = 0; s < W; s++) {
+      const ii = ic + s;
+      const i = ii % W;
+      const dx = X[row + i] + Math.floor(ii / W) * C - x0;
+      if (dx > hi || dx > reach) break;
+      if (dx >= lo) shade(j, i, dx);
+    }
+    for (let s = 1; s < W; s++) {
+      const ii = ic - s;
+      const i = ((ii % W) + W) % W;
+      const dx = X[row + i] - (ii < 0 ? C : 0) - x0;
+      if (dx < lo || dx < -reach) break;
+      if (dx <= hi) shade(j, i, dx);
+    }
+  }
+}
 
 /** What a bare canvas is filled with before the units land: the BLANK's
  *  two primer tones. A surface whose rest colour is not a primer — the
@@ -440,120 +927,73 @@ export function grantGraduationStripe(onyxBase: boolean): void {
  *  built. */
 const TONE_FILL: Record<string, string> = { white: '#f4f2ee', onyx: '#17171a' };
 
-const css = (hex: number): string => `#${hex.toString(16).padStart(6, '0')}`;
-
-/** Deterministic per-unit rng (mulberry32) — a splotch rolls the same
- *  silhouette on every headset that ever bakes it. */
-function rng(seed: number): () => number {
-  let a = (seed * 2654435761) >>> 0;
-  return () => {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function drawUnit(g: CanvasRenderingContext2D, p: PlacedPaint, W: number, H: number): void {
-  g.fillStyle = css(PAINT.colours[p.colour]);
-  const cy = (1 - p.v) * H;
-  // Three passes across the u seam so a wrap never cuts a unit.
-  for (const off of [-1, 0, 1]) {
-    const cx = (p.u + off) * W;
-    if (cx < -W * 0.6 || cx > W * 1.6) continue;
-    g.save();
-    g.translate(cx, cy);
-    g.rotate(p.angle * Math.PI * 2);
-    if (p.kind === 'stripe') {
-      const w = Math.max(4, p.len * W);
-      const h = Math.max(3, p.wid * H * 0.35);
-      g.beginPath();
-      g.roundRect(-w / 2, -h / 2, w, h, h / 2);
-      g.fill();
-    } else if (p.kind === 'dot') {
-      // A disc: len is the diameter's share of the canvas. wid: unused.
-      g.beginPath();
-      g.arc(0, 0, Math.max(3, p.len * W * 0.5), 0, Math.PI * 2);
-      g.fill();
-    } else if (p.kind === 'square') {
-      // A square, spun by the angle — the corner radius is a hair, so it
-      // reads as cut, not sprayed. wid: unused.
-      const s = Math.max(4, p.len * W * 0.6);
-      g.beginPath();
-      g.roundRect(-s / 2, -s / 2, s, s, s * 0.06);
-      g.fill();
-    } else {
-      const r = Math.max(4, p.len * W * 0.3);
-      const squash = 0.6 + 0.4 * (p.wid || 0.5);
-      const roll = rng(p.variant + p.colour * 31 + 7);
-      const points = 9;
-      g.beginPath();
-      for (let i = 0; i <= points; i++) {
-        const a = (i / points) * Math.PI * 2;
-        const rad = r * (0.62 + 0.38 * roll());
-        const x = Math.cos(a) * rad;
-        const y = Math.sin(a) * rad * squash;
-        if (i === 0) g.moveTo(x, y);
-        else {
-          const pa = ((i - 0.5) / points) * Math.PI * 2;
-          const pr = r * (0.75 + 0.35 * roll());
-          g.quadraticCurveTo(Math.cos(pa) * pr, Math.sin(pa) * pr * squash, x, y);
-        }
-      }
-      g.closePath();
-      g.fill();
-      // A couple of satellite droplets — the splat's read.
-      for (let d = 0; d < 3; d++) {
-        const a = roll() * Math.PI * 2;
-        const dist = r * (1.15 + roll() * 0.5);
-        const dr = r * (0.08 + roll() * 0.1);
-        g.beginPath();
-        g.arc(Math.cos(a) * dist, Math.sin(a) * dist * squash, dr, 0, Math.PI * 2);
-        g.fill();
-      }
-    }
-    g.restore();
-  }
+/** Bake one part of a look into a fresh RGBA buffer, W × H. */
+function bakePart(look: Look, part: PaintPart, fill: string, W: number, H: number): ImageData {
+  const g = gridOf(part, W, H);
+  const img = new ImageData(W, H);
+  const [r, gg, b] = rgbOf(parseInt(fill.replace('#', ''), 16) || 0);
+  // One word per texel (RGBA bytes, little-endian) — a fill, not a loop.
+  new Uint32Array(img.data.buffer).fill(((255 << 24) | (b << 16) | (gg << 8) | r) >>> 0);
+  const S = chartOf(part).S;
+  for (const p of look.paint) if (p.part === part) rasterUnit(img.data, g, S, p);
+  return img;
 }
 
 interface PaintStore {
   canvas: HTMLCanvasElement;
   tex: CanvasTexture;
+  /** The committed look's bake — the ghost draws over a copy of it. */
+  base: ImageData | null;
+  /** The ghost's working buffer, reused frame to frame. */
+  scratch: ImageData | null;
+  /** True while this canvas shows a ghost rather than `base`. */
+  ghost: boolean;
+}
+
+function storeFor(mesh: Mesh, part: PaintPart): PaintStore {
+  let store = mesh.userData.paintStore as PaintStore | undefined;
+  if (!store) {
+    const size = PAINT.canvas[part] ?? 256;
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = size;
+    const tex = new CanvasTexture(canvas);
+    tex.colorSpace = SRGBColorSpace;
+    // The body is seen edge-on round its sides; a little anisotropy keeps
+    // the paint's edges from going to mush there.
+    tex.anisotropy = 4;
+    store = { canvas, tex, base: null, scratch: null, ghost: false };
+    mesh.userData.paintStore = store;
+  }
+  return store;
 }
 
 /**
  * Bake `look` onto every paint surface under `root`. Cheap enough to call
- * on every look change (a handful of canvas fills); call it only then —
- * never per frame.
+ * on every look change; call it only then — never per frame (the ghost
+ * has its own path, applyGhost).
  */
 export function applyLook(root: Object3D, look: Look): void {
+  const memo = new Map<string, ImageData>();
   root.traverse((o) => {
     const part = o.userData?.paintPart as PaintPart | undefined;
     if (!part) return;
     const mesh = o as Mesh;
-    const mat = mesh.material as MeshStandardMaterial;
     if (Array.isArray(mesh.material)) return;
-    const size = PAINT.canvas[part] ?? 256;
-    let store = mesh.userData.paintStore as PaintStore | undefined;
-    if (!store) {
-      const canvas = document.createElement('canvas');
-      canvas.width = canvas.height = size;
-      const tex = new CanvasTexture(canvas);
-      tex.colorSpace = SRGBColorSpace;
-      store = { canvas, tex };
-      mesh.userData.paintStore = store;
-    }
-    const g = store.canvas.getContext('2d')!;
+    const mat = mesh.material as MeshStandardMaterial;
+    const store = storeFor(mesh, part);
+    const size = store.canvas.width;
     const tone = (mesh.userData.paintTone as string) ?? 'white';
-    g.fillStyle = (mat.userData?.paintFill as string) ?? TONE_FILL[tone] ?? TONE_FILL.white;
-    g.fillRect(0, 0, size, size);
-    let painted = false;
-    for (const p of look.paint) {
-      if (p.part !== part) continue;
-      drawUnit(g, p, size, size);
-      painted = true;
+    const fill = (mat.userData?.paintFill as string) ?? TONE_FILL[tone] ?? TONE_FILL.white;
+    const key = `${part}|${fill}|${size}`;
+    let img = memo.get(key);
+    if (!img) {
+      img = bakePart(look, part, fill, size, size);
+      memo.set(key, img);
     }
+    store.base = img;
+    store.ghost = false;
+    store.canvas.getContext('2d')!.putImageData(img, 0, 0);
+    const painted = look.paint.some((p) => p.part === part);
     // PAINT ON METAL. A near-mirror surface has almost no diffuse, so a
     // stripe laid on a hand's steel would read as a faint tint of a
     // reflection and nothing more. Where paint actually lands, the finish
@@ -574,24 +1014,55 @@ export function applyLook(root: Object3D, look: Look): void {
   });
 }
 
+/** How solid the held unit reads before it is placed. */
+const GHOST_ALPHA = 0.78;
+
+/**
+ * THE GHOST: show `unit` (the one in the hand) over the committed look on
+ * the surfaces of its part under `root`, or wipe it (null). Only the
+ * canvases of that one part are touched — a copy of the committed bake
+ * plus one shape — so it is cheap enough to run every frame the ray moves,
+ * where re-baking the whole look (every part, every unit) was not.
+ * Surfaces still showing an old ghost get their committed bake back.
+ */
+export function applyGhost(root: Object3D, unit: PlacedPaint | null): void {
+  root.traverse((o) => {
+    const part = o.userData?.paintPart as PaintPart | undefined;
+    if (!part) return;
+    const store = o.userData.paintStore as PaintStore | undefined;
+    if (!store?.base) return;
+    const g2d = store.canvas.getContext('2d')!;
+    if (unit && unit.part === part) {
+      const W = store.canvas.width;
+      const H = store.canvas.height;
+      if (!store.scratch || store.scratch.width !== W) store.scratch = new ImageData(W, H);
+      store.scratch.data.set(store.base.data);
+      const g = gridOf(part, W, H);
+      rasterUnit(store.scratch.data, g, chartOf(part).S, unit, GHOST_ALPHA);
+      g2d.putImageData(store.scratch, 0, 0);
+      store.ghost = true;
+      store.tex.needsUpdate = true;
+    } else if (store.ghost) {
+      g2d.putImageData(store.base, 0, 0);
+      store.ghost = false;
+      store.tex.needsUpdate = true;
+    }
+  });
+}
+
 /* ── the record (P4): the painting as a picture and as words ──────────── */
 //
 // The profile card (and anything else that shows a player's name) can show
 // the painting BEHIND the name: a flat render of the front of the part they
-// painted most, straight from the same drawUnit bake the body uses — the
-// banner IS their paint, not a swatch of it. And the gazette gets the look
-// as WORDS: the palette's names for their most-used colours.
+// painted most, straight from the same bake the body uses — the banner IS
+// their paint, not a swatch of it. And the gazette gets the look as WORDS:
+// the palette's names for their most-used colours.
 
 /** Bake one part of a look flat (no mesh) — the unwrap as a picture. */
 function bakeFlat(look: Look, part: PaintPart, tone: 'white' | 'onyx', size: number): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
-  const g = canvas.getContext('2d')!;
-  g.fillStyle = TONE_FILL[tone];
-  g.fillRect(0, 0, size, size);
-  for (const p of look.paint) {
-    if (p.part === part) drawUnit(g, p, size, size);
-  }
+  canvas.getContext('2d')!.putImageData(bakePart(look, part, TONE_FILL[tone], size, size), 0, 0);
   return canvas;
 }
 
@@ -647,8 +1118,8 @@ export function demoLook(): Look {
   const s = (part: PaintPart, u: number, v: number, angle: number, len: number, wid: number, colour: number): PlacedPaint => ({
     kind: 'stripe', part, u, v, angle, len, wid, colour, variant: 0,
   });
-  const b = (part: PaintPart, u: number, v: number, len: number, colour: number, variant: number): PlacedPaint => ({
-    kind: 'splotch', part, u, v, angle: 0, len, wid: 0.5, colour, variant,
+  const unit = (kind: PaintKind, part: PaintPart, u: number, v: number, angle: number, len: number, colour: number): PlacedPaint => ({
+    kind, part, u, v, angle, len, wid: 0.5, colour, variant: 0,
   });
   return {
     paint: [
@@ -664,18 +1135,19 @@ export function demoLook(): Look {
       // The visor band across the face, cyan over a magenta underline.
       s('head', 0.75, 0.56, 0.0, 0.4, 0.12, 11),
       s('head', 0.75, 0.49, 0.0, 0.34, 0.05, 10),
-      // Hip splotches — the chameleon's flanks.
-      b('body', 0.02, 0.258, 0.42, 10, 3), // magenta, right flank
-      b('body', 0.48, 0.258, 0.42, 13, 7), // lime, left flank
-      b('body', 0.75, 0.141, 0.3, 9, 11), // ember, front low
-      // A crown dot on the skull.
-      b('head', 0.75, 0.88, 0.2, 20, 5),
-      // The new geometry: a signal-red DOT on the sternum, a black SQUARE
-      // spun 45° on the belly, and a gold dot on whatever's bolted to the
-      // head (so the gear surface is exercised too).
-      { kind: 'dot', part: 'body', u: 0.75, v: 0.86, angle: 0, len: 0.12, wid: 0.5, colour: 19, variant: 0 },
-      { kind: 'square', part: 'body', u: 0.75, v: 0.6, angle: 0.125, len: 0.16, wid: 0.5, colour: 1, variant: 0 },
-      { kind: 'dot', part: 'gearHead', u: 0.5, v: 0.5, angle: 0, len: 0.4, wid: 0.5, colour: 20, variant: 0 },
+      // Hip dots — magenta and lime flanks, ember low on the front.
+      unit('dot', 'body', 0.02, 0.258, 0, 0.25, 10),
+      unit('dot', 'body', 0.48, 0.258, 0, 0.25, 13),
+      unit('dot', 'body', 0.75, 0.141, 0, 0.18, 9),
+      // A crown dot on the skull — round, however much the unwrap pinches.
+      unit('dot', 'head', 0.75, 0.97, 0, 0.14, 20),
+      // A signal-red DOT on the sternum, a black SQUARE spun 45° on the
+      // belly, a volt TRIANGLE pointing down it, and a gold dot on
+      // whatever's bolted to the head (so the gear surface is exercised).
+      unit('dot', 'body', 0.75, 0.86, 0, 0.12, 19),
+      unit('square', 'body', 0.75, 0.6, 0.125, 0.16, 1),
+      unit('triangle', 'body', 0.75, 0.47, 0.5, 0.14, 17),
+      unit('dot', 'gearHead', 0.5, 0.5, 0, 0.4, 20),
     ],
   };
 }
@@ -695,7 +1167,13 @@ export function installPaintDevHook(): void {
     take: (kind: PaintKind, colour: number): boolean => handTake(kind, colour),
     place: (part: PaintPart, u: number, v: number): boolean => handPlace(part, u, v),
     lift: (part: PaintPart, u: number, v: number): boolean => handLift(part, u, v),
+    /** Which placed unit (index) is under a point, or -1. */
+    at: (part: PaintPart, u: number, v: number): number => unitAt(part, u, v),
+    /** One part of the look baked flat, as a PNG data URL — probes eyeball
+     *  the chart (round dots, even stripes) straight off the unwrap. */
+    flat: (part: PaintPart, tone = 'white'): string => bakeFlat(myLook(), part, tone === 'onyx' ? 'onyx' : 'white', PAINT.canvas[part] ?? 256).toDataURL(),
     ret: (): void => handReturn(),
+    undo: (): boolean => undoLast(),
     held: (): PlacedPaint | null => bay.held,
     // P3 wire verbs, for the headless channel probes.
     pack: (): string => myPackedLook(),

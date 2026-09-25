@@ -95,7 +95,7 @@ for the unread paper.
 | --- | --- |
 | **CENTER** | FIGHT · ARCADE · CLUB (FIGHT's flows still drill in and BACK out on the slab; CLUB is the region pick) |
 | **LEFT — THE TOWN** | TOWN (the live-status chips) · LADDER (the leaderboard, off the back wall: BATTLE / XP / ARCADE sub-boards, ten rows, stick-scrolled, tap a name for the profile) · NEWS (the Gasket Gazette, rendered on its own page canvas and blitted onto the wing, stick-scrolled) |
-| **RIGHT — YOU** | YOU (the paint bay, your blank, coins, record) · SETTINGS (volume tracks scrubbed by the trigger, mute / voice / hide-paint breakers, REPORT, CREDITS) |
+| **RIGHT — YOU** | LOCKER (CUSTOMIZE — the one customization plate, LOCKER · STORE · PAINT — and the career profile) · STORE (the catalogue, the bank, the purse) · SETTINGS (volume tracks scrubbed by the trigger, mute / voice / hide-paint breakers, REPORT, CREDITS) |
 
 Above the right wing hangs **THE PROFILE pop-out** — what the floating
 coin readout became, on the RAVE RAID profile-card pattern: a bare chip

@@ -74,13 +74,14 @@ import { audienceStands } from '../arena/desert/audience.js';
 import { audienceView } from './AudienceSystem.js';
 import { crowd } from '../audio/crowd.js';
 import { currentVoiceContext, VOICE_RULES, voiceAllowed, hearAllowed } from '../net/voiceRules.js';
-import { applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, type PaintPart } from '../avatar/paint.js';
+import { applyGhost, applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, undoLast, unitAt, type PaintPart } from '../avatar/paint.js';
+import { pulseHand } from '../input/haptics.js';
 import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
 import { botGradeLine, botLive, installBotBrainDevHook } from '../combat/botBrain.js';
 import { KitMenuPanel } from '../menu/wrap.js';
 import type { PanelButton } from '../ui/kit/panel.js';
-import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey, bayTurn } from '../menu/paintbay.js';
+import { BAY_H, BAY_W, bayClick, bayFace, bayFaceKey, bayFaceState } from '../menu/paintbay.js';
 import {
   avatarOwned,
   clearShopPreview,
@@ -209,6 +210,30 @@ interface Pointer {
 const BAY_MAGNET_RINGS = [0.7, 1.5];
 const BAY_MAGNET_SLACK = 0.06;
 
+/**
+ * THE STEADY HAND. The paint lands where the ray meets the body, and a
+ * hand held out at arm's length shakes — a degree of tremor is two
+ * centimetres on the blank. The bay aims with its own copy of each ray,
+ * eased toward the real one at a rate that climbs with how far apart
+ * they are: a tremor is soaked up, a deliberate sweep is followed at
+ * once (a one-euro filter, in spirit). `base` is the rate at rest (per
+ * second), `chase` how much each radian of gap adds to it.
+ */
+const BAY_STEADY = { base: 18, chase: 1600 };
+/** THE TRIGGER'S JOLT: pulling a trigger tugs the controller, so a mark
+ *  lands where the ray was this long BEFORE the pull registered (ms). */
+const BAY_PULL_LEAD = 70;
+/** Where the mirror stands: at home beside the LOCKER and STORE, and
+ *  brought in to arm's reach while you paint — two metres off, a degree of
+ *  aim was four centimetres of body. */
+const MIRROR_HOME = { x: -0.75, z: -2.0 };
+const MIRROR_PAINT = { x: -0.42, z: -1.22 };
+/** How fast the thumbstick spins the blank in the bay (rad/s at full tilt),
+ *  and turns a held mark (turns/s). */
+const BAY_SPIN_RATE = 2.4;
+const BAY_TWIST_RATE = 0.3;
+const wrapAngle = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+
 export class MenuSystem extends createSystem({}) {
   private menu!: Menu;
   private wrap!: Wrap;
@@ -225,8 +250,23 @@ export class MenuSystem extends createSystem({}) {
    *  curled tube two centimetres wide, a mohawk spike seven millimetres. */
   private bayGear: Mesh[] = [];
   private magnetRay = new Raycaster();
-  private bayGhostAt = 0;
+  /** What the ghost last showed (a key of the held pose + the spot). */
+  private bayGhostKey = '';
   private bayGhostOn = false;
+  /** Each hand's steadied aim (THE STEADY HAND) and its recent spots on
+   *  the body (THE TRIGGER'S JOLT). */
+  private bayAimRay = {
+    left: { o: new Vector3(), d: new Vector3(), live: false },
+    right: { o: new Vector3(), d: new Vector3(), live: false },
+  };
+  private bayTrail: Record<'left' | 'right', Array<{ t: number; part: PaintPart; u: number; v: number }>> = { left: [], right: [] };
+  /** Which hands' rays are on the body this frame. */
+  private bayOnBody = { left: false, right: false };
+  /** The blank's turn as shown (eased toward bayFaceState.yaw). */
+  private mirrorTurn = 0;
+  private mirrorShown = false;
+  private twistWas = { left: false, right: false };
+  private frameDt = 1 / 72;
   /** Last lobby-ness handed to the music (null = never) — see applyState(). */
   private musicInLobby: boolean | null = null;
   private ray = new Raycaster();
@@ -254,9 +294,6 @@ export class MenuSystem extends createSystem({}) {
   /** THE PODIUM: your blank standing beside the YOU wing, always on show
    *  in the lobby — the avatar IS the menu's centrepiece now. */
   private podium?: Group;
-  /** The mirror's resting yaw — it faces the player; the paint bay's turn
-   *  is added on top of it (menu/paintbay.ts bayTurn). */
-  private mirrorYaw0 = 0;
   private skinVersion = 0;
   /** The opponent pad is modelling a STORE platform try-on (needs restoring). */
   private oppPadPreviewed = false;
@@ -340,11 +377,13 @@ export class MenuSystem extends createSystem({}) {
     this.wrap = installWrap(this.menu, (a) => this.run(a));
     // THE PAINT BAY: a kit modal panel beside the locker mirror. Local
     // pb:* ids settle in bayClick; real actions go through run().
-    this.bayPanel = new KitMenuPanel('paintbay', 0.84, 0.99, BAY_W, BAY_H, bayFace, (id) => {
+    // The PAINT tab of the one customization plate: the same size and
+    // place as the LOCKER and the STORE, so the tabs swap faces, not rooms.
+    this.bayPanel = new KitMenuPanel('paintbay', 0.94, 0.94 * (BAY_H / BAY_W), BAY_W, BAY_H, bayFace, (id) => {
       if (!bayClick(id)) this.run(id as MenuAction);
     });
-    this.bayPanel.mesh.position.set(0.6, 1.42, -1.06);
-    this.bayPanel.mesh.rotation.y = -0.26;
+    this.bayPanel.mesh.position.set(0.5, 1.52, -1.1);
+    this.bayPanel.mesh.rotation.y = -0.3;
     this.bayPanel.mesh.visible = false;
     this.menu.panels.push(this.bayPanel);
     this.menu.group.add(this.bayPanel.mesh);
@@ -352,8 +391,9 @@ export class MenuSystem extends createSystem({}) {
     // titan line-up, the arcade lobby and the ball loadout. Same panel ids
     // as the plates they replace, so every bit of the visibility and
     // routing machinery below is untouched — only the faces changed.
-    this.addModal('custom', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(true), [0.5, 1.53, -1.1], -0.3);
-    this.addModal('shop', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(false), [0.5, 1.5, -1.1], -0.3);
+    // (The STORE's paint racks answer their `pb:*` ids in paintbay.ts.)
+    this.addModal('custom', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(true), [0.5, 1.52, -1.1], -0.3);
+    this.addModal('shop', 0.94, 0.94, LOCKER_W, LOCKER_H, () => lockerFace(false), [0.5, 1.52, -1.1], -0.3, (id) => bayClick(id));
     this.addModal('campaign', 1.5, 1.5 * (CAMP_H / CAMP_W), CAMP_W, CAMP_H, campaignFace, [0, 1.5, -1.2], 0);
     this.addModal('lobby', 1.05, 1.05 * (LOBBY_H / LOBBY_W), LOBBY_W, LOBBY_H, lobbyFace, [0, 1.5, -1.18], 0);
     // THE READER: the Gazette held up large, straight ahead, where the slab
@@ -570,10 +610,10 @@ export class MenuSystem extends createSystem({}) {
 
   update(delta: number): void {
     this.takeBootJoin();
-    // THE BLANK'S TURN: the bay's buttons yaw the mirror so its back is
-    // reachable. One assignment, and only while the bay is the thing you
-    // are looking at — the locker's own mirror always faces you.
-    if (this.mirror) this.mirror.group.rotation.y = this.mirrorYaw0 + (app.paintBayOpen ? bayTurn() : 0);
+    this.frameDt = Math.min(0.1, Math.max(1 / 240, delta));
+    // THE MIRROR: comes in to arm's reach for the PAINT tab and turns to
+    // the bay's facing, easing both ways; home beside the other two faces.
+    this.updateMirrorPose(delta);
     if (app.state !== this.lastState) this.applyState();
     this.applyOwnSkins();
     this.pulseBannerGlow();
@@ -635,8 +675,8 @@ export class MenuSystem extends createSystem({}) {
     // paper and settings are TABS on the wings now — MENUS 2.) The shop is
     // a sub-modal of customisation: while it's up the customise plate (and
     // its mirror/loadout) step aside for the shop face.
-    const shopOpen = customization.open && customization.shopOpen;
-    const modalCustom = customization.open && !shopOpen;
+    const shopOpen = customization.open && customization.shopOpen && !app.paintBayOpen;
+    const modalCustom = customization.open && !customization.shopOpen && !app.paintBayOpen;
     const modalCampaign = app.campaignOpen;
     const modalLobby = app.lobbyMode !== null;
     const modalReader = app.readerOpen;
@@ -709,16 +749,18 @@ export class MenuSystem extends createSystem({}) {
       // surfaces join the targets so the ray lands ON the blank.
       if (app.paintBayOpen) this.rayTargets.push(...this.bayMeshes);
     }
+    if (app.paintBayOpen) this.resetBayPointers();
     for (const hand of ['left', 'right'] as const) {
       const hit = this.updatePointer(hand, this.rayTargets);
       // THE PAINT BAY: anything that is not a panel — the blank, the
       // gear, or the air beside them — goes through THE MAGNET, which
       // may find a piece the pointer itself just missed.
       if (app.paintBayOpen && !(hit && this.menu.panels.some((p) => p.mesh === hit.object))) {
-        const on = this.bayAim(hit, this.ray.ray.origin, this.ray.ray.direction);
-        if (on?.object.userData?.paintPart && on.uv) this.bayBodyHit(hand, on);
+        this.bayPoint(hand);
         continue;
       }
+      // On a panel: the steadied aim starts fresh when it comes back.
+      if (app.paintBayOpen) this.bayAimRay[hand].live = false;
       if (!hit) continue;
       const panel = this.menu.panels.find((p) => p.mesh === hit.object);
       if (!panel) continue;
@@ -836,17 +878,7 @@ export class MenuSystem extends createSystem({}) {
         this.bayKey = key;
         this.bayPanel.redraw(this.hovered === 'paintbay' ? this.hoveredAction : null);
       }
-      // B (either hand) returns the held unit to the tray.
-      const bDown =
-        (this.input.xr.gamepads.left?.getButtonDown(InputComponent.B_Button) ?? false) ||
-        (this.input.xr.gamepads.right?.getButtonDown(InputComponent.B_Button) ?? false);
-      if (bDown && bay.held) {
-        handReturn();
-        this.bakeGhost(null); // wipe any ghost preview
-      }
-      // The ray left the body this frame: clear a lingering ghost once.
-      if (!bay.hover && this.bayGhostOn) this.bakeGhost(null);
-      bay.hover = null; // re-established by bayBodyHit next frame
+      this.bayUpkeep();
     }
 
     // Freshness tick for live text (queue status, pub counts, room lists…):
@@ -1345,35 +1377,45 @@ export class MenuSystem extends createSystem({}) {
         setAvatarSkin('onyx');
         break;
       case 'open-paintbay':
+        // The PAINT tab: the plate stays open, its face swaps to the bay.
+        customization.open = true;
+        customization.shopOpen = false;
+        clearShopPreview(); // paint what you own, not what you're trying on
         app.paintBayOpen = true;
         this.ensureMirror();
         this.collectBayMeshes();
         this.bayKey = '';
         break;
       case 'paintbay-close':
-        handReturn(); // never strand a unit in the hand
-        app.paintBayOpen = false;
-        break;
-      case 'open-custom':
-        // Opens onto the LOCKER (your inventory + colours).
-        customization.open = true;
-        customization.shopOpen = false;
-        this.ensureMirror();
-        break;
       case 'custom-close':
+        // CLOSE on any face closes the whole plate.
+        this.leavePaint();
         customization.open = false;
         customization.shopOpen = false;
         clearShopPreview(); // the try-on goes back on the rack
         break;
+      case 'open-custom':
+        // Opens onto the LOCKER (your inventory + colours).
+        this.leavePaint();
+        customization.open = true;
+        customization.shopOpen = false;
+        this.ensureMirror();
+        break;
       case 'open-shop':
+        this.leavePaint();
         customization.open = true;
         customization.shopOpen = true;
         if (customization.tab === 'bank' || customization.tab === 'colour') customization.tab = 'platforms';
         this.ensureMirror();
         break;
       case 'open-locker':
+        this.leavePaint();
+        customization.open = true;
         customization.shopOpen = false;
         clearShopPreview();
+        break;
+      case 'tab-paint':
+        customization.tab = 'paint';
         break;
       case 'tab-avatars':
         customization.tab = 'avatars';
@@ -1398,6 +1440,7 @@ export class MenuSystem extends createSystem({}) {
         if (!bank.account.known) void whoami();
         break;
       case 'open-bank':
+        this.leavePaint();
         customization.open = true;
         customization.shopOpen = true;
         customization.tab = 'bank';
@@ -1821,10 +1864,9 @@ export class MenuSystem extends createSystem({}) {
     solveTorso(rig, new Vector3(0, 1.5, 0), new Quaternion(), 0, 0, _dir, _end);
     rig.gloves[0].position.set(-0.22, 1.12, -0.28);
     rig.gloves[1].position.set(0.22, 1.12, -0.28);
-    group.position.set(-0.75, 0, -2.0);
-    // Face the player standing at the rig origin (default forward is -Z).
-    this.mirrorYaw0 = Math.PI + Math.atan2(0 - group.position.x, 0 - group.position.z);
-    group.rotation.y = this.mirrorYaw0;
+    // Placed and turned every frame by updateMirrorPose.
+    group.position.set(MIRROR_HOME.x, 0, MIRROR_HOME.z);
+    group.rotation.y = Math.PI + Math.atan2(-group.position.x, -group.position.z);
     this.scene.add(group);
     this.mirror = { group, rig };
     this.skinVersion = -1; // force a re-apply so the mirror dresses correctly
@@ -2361,54 +2403,201 @@ export class MenuSystem extends createSystem({}) {
     return best;
   }
 
-  /** The ray is ON the blank in the paint bay: ghost/adjust/place/lift. */
+  /**
+   * A hand's ray is in the bay and not on a panel: aim it (steadied — THE
+   * STEADY HAND) at the blank and its gear (THE MAGNET), put the pointer's
+   * dot where the paint would land, and hand any hit to bayBodyHit.
+   * updatePointer has just set `this.ray` to this hand's raw ray.
+   */
+  private bayPoint(hand: 'left' | 'right'): void {
+    const raw = this.ray.ray;
+    const s = this.bayAimRay[hand];
+    if (!s.live) {
+      s.o.copy(raw.origin);
+      s.d.copy(raw.direction);
+      s.live = true;
+    } else {
+      const k = 1 - Math.exp(-this.frameDt * (BAY_STEADY.base + BAY_STEADY.chase * s.d.angleTo(raw.direction)));
+      s.o.lerp(raw.origin, k);
+      s.d.lerp(raw.direction, k).normalize();
+    }
+    this.ray.set(s.o, s.d);
+    this.hits.length = 0;
+    const first = this.ray.intersectObjects(this.bayMeshes, false, this.hits)[0];
+    const on = this.bayAim(first ? { ...first } : undefined, s.o, s.d);
+    const dot = this.pointers[hand].dot;
+    if (!on?.object.userData?.paintPart || !on.uv) {
+      this.bayTrail[hand].length = 0;
+      return;
+    }
+    // The dot sits where the paint will land — the steadied spot, not the
+    // shaking one.
+    dot.position.copy(on.point);
+    dot.visible = true;
+    this.bayOnBody[hand] = true;
+    this.bayBodyHit(hand, on);
+  }
+
+  /** Both pointers' dots back to plain (the bay recolours one over a mark
+   *  it can lift), and no hand on the body until the rays say so. */
+  private resetBayPointers(): void {
+    for (const hand of ['left', 'right'] as const) {
+      const dot = this.pointers[hand].dot;
+      (dot.material as MeshBasicMaterial).color.setHex(0xffc04d);
+      dot.scale.setScalar(1);
+      this.bayOnBody[hand] = false;
+    }
+  }
+
+  /** The ray is ON the blank in the paint bay: place or lift on the trigger. */
   private bayBodyHit(hand: 'left' | 'right', hit: Intersection): void {
     const part = hit.object.userData.paintPart as PaintPart;
     const u = hit.uv!.x;
     const v = hit.uv!.y;
     bay.hover = { part, u, v };
+    const now = performance.now();
+    const trail = this.bayTrail[hand];
+    trail.push({ t: now, part, u, v });
+    while (trail.length > 1 && now - trail[0].t > 250) trail.shift();
+    // Empty-handed over a mark: the dot turns blue and swells — this one
+    // lifts.
+    if (!bay.held && unitAt(part, u, v) >= 0) {
+      const dot = this.pointers[hand].dot;
+      (dot.material as MeshBasicMaterial).color.setHex(0x4fb7ff);
+      dot.scale.setScalar(1.7);
+    }
     const gp = this.input.xr.gamepads[hand];
-    const down = gp?.getButtonDown(InputComponent.Trigger) ?? false;
+    if (!(gp?.getButtonDown(InputComponent.Trigger) ?? false)) return;
+    // THE TRIGGER'S JOLT: act where the ray was just before the pull.
+    let at = trail[0];
+    for (let i = trail.length - 1; i >= 0; i--) {
+      if (now - trail[i].t >= BAY_PULL_LEAD) {
+        at = trail[i];
+        break;
+      }
+    }
+    const session = this.world.session as Parameters<typeof pulseHand>[0];
     if (bay.held) {
-      // THE MINUTELY: stick x twists, stick y sizes — capped at
-      // PAINT.maxSize so a unit can never swallow the body (grip → width,
-      // for the stripe; dots and squares have one size).
-      const axes = gp?.getAxesValues(InputComponent.Thumbstick);
-      const grip = gp?.getButtonPressed(InputComponent.Squeeze) ?? false;
-      if (axes) {
-        const dt = 1 / 60;
-        if (Math.abs(axes.x) > 0.25) bay.held.angle = (bay.held.angle + axes.x * dt * 0.25 + 1) % 1;
-        if (Math.abs(axes.y) > 0.25) {
-          const k = grip && bay.held.kind === 'stripe' ? 'wid' : 'len';
-          bay.held[k] = Math.max(0.02, Math.min(PAINT.maxSize, bay.held[k] - axes.y * dt * 0.5));
-        }
-      }
-      if (down) {
-        handPlace(part, u, v); // setLook → the real bake replaces the ghost
+      if (handPlace(at.part, at.u, at.v)) {
+        // setLook → the real bake replaces the ghost
         this.bayGhostOn = false;
+        this.bayGhostKey = '';
         sfx.uiClick();
+        pulseHand(session, hand, 0.45, 28);
       } else {
-        this.bakeGhost({ part, u, v });
+        sfx.armorClank(); // the look is full
       }
-    } else if (down) {
-      if (handLift(part, u, v)) sfx.uiClick();
+    } else if (handLift(at.part, at.u, at.v)) {
+      sfx.uiClick();
+      pulseHand(session, hand, 0.3, 18);
     }
   }
 
-  /** Preview the held unit at the hover spot (throttled), or wipe it. */
-  private bakeGhost(at: { part: PaintPart; u: number; v: number } | null): void {
-    const root = this.mirror?.group;
-    if (!root) return;
-    if (!at) {
-      applyLook(root, myLook());
-      this.bayGhostOn = false;
-      return;
+  /**
+   * The bay's per-frame upkeep after the pointers: the thumbstick (THE
+   * MINUTELY on a held mark the ray is on — twist and size, grip for a
+   * stripe's thickness, a tick at every eighth and a snap onto it when
+   * released close; otherwise it spins the blank), B (send the hand back),
+   * A / X (undo, empty-handed), and THE GHOST.
+   */
+  private bayUpkeep(): void {
+    const dt = this.frameDt;
+    const session = this.world.session as Parameters<typeof pulseHand>[0];
+    for (const hand of ['left', 'right'] as const) {
+      const gp = this.input.xr.gamepads[hand];
+      const axes = gp?.getAxesValues(InputComponent.Thumbstick);
+      const x = axes && Math.abs(axes.x) > 0.25 ? axes.x : 0;
+      const y = axes && Math.abs(axes.y) > 0.25 ? axes.y : 0;
+      const held = bay.held;
+      if (held && this.bayOnBody[hand]) {
+        if (x) {
+          const before = held.angle;
+          held.angle = (((held.angle + x * dt * BAY_TWIST_RATE) % 1) + 1) % 1;
+          if (Math.floor(before * 8) !== Math.floor(held.angle * 8)) pulseHand(session, hand, 0.2, 12);
+        }
+        if (y) {
+          const grip = gp?.getButtonPressed(InputComponent.Squeeze) ?? false;
+          const k = grip && held.kind === 'stripe' ? 'wid' : 'len';
+          held[k] = Math.max(0.03, Math.min(PAINT.maxSize, held[k] * Math.exp(-y * dt * 1.4)));
+        }
+        if (x || y) {
+          this.twistWas[hand] = true;
+        } else if (this.twistWas[hand]) {
+          // Let go near an eighth: it clicks onto it.
+          this.twistWas[hand] = false;
+          const near = Math.round(held.angle * 8) / 8;
+          if (Math.abs(held.angle - near) < 0.012) held.angle = ((near % 1) + 1) % 1;
+          bay.version += 1; // the panel's hand icon catches up once, not every frame
+        }
+      } else if (x) {
+        // THE TURN: the stick spins the blank to reach its back.
+        bayFaceState.yaw -= x * dt * BAY_SPIN_RATE;
+      }
     }
-    const now = performance.now();
-    if (this.bayGhostOn && now - this.bayGhostAt < 90) return;
-    this.bayGhostAt = now;
-    this.bayGhostOn = true;
-    applyLook(root, { paint: [...myLook().paint, { ...bay.held!, ...at }] });
+    const pads = this.input.xr.gamepads;
+    if (bay.held && ((pads.left?.getButtonDown(InputComponent.B_Button) ?? false) || (pads.right?.getButtonDown(InputComponent.B_Button) ?? false))) {
+      handReturn();
+      sfx.uiClick();
+    }
+    if (!bay.held && ((pads.right?.getButtonDown(InputComponent.A_Button) ?? false) || (pads.left?.getButtonDown(InputComponent.X_Button) ?? false))) {
+      if (undoLast()) sfx.uiClick();
+    }
+    // THE GHOST: the held mark, drawn over the look where the ray is —
+    // redrawn only when the spot or the pose actually moved.
+    const root = this.mirror?.group;
+    if (root && bay.held && bay.hover) {
+      const h = bay.held;
+      const at = bay.hover;
+      const key = `${h.kind}|${h.colour}|${h.angle.toFixed(4)}|${h.len.toFixed(4)}|${h.wid.toFixed(4)}|${at.part}|${at.u.toFixed(4)}|${at.v.toFixed(4)}`;
+      if (key !== this.bayGhostKey) {
+        this.bayGhostKey = key;
+        applyGhost(root, { ...h, ...at });
+        this.bayGhostOn = true;
+      }
+    } else if (root && this.bayGhostOn) {
+      applyGhost(root, null);
+      this.bayGhostOn = false;
+      this.bayGhostKey = '';
+    }
+    bay.hover = null; // re-established by bayBodyHit next frame
+  }
+
+  /** Leaving the PAINT tab: nothing stranded in the hand, no ghost left on
+   *  the mirror, and the blank turns back to face you. */
+  private leavePaint(): void {
+    if (!app.paintBayOpen) return;
+    handReturn();
+    app.paintBayOpen = false;
+    if (this.mirror && this.bayGhostOn) applyGhost(this.mirror.group, null);
+    this.bayGhostOn = false;
+    this.bayGhostKey = '';
+    bayFaceState.yaw = 0;
+    this.mirrorTurn = wrapAngle(this.mirrorTurn); // unwind the short way
+    this.resetBayPointers();
+  }
+
+  /** The mirror's place and turn, eased: home beside the LOCKER and STORE,
+   *  at arm's reach for the PAINT tab, turned to the bay's facing. */
+  private updateMirrorPose(delta: number): void {
+    if (!this.mirror) return;
+    const g = this.mirror.group;
+    const shown = customization.open || app.paintBayOpen;
+    const home = app.paintBayOpen ? MIRROR_PAINT : MIRROR_HOME;
+    const targetTurn = app.paintBayOpen ? bayFaceState.yaw : 0;
+    if (shown && !this.mirrorShown) {
+      // Stepping into view: arrive in place rather than gliding in from wherever it was left.
+      g.position.set(home.x, 0, home.z);
+      this.mirrorTurn = targetTurn;
+    } else {
+      const k = 1 - Math.exp(-delta * 7);
+      g.position.x += (home.x - g.position.x) * k;
+      g.position.z += (home.z - g.position.z) * k;
+      this.mirrorTurn += (targetTurn - this.mirrorTurn) * (1 - Math.exp(-delta * 10));
+    }
+    this.mirrorShown = shown;
+    // Face the player at the rig origin (default forward is −Z), then turn.
+    g.rotation.y = Math.PI + Math.atan2(-g.position.x, -g.position.z) + this.mirrorTurn;
+    g.updateMatrixWorld(true);
   }
 
   private updatePointer(hand: 'left' | 'right', targets: Object3D[]): Intersection | undefined {

@@ -1,7 +1,7 @@
 # THE PAINT — how a blank becomes yours
 
 The design of FF2's paint system (DESIGN.md §5.3, expanded): buying
-individual stripes and splotches of colour, placing them minutely on your
+individual stripes, dots, squares and triangles of colour, placing them minutely on your
 own body, and carrying the result — your personal painting — into every
 game, in front of every player, for as long as you keep adding to it.
 
@@ -20,10 +20,13 @@ fights, raids and rave sets all feed it):
 
 | Item | What it is | Placement freedom |
 | --- | --- | --- |
-| **STRIPE** | A straight band of one colour | position · angle · length · width |
-| **SPLOTCH** | An organic splat of one colour (each unit rolls one of ~8 splat silhouettes when placed; re-placing re-rolls) | position · angle · scale |
+| **STRIPE** | A straight band of one colour | position · angle · length · thickness |
 | **DOT** | A disc — the paint's atom (P5) | position · size |
 | **SQUARE** | A square, cut not sprayed (P5) | position · angle · size |
+| **TRIANGLE** | An equilateral triangle, the one that points (P7) | position · angle · size |
+
+(The SPLOTCH is retired, P7: nothing sells it, and every splotch anyone
+owned or wore became a DOT of its colour — see §7.)
 
 - **Colour is the product.** Units are sold per colour: a rack of hues,
   cheap earth-and-primary tones first, hotter neons a tier up, and a
@@ -34,9 +37,12 @@ fights, raids and rave sets all feed it):
   intact** — paint is never consumed, so experimenting is free once
   you own the materials. (The brief's law: place AND remove, from your
   locker, minutely.)
-- Pricing sketch (tune in `config.ts` `PAINT` block): basic hue stripe
-  ≈ 8 coins, splotch ≈ 10, dot 5, square 7 — every unit under a game's
-  pay. Neon tier ×2, top shelf ×4.
+- Pricing (tune in `config.ts` `PAINT` block): basic hue stripe 8
+  coins, dot 5, square 7, triangle 6 — every unit under a game's pay.
+  Neon tier ×2, top shelf ×4.
+- **Where you buy**: the STORE's PAINT board stocks the locker a unit
+  per tap, and the PAINT tab buys as you go — a colour you've run out of
+  wears its price, and one tap buys one unit and puts it on your pointer.
   A first paint job (5–8 units) costs a handful of bouts, not a
   savings drive — the wardrobe still grows over weeks, which is the
   point ("lasting through games and added to over time"), but nobody
@@ -45,32 +51,45 @@ fights, raids and rave sets all feed it):
   tone (black stripe on a white body, white on onyx) so every player
   has touched the paint bay once.
 
-## 2 · Where you paint — THE PAINT BAY
+## 2 · Where you paint — THE PAINT TAB
 
-A locker face (later: a room of its own in the new venue, your mannequin
-on a plinth). Your body stands live in front of you; the tray beside it
-holds your owned, unplaced units grouped by colour.
+The third tab of the one customization plate — LOCKER · STORE · PAINT,
+the same plate in the same place, opened from the YOU wing's CUSTOMIZE.
+Your body (the mirror) comes in to arm's reach beside it (P7: it stood
+two metres off, where a degree of aim was four centimetres of body).
+
+The face, top to bottom: the four SHAPES; one grid of every colour on
+the racks for the lit shape — owned colours wear their count, the rest
+their price; THE HAND (what's on your pointer, and panel buttons to turn
+it, size it and send it back) or, empty-handed, UNDO; the TURN (◂ FRONT ▸)
+and CLOSE.
 
 The verbs, all controller-native:
 
-1. **Take** — point at a unit in the tray, trigger: it rides your ray as
-   a ghost stripe.
+1. **Take** — tap a colour: it rides your ray as a ghost of the shape
+   (a colour you don't own is bought, one unit, in the same tap).
 2. **Place** — sweep the ray over your body; the ghost wraps the surface
-   at the hit point, live. Trigger drops it.
-3. **Adjust while held** (this is the "minutely"): thumbstick **twist**
-   (x) rotates, thumbstick **y** scales length (stripes) or size
-   (splotches), **grip held** switches the y-axis to width. Haptic tick
-   at snap angles (0°/45°/90°) with free placement between.
-4. **Pick back up** — point at a placed unit, hold trigger a beat: it
-   pops back onto the ray (its slot in the layer order remembered until
-   dropped elsewhere).
-5. **Return** — B with a unit held sends it back to the tray.
-6. **Layers** — newest sits on top; two placed units pointed at in turn
-   swap layers via a SWAP chip on the tray panel. (Full reorder UI can
-   wait; swap covers the real cases.)
+   at the hit point, live, a little translucent until it lands. Trigger
+   drops it. The mark lands where the ray was ~70 ms BEFORE the pull
+   registered — pulling a trigger tugs the controller.
+3. **Adjust while held** (the "minutely"): thumbstick **x** turns it,
+   **y** sizes it (grip held: a stripe's thickness). A haptic tick at
+   every eighth of a turn, and letting go near one clicks onto it. The
+   panel's ↺ ↻ − + (THIN / THICK) do the same for anyone who'd rather press.
+4. **Pick back up** — empty-handed, the pointer's dot turns blue and
+   swells over a mark it can lift; trigger lifts it onto the ray.
+   Picking is by the mark's OUTLINE (the topmost mark under the dot), so
+   a long thin stripe lifts from its end.
+5. **Return** — B (or BACK) sends the held unit to the locker.
+6. **Undo** — A / X (or UNDO), empty-handed: the newest mark comes off
+   and back into the locker.
+7. **Turn** — ◂ ▸ step the body an eighth; the thumbstick spins it
+   freely whenever it isn't adjusting a held mark. It eases, both ways.
 
-The bay runs on the panel kit for its tray/chips and the existing ray +
-trigger grammar — no new input machinery.
+THE STEADY HAND: the bay aims with its own copy of each ray, eased
+toward the real one at a rate that climbs with the gap between them — a
+tremor is soaked up, a deliberate sweep followed at once — and the
+pointer's dot sits where the paint will land.
 
 ## 3 · The look, as data
 
@@ -78,9 +97,9 @@ One look = the base tone + an ordered list of placed units:
 
 ```ts
 interface PlacedPaint {
-  kind: 'stripe' | 'splotch';
+  kind: 'stripe' | 'dot' | 'square' | 'triangle';
   colour: number;   // index into the sold palette (not a free RGB)
-  variant: number;  // splotch silhouette roll; stripes: end-cap style
+  variant: number;  // reserved (the retired splotch's silhouette roll)
   part: 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand';  // P5: the gear slots; P6: your hands
   u: number; v: number;   // anchor in that part's unwrap, quantized /255
   angle: number;          // /255 over 2π
@@ -92,7 +111,9 @@ interface Look {
 }
 ```
 
-Packed, one unit is **8 bytes**; a maxed look is ~520 bytes — smaller
+On the wire (format 4, P7) b0 carries the kind in bits 0..2 and the
+part in bits 3..7; formats 1–3 still read, and a splotch in any of them
+reads as a dot. Packed, one unit is **8 bytes**; a maxed look is ~520 bytes — smaller
 than one pose packet burst. Caps and quantization are the moderation and
 netcode story in one move: every field is clamped by construction, a
 look can't be oversized, and the same bytes render the same everywhere.
@@ -104,21 +125,32 @@ behind the name.
 
 ## 4 · How it renders
 
-The blank's lofts get a **cylindrical unwrap** (ring index → v, segment
-→ u — the loft builder already iterates exactly those), and each body
-part gets a **paint canvas** (head 256², chest 512×512, pelvis 256²,
-gloves 128²):
+The blank's lofts carry a **cylindrical unwrap** (ring index → v, angle
+round the ring → u), and each paint surface gets a **paint canvas**
+(head 256², body 768², gear 256² / 128², hands 256²):
 
 1. Start from the base tone fill.
-2. Draw each placed unit oldest-first: stripes as rotated rounded bands,
-   splotches as their seeded blob paths; anything crossing the u-seam
-   draws twice, offset ±1, so wraps are seamless.
+2. Rasterize each placed unit oldest-first, **true to size** (P7). The
+   unwrap is not square on the body — u runs round each ring by angle, so
+   the front of the shoulders spans almost twice the metres per texel
+   that its height does, the waist much less, and the skull pinches to
+   nothing at the crown — so a shape drawn flat on the canvas came out
+   stretched. Each surface carries a CHART of its own geometry (the
+   ring's half-width, half-depth and height per v), every texel near a
+   unit is measured back to the unit's centre along the surface (across
+   by the arc round its ring, down by the arc of its own meridian), and
+   the shape is a signed distance in those metres, antialiased over the
+   texel's own size. A dot is round wherever it lands, a stripe keeps its
+   width round the side, a mark on the crown is a disc. Gear and hands
+   have no chart and keep the flat canvas measure. Crossing the u-seam
+   is free: the measure wraps.
 3. Upload once as the part material's `map`.
 
 A repaint happens **only when the look changes** — placing in the bay,
 or a rival's look arriving. At runtime a painted fighter costs exactly
-what a blank costs: same meshes, one static texture per part. (This is
-the panel kit's repaint-key discipline applied to bodies.)
+what a blank costs: same meshes, one static texture per part. THE GHOST
+(the held unit in the bay) does not re-bake the look: it copies the
+committed bake of the one part under the ray and draws one shape over it.
 
 Onyx bodies keep their sheen: paint draws into the same map, and the
 darker base simply reads through unpainted texels.
@@ -261,3 +293,17 @@ Free placement can draw things we don't want in a room:
    (part index 5, append-only). Probed: the bay places onto the hands,
    the pair roundtrips the wire, and the MIRROR's hand — the thing the
    bay's ray paints — bakes it.
+7. **P7 — clean, steady, one plate.** **SHIPPED**: the PAINT tab of the
+   one customization plate (LOCKER · STORE · PAINT, one CUSTOMIZE door
+   on the YOU wing) replaces the separate bay modal, and the STORE gains
+   a PAINT board; the mirror comes to arm's reach and eases through its
+   turns; THE STEADY HAND and the trigger's lead; stick detents with
+   haptic ticks; UNDO; panel nudges; picking by outline; the ghost drawn
+   over a cached bake of one part (cheap enough for every frame, where
+   the full re-bake ran ~11 times a second). Rendering is TRUE TO SIZE
+   (§4). The SPLOTCH is retired (owned and placed ones became dots) and
+   the TRIANGLE joins; wire format 4 carries it. And a real bug: the
+   locker's reload only knew stripes and splotches, so every DOT and
+   SQUARE bought vanished on the next boot — it reads every kind now.
+   Probed in `npm run check:paint`: formats 2–3 read with splotch → dot,
+   the locker survives a restart, a stripe picks at its end.

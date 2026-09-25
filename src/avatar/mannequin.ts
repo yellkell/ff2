@@ -71,7 +71,7 @@ function tagged(tone: BlankTone): Group {
  *  by construction), `w`/`d` are half-width/half-depth at height `y`.
  *  `z` shifts the ring fore/aft — the neck-root rings lean FORWARD to meet
  *  the head, which the IK deliberately hangs ahead of the spine. */
-interface Ring {
+export interface Ring {
   y: number;
   w: number;
   d: number;
@@ -86,7 +86,7 @@ const SEG = 36;
  * indexed mesh so the shading rolls continuously — no crossing primitives,
  * no visible seams, mirror-symmetric on both axes by construction.
  */
-function loft(rings: Ring[], mat: MeshStandardMaterial): Mesh {
+function loft(rings: readonly Ring[], mat: MeshStandardMaterial): Mesh {
   // SEG+1 columns per ring: the seam vertex is duplicated so u runs a
   // clean 0..1 around the body — THE PAINT bakes into these UVs, and a
   // shared seam vertex would smear the last column across the whole map.
@@ -150,12 +150,16 @@ function loft(rings: Ring[], mat: MeshStandardMaterial): Mesh {
  * leaning the stub back hides it. Disconnected, the joint can never bind —
  * and a floating head is a mannequin's honest silhouette anyway.
  */
+/** The egg's stretch of a sphere of BODY_IK.headRadius (x, y, z) — THE
+ *  PAINT's chart (avatar/paint.ts) measures the skull from it. */
+export const HEAD_SCALE: readonly [number, number, number] = [0.84, 1.08, 0.93];
+
 export function buildMannequinHead(tone: BlankTone): Group {
   const r = BODY_IK.headRadius;
   const g = tagged(tone);
 
   const skull = new Mesh(new SphereGeometry(r, 28, 22), toneMat(tone));
-  skull.scale.set(0.84, 1.08, 0.93);
+  skull.scale.set(HEAD_SCALE[0], HEAD_SCALE[1], HEAD_SCALE[2]);
   skull.position.y = r * 0.05;
   skull.userData.paintPart = 'head'; // THE PAINT bakes into this mesh's map
   skull.userData.paintTone = tone;
@@ -180,7 +184,7 @@ export function buildMannequinHead(tone: BlankTone): Group {
  * untouched: BODY_IK still puts chest and pelvis where it always did, and
  * this surface runs inside them.
  */
-const BODY_RINGS: Ring[] = [
+export const BODY_RINGS: readonly Ring[] = [
   // THE NECK — a short column rising from the shoulders, stopping CLEAR of
   // the head's underside (~0.516 hip-local when standing). It leans forward
   // (−z) because the IK deliberately hangs the spine behind the head.

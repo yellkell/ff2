@@ -120,8 +120,8 @@ export function seasonScoreField(idx: number): string {
 }
 
 /**
- * THE PAINT (docs/paint.md) — the blank takes colour from placed stripes
- * and splotches alone. The palette INDEX is the wire value, so the roster
+ * THE PAINT (docs/paint.md) — the blank takes colour from placed stripes,
+ * dots, squares and triangles alone. The palette INDEX is the wire value, so the roster
  * is append-only: never reorder, never remove, only add to the end.
  * Tiers by index: 0–7 the base rack, 8–19 the neon rack, 20–23 top shelf.
  */
@@ -140,8 +140,9 @@ export const PAINT = {
   /** Unit prices in coins; racks multiply (see tierOf). Paint is CHEAP —
    *  every unit lands between five and ten, under a game's pay, so a first
    *  paint job is an afternoon's idea and not a saving-up. DOTS are the
-   *  cheapest geometry: a dot is the paint's atom. */
-  price: { stripe: 8, splotch: 10, dot: 5, square: 7 },
+   *  cheapest geometry: a dot is the paint's atom. (The splotch is
+   *  retired: owned ones became dots.) */
+  price: { stripe: 8, dot: 5, square: 7, triangle: 6 },
   /** The biggest a unit can be sized in the bay (fraction of its part's
    *  canvas). Big enough for a sash across the chest, never a whole-body
    *  fill — the blank's silhouette stays the picture. */
@@ -152,8 +153,8 @@ export const PAINT = {
    *  finish, and a bare one is never touched. */
   metalness: 0.45,
   // The racks still cost more, but the top shelf no longer multiplies a
-  // cheap unit back into an expensive one: a GOLD LEAF splotch is 40, not
-  // 300. Base rack · neon rack · top shelf.
+  // cheap unit back into an expensive one: a GOLD LEAF stripe is 32.
+  // Base rack · neon rack · top shelf.
   tierMult: [1, 2, 4],
   /** Rack boundaries by colour index: 0–7 base, 8–19 neon, 20+ top. */
   tierOf: (colour: number): number => (colour < 8 ? 0 : colour < 20 ? 1 : 2),

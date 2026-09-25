@@ -430,6 +430,28 @@ carried over verbatim: everything in it still applies to this code.
   wire report names a champion's paint. Headless probes:
   `npm run check:paint` (wire + record + two-client room), plus the bay
   verbs under `window.__ff2.paint`.
+- **PAINT P7 — clean, steady, one plate** ([`docs/paint.md`](docs/paint.md)
+  §2, §4, P7). ONE customization plate: the YOU wing's CUSTOMIZE opens
+  LOCKER · STORE · PAINT, three tabs on one plate in one place, and the
+  STORE gains a PAINT board. The PAINT tab is one grid: an owned colour
+  wears its count, one you've run out of wears its price, and a tap buys
+  ONE unit and puts it on your pointer. The mirror comes to arm's reach
+  while you paint and eases through its turns (◂ ▸, or spin it with the
+  stick). Shapes are drawn TRUE TO SIZE — each surface is measured in
+  metres, so dots are round, squares square and stripes even wherever
+  they land. Steadied aim, the mark lands where you aimed just before the
+  trigger's tug, stick detents with haptic ticks, UNDO (A / X), panel
+  nudges for turn and size, picking by outline, and a live ghost cheap
+  enough for every frame. The SPLOTCH is retired (owned and worn ones
+  became dots), the TRIANGLE joins (wire format 4), and bought dots and
+  squares no longer vanish from the locker on a restart.
+- **THE SHOULDERS, SQUARED** (`solveTorso`, avatar/boxer.ts): the body
+  now follows a LOOK and ignores a GLANCE by time — a look held 0.4 s
+  (or a swing past 34°) turns the shoulders all the way round, to within
+  2°. It used to sit inside a 37° dead zone drifting over four seconds and
+  stop 8° short, and a boxing guard pulled it 20° off the head for as
+  long as you held it; the hands now pull by where they are, not by the
+  skewed line between them.
 
 ## Run it
 
