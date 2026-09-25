@@ -273,6 +273,10 @@ export function applyPlatformSkin(root: Object3D, skin: PlatformSkin): void {
           m.map = look.map;
           m.bumpMap = look.bump;
           m.emissiveMap = look.emissiveMap ?? null;
+          // A two-material deck (CHAMPION's gold in lacquer) carries its
+          // roughness and metalness per texel; the rest clear it.
+          m.roughnessMap = look.finish ?? null;
+          m.metalnessMap = look.finish ?? null;
           m.needsUpdate = true;
         }
         m.color.setHex(look.color);

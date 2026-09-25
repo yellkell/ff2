@@ -18,6 +18,7 @@
       import { buildBoxer } from '/src/avatar/boxer.ts';
       import { applyAvatarSkin, applyPlatformSkin, avatarSkin, platformSkin } from '/src/avatar/skins.ts';
       import { makePlatform } from '/src/arena/arena.ts';
+      import { decksSettled } from '/src/arena/decks.ts';
       import { applyGear } from '/src/avatar/gear.ts';
 
       const params = new URLSearchParams(location.search);
@@ -79,11 +80,20 @@
         j++;
       }
       if (padIds.length && !skinIds.length) {
-        // High three-quarter view so the deck (and its decal) is visible.
-        camera.position.set(0.4, 2.6, -2.4);
-        camera.lookAt(0, 0.5, 0);
+        if (params.get('view') === 'stand') {
+          // ?view=stand — the fighter's own eye: standing on the pad (top
+          // face at y 0.55 here), looking down toward the foe.
+          camera.position.set(0, 0.55 + 1.6, 0.35);
+          camera.lookAt(0, 0.55, -0.55);
+        } else {
+          // High three-quarter view so the deck (and its decal) is visible.
+          camera.position.set(0.4, 2.6, -2.4);
+          camera.lookAt(0, 0.5, 0);
+        }
       }
 
+      // Decks refine to full size a slice at a time; shoot the finished ones.
+      await decksSettled();
       renderer.render(scene, camera);
       // Let textures/env settle, render once more, then flag ready.
       requestAnimationFrame(() => {
