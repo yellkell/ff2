@@ -171,9 +171,7 @@ export const BOSSES: BossDef[] = [
     weakPattern: 'both',
     // The scrapyard learned the GATE: a fence of fire with one gap — the
     // junkyard's own move, and the plainest read in the new vocabulary.
-    // Every titan throws the CROSS too — the arms go out like wings and
-    // snap across the body as the side rails fire (the scissor gesture).
-    grammar: { gate: 3, lanes: 2, cross: 3 },
+    grammar: { gate: 3, lanes: 2 },
     beat: 0.56,
     grammarCharge: 2.1,
   },
@@ -199,6 +197,8 @@ export const BOSSES: BossDef[] = [
     // The foundry press learned the WAVE: its drumline slam was already a
     // march — now the whole deck marches (and the classic surge, weighted
     // above, rocks it lengthways).
+    // The CROSS too (every titan past the scrapyard throws it): the arms
+    // go out like wings and snap across the body as the side rails fire.
     grammar: { wave: 4, cross: 3 },
     beat: 0.5,
     grammarCharge: 2.0,
