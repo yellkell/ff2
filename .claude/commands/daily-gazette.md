@@ -1,22 +1,24 @@
-Write and publish today's edition of The Gasket Gazette.
+Write and publish today's edition of The Gasket Gazette — the paper of
+Gasket Cove, where the Clankers scrap on the beach.
 
 Read `docs/gazette-voice.md` first — every line of the edition is written in
 Sheriff Cole Ironside's voice, under its rules (never name who fell; never
-break the fourth wall; translate every game term; one tin tell; the page's
-length). Then:
+break the fourth wall; translate every game term into the cove's words —
+scraps on the sand, titans up out of the surf, the harbour clock; one tin
+tell; it is always sundown; the page's length). Then:
 
 1. Run `node scripts/ladder-brief.mjs` and read the wire report it prints:
-   climbers and the busiest (never fallers), the raid wire (titans felled
-   since the last edition, squads, clock times), new names in town, and for
+   climbers and the busiest (never fallers), the raid wire (titans beached
+   since the last edition, squads, clock times), who washed up new, and for
    each fighter their `tone`, most-used paint `colours`, worn `gear` and the
-   `pad` they stand on — in Gasket's own words already.
+   `pad` they stand on — in the cove's own words already.
 2. Write the edition as ONE JSON object to `/tmp/gazette.json` with exactly
    these fields: `headline`, `subhead`, `body`, `mood`, `wanted`
    (`{ name, crime, reward }`), `notice`, `weather`. Sizes: headline under 60
    characters; body 180–320 words in 3–5 blank-line-separated paragraphs;
    `wanted.crime` under 80 characters; `notice` under 160; `weather` one line.
    The lede is the wire's biggest change; the raid wire is paragraph two if
-   there is one; the town's paint, ironmongery and decks are paragraph three;
+   there is one; the beach's paint, ironmongery and decks are paragraph three;
    the grumble and the tin tell close it. A quiet wire still gets an edition
    (see the voice doc's second example) and a `wanted` for the top of the roll.
 3. Run `node scripts/publish-gazette.mjs /tmp/gazette.json`. It validates the

@@ -220,13 +220,13 @@ await wrap(`act('wrap:tab-town')`);
   const before = errors.length;
   await page.evaluate(() => {
     window.__ff2.gazette.inject({
-      headline: 'VOLTAIRE UP NINE RUNGS; SOMEBODY CHECK THE LADDER',
-      subhead: 'A pair fight, a brawl, and a coat of OXBLOOD this office did not authorise.',
-      body: 'VOLTAIRE rose nine rungs on the roll overnight, which is not a climb so much as a jailbreak. Eleven engagements, most of them duels.\n\nOut at the boneyard a squad put down JUGGERNAUT in eight minutes on the county watch. They came back through the trailhead at dusk making the noise they make.\n\nThe sign still points the wrong way. My knee has been clicking since the weather turned; the doctor says it is the weather.',
+      headline: 'VOLTAIRE UP NINE RUNGS; SOMEBODY CHECK THE TIDE',
+      subhead: 'A pair scrap, a beach brawl, and a coat of OXBLOOD this office did not authorise.',
+      body: 'VOLTAIRE rose nine rungs on the roll overnight, which is not a climb so much as a flood. Eleven scraps on the sand, most of them one-on-one.\n\nOut past the point a squad put down JUGGERNAUT in eight minutes on the harbour clock. They came back round the point at sundown making the noise they make, and dripping.\n\nSomebody has moved the tiki torches again. My knee has been squeaking since the wind came in off the sea; the doctor says it is the salt.',
       mood: 'AGGRIEVED',
-      wanted: { name: 'VOLTAIRE', crime: 'Excessive winning. Also the paint.', reward: '200 bolt-dollars' },
-      notice: 'The boneyard is closed to picnickers until GOLIATH stops getting back up.',
-      weather: 'Dusk. It has been dusk for some time. Expect dusk.',
+      wanted: { name: 'VOLTAIRE', crime: 'Excessive scrapping. Also the paint.', reward: '200 iron-dollars' },
+      notice: 'No scrapping below the tide line. The sea has enough to put up with.',
+      weather: 'Sundown. The sun has been going down since the metal arrived and has not finished.',
     });
     window.__ff2.gazette.open();
   });

@@ -3,7 +3,7 @@
  *
  * Reads the live ladder (Firestore `players`) and the snapshot left by the
  * LAST published edition (`gazette/_snapshot`), works out what changed since
- * — who fought, who climbed, who slid, who's new in town — and prints a
+ * — who scrapped, who climbed, who slid, who washed up new — and prints a
  * compact JSON brief to stdout.
  *
  * It writes NOTHING. The scheduled Claude task pipes this brief into Sheriff
@@ -67,8 +67,8 @@ function paintColours(wire, max = 3) {
   return [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([c]) => PAINT_NAMES[c]);
 }
 
-// GEAR (src/avatar/gear.ts) and the DECKS (src/avatar/skins.ts) in Gasket's
-// own words — the ids ride the player doc; keep these in step with the game.
+// GEAR (src/avatar/gear.ts) and the DECKS (src/avatar/skins.ts) in Gasket
+// Cove's own words — the ids ride the player doc; keep these in step with the game.
 const GEAR_WORDS = {
   crest: 'a CREST bolted nose to nape',
   antennae: 'twin ANTENNAE off the temples',
@@ -145,8 +145,8 @@ async function readSnapshot() {
 }
 
 /**
- * RAIDS since the last edition: squads that marched out of town and FELLED the
- * titans (`ff2-raid-time`) or the gel-beast GOOPLIATH (`ff2-goopliath-time`).
+ * RAIDS since the last edition: squads that went out past the point and
+ * BEACHED the titans (`ff2-raid-time`) or the gel-beast GOOPLIATH (`ff2-goopliath-time`).
  * Only VICTORIOUS runs are ever recorded — the game posts a run when the last
  * boss falls, so a squad that got beaten leaves no wire at all. The brief
  * therefore carries triumphs only, which suits the paper's never-punch-down
@@ -264,16 +264,16 @@ const brief = {
     ffaPoints: 'FFA board POINTS (+11 per win, +1 per game) — not a win count',
     gamesApprox: 'ESTIMATED bouts fought since the last edition (round(xpGained / 25)) — THIS is the matches-played figure',
     raids:
-      'squads that marched OUT of town and FELLED the wild machines since the last edition — kind "titans" is the five-boss raid (RUSTHOOK → GOLIATH), kind "goopliath" is the gel-beast. VICTORIES ONLY: beaten squads are never recorded, so no raid in this list failed. hardcore = no healing between titans; difficulty is normal/hard/blazing. Name the squad callsigns together — a raid is one deed by the whole posse.',
+      'squads that went out past the point and BEACHED (felled) the machines that come up out of the surf since the last edition — kind "titans" is the five-boss raid (RUSTHOOK → GOLIATH), kind "goopliath" is the gel-beast. VICTORIES ONLY: beaten squads are never recorded, so no raid in this list failed. hardcore = no healing between titans; difficulty is normal/hard/blazing. Name the squad callsigns together — a raid is one deed by the whole posse.',
     gear: "each player's GEAR — the shapes bolted onto the body, already in Cole's words ('a CREST bolted nose to nape'). Empty = bare iron. Cole calls it ironmongery; it's vanity, never a score.",
-    pad: "the DECK each player fights on, by material ('WALNUT', 'SLATE flagstones', 'BULLION (gold leaf)'). Empty = the house boards. The CHAMPION, TIDEBREAKER and BLAZING decks are EARNED, never bought — worth a line when someone stands on one.",
+    pad: "the DECK each player scraps on, above the sand, by material ('WALNUT', 'SLATE flagstones', 'BULLION (gold leaf)'). Empty = the house boards. The CHAMPION, TIDEBREAKER and BLAZING decks are EARNED, never bought — worth a line when someone stands on one.",
     colours:
       "each player's PAINT: `tone` is their body's base (bone white or onyx black) and `colours` their most-used paint colours, heaviest first. An empty colours list means a factory-blank body — unpainted iron, nobody's made it theirs yet. Cole can describe a champion by their war paint ('the EMBER-and-CYAN machine', 'that GOLD LEAF dandy'); colours are decoration the players chose, never a score.",
   },
-  // Cole's favourite kind of day: nobody threw a single iron ball — and no
-  // war party went monster-hunting in the wastes either.
+  // Cole's favourite kind of day: nobody scrapped on the sand — and no
+  // squad went out past the point after the titans either.
   nobodyFought: totalGames === 0 && movers.length === 0 && raids.length === 0,
-  // The raid wire: every squad that felled the titans or the tide since the
+  // The raid wire: every squad that beached the titans or the tide since the
   // last edition, newest first.
   raids,
   summary: {

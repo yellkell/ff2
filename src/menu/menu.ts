@@ -1167,7 +1167,8 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number,
 }
 
 // --- THE GASKET GAZETTE -----------------------------------------------------
-// The paper itself — an aged-newsprint front page (serif type on cream, a
+// Gasket Cove's paper — the scrapping on the beach, as the Sheriff sees it
+// (docs/gazette-voice.md). An aged-newsprint front page (serif type on cream, a
 // deliberate break from the smoked-steel lobby). MENUS 2: it renders on its
 // own portrait canvas here and the TOWN wing's NEWS tab blits it (wrap.ts);
 // the paper button and the modal are gone.
@@ -1305,7 +1306,7 @@ function layoutArticle(ctx: CanvasRenderingContext2D, art: GazetteArticle, top: 
 
   ctx.textAlign = 'right';
   ctx.font = `italic bold 22px ${NEWS_SERIF}`;
-  if (draw) ctx.fillText(`— ${art.byline}, Gasket Township`, NW - 50, y + 8);
+  if (draw) ctx.fillText(`— ${art.byline}, Gasket Cove`, NW - 50, y + 8);
   y += 40;
 
   // THE VOICE's sections (docs/gazette-voice.md §5), under the byline:
@@ -1401,17 +1402,17 @@ function drawNews(ctx: CanvasRenderingContext2D): void {
   ctx.font = `900 58px ${NEWS_SERIF}`;
   ctx.fillText('The Gasket Gazette', NW / 2, 152);
   ctx.font = `italic 17px ${NEWS_SERIF}`;
-  ctx.fillText('GASKET TERRITORY · EST. 2226 · PRICE ONE CENT', NW / 2, 178);
+  ctx.fillText('GASKET COVE · EST. 2226 · PRICE ONE CENT', NW / 2, 178);
   newsRule(ctx, 192, 2);
 
   // Dateline strip — edition number left, the date centred. Strip any
-  // "GASKET TERRITORY —" prefix (older editions stored it) so the date stays
-  // short and never collides.
+  // "GASKET TERRITORY —" / "GASKET COVE —" prefix (older editions stored
+  // one) so the date stays short and never collides.
   ctx.font = `bold 16px ${NEWS_SERIF}`;
   ctx.textAlign = 'left';
   ctx.fillText(art ? (art.edition > 0 ? `No. ${art.edition}` : 'WELCOME') : 'No. —', 50, 216);
-  let dateText = (art?.dateline || '').replace(/^\s*GASKET TERRITORY\s*[—–-]\s*/i, '').trim();
-  if (!dateText) dateText = 'GASKET TERRITORY';
+  let dateText = (art?.dateline || '').replace(/^\s*GASKET (TERRITORY|COVE)\s*[—–-]\s*/i, '').trim();
+  if (!dateText) dateText = 'GASKET COVE';
   ctx.textAlign = 'center';
   ctx.fillText(dateText, NW / 2, 216);
   newsRule(ctx, 228, 2);

@@ -111,7 +111,7 @@ const latestSnap = await db.doc('gazette/latest').get();
 const edition = ((latestSnap.exists && latestSnap.data().edition) || 0) + 1;
 
 const today = new Date();
-// Just the date — the page template already prints "GASKET TERRITORY" in the
+// Just the date — the page template already prints "GASKET COVE" in the
 // masthead, so the dateline strip stays short.
 const dateline =
   article.dateline ||
