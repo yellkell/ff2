@@ -262,7 +262,10 @@ export const MOVES: Record<
   // you're being taught, not warned. Rare on purpose: it's the set piece
   // the floor talks about afterwards, and a memory test you meet every
   // phrase stops being one.
-  routine: { chargeBeats: 8, weights: [0, 1, 2, 2, 3] },
+  // CUT from the set-list: the falling blocks didn't land with the floor.
+  // Zero weight at every act, so no chart rolls it; the machinery stays
+  // (the dev drop and /deck-preview.html?shape=routine still show it).
+  routine: { chargeBeats: 8, weights: [0, 0, 0, 0, 0] },
   // THE COMBINATION asks for the two hardest answers in the game on one
   // beat, which is exactly why it should be something you meet once in a
   // night and talk about after — not a shape the back stretch serves

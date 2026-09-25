@@ -18,6 +18,13 @@ plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 (DESIGN.md §10). [`FOUNDATION.md`](FOUNDATION.md) is FF1's own README,
 carried over verbatim: everything in it still applies to this code.
 
+- **NO FALLING BLOCKS, NO CHASING LASER** — two boss attacks cut after
+  play: RAVE RAID's **ROUTINE** (the taught corners and the blocks
+  crushing the other three) weighs zero at every act, so no chart rolls
+  it; and the titans' beam no longer **TRACKS** you through its charge —
+  VULTURE, GOLIATH and GOOPLIATH aim it once, where you stand when it
+  starts, and it stays put (`beamTracks` is off on every def). The
+  machinery for both stays in place for the dev drop and a later bill.
 - **THE BANK** — iron-dollars for money. The STORE has a third chip,
   BANK, and the YOU wing's purse is a door to it: four packs — 500 · 1300
   · 3000 · 7000 — a pack is its number and its price, nothing else to read.

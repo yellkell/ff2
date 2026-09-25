@@ -10,7 +10,7 @@
  *      smokestacks glowing off the shoulders, riveted slab chest, and two
  *      massive rectangular HAMMER-BLOCK fists.
  *  III VULTURE — the executioner. A hooded narrow head with a hooked beak
- *      and ONE round eye (the tracking beam's source), swept wing-plate
+ *      and ONE round eye (the beam's source), swept wing-plate
  *      pauldrons, a slim tapered trunk and talon-clawed hands.
  *  IV  JUGGERNAUT — the rolling fortress. Squat and WIDE: a dome head sunk
  *      between the shoulders, double-layered bolted chest plates, and a
@@ -105,7 +105,9 @@ export interface BossDef {
   slamStyle: SlamStyle;
   /** Detonations in a rehit/march pattern (1 for 'single'). */
   slamCount: number;
-  /** Beam telegraphs TRACK the player and only lock late — dodge late. */
+  /** Beam telegraphs TRACK the player and only lock late — dodge late.
+   *  Off on every titan: the laser that chased you was cut from the bill
+   *  (the machinery stays in CampaignSystem for a later one). */
   beamTracks: boolean;
   /** Enrage threshold as an HP fraction (0 = never): faster, angrier. */
   enrageAt: number;
@@ -211,7 +213,7 @@ export const BOSSES: BossDef[] = [
     swayAmp: 0.6,
     slamStyle: 'single',
     slamCount: 1,
-    beamTracks: true,
+    beamTracks: false,
     enrageAt: 0,
     weakPattern: 'double',
     // The executioner learned the CROSSFIRE — rails from the side emitters,
@@ -257,7 +259,7 @@ export const BOSSES: BossDef[] = [
     // nova carries an extra half-second of windup — rotating a whole squad
     // to one safe wedge needs more read time than a single dodge. The beam
     // (laser) cooks 0.4s longer than its raw pace too, for a fairer dodge on
-    // the fastest titan's tracking shot.
+    // the fastest titan's shot.
     charge: { slam: 1.15, sweep: 1.35, beam: 1.6, volley: 1.8, nova: 2.6, seesaw: 1.7, surge: 1.8 },
     weights: { slam: 3, sweep: 3, beam: 3, volley: 3, nova: 4, seesaw: 0, surge: 0 },
     volleyCount: 4,
@@ -265,7 +267,7 @@ export const BOSSES: BossDef[] = [
     swayAmp: 0.35,
     slamStyle: 'march',
     slamCount: 2,
-    beamTracks: true,
+    beamTracks: false,
     enrageAt: 0.5,
     weakPattern: 'crown',
     platform: 'blazing',
@@ -321,7 +323,7 @@ export function raidBoss(def: BossDef, stage: number, raiders: number): BossDef 
  * breaker). `health` is a HIT COUNT, not damage — his whole body is the
  * hitbox and every landed ball steps the bar one notch (weakPattern 'body').
  * The moveset: the horizontal sweep (with the full-turn lash in raids), the
- * tracking eye beams, GOLIATH's safe-wedge nova — and the SEESAW, his alone:
+ * eye beams, GOLIATH's safe-wedge nova — and the SEESAW, his alone:
  * one half of the platform floods, then the other, and the cascade grows
  * legs as he drains (GOOPLIATH.seesawStages).
  */
@@ -344,7 +346,7 @@ export const GOOPLIATH_DEF: BossDef = {
   swayAmp: 0, // the gel sim carries its own idle motion
   slamStyle: 'single',
   slamCount: 1,
-  beamTracks: true,
+  beamTracks: false,
   enrageAt: 0.35,
   weakPattern: 'body',
   platform: 'tidebreaker',
@@ -576,7 +578,7 @@ export function buildTitan(def: BossDef): TitanRig {
     }
     case 'vulture': {
       // A hooded scavenger skull: narrow casque and ONE big round eye — the
-      // source of the tracking beam, so the tell reads at a glance. (No beak:
+      // source of the beam, so the tell reads at a glance. (No beak:
       // the old cone hung straight over the eye and hid the blink.)
       const hood = new Mesh(new CylinderGeometry(headR * 0.55, headR * 0.9, headR * 1.9, 8), chassis(accent, 0.06));
       hood.rotation.x = 0.28; // craned forward, watching you
