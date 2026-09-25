@@ -149,8 +149,10 @@ export function createCoveSound(fires: FireSpot[]): CoveSound {
   const start = (ctx: AudioContext, b: Bank): void => {
     started = true;
     // the sea's roar, wide across the bay ahead; the palms and the crickets behind
-    loop(ctx, b.far, 0.55, panner(ctx, -60, SEA_Y, -140, 40, 0.6));
-    loop(ctx, b.far, 0.45, panner(ctx, 90, SEA_Y, -120, 40, 0.6));
+    // (kept LOW: it's the bed the wave-timed crashes and swashes sit on —
+    // any louder and it reads as a constant hum)
+    loop(ctx, b.far, 0.16, panner(ctx, -60, SEA_Y, -140, 40, 0.6));
+    loop(ctx, b.far, 0.13, panner(ctx, 90, SEA_Y, -120, 40, 0.6));
     loop(ctx, b.palms, 0.16, panner(ctx, 0, 8, 30, 12, 0.5));
     loop(ctx, b.crickets, 0.3, panner(ctx, -25, 2, 45, 10, 0.5));
     loop(ctx, b.crickets, 0.22, panner(ctx, 40, 2, 55, 10, 0.5));
