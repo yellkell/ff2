@@ -21,7 +21,9 @@ carried over verbatim: everything in it still applies to this code.
 - **NO FALLING BLOCKS, NO CHASING LASER** — two titan attacks cut after
   play: the **SLAM** (the ghost block hanging over a disc on your pad,
   dropping with the countdown and crashing down) weighs zero on every
-  titan, so none of them throws it; and the beam no longer **TRACKS** you
+  titan, so none of them throws it — the **SEESAW** (one half of the pad
+  floods, then the other: cross) takes its weight on every machine; and
+  the beam no longer **TRACKS** you
   through its charge — VULTURE, GOLIATH and GOOPLIATH aim it once, where
   you stand when it starts, and it stays put (`beamTracks` is off on
   every def). The machinery for both stays for the dev probe and a later

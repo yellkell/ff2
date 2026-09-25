@@ -94,8 +94,9 @@ export interface BossDef {
   charge: Record<AttackKind, number>;
   /** Attack roster weights; 0 = this titan never uses that attack. The
    *  SLAM (the ghost block dropping onto a disc) is 0 on every titan: it
-   *  was cut from the bill after play. Its machinery stays in
-   *  CampaignSystem (the dev probe can still force one). */
+   *  was cut from the bill after play, and the SEESAW took its weight on
+   *  each machine. Its machinery stays in CampaignSystem (the dev probe
+   *  can still force one). */
   weights: Record<AttackKind, number>;
   /** Fireballs per volley (see 'volley' — the blockable projectiles). */
   volleyCount: number;
@@ -159,7 +160,7 @@ export const BOSSES: BossDef[] = [
     cooldownMin: 2.6,
     cooldownMax: 3.6,
     charge: { slam: 1.9, sweep: 2.1, beam: 1.7, volley: 2.0, nova: 2.2, seesaw: 1.7, surge: 1.8 },
-    weights: { slam: 0, sweep: 0, beam: 3, volley: 0, nova: 0, seesaw: 0, surge: 0 },
+    weights: { slam: 0, sweep: 0, beam: 3, volley: 0, nova: 0, seesaw: 5, surge: 0 },
     volleyCount: 3,
     beams: 1,
     swayAmp: 0.4,
@@ -184,7 +185,7 @@ export const BOSSES: BossDef[] = [
     cooldownMin: 2.2,
     cooldownMax: 3.2,
     charge: { slam: 1.6, sweep: 1.9, beam: 1.6, volley: 1.9, nova: 2.2, seesaw: 1.7, surge: 1.8 },
-    weights: { slam: 0, sweep: 3, beam: 2, volley: 0, nova: 0, seesaw: 0, surge: 2 },
+    weights: { slam: 0, sweep: 3, beam: 2, volley: 0, nova: 0, seesaw: 4, surge: 2 },
     volleyCount: 3,
     beams: 1,
     swayAmp: 0.5,
@@ -210,7 +211,7 @@ export const BOSSES: BossDef[] = [
     cooldownMin: 1.9,
     cooldownMax: 2.8,
     charge: { slam: 1.45, sweep: 1.7, beam: 1.55, volley: 1.7, nova: 2.2, seesaw: 1.7, surge: 1.8 },
-    weights: { slam: 0, sweep: 4, beam: 4, volley: 2, nova: 0, seesaw: 0, surge: 0 },
+    weights: { slam: 0, sweep: 4, beam: 4, volley: 2, nova: 0, seesaw: 3, surge: 0 },
     volleyCount: 4,
     beams: 1,
     swayAmp: 0.6,
@@ -235,7 +236,7 @@ export const BOSSES: BossDef[] = [
     cooldownMin: 1.6,
     cooldownMax: 2.4,
     charge: { slam: 1.3, sweep: 1.5, beam: 1.25, volley: 2.0, nova: 2.2, seesaw: 1.7, surge: 1.8 },
-    weights: { slam: 0, sweep: 2, beam: 4, volley: 5, nova: 0, seesaw: 0, surge: 0 },
+    weights: { slam: 0, sweep: 2, beam: 4, volley: 5, nova: 0, seesaw: 3, surge: 0 },
     volleyCount: 3,
     beams: 2,
     swayAmp: 0.45,
@@ -264,7 +265,7 @@ export const BOSSES: BossDef[] = [
     // (laser) cooks 0.4s longer than its raw pace too, for a fairer dodge on
     // the fastest titan's shot.
     charge: { slam: 1.15, sweep: 1.35, beam: 1.6, volley: 1.8, nova: 2.6, seesaw: 1.7, surge: 1.8 },
-    weights: { slam: 0, sweep: 3, beam: 3, volley: 3, nova: 4, seesaw: 0, surge: 0 },
+    weights: { slam: 0, sweep: 3, beam: 3, volley: 3, nova: 4, seesaw: 3, surge: 0 },
     volleyCount: 4,
     beams: 2,
     swayAmp: 0.35,
