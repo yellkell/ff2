@@ -212,7 +212,7 @@ console.log('=== the wire: pack / unpack ===');
   // own patch of the canvas — the two PAULDRONS take paint separately —
   // and a gear mark is a decal on the piece, found where it was placed.
   console.log('\n=== the gear atlas: each pad its own ===');
-  // Each pad is a CAP and a LAME (its rims are trim), left pad first.
+  // Aimed at each pad from above and outside, in the mirror's own frame.
   for (const id of ['pauldrons', 'spikepads']) {
     await page.evaluate((g) => window.__ff2.gear.equip(g), id);
     await page.waitForTimeout(700); // the rig re-dresses, the bay re-collects
@@ -220,17 +220,39 @@ console.log('=== the wire: pack / unpack ===');
       const g = window.__ff2.bayGearProbe;
       const p = window.__ff2.paint;
       p.clear();
-      const n = g.count();
-      const half = Math.floor(n / 2);
-      const a = g.spot(0);
-      const b = g.spot(half);
+      const [hx, hy, hz] = g.hips();
+      const aimAt = (s) => {
+        const to = [hx + s * 0.22, hy + 0.43, hz];
+        return g.hit([to[0] + s * 0.15, to[1] + 0.45, to[2] - 0.1], to);
+      };
+      const a = aimAt(1);
+      const b = aimAt(-1);
       p.grant('dot', 9);
       const placed = !!a && p.take('dot', 9) && p.place(a.part, a.u, a.v);
-      return { n, placed, onA: g.at(0), onB: g.at(half), distinct: !!a && !!b && (Math.abs(a.u - b.u) > 0.02 || Math.abs(a.v - b.v) > 0.02) };
+      return { gear: g.count(), a: !!a, b: !!b, placed, onA: aimAt(1)?.at, onB: aimAt(-1)?.at };
     });
-    check(`${id}: the two pads have their own patches of canvas`, pads.n >= 4 && pads.n % 2 === 0 && pads.distinct, JSON.stringify(pads));
-    check(`${id}: a dot on one pad is on that pad, not the other`, pads.placed && pads.onA === 0 && pads.onB === -1, JSON.stringify(pads));
+    check(`${id}: a few merged surfaces, not dozens of parts`, pads.gear >= 1 && pads.gear <= 3, JSON.stringify(pads));
+    check(`${id}: a dot on one pad is on that pad, not the other`, pads.a && pads.b && pads.placed && pads.onA === 0 && pads.onB === -1, JSON.stringify(pads));
   }
+  // THE FACING SPLIT: an extruded piece (the CREST's fin) gave its two
+  // faces the same UVs, so a mark on one face could never show. A dot on
+  // the fin's left face is on the left face, and not through on the right.
+  await page.evaluate(() => window.__ff2.gear.equip('crest'));
+  await page.waitForTimeout(700);
+  const fin = await page.evaluate(() => {
+    const g = window.__ff2.bayGearProbe;
+    const p = window.__ff2.paint;
+    p.clear();
+    const to = [0, 1.5 + 0.17, 0.03];
+    const left = () => g.hit([0.5, to[1], to[2]], to);
+    const right = () => g.hit([-0.5, to[1], to[2]], to);
+    const a = left();
+    p.grant('dot', 11);
+    const placed = !!a && p.take('dot', 11) && p.place(a.part, a.u, a.v);
+    return { hitL: !!a, hitR: !!right(), placed, onL: left()?.at, onR: right()?.at };
+  });
+  check('a dot on one face of the crest fin is on that face, not through on the other', fin.hitL && fin.hitR && fin.placed && fin.onL === 0 && fin.onR === -1, JSON.stringify(fin));
+  await page.evaluate(() => window.__ff2.gear.clear('head'));
   await page.evaluate(() => window.__ff2.gear.equip('chestplate'));
   await page.waitForTimeout(700);
   const plate = await page.evaluate(() => {

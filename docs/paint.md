@@ -161,6 +161,13 @@ round the ring → u), and each paint surface gets a **paint canvas**
    the atlas (wire format ≤ 4, or a saved look before LOOK_VERSION 2) is
    flagged and still stamped on every island in its own UVs, as it
    always was, until it is lifted or undone.
+   Two more atlas rules. An EXTRUDED part (a fin, a blade, a bevelled
+   plate — `userData.atlasSplit`) gives its two faces the same UVs, so
+   its triangles are binned by facing and each bin mapped flat as its
+   own island. And once the atlas is laid, the piece is MERGED
+   (`mergePiece`): one mesh per finish, atlas UVs, paint tags and map
+   intact — a few draw calls and one paint canvas per piece, not one per
+   part.
 3. Upload once as the part material's `map`.
 
 A repaint happens **only when the look changes** — placing in the bay,

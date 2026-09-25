@@ -520,10 +520,23 @@ export class MenuSystem extends createSystem({}) {
     (window.__ff2 as unknown as Record<string, unknown>).bayAim = (part: string, offDeg: number): string | null => {
       const piece = this.bayGear.find((m) => m.userData.paintPart === part);
       if (!piece) return null;
-      const geo = piece.geometry;
-      if (!geo.boundingSphere) geo.computeBoundingSphere();
-      const centre = piece.localToWorld(geo.boundingSphere!.center.clone());
+      // Aim at the piece's nearest point to the eye — on its surface, where
+      // a finger would point. (A merged piece's centre can sit inside the
+      // head: the middle of a PAIR of horns is between them.)
       const origin = new Vector3(0, 1.6, 0);
+      const pos = piece.geometry.getAttribute('position');
+      const centre = new Vector3();
+      const v = new Vector3();
+      let best = Infinity;
+      const step = Math.max(1, Math.floor(pos.count / 3000));
+      for (let i = 0; i < pos.count; i += step) {
+        piece.localToWorld(v.fromBufferAttribute(pos, i));
+        const d = v.distanceToSquared(origin);
+        if (d < best) {
+          best = d;
+          centre.copy(v);
+        }
+      }
       const dir = centre.clone().sub(origin).normalize();
       const side = new Vector3(0, 1, 0).cross(dir).normalize();
       dir.addScaledVector(side, Math.tan((offDeg * Math.PI) / 180)).normalize();
@@ -561,6 +574,23 @@ export class MenuSystem extends createSystem({}) {
       at: (i: number): number => {
         const s = gearSpot(i);
         return s ? unitAt(s.part, s.u, s.v, s.map) : -2;
+      },
+      /** Where the mirror's hips are, in its own frame (gear is placed off them). */
+      hips: (): number[] => this.mirror?.rig.body.position.toArray() ?? [],
+      /** Aim at the mirror's gear from `from` toward `to` (its own frame):
+       *  what the ray hits, and which placed mark (index) is under it. */
+      hit: (from: number[], to: number[]) => {
+        const g = this.mirror?.group;
+        if (!g) return null;
+        g.updateMatrixWorld(true);
+        const o = g.localToWorld(new Vector3(from[0], from[1], from[2]));
+        const t = g.localToWorld(new Vector3(to[0], to[1], to[2]));
+        this.magnetRay.set(o, t.sub(o).normalize());
+        const h = this.magnetRay.intersectObjects(this.bayGear, false)[0];
+        if (!h?.uv) return null;
+        const part = h.object.userData.paintPart as PaintPart;
+        const map = h.object.userData.paintMap as GearMap | undefined;
+        return { part, u: h.uv.x, v: h.uv.y, at: unitAt(part, h.uv.x, h.uv.y, map) };
       },
     };
     (window.__ff2 as unknown as Record<string, unknown>).paintSnap = (rootName: string, part: string): string => {

@@ -445,6 +445,23 @@ carried over verbatim: everything in it still applies to this code.
   enough for every frame. The SPLOTCH is retired (owned and worn ones
   became dots), the TRIANGLE joins (wire format 4), and bought dots and
   squares no longer vanish from the locker on a restart.
+- **GEAR, THE ART PASS** (`avatar/gear.ts`, `avatar/gearAtlas.ts`). Every
+  piece rebuilt to read as kit, not primitives, in one detail language —
+  primer where it takes paint, trim where it is fixed: mounts, collars,
+  bands, rims, rivets, eased edges. The CREST is one sculpted fin with a
+  serrated back on a trim rail (it was eleven stepped boxes); the MOHAWK
+  is raked blades on a rail; the ANTENNAE bow from temple bosses, banded,
+  to faceted bulbs; the HALO is a studded band with an inner lip; the
+  VISOR is a thick lens with hinges at the temples and a glass slit; the
+  CROWN's points are faceted and studded; HORNS and ANTLERS are bound at
+  the root; the TAIL is banded with a blade tip; the WINGS hang from a
+  mount on hinges; the pads are riveted; the CUFFS are a riveted bracer;
+  the KNUCKLES a duster with collared spikes; the GAUNTLETS a bevelled
+  plate; the CLAWS grow from a mount bar. A piece is MERGED after its
+  paint atlas is laid — one mesh per finish, 2–3 draw calls and one paint
+  canvas per piece where the spiked pads were thirty — and extruded parts
+  are split by facing in the atlas so both faces of a fin or blade paint
+  (the wings' never could).
 - **GEAR, POLISHED — and SPIKED PADS** (`avatar/gear.ts`). New on the
   BODY shelf: **SPIKED PADS** ($220) — layered shoulder plate, a size up
   from the pauldrons, three spikes a side driven up through each cap from

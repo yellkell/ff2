@@ -33,10 +33,10 @@
  * toward −z, the cuff toward +z.
  */
 
-import { BoxGeometry, BufferGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, type Object3D, Quaternion, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, IcosahedronGeometry, LatheGeometry, Mesh, MeshStandardMaterial, type Object3D, Quaternion, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { BODY_IK, PAINT } from '../config.js';
 import { EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
-import { atlasGear } from './gearAtlas.js';
+import { atlasGear, mergePiece } from './gearAtlas.js';
 
 export type GearSlot = 'head' | 'body' | 'hands';
 export const GEAR_SLOTS: readonly GearSlot[] = ['head', 'body', 'hands'];
@@ -207,6 +207,126 @@ function taperedTube(pts: Vector3[], r0: number, r1: number, segs: number, sides
 
 const R = BODY_IK.headRadius;
 const UP = new Vector3(0, 1, 0);
+const FWD = new Vector3(0, 0, 1);
+
+/* ── the detail kit ──────────────────────────────────────────────────── */
+//
+// What turns a primitive into a piece of kit: a place it is MOUNTED (a
+// collar, a boss, a hinge), EDGES that catch the light (a bevel, a rolled
+// rim), and SMALL PARTS in the trim (rivets, bands, studs). Trim is never
+// a paint surface, so none of this spends the piece's canvas.
+
+/** The skull the head pieces are modelled on (the old egg, EGG_SCALE ×
+ *  R, centred R/20 above the head's origin — mannequin.ts); applyGear
+ *  stretches the piece onto the skull it actually gets. */
+const EGG = { a: 0.84 * R, b: 1.08 * R, c: 0.93 * R, y0: 0.05 * R };
+
+/** Where a ray from the skull's centre along `dir` leaves it, and the
+ *  surface normal there. */
+function eggPoint(dir: Vector3): { p: Vector3; n: Vector3 } {
+  const d = dir.clone().normalize();
+  const t = 1 / Math.sqrt((d.x / EGG.a) ** 2 + (d.y / EGG.b) ** 2 + (d.z / EGG.c) ** 2);
+  const p = d.multiplyScalar(t).add(new Vector3(0, EGG.y0, 0));
+  const n = new Vector3(p.x / EGG.a ** 2, (p.y - EGG.y0) / EGG.b ** 2, p.z / EGG.c ** 2).normalize();
+  return { p, n };
+}
+
+/** A point on the skull's midline, `th` radians from the brow (front, −z)
+ *  up over the crown to the nape (π, +z), with its normal and the
+ *  direction along the midline toward the back. */
+function eggMid(th: number): { p: Vector3; n: Vector3; back: Vector3 } {
+  const at = eggPoint(new Vector3(0, Math.sin(th), -Math.cos(th)));
+  const next = eggPoint(new Vector3(0, Math.sin(th + 0.01), -Math.cos(th + 0.01)));
+  return { ...at, back: next.p.sub(at.p).normalize() };
+}
+
+/** Orient an object's +y along `dir`. */
+function aim(o: Object3D, dir: Vector3): void {
+  o.quaternion.setFromUnitVectors(UP, dir.clone().normalize());
+}
+
+/** A rivet (a low dome) in the trim, at `at`, domed along `n`. */
+function rivet(trimMat: MeshStandardMaterial, at: Vector3, n: Vector3, r: number): Mesh {
+  const m = asTrim(new Mesh(new SphereGeometry(r, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), trimMat));
+  m.position.copy(at);
+  aim(m, n);
+  return m;
+}
+
+/** A ring round a tube at `at`, its hole along `axis` — a band, a collar. */
+function collar(trimMat: MeshStandardMaterial, at: Vector3, axis: Vector3, r: number, tube: number): Mesh {
+  const m = asTrim(new Mesh(new TorusGeometry(r, tube, 6, 20), trimMat));
+  m.position.copy(at);
+  m.quaternion.setFromUnitVectors(FWD, axis.clone().normalize());
+  return m;
+}
+
+/** The same curve and taper taperedTube builds from `pts`, sampled at `t`:
+ *  the point, the tangent, the radius. */
+function tubeAt(pts: Vector3[], r0: number, r1: number, t: number): { p: Vector3; tan: Vector3; r: number } {
+  const curve = new CatmullRomCurve3(pts, false, 'centripetal', 0.5);
+  const k = t < 0.5 ? (t / 0.5) * 0.22 : 0.22 + ((t - 0.5) / 0.5) * 0.78;
+  return { p: curve.getPointAt(t), tan: curve.getTangentAt(t), r: r0 + (r1 - r0) * k };
+}
+
+/** Trim bands round a tapered tube at each of `ts`. */
+function tubeBands(trimMat: MeshStandardMaterial, pts: Vector3[], r0: number, r1: number, ts: number[], thick = 0.16, snug = 1.04): Mesh[] {
+  return ts.map((t) => {
+    const at = tubeAt(pts, r0, r1, t);
+    return collar(trimMat, at.p, at.tan, at.r * snug, at.r * thick);
+  });
+}
+
+/** A rounded rectangle, CCW in (r, y) — a lathe profile. */
+function roundRectProfile(r0: number, r1: number, y0: number, y1: number, c: number): Vector2[] {
+  const pts: Vector2[] = [];
+  const arc = (cx: number, cy: number, a0: number): void => {
+    for (let i = 0; i <= 3; i++) {
+      const a = a0 + (i / 3) * (Math.PI / 2);
+      pts.push(new Vector2(cx + Math.cos(a) * c, cy + Math.sin(a) * c));
+    }
+  };
+  arc(r1 - c, y1 - c, 0); // outer top
+  arc(r0 + c, y1 - c, Math.PI / 2); // inner top
+  arc(r0 + c, y0 + c, Math.PI); // inner bottom
+  arc(r1 - c, y0 + c, Math.PI * 1.5); // outer bottom
+  pts.push(pts[0].clone());
+  return pts;
+}
+
+/** A flat plate of outline `shape`, `depth` thick with eased edges, centred
+ *  on its own thickness — flagged for the atlas's facing split. */
+function plate(shape: Shape, depth: number, bevel: number, mat: MeshStandardMaterial): Mesh {
+  const geo = new ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: bevel,
+    bevelSize: bevel,
+    bevelSegments: 2,
+    curveSegments: 12,
+  });
+  geo.translate(0, 0, -depth / 2);
+  const m = new Mesh(geo, mat);
+  m.userData.atlasSplit = true;
+  return m;
+}
+
+/** A rounded rectangle outline, centred, w × h. */
+function roundRect(w: number, h: number, c: number): Shape {
+  const sh = new Shape();
+  const x = -w / 2;
+  const y = -h / 2;
+  sh.moveTo(x + c, y);
+  sh.lineTo(x + w - c, y);
+  sh.quadraticCurveTo(x + w, y, x + w, y + c);
+  sh.lineTo(x + w, y + h - c);
+  sh.quadraticCurveTo(x + w, y + h, x + w - c, y + h);
+  sh.lineTo(x + c, y + h);
+  sh.quadraticCurveTo(x, y + h, x, y + h - c);
+  sh.lineTo(x, y + c);
+  sh.quadraticCurveTo(x, y, x + c, y);
+  return sh;
+}
 
 /**
  * ONE SHOULDER'S ARMOUR — the pauldron both pads are built from. A domed
@@ -227,18 +347,18 @@ function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, s
   const b = 0.07 * k;
   const c = 0.118 * k;
   const capY = -0.018 * k;
-  const cap = new Mesh(new SphereGeometry(1, 28, 10, 0, Math.PI * 2, 0, Math.PI * 0.43), mat);
+  const cap = new Mesh(new SphereGeometry(1, 24, 9, 0, Math.PI * 2, 0, Math.PI * 0.43), mat);
   cap.scale.set(a, b, c);
   cap.position.y = capY;
   pad.add(cap);
   // THE LAME: a band of the same dome, a size up, lower, overlapping.
-  const lame = new Mesh(new SphereGeometry(1, 28, 4, 0, Math.PI * 2, Math.PI * 0.4, Math.PI * 0.17), mat);
+  const lame = new Mesh(new SphereGeometry(1, 24, 3, 0, Math.PI * 2, Math.PI * 0.4, Math.PI * 0.17), mat);
   lame.scale.set(a * 1.07, b, c * 1.06);
   lame.position.y = capY - 0.012 * k;
   pad.add(lame);
   // THE RIMS: a thin roll of trim along each plate's lower edge.
   const rim = (theta: number, sx: number, sz: number, y: number): void => {
-    const ring = asTrim(new Mesh(new TorusGeometry(1, 0.045, 6, 40), trimMat));
+    const ring = asTrim(new Mesh(new TorusGeometry(1, 0.045, 5, 32), trimMat));
     ring.rotation.x = Math.PI / 2;
     const rr = Math.sin(theta);
     ring.scale.set(sx * rr, sz * rr, 0.1 * k);
@@ -247,6 +367,14 @@ function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, s
   };
   rim(Math.PI * 0.43, a, c, capY);
   rim(Math.PI * 0.57, a * 1.07, c * 1.06, capY - 0.012 * k);
+  // Rivets round the lame's outer face, where it is fixed to the cap.
+  for (const deg of [-64, -32, 0, 32, 64]) {
+    const f = (deg * Math.PI) / 180;
+    const out = new Vector3(s * Math.cos(f), 0, Math.sin(f));
+    const at = new Vector3(out.x * a * 1.07 * 1.005, capY - 0.012 * k, out.z * c * 1.06 * 1.005);
+    const n = new Vector3(out.x / (a * a), 0, out.z / (c * c)).normalize();
+    pad.add(rivet(trimMat, at, n, 0.0048 * k));
+  }
   if (spikes) {
     // Three spikes up out of the cap: the big one off the top, leaning
     // out over the arm, and a smaller one fore and aft. Each rises along
@@ -298,41 +426,79 @@ const BUILDERS: Record<string, Builder> = {
   /* head — origin at the head centre, front −z. Modelled on the old EGG
    * skull, R×(0.84, 1.08, 0.93) (mannequin.ts EGG_SCALE); applyGear
    * stretches the whole piece onto whatever the skull is now. */
-  crest: (mat) => {
+  crest: (mat, _side, trimMat) => {
+    // ONE FIN, sculpted: its foot follows the skull's midline from the
+    // brow over the crown to the nape, its crest rises off the brow,
+    // peaks behind the crown and sweeps down the back, and the back half
+    // is SERRATED — a saw of teeth, not a smooth curve. A centimetre
+    // thick with eased edges, standing on a rolled rail of trim. (It was
+    // eleven boxes in a stepped row and read like a fan of cards.)
     const g = new Group();
-    // A fin from the brow over the crown to the nape: eleven plates, each
-    // standing PROUD of the skull by its full height, thinning aft.
-    for (let i = 0; i < 11; i++) {
-      const t = i / 10;
-      const z = R * (0.7 - t * 1.55);
-      const h = R * (0.35 + Math.sin(t * Math.PI) * 0.6);
-      const p = new Mesh(new BoxGeometry(R * 0.1, h, R * 0.19), mat);
-      const y = Math.sqrt(Math.max(0, 1 - (z / (R * 0.93)) ** 2)) * R * 1.08;
-      p.position.set(0, y + h * 0.45 - R * 0.06, z);
-      p.rotation.x = -(t - 0.5) * 1.1;
-      g.add(p);
+    const N = 26;
+    const th0 = 0.55;
+    const th1 = 2.78;
+    const foot: Vector3[] = [];
+    const top: Vector3[] = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N;
+      const { p, n } = eggMid(th0 + (th1 - th0) * t);
+      foot.push(p.clone().addScaledVector(n, -0.04 * R));
+      let h = R * (0.08 + 0.5 * Math.sin(Math.PI * Math.pow(t, 0.75)));
+      // THE TEETH: every other station on the back half drops, and slips
+      // back along the skull, so each tooth rakes toward the nape.
+      const tooth = t > 0.4 && i % 2 === 1;
+      if (tooth) h *= 0.7;
+      const q = p.clone().addScaledVector(n, h);
+      if (tooth) q.addScaledVector(eggMid(th0 + (th1 - th0) * t).back, 0.05 * R);
+      top.push(q);
+    }
+    // The outline in the fin's own plane (x = z, y = y), foot then crest.
+    const sh = new Shape();
+    sh.moveTo(foot[0].z, foot[0].y);
+    for (const q of top) sh.lineTo(q.z, q.y);
+    for (let i = N; i >= 0; i--) sh.lineTo(foot[i].z, foot[i].y);
+    const fin = plate(sh, R * 0.07, R * 0.014, mat);
+    fin.rotation.y = -Math.PI / 2; // the plane's x onto z; its thickness across the head
+    g.add(fin);
+    const rail: Vector3[] = [];
+    for (let i = 0; i <= N; i++) {
+      const m = eggMid(th0 + ((th1 - th0) * i) / N);
+      rail.push(m.p.addScaledVector(m.n, 0.012 * R));
+    }
+    g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(rail), 48, 0.05 * R, 8), trimMat)));
+    return g;
+  },
+  antennae: (mat, _side, trimMat) => {
+    // A pair of FEELERS: each rises from a trim boss on the temple, a
+    // tapered stalk that bows up, out and forward, banded twice in trim,
+    // ending in a faceted bulb on a collar. (They were straight sticks
+    // with a ball on the end.)
+    const g = new Group();
+    for (const s of [-1, 1] as const) {
+      const { p, n } = eggPoint(new Vector3(s * 0.72, 0.66, -0.12));
+      const boss = asTrim(new Mesh(new CylinderGeometry(0.1 * R, 0.13 * R, 0.08 * R, 16), trimMat));
+      boss.position.copy(p).addScaledVector(n, 0.015 * R);
+      aim(boss, n);
+      g.add(boss);
+      const pts = [
+        p.clone().addScaledVector(n, 0.02 * R),
+        p.clone().add(new Vector3(s * 0.14 * R, 0.36 * R, 0)),
+        new Vector3(s * 0.98 * R, 1.25 * R, -0.1 * R),
+        new Vector3(s * 1.18 * R, 1.72 * R, -0.32 * R),
+      ];
+      const r0 = 0.05 * R;
+      const r1 = 0.02 * R;
+      g.add(new Mesh(taperedTube(pts, r0, r1, 26, 10), mat));
+      for (const band of tubeBands(trimMat, pts, r0, r1, [0.3, 0.62])) g.add(band);
+      const tip = tubeAt(pts, r0, r1, 1);
+      g.add(collar(trimMat, tip.p, tip.tan, 0.035 * R, 0.014 * R));
+      const bulb = new Mesh(new IcosahedronGeometry(0.13 * R, 1), mat);
+      bulb.position.copy(tip.p).addScaledVector(tip.tan, 0.1 * R);
+      g.add(bulb);
     }
     return g;
   },
-  antennae: (mat) => {
-    const g = new Group();
-    for (const s of [-1, 1]) {
-      const base = new Mesh(new CylinderGeometry(R * 0.06, R * 0.09, R * 0.2, 10), mat);
-      base.position.set(s * R * 0.7, R * 0.55, -R * 0.1);
-      base.rotation.z = -s * 0.5;
-      g.add(base);
-      const whip = new Mesh(new CylinderGeometry(R * 0.02, R * 0.045, R * 1.3, 8), mat);
-      whip.position.set(s * R * 1.0, R * 1.2, -R * 0.2);
-      whip.rotation.z = -s * 0.45;
-      whip.rotation.x = 0.25;
-      g.add(whip);
-      const tip = new Mesh(new SphereGeometry(R * 0.07, 10, 8), mat);
-      tip.position.set(s * R * 1.28, R * 1.78, -R * 0.35);
-      g.add(tip);
-    }
-    return g;
-  },
-  horns: (mat) => {
+  horns: (mat, _side, trimMat) => {
     // THE RAM'S CURL. Each horn is ONE tapered tube along a spline: it
     // roots thick at the temple, climbs out and up, rolls BACK over the
     // ear, drops behind the jaw and sweeps FORWARD again so the point
@@ -361,6 +527,8 @@ const BUILDERS: Record<string, Builder> = {
         [2.08, -0.36, -1.02], // the tip lifting a hair
       ].map(([x, y, z]) => new Vector3(s * x * R, y * R, z * R));
       g.add(new Mesh(taperedTube(pts, R * 0.44, R * 0.05, 34, 7), faceted));
+      // Two bands of trim just out from the root, where a horn is bound.
+      for (const band of tubeBands(trimMat, pts, R * 0.44, R * 0.05, [0.13, 0.2], 0.09, 1.0)) g.add(band);
       // A boss where the horn meets the skull, so the root reads as seated.
       const boss = new Mesh(new SphereGeometry(R * 0.46, 9, 7), faceted);
       boss.position.copy(pts[0]);
@@ -369,61 +537,92 @@ const BUILDERS: Record<string, Builder> = {
     }
     return g;
   },
-  halo: (mat) => {
+  halo: (mat, _side, trimMat) => {
+    // A BAND of light's metal, not a wire: a flat ring with a rounded
+    // section, tipped back a little, a lip of trim round its inside edge
+    // and twelve studs round its top.
     const g = new Group();
-    const ring = new Mesh(new TorusGeometry(R * 0.78, R * 0.055, 10, 40), mat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = R * 1.5;
+    const r0 = 0.7 * R;
+    const r1 = 0.9 * R;
+    const ring = new Mesh(new LatheGeometry(roundRectProfile(r0, r1, -0.03 * R, 0.03 * R, 0.022 * R), 48), mat);
     g.add(ring);
+    const lip = asTrim(new Mesh(new TorusGeometry(r0, 0.018 * R, 5, 48), trimMat));
+    lip.rotation.x = Math.PI / 2;
+    g.add(lip);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const at = new Vector3(Math.sin(a) * (r0 + r1) * 0.5, 0.03 * R, Math.cos(a) * (r0 + r1) * 0.5);
+      g.add(rivet(trimMat, at, UP, 0.03 * R));
+    }
+    g.position.y = R * 1.5;
+    g.rotation.x = 0.15; // the front a touch higher: tipped back
     return g;
   },
-  mohawk: (mat) => {
+  mohawk: (mat, _side, trimMat) => {
+    // A row of BLADES down the midline: seven flattened spikes, thin side
+    // to side and raked back, tallest over the crown, each set into a
+    // rolled rail of trim. (They were round cones standing bolt upright.)
     const g = new Group();
-    for (let i = 0; i < 6; i++) {
-      const t = i / 5;
-      const z = R * (0.55 - t * 1.15);
-      const y = Math.sqrt(Math.max(0, 1 - (z / (R * 0.93)) ** 2)) * R * 1.08;
-      const h = R * (0.5 + Math.sin(t * Math.PI) * 0.35);
-      const spike = new Mesh(new ConeGeometry(R * 0.11, h, 10), mat);
-      spike.position.set(0, y + h * 0.42, z);
-      spike.rotation.x = -(t - 0.45) * 0.8;
-      g.add(spike);
+    const th0 = 0.85;
+    const th1 = 2.55;
+    const rail: Vector3[] = [];
+    for (let i = 0; i <= 20; i++) {
+      const m = eggMid(th0 + ((th1 - th0) * i) / 20);
+      rail.push(m.p.addScaledVector(m.n, 0.012 * R));
+    }
+    g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(rail), 40, 0.06 * R, 8), trimMat)));
+    const count = 7;
+    for (let i = 0; i < count; i++) {
+      const t = i / (count - 1);
+      const { p, n, back } = eggMid(th0 + 0.08 + (th1 - th0 - 0.16) * t);
+      const h = R * (0.42 + 0.42 * Math.sin(Math.PI * (0.15 + 0.7 * t)));
+      const dir = n.clone().addScaledVector(back, 0.5).normalize();
+      const blade = new Mesh(new ConeGeometry(0.13 * R, h, 6), mat);
+      blade.scale.set(0.38, 1, 1); // flat across the head, long fore and aft
+      aim(blade, dir);
+      blade.position.copy(p).addScaledVector(dir, h / 2 - 0.03 * R);
+      g.add(blade);
     }
     return g;
   },
   visorband: (mat, _side, trimMat) => {
-    // A VISOR, not a hoop: a wraparound plate across the eyes — a thin
-    // open cylinder segment hugging the skull, taller than it is thick,
-    // with a dark slit and a brow bar along its top. The old torus wore
-    // like a bent wire and read as a headband slipping off.
+    // A VISOR: a thick wraparound lens across the eyes — its section
+    // swells in the middle and eases to rounded edges, so it has a real
+    // edge to catch the light — hinged at each temple on a trim disc,
+    // with a slit of dark glass across the front. (It was a flat strip
+    // of cylinder that read as a headband.)
     const g = new Group();
-    const arc = Math.PI * 1.15;
-    const plate = new Mesh(
-      new CylinderGeometry(R * 0.98, R * 1.0, R * 0.34, 40, 1, true, Math.PI - arc / 2, arc),
-      mat,
-    );
-    plate.material = mat.clone();
-    (plate.material as MeshStandardMaterial).side = DoubleSide;
-    plate.position.set(0, R * 0.1, -R * 0.02);
-    plate.scale.set(0.9, 1, 1.02);
-    g.add(plate);
-    // The slit: the visor's glass, a dark band across the middle — trim,
-    // so it stays dark whatever the plate is painted.
-    const slitMat = trimMat.clone();
-    slitMat.side = DoubleSide;
-    const slit = asTrim(new Mesh(
-      new CylinderGeometry(R * 1.01, R * 1.01, R * 0.12, 40, 1, true, Math.PI - arc * 0.42, arc * 0.84),
-      slitMat,
-    ));
-    slit.position.copy(plate.position);
-    slit.scale.copy(plate.scale);
-    g.add(slit);
-    // The brow bar over the top edge, a hair proud, in the trim too.
-    const brow = asTrim(new Mesh(new TorusGeometry(R * 0.93, R * 0.03, 8, 40, arc), trimMat));
-    brow.rotation.set(Math.PI / 2, 0, Math.PI / 2 - arc / 2 + Math.PI);
-    brow.position.set(0, R * 0.28, -R * 0.02);
-    brow.scale.set(0.9, 1.02, 1);
-    g.add(brow);
+    const arc = Math.PI * 1.1;
+    const phi0 = Math.PI - arc / 2;
+    const lens = [
+      new Vector2(1.0 * R, -0.17 * R),
+      new Vector2(1.045 * R, -0.12 * R),
+      new Vector2(1.068 * R, 0),
+      new Vector2(1.045 * R, 0.12 * R),
+      new Vector2(1.0 * R, 0.17 * R),
+      new Vector2(0.965 * R, 0.15 * R),
+      new Vector2(0.955 * R, 0),
+      new Vector2(0.965 * R, -0.15 * R),
+      new Vector2(1.0 * R, -0.17 * R),
+    ];
+    const body = new Mesh(new LatheGeometry(lens, 48, phi0, arc), mat);
+    g.add(body);
+    const glassMat = trimMat.clone();
+    glassMat.side = DoubleSide;
+    glassMat.roughness = 0.08;
+    const glass = asTrim(new Mesh(new CylinderGeometry(1.071 * R, 1.071 * R, 0.085 * R, 44, 1, true, Math.PI - arc * 0.4, arc * 0.8), glassMat));
+    g.add(glass);
+    for (const phi of [phi0, phi0 + arc]) {
+      const hinge = asTrim(new Mesh(new CylinderGeometry(0.15 * R, 0.15 * R, 0.07 * R, 20), trimMat));
+      hinge.position.set(Math.sin(phi) * 1.0 * R, 0, Math.cos(phi) * 1.0 * R);
+      aim(hinge, new Vector3(Math.cos(phi), 0, -Math.sin(phi)));
+      g.add(hinge);
+      const bolt = rivet(trimMat, hinge.position.clone().addScaledVector(new Vector3(Math.cos(phi), 0, -Math.sin(phi)), 0.035 * R), new Vector3(Math.cos(phi), 0, -Math.sin(phi)), 0.05 * R);
+      g.add(bolt);
+    }
+    // Fitted to the egg's oval, sat just below the brow.
+    g.scale.set(0.9, 1, 1.02);
+    g.position.set(0, R * 0.1, -R * 0.02);
     return g;
   },
 
@@ -545,7 +744,7 @@ const BUILDERS: Record<string, Builder> = {
     g.add(new Mesh(new TubeGeometry(new CatmullRomCurve3(along(null, cols / 2, 0.002)), 16, 0.007, 8), mat));
     return g;
   },
-  tail: (mat) => {
+  tail: (mat, _side, trimMat) => {
     // A TAIL, where a dorsal ridge used to be. ONE tapered tube along a
     // spline (the horns' own taperedTube), rooted INSIDE the small of the
     // back so it grows out of the surface with no seam and no boss to
@@ -574,6 +773,15 @@ const BUILDERS: Record<string, Builder> = {
     // 1.5 mm at the tip: a point at any distance you will ever see it from,
     // without the degenerate ring a true zero would leave for the normals.
     g.add(new Mesh(taperedTube(pts, 0.046, 0.0015, 34, 7), faceted));
+    // Segmented by three bands of trim down its length, and tipped with a
+    // flat BLADE — the devil's arrowhead — along the flick.
+    for (const band of tubeBands(trimMat, pts, 0.046, 0.0015, [0.2, 0.38, 0.56], 0.14, 1.0)) g.add(band);
+    const tip = tubeAt(pts, 0.046, 0.0015, 0.97);
+    const blade = new Mesh(new ConeGeometry(0.024, 0.06, 4), faceted);
+    blade.scale.set(1, 1, 0.3);
+    aim(blade, tip.tan);
+    blade.position.copy(tip.p).addScaledVector(tip.tan, 0.024);
+    g.add(blade);
     return g;
   },
   belt: (mat, _side, trimMat) => {
@@ -606,22 +814,46 @@ const BUILDERS: Record<string, Builder> = {
     return g;
   },
   /* hands — palm at the origin, fingers −z, cuff +z (hands.ts) */
-  cuffs: (mat) => {
+  cuffs: (mat, _side, trimMat) => {
+    // A BRACER round the wrist: a short band with a squared, rounded
+    // section (lathed), flattened to the hand's own wrist, rolled edges of
+    // trim either side and four rivets round its face. (It was a torus —
+    // a bangle.)
     const g = new Group();
-    const ring = new Mesh(new TorusGeometry(0.046, 0.011, 8, 28), mat);
-    ring.rotation.x = 0; // the torus's hole runs along z: a bracelet round the wrist
-    ring.scale.set(1, 0.7, 1);
-    ring.position.z = 0.085;
-    g.add(ring);
+    const bracer = new Group();
+    bracer.add(new Mesh(new LatheGeometry(roundRectProfile(0.039, 0.047, -0.014, 0.014, 0.004), 28), mat));
+    for (const y of [-0.0125, 0.0125]) {
+      const edge = asTrim(new Mesh(new TorusGeometry(0.0468, 0.0026, 5, 28), trimMat));
+      edge.rotation.x = Math.PI / 2;
+      edge.position.y = y;
+      bracer.add(edge);
+    }
+    for (let i = 0; i < 4; i++) {
+      const a = Math.PI / 4 + (i * Math.PI) / 2;
+      const out = new Vector3(Math.sin(a), 0, Math.cos(a));
+      bracer.add(rivet(trimMat, out.clone().multiplyScalar(0.047), out, 0.0036));
+    }
+    bracer.rotation.x = Math.PI / 2; // the lathe's axis along the arm
+    bracer.scale.set(1, 1, 0.62); // flattened top to bottom, like a wrist
+    bracer.position.z = 0.085;
+    g.add(bracer);
     return g;
   },
-  knuckles: (mat, side) => {
+  knuckles: (mat, side, trimMat) => {
+    // A KNUCKLE-DUSTER: a bar across the knuckles, a spike rising off it
+    // over each, each spike set in a trim collar. (They were four cones
+    // floating over the fingers.)
     const g = new Group();
+    const bar = new Mesh(new CapsuleGeometry(0.0078, 0.062, 4, 12), mat);
+    bar.rotation.z = Math.PI / 2;
+    bar.position.set(0, 0.016, -0.046);
+    g.add(bar);
     for (let i = 0; i < 4; i++) {
       const x = side * (0.0285 - i * 0.019);
-      const spike = new Mesh(new ConeGeometry(0.007, 0.03, 8), mat);
-      spike.position.set(x, 0.02, -0.046);
+      const spike = new Mesh(new ConeGeometry(0.0068, 0.03, 8), mat);
+      spike.position.set(x, 0.016 + 0.0078 + 0.013, -0.046);
       g.add(spike);
+      g.add(collar(trimMat, new Vector3(x, 0.016 + 0.0074, -0.046), UP, 0.0072, 0.0019));
     }
     return g;
   },
@@ -631,14 +863,20 @@ const BUILDERS: Record<string, Builder> = {
     // at y = 0.012), three knuckle ridges across its leading edge, and a
     // flared cuff round the wrist behind it.
     const g = new Group();
-    const plate = new Mesh(new BoxGeometry(0.086, 0.01, 0.084), mat);
-    plate.position.set(0, 0.017, 0.006);
-    g.add(plate);
+    // The back plate: a rounded rectangle with eased edges (it was a box).
+    const back = plate(roundRect(0.084, 0.082, 0.014), 0.006, 0.0022, mat);
+    back.rotation.x = -Math.PI / 2; // lying flat on the back of the hand
+    back.position.set(0, 0.0165, 0.006);
+    g.add(back);
+    // Three ridges across its leading edge, rolled, not boxed.
     for (let i = 0; i < 3; i++) {
-      const ridge = asTrim(new Mesh(new BoxGeometry(0.088, 0.008, 0.009), trimMat));
-      ridge.position.set(0, 0.024, -0.022 + i * 0.02);
+      const ridge = asTrim(new Mesh(new CapsuleGeometry(0.0036, 0.076, 3, 8), trimMat));
+      ridge.rotation.z = Math.PI / 2;
+      ridge.position.set(0, 0.0235, -0.024 + i * 0.017);
       g.add(ridge);
     }
+    // A rivet at each back corner.
+    for (const x of [-0.033, 0.033]) g.add(rivet(trimMat, new Vector3(x, 0.0215, 0.036), UP, 0.0032));
     // The cuff: a short frustum open at both ends, wider toward the arm.
     // FITTED to the wrist: flattened top to bottom (its local z is the
     // hand's vertical once it is laid along the arm) so it hugs the
@@ -677,14 +915,18 @@ const MORE_BUILDERS: Record<string, Builder> = {
       const z = Math.sin(a) * R * 0.86 * 1.02;
       const front = 0.5 - 0.5 * Math.sin(a);
       const h = R * (0.3 + front * 0.34);
-      const point = new Mesh(new ConeGeometry(R * 0.075, h, 8), mat);
-      point.position.set(x, R * 0.62 + h * 0.46, z);
-      point.rotation.set(Math.sin(a) * 0.22, 0, -Math.cos(a) * 0.22);
+      // Faceted like cut stone — four faces, not a round cone — and
+      // seated on a stud of trim set into the band.
+      const point = new Mesh(new ConeGeometry(R * 0.09, h, 4), mat);
+      point.position.set(x, R * 0.66 + h * 0.46, z);
+      point.rotation.set(Math.sin(a) * 0.22, Math.PI / 4 - a, -Math.cos(a) * 0.22, 'YXZ');
       g.add(point);
+      const out = new Vector3(Math.cos(a) * 0.9, 0, Math.sin(a) * 1.02).normalize();
+      g.add(rivet(trimMat, new Vector3(x * 1.07, R * 0.62, z * 1.05), out, R * 0.05));
     }
     return g;
   },
-  antlers: (mat) => {
+  antlers: (mat, _side, trimMat) => {
     // A stag's pair: each a tapered beam off the temple, climbing up and
     // back and curling in at the tip, with a brow tine forward and a
     // second tine off the middle. Faceted like the horns.
@@ -694,13 +936,17 @@ const MORE_BUILDERS: Record<string, Builder> = {
     const tube = (pts: number[][], s: number, r0: number, r1: number, segs: number): Mesh =>
       new Mesh(taperedTube(pts.map(([x, y, z]) => new Vector3(s * x * R, y * R, z * R)), r0 * R, r1 * R, segs, 6), faceted);
     for (const s of [-1, 1]) {
-      g.add(tube([[0.66, 0.6, -0.08], [0.92, 1.05, 0.05], [1.15, 1.55, 0.3], [1.2, 2.05, 0.55], [1.02, 2.45, 0.82]], s, 0.16, 0.03, 22));
+      const beam = [[0.66, 0.6, -0.08], [0.92, 1.05, 0.05], [1.15, 1.55, 0.3], [1.2, 2.05, 0.55], [1.02, 2.45, 0.82]];
+      g.add(tube(beam, s, 0.16, 0.03, 22));
+      // THE BURR: the knobbed ring where a real antler meets the skull.
+      const burr = tubeBands(trimMat, beam.map(([x, y, z]) => new Vector3(s * x * R, y * R, z * R)), 0.16 * R, 0.03 * R, [0.05], 0.3, 1.12);
+      for (const b of burr) g.add(b);
       g.add(tube([[0.82, 0.92, -0.02], [0.98, 1.22, -0.4], [1.02, 1.42, -0.7]], s, 0.09, 0.02, 12)); // the brow tine
       g.add(tube([[1.12, 1.5, 0.28], [1.45, 1.75, 0.15], [1.7, 2.05, 0.05]], s, 0.09, 0.02, 12)); // the second tine
     }
     return g;
   },
-  wings: (mat) => {
+  wings: (mat, _side, trimMat) => {
     // Two fans of swept blades off the shoulder blades: three per side,
     // the longest on top, each pivoting at the blade and raked up, out
     // and back — a silhouette that reads from across the arena.
@@ -720,6 +966,7 @@ const MORE_BUILDERS: Record<string, Builder> = {
         });
         blade.translate(0, 0, -0.0025);
         const plate = new Mesh(blade, mat);
+        plate.userData.atlasSplit = true; // front and back faces paint apart
         const pivot = new Group();
         pivot.position.set(s * 0.11, 0.36 - i * 0.02, 0.09);
         // Roll lifts the plate; yaw sweeps it back (the back is +z). The
@@ -727,17 +974,28 @@ const MORE_BUILDERS: Record<string, Builder> = {
         pivot.rotation.set(0, -s * (0.55 + i * 0.22), s * (1.15 - i * 0.34));
         pivot.add(plate);
         g.add(pivot);
+        // Each blade turns on a HINGE — a knuckle of trim at its root.
+        g.add(rivet(trimMat, pivot.position.clone(), new Vector3(s * 0.4, 0.2, 1), 0.012));
       }
     }
+    // THE MOUNT: a plate across the shoulder blades both fans hang from.
+    const mount = plate(roundRect(0.2, 0.07, 0.03), 0.01, 0.003, mat);
+    mount.position.set(0, 0.34, 0.108);
+    g.add(mount);
     return g;
   },
-  claws: (mat) => {
+  claws: (mat, _side, trimMat) => {
     // Three talons rooted on the knuckle line, reaching forward past the
     // fingers and hooking down to a point. The palm block's front face is
     // at z ≈ −0.045; the roots sit just inside it.
     const g = new Group();
     const faceted = mat.clone();
     faceted.flatShading = true;
+    // The talons are MOUNTED: a trim bar across the knuckles they grow from.
+    const mount = asTrim(new Mesh(new CapsuleGeometry(0.0065, 0.05, 3, 10), trimMat));
+    mount.rotation.z = Math.PI / 2;
+    mount.position.set(0, 0.015, -0.036);
+    g.add(mount);
     for (const x of [-0.021, 0, 0.021]) {
       const pts = [
         [x, 0.014, -0.034],
@@ -840,6 +1098,7 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     });
     const map = atlasGear(g, paintable, `${id}|${side}`, PAINT.canvas[part] ?? 256);
     for (const mesh of paintable) mesh.userData.paintMap = map;
+    mergePiece(g); // a few draw calls per piece, not dozens (gearAtlas.ts)
     o.add(g);
   });
 }
