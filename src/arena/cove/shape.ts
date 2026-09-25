@@ -30,10 +30,11 @@ export const SHORE_Z = -30;
  *  mode's footprint (duel, 2v2, FFA, the raid arc out to z ≈ −12). */
 export const CLEARING = { x: 0, z: -5.5, rx: 16, rz: 12.5, y: -0.15 };
 
-/** Toward the sun: SUNDOWN, 2.5° over the sea ahead and 28° to the right —
+/** Toward the sun: SUNDOWN, 1° over the sea — touching it — ahead and 28°
+ *  to the right —
  *  off the rival's shoulder, never behind their head, so a fireball still
  *  reads against the sky while the glitter road runs in across the bay. */
-export const SUN_DIR = new Vector3(0.469, 0.044, -0.882).normalize();
+export const SUN_DIR = new Vector3(0.4694, 0.01745, -0.8828).normalize();
 
 /** Swell period (s). Long-period groundswell: slow, heavy sets. */
 export const SWELL_PERIOD = 9.5;
