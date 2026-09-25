@@ -1,12 +1,14 @@
 <!doctype html>
 <!-- DEV-ONLY harness: renders an arena backdrop for screenshots. Not shipped.
-     ?env=desert|saltflats  ?site=trailhead|flats|boneyard  ?yaw=<rad>  ?pitch=<rad>
+     ?env=desert|saltflats|cove  ?site=trailhead|flats|boneyard  ?yaw=<rad>  ?pitch=<rad>
+     ?t=<s> freezes THE COVE's surf at that moment (default: live clock).
      ?raid=1 lays out the five-seat raid arc + pit instead of the duel pair. -->
 <html>
   <body style="margin:0; background:#000">
     <script type="module">
       import {
         ACESFilmicToneMapping,
+        NoToneMapping,
         Fog,
         Matrix4,
         PerspectiveCamera,
@@ -18,6 +20,7 @@
       import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
       import { buildSaltFlats } from '/src/arena/saltflats/index.ts';
       import { buildDesert } from '/src/arena/desert/index.ts';
+      import { buildCove } from '/src/arena/cove/index.ts';
       import { makePlatform } from '/src/arena/arena.ts';
       import { MODE_LAYOUT, RAID_RING_RADIUS } from '/src/config.ts';
 
@@ -39,7 +42,16 @@
       scene.environment = new PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 
       let env;
-      if (which === 'desert') {
+      if (which === 'cove') {
+        // The headset renders with NO tone mapping (IWSDK only sets sRGB
+        // output) — preview the cove the way the Quest will show it.
+        renderer.toneMapping = NoToneMapping;
+        env = buildCove(Number(params.get('quality') ?? 1));
+        env.root.visible = true;
+        scene.add(env.root);
+        scene.background = env.skyColor;
+        scene.fog = env.fog;
+      } else if (which === 'desert') {
         env = buildDesert();
         env.setSite(site);
         env.root.visible = true;
@@ -55,6 +67,7 @@
       }
 
       window.__env = env; // for a probe to poke at (dev-only page)
+      window.__three = { renderer, scene, get camera() { return camera; } };
 
       // Show the fight pedestals so the raised-platform effect is visible.
       const mine = makePlatform(0xff7a18);
@@ -134,9 +147,16 @@
       // A few frames so the living parts (fire, windmill) settle into motion.
       let frames = 0;
       let last = performance.now();
+      const frozen = params.get('t');
       const tick = () => {
         const now = performance.now();
-        env.update((now - last) / 1000, now / 1000);
+        // THE COVE bakes its sky a strip a frame before it can be shown.
+        if (env.bake && !env.ready) {
+          env.bake(renderer);
+          requestAnimationFrame(tick);
+          return;
+        }
+        env.update((now - last) / 1000, frozen !== null ? Number(frozen) : now / 1000);
         last = now;
         renderer.render(scene, camera);
         if (++frames < 6) requestAnimationFrame(tick);

@@ -32,8 +32,8 @@ function loadDifficulty(): Difficulty {
   return 'normal';
 }
 /** The arena backdrop: bare AR passthrough, the papercraft desert, the salt
- *  flats, or the (shelved) factory. */
-export type AppEnvironment = 'ar' | 'desert' | 'saltflats' | 'factory';
+ *  flats, THE COVE (sundown on Tidewater's beach), or the (shelved) factory. */
+export type AppEnvironment = 'ar' | 'desert' | 'saltflats' | 'cove' | 'factory';
 
 export interface LifetimeStats {
   wins: number;
@@ -299,12 +299,12 @@ export const app: {
   difficulty: loadDifficulty(),
   environment: ((): AppEnvironment => {
     const e = localStorage.getItem('ff-env');
-    // First-ever launch (nothing stored) opens in the desert arena; after that
-    // we honour whatever the player last chose — including bare AR. The OLD
-    // FACTORY backdrop is shelved (COMING SOON in the picker), so anyone who
-    // had it equipped falls back to the desert.
-    if (e === 'desert' || e === 'saltflats' || e === 'ar') return e;
-    return 'desert';
+    // First-ever launch (nothing stored) opens in THE COVE; after that we
+    // honour whatever the player last chose in SETTINGS » ARENA — including
+    // bare AR. The OLD FACTORY backdrop is shelved, so anyone who had it
+    // equipped lands in the cove too.
+    if (e === 'desert' || e === 'saltflats' || e === 'cove' || e === 'ar') return e;
+    return 'cove';
   })(),
   accentHue: DEFAULT_ACCENT_HUE,
   accentLight: DEFAULT_ACCENT_LIGHT,

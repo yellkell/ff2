@@ -115,8 +115,9 @@ export type MenuAction =
   | 'kp-del'
   | 'kp-join'
   | `kp-${number}`
-  /** Arena-backdrop picker (LOCKER » ARENA tab): bare AR / desert / salt flats. */
+  /** Arena-backdrop picker (SETTINGS » ARENA): the desert / THE COVE. */
   | 'env-desert'
+  | 'env-cove'
   | 'env-saltflats'
   | 'env-factory'
   | 'tab-arena'

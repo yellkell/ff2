@@ -1193,6 +1193,11 @@ export class MenuSystem extends createSystem({}) {
         saveEnvironment();
         this.restartForEnvironmentMode();
         break;
+      case 'env-cove':
+        app.environment = 'cove';
+        saveEnvironment();
+        this.restartForEnvironmentMode();
+        break;
       case 'env-saltflats':
         app.environment = 'saltflats';
         saveEnvironment();
