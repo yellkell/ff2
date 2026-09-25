@@ -58,6 +58,8 @@ import braineaterUrl from '../assets/music/braineater.mp3';
 import creditsUrl from '../assets/music/credits.mp3';
 import defenseUrl from '../assets/music/defense.m4a';
 import awakeningUrl from '../assets/music/awakening.m4a';
+import passionUrl from '../assets/music/passion.m4a';
+import finalUrl from '../assets/music/final.m4a';
 import type { MoveKind } from '../config.js';
 
 /** Where a record is allowed to play. 'credits' is a role of one: the
@@ -444,6 +446,40 @@ export const TRACKS: Track[] = [
     // true peak (−1.4 dBFS) goes just over on a maxed music slider — which
     // is what the limiter on the music bus is for, and SWAG and GIVE IT TO
     // ME already ask it the same favour.
+    roles: ['raid'],
+  },
+  {
+    id: 'passion',
+    title: 'PASSION',
+    url: passionUrl,
+    bpm: 125.996,
+    downbeat: 1.8886,
+    seconds: 231.97,
+    lufs: -8.6,
+    // The raw reading is 63 and the record isn't that slow: its onsets sit
+    // on a 252 lattice (63 × 4), and 63, 84 and 126 all autocorrelate off
+    // it. The drums run half-time — one heavy kick a bar, which is also
+    // what the downbeat vote locks onto (3× any other slot) — but the
+    // pulse the floor dances is 126, and a 63 chart would be a waiting
+    // room. Same four-thousandths-under grid as DEFENSE, and the fraction
+    // outscored 126 flat, so it stays. No intro to skip: it's up from the
+    // first second.
+    roles: ['raid'],
+  },
+  {
+    id: 'final',
+    title: 'FINAL',
+    url: finalUrl,
+    bpm: 126.0,
+    downbeat: 0.0481,
+    seconds: 300.95,
+    lufs: -7.8,
+    // Read 63 at first, like PASSION, off the same 252 lattice — but here
+    // the kick settles it: four on the floor at 126, off-beats nearly empty
+    // (0.23 of the on-beats). The full band phase-locks half a beat later,
+    // on the off-beat hats; the kick is the beat, so the kick's phase wins.
+    // The longest record in the box at five minutes, and it starts on the
+    // one — bar 1 beat 1 is 48 ms in.
     roles: ['raid'],
   },
   {
