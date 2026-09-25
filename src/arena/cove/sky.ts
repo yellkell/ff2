@@ -52,7 +52,7 @@ const STRIPS = 32;
 const EL0 = -10 * (Math.PI / 180);
 
 /** Radiance → display scale shared by everything that reads the bake. */
-export const SKY_EXPOSURE = 17.0;
+export const SKY_EXPOSURE = 15.0;
 
 /** GLSL: direction → uv in the sky bake (continuous-u variant for gradients). */
 export const SKY_UV_GLSL = /* glsl */ `
@@ -71,9 +71,13 @@ vec4 coveSample(sampler2D tex, vec3 dir) {
   bool alt = abs(dx.x) + abs(dy.x) > abs(dxA.x) + abs(dyA.x);
   return textureGrad(tex, uv, alt ? dxA : dx, alt ? dyA : dy);
 }
-// Soft shoulder: below 0.55 untouched, above it rolls toward 1 — a sunlit
+// The evening grade, then a soft shoulder. The grade is a warm filter on
+// everything the sky gives — dome, clouds, the sea's reflections alike —
+// so late-evening blue sinks to dusky lavender and every white goes orange.
+// The shoulder: below 0.55 untouched, above it rolls toward 1, so a sunlit
 // cloud keeps its modelling without a tone mapper (the headset has none).
 vec3 coveTone(vec3 c) {
+  c *= vec3(1.16, 0.84, 0.58);
   vec3 over = max(c - 0.55, 0.0);
   return min(c, 0.55) + 0.45 * (1.0 - exp(-over / 0.45));
 }
@@ -199,7 +203,7 @@ vec3 atmosphere(vec3 ro, vec3 rd, float tMax, out vec3 transOut) {
 
 // ---- cumulus: fair-weather cells between 1.3 and ~2.7 km
 const float CB = 1.35;
-const float CT = 2.75;
+const float CT = 2.35; // fair-weather cumulus: wider than they are tall
 // each octave rotated off the lattice, so value noise can't leave its
 // grid's diamonds and points in the cloud outlines
 const mat2 ROT = mat2(0.8, -0.6, 0.6, 0.8);
@@ -210,27 +214,31 @@ float fbm2(vec2 p) {
 }
 float coverage(vec2 p) {
   // p in km: cells ~1 km across, clumped into fields with clear sky between
-  float n = fbm2(p * 0.9);
+  float n = fbm2(p * 0.7);
   float field = vnoise2(ROT * p * 0.12 + 11.0);
   return smoothstep(0.62, 0.82, n + (field - 0.5) * 0.3);
 }
 float cloudDensity(vec3 p, float cov) {
   float h = (length(p) - RG - CB) / (CT - CB);
   if (h < 0.0 || h > 1.0) return 0.0;
-  // flat bases, domed tops: the column is as tall as its coverage
-  // a DOME: a column is as tall as sqrt(coverage), and the density falls
-  // away with the height fraction inside it, so every cell rounds over
-  float top = sqrt(cov) * 0.95;
-  if (h > top) return 0.0;
-  float rel = h / max(top, 1e-3);
-  float d = smoothstep(0.0, 0.05, h) * (1.0 - rel * rel) * (0.35 + 0.65 * cov);
+  // A CUMULUS, not a mountain range. The clouds used to be their 2D
+  // footprint extruded straight up — vertical walls, which a low sun lit
+  // into fins and spikes. Now the cross-section SHRINKS as it climbs: the
+  // higher a point, the more coverage it takes to still be cloud there. So
+  // every cell is a dome — widest at its flat base, sloping in, rounding
+  // over at a crown as high as its coverage is strong — and the billows
+  // below make that dome a cauliflower.
+  float need = h * h * 0.9;
+  float d = smoothstep(need, need + 0.14, cov) * smoothstep(0.0, 0.07, h) * mix(0.6, 1.0, cov);
   if (d <= 0.0) return 0.0;
-  // cauliflower: billows eat the outline, harder toward the crown
+  float rel = h;
   // rotated off the lattice: value noise has grid planes, and level ones
   // line up with the cloud deck as ledges
   vec3 q = mat3(0.80, 0.36, -0.48, -0.60, 0.48, -0.64, 0.0, 0.80, 0.60) * p * 2.4;
-  float n = vnoise3(q) * 0.55 + vnoise3(q * 2.3 + 3.1) * 0.3 + vnoise3(q * 5.7 - 1.7) * 0.15;
-  d = clamp((d - (1.0 - n) * mix(0.18, 0.42, rel)) * 3.0, 0.0, 1.0);
+  // big rounded billows: weight on the coarse octaves (fine ones carve spikes)
+  float n = vnoise3(q * 0.55) * 0.6 + vnoise3(q * 1.3 + 3.1) * 0.3 + vnoise3(q * 3.1 - 1.7) * 0.1;
+  // billows eat the crown and the shoulders, barely the flat base
+  d = clamp((d - (1.0 - n) * mix(0.12, 0.4, rel)) * 3.0, 0.0, 1.0);
   return d * 32.0; // extinction (/km)
 }
 // The march is ADAPTIVE: long strides through clear air, and the moment a
@@ -501,7 +509,7 @@ export function makeSkyDome(bake: SkyBake): Mesh {
       cloudTex: { value: bake.clouds },
       uTime: skyTime,
       sunDir: { value: SUN_DIR.clone() },
-      sunTint: { value: new Color(1.0, 0.42, 0.12) },
+      sunTint: { value: new Color(1.0, 0.32, 0.07) },
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;

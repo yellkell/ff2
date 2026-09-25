@@ -68,11 +68,11 @@ export interface Cove {
  *  hemisphere) — the water shader is fed the same numbers, so the sea and
  *  the sand agree on how bright the evening is. SUNDOWN: a low copper sun,
  *  a dusk-violet sky dome, warm bounce off the sand. */
-const SUN_COLOR = new Color().setRGB(1.0, 0.56, 0.28, SRGBColorSpace);
-const SUN_INTENSITY = 3.4;
-const SKY_TOP = new Color().setRGB(0.56, 0.5, 0.62, SRGBColorSpace);
-const SKY_GROUND = new Color().setRGB(0.66, 0.45, 0.32, SRGBColorSpace);
-const HEMI_INTENSITY = 1.0;
+const SUN_COLOR = new Color().setRGB(1.0, 0.42, 0.16, SRGBColorSpace);
+const SUN_INTENSITY = 2.6;
+const SKY_TOP = new Color().setRGB(0.5, 0.4, 0.5, SRGBColorSpace);
+const SKY_GROUND = new Color().setRGB(0.6, 0.36, 0.24, SRGBColorSpace);
+const HEMI_INTENSITY = 0.7;
 
 /** The bonfires, all well outside the arena: [x, metres inland from the
  *  waterline at that x, size]. */
@@ -132,7 +132,7 @@ export function buildCove(quality = 1): Cove {
   root.add(sun, sun.target);
   const hemi = new HemisphereLight(SKY_TOP, SKY_GROUND, HEMI_INTENSITY);
   root.add(hemi);
-  root.add(new AmbientLight(new Color().setRGB(0.42, 0.4, 0.6, SRGBColorSpace), 0.06));
+  root.add(new AmbientLight(new Color().setRGB(0.42, 0.34, 0.5, SRGBColorSpace), 0.05));
 
   const sunE = SUN_COLOR.clone().multiplyScalar(SUN_INTENSITY);
   // the sky's irradiance on flat water: the hemisphere's upper half
@@ -162,7 +162,7 @@ export function buildCove(quality = 1): Cove {
   const sound = createCoveSound([...spotsF, ...torches]);
 
   // the haze: dusk mauve with the sunset's warmth in it
-  const horizon = new Color().setRGB(0.66, 0.5, 0.5, SRGBColorSpace);
+  const horizon = new Color().setRGB(0.6, 0.36, 0.26, SRGBColorSpace);
   const fog = new Fog(horizon, 120, 3400);
 
   return {
