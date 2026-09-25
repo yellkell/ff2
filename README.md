@@ -18,6 +18,40 @@ plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 (DESIGN.md §10). [`FOUNDATION.md`](FOUNDATION.md) is FF1's own README,
 carried over verbatim: everything in it still applies to this code.
 
+- **THE TITANS, FINISHED** — the five machines stop reading as blocks.
+  A finishing pass over each rig (`finishTitan` in `campaign/bosses.ts`)
+  bevels every box and rounds every barrel without moving a pivot, and
+  each machine wears its own procedural SKIN (`materials/titanSkin.ts`:
+  colour, roughness, metalness and bump, drawn once): RUSTHOOK's blotched
+  rust, pitting and weeps; PISTONKAISER's hammer-dimpled iron with temper
+  colours; VULTURE's scale plumage; JUGGERNAUT's riveted panel armour;
+  GOLIATH's brushed black plate engraved with scrollwork. Rust and paint
+  aren't bare metal any more, so the hulls stop mirroring the room black.
+  And each theme grew: a hazard-striped salvage plate, riveted patches and
+  a live severed cable on RUSTHOOK; heat vents and molten cracks on
+  PISTONKAISER; a raised feather ruff and wing coverts on VULTURE; track
+  links and a stencilled IV on JUGGERNAUT; crown jewels and a chain of
+  office on GOLIATH. Repeated parts merge to one mesh, so draw calls barely
+  move. Dev: `/titan-preview.html` (`?t=0..4`, `&close=1`).
+- **STATS** — the boards get a podium (medal discs, a lit edge, the
+  leader's row in gold) and a gauge under every row showing how close it
+  runs to the leader; RAVE RAID's record list is alphabetical with a find
+  box; OVERTIME joins the shelf, and `npm run check:stats-tracks` (in CI)
+  fails whenever the page's song list falls behind the raid shelf.
+- **NO FALLING BLOCKS, NO CHASING LASER** — two titan attacks cut after
+  play: the **SLAM** (the ghost block hanging over a disc on your pad,
+  dropping with the countdown and crashing down) weighs zero on every
+  titan, so none of them throws it — the **SEESAW** (one half of the pad
+  floods, then the other: cross) takes its weight on every machine; and
+  the beam no longer **TRACKS** you
+  through its charge — VULTURE, GOLIATH and GOOPLIATH aim it once, where
+  you stand when it starts, and it stays put (`beamTracks` is off on
+  every def). The machinery for both stays for the dev probe and a later
+  bill. (THE RECITAL was already off the titans' bill; RAVE RAID's
+  ROUTINE is untouched.)
+  And every titan past RUSTHOOK throws the **CROSS** now, not just VULTURE: the arms
+  go out like wings and snap across the body as the side rails fire.
+
 - **THE BANK** — iron-dollars for money. The STORE has a third chip,
   BANK, and the YOU wing's purse is a door to it: four packs — 500 · 1300
   · 3000 · 7000 — a pack is its number and its price, nothing else to read.

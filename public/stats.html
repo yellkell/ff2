@@ -754,6 +754,60 @@
       }
       .row.top1 .rank { color: var(--g-s); }
       .row.top3 .rank { color: var(--text); }
+
+      /* THE PODIUM — the first three wear their medal: a struck disc for
+         the rank, a lit edge down the row's left side, and the leader's row
+         washed in the board's accent. Everything below them stays quiet. */
+      .row.p1, .row.p2, .row.p3 { padding-top: 11px; padding-bottom: 11px; }
+      .row.p1 { --medal: #ffd75e; --medal-ink: #2a1c00; }
+      .row.p2 { --medal: #d9e0ea; --medal-ink: #151a22; }
+      .row.p3 { --medal: #e0975a; --medal-ink: #2a1206; }
+      .row.p1, .row.p2, .row.p3 {
+        box-shadow: inset 3px 0 0 var(--medal);
+      }
+      .row.p1 {
+        background: linear-gradient(90deg, var(--accent-faint), transparent 70%);
+      }
+      .row.p1 .rank, .row.p2 .rank, .row.p3 .rank {
+        display: inline-grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        margin-left: 10px;
+        border-radius: 50%;
+        font-size: 14px;
+        font-weight: 700;
+        text-align: center;
+        color: var(--medal-ink);
+        background: radial-gradient(circle at 35% 30%, #fff 0 8%, var(--medal) 45%, color-mix(in srgb, var(--medal) 70%, #000) 100%);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 8px color-mix(in srgb, var(--medal) 35%, transparent);
+      }
+      .row.p1 .name { font-size: 19px; }
+      .row.p1 .score { font-size: 20px; color: var(--g-s); }
+
+      /* THE GAUGE — how close each entry runs to the leader: a hairline
+         under the row, full for the leader and shorter the further back
+         you are (for a clock, the leader's time over yours). It fills the
+         dead air between the name and the number with the one thing that
+         space should say. */
+      .row[style*='--w']::after {
+        content: '';
+        position: absolute;
+        left: 64px;
+        bottom: 3px;
+        height: 2px;
+        width: calc((100% - 80px) * var(--w));
+        border-radius: 2px;
+        background: linear-gradient(90deg, var(--accent-dim), var(--accent-faint));
+        opacity: 0.55;
+        pointer-events: none;
+      }
+      .row.p1[style*='--w']::after,
+      .row.p2[style*='--w']::after,
+      .row.p3[style*='--w']::after {
+        background: linear-gradient(90deg, var(--medal), transparent);
+        opacity: 0.5;
+      }
       .row .name {
         flex: 1 1 auto;
         font-weight: 600;
@@ -888,6 +942,21 @@
         text-align: right;
       }
       .song .best { flex: none; width: 30px; text-align: center; font-weight: 700; font-size: 18px; }
+      /* The shelf's filter: the list is past two dozen records and still
+         growing, so a name typed here narrows it (the game's shelf is
+         alphabetical, and so is this one). */
+      .song-find {
+        display: block;
+        width: 100%;
+        margin: 4px 0 10px;
+      }
+      .songs .none {
+        padding: 14px 22px;
+        font-size: 13px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--disabled);
+      }
       @media (max-width: 760px) {
         .songs { max-height: clamp(160px, 38vh, 340px); }
       }
@@ -1224,7 +1293,8 @@
         text-transform: uppercase;
         color: var(--faint);
       }
-      .lab-filter input[type='search'] {
+      .lab-filter input[type='search'],
+      .song-find {
         appearance: none;
         min-height: 44px;
         min-width: 220px;
@@ -1239,18 +1309,21 @@
         letter-spacing: 0.08em;
         transition: background-color 0.18s linear, border-color 0.18s linear;
       }
-      .lab-filter input[type='search']::placeholder {
+      .lab-filter input[type='search']::placeholder,
+      .song-find::placeholder {
         color: var(--disabled);
         letter-spacing: 0.14em;
         text-transform: uppercase;
         font-size: 13px;
       }
-      .lab-filter input[type='search']:hover {
+      .lab-filter input[type='search']:hover,
+      .song-find:hover {
         background: var(--plate-hover);
         border-color: var(--line-hover);
         transition-duration: 0.1s;
       }
-      .lab-filter input[type='search']:focus-visible {
+      .lab-filter input[type='search']:focus-visible,
+      .song-find:focus-visible {
         outline: none;
         border-color: var(--accent-edge);
         box-shadow: 0 0 0 3px var(--accent-faint);
@@ -1698,6 +1771,7 @@
           <section class="panel opening">
             <i class="halo"></i><span class="sheen"></span>
             <h2 class="panel-title">Records</h2>
+            <input type="search" class="song-find" id="rr-find" placeholder="find a record" aria-label="Find a record" autocomplete="off" spellcheck="false" />
             <div class="col-caps">
               <span style="flex: 1 1 auto">RECORD</span>
               <span style="width: 46px; text-align: right">RUNS</span>
@@ -1843,7 +1917,13 @@
         const m = Math.floor(t / 60);
         return `${m}:${(t - m * 60).toFixed(1).padStart(4, '0')}`;
       };
-      const rowClass = (i) => (i === 0 ? 'top1' : i < 3 ? 'top3' : '');
+      const rowClass = (i) => (i === 0 ? 'top1 p1' : i < 3 ? `top3 p${i + 1}` : '');
+      /** THE GAUGE's length, 0..1 against the leader — `low` for a clock,
+       *  where the leader's time over yours is the share you've closed. */
+      const gauge = (v, best, low) => {
+        const w = low ? (v > 0 ? best / v : 0) : best > 0 ? v / best : 0;
+        return ` style="--w:${Math.max(0.03, Math.min(1, w)).toFixed(3)}"`;
+      };
       const ago = (iso) => {
         if (!iso) return '';
         const d = typeof iso === 'number' ? new Date(iso) : new Date(iso);
@@ -2064,7 +2144,7 @@
         rowsEl.innerHTML = rows
           .map((r, i) => {
             if (def.kind === 'player') {
-              return `<li class="row ${rowClass(i)}"><span class="rank">${i + 1}</span>` +
+              return `<li class="row ${rowClass(i)}"${gauge(r.value, rows[0].value, false)}><span class="rank">${i + 1}</span>` +
                 `<span class="name">${who(r.uid, r.name)}${paintChips(r.look)}</span>` +
                 `<span class="score">${num(r.value)}</span></li>`;
             }
@@ -2077,7 +2157,7 @@
               (r.difficulty === 'hard' ? '<span class="diff-chip hard">HARD</span>' : '') +
               (r.difficulty === 'blazing' ? '<span class="diff-chip blazing">BLAZING</span>' : '') +
               (r.hardcore ? '<span class="diff-chip hc">HC</span>' : '');
-            return `<li class="row ${rowClass(i)}"><span class="rank">${i + 1}</span>` +
+            return `<li class="row ${rowClass(i)}"${gauge(r.value, rows[0].value, true)}><span class="rank">${i + 1}</span>` +
               `<span class="name">${squad}${chips}</span>` +
               `<span class="when">${esc(ago(r.at))}</span>` +
               `<span class="score">${runClock(r.value)}</span></li>`;
@@ -2769,7 +2849,9 @@
          shelf the lobby offers (tracksFor('raid')). A lobby or credits
          track never gets raided, so it can never hold a record, and listing
          it here just offers an empty board. Anything the board carries that
-         isn't listed still shows, under its own id. */
+         isn't listed still shows, under its own id. `npm run
+         check:stats-tracks` (in CI) fails when this list drifts from the
+         shelf. */
       const RR_TRACKS = [
         ['sakupened', 'SAKUPENED'], ['combat', 'COMBAT'], ['discoball', 'DISCO BALL'],
         ['loop', 'LOOP'], ['capture', 'CAPTURE'], ['morning', 'MORNING'],
@@ -2779,17 +2861,20 @@
         ['vone', 'ORIGINAL'], ['fusion', 'FUSION'], ['braineater', 'BRAIN EATER'],
         ['futurevibe', 'FUTURE VIBE'], ['vfall', 'BREAKCORE V4'],
         ['defense', 'DEFENSE'], ['awakening', 'AWAKENING'],
+        ['passion', 'PASSION'], ['final', 'FINAL'], ['overtime', 'OVERTIME'],
       ];
       const RR_DIFFS = [
         { id: '0', label: 'Easy' }, { id: '1', label: 'Normal' },
         { id: '2', label: 'Hard' }, { id: '3', label: 'Expert' },
       ];
       const GRADE_COLOUR = { S: 'var(--g-s)', A: 'var(--g-a)', B: 'var(--g-b)', C: 'var(--g-c)', F: 'var(--g-f)' };
-      const rr = { track: RR_TRACKS[0][0], diff: '1', cache: new Map() };
+      const rr = { track: [...RR_TRACKS].sort((a, b) => a[1].localeCompare(b[1]))[0][0], diff: '1', cache: new Map() };
 
       /** A rave chart's board id — mirrors src/net/boards.ts raveBoard(). */
       const raveBoard = (track, diff) =>
         `rave-${String(track).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${diff}`;
+
+      document.getElementById('rr-find').addEventListener('input', () => drawRrSongs());
 
       function drawRrRail() {
         fillRail('rr-rail', 'rr-marker', RR_DIFFS, rr.diff, (id) => {
@@ -2802,7 +2887,11 @@
 
       function drawRrSongs() {
         const host = document.getElementById('rr-songs');
-        host.innerHTML = RR_TRACKS.map(([id, name]) => {
+        const find = (document.getElementById('rr-find')?.value || '').trim().toLowerCase();
+        const shelf = [...RR_TRACKS]
+          .sort((a, b) => a[1].localeCompare(b[1]))
+          .filter(([, name]) => !find || name.toLowerCase().includes(find));
+        host.innerHTML = shelf.map(([id, name]) => {
           const rows = rr.cache.get(raveBoard(id, rr.diff));
           const runs = rows ? rows.length : null;
           const best = rows && rows[0] ? rows[0].grade : '';
@@ -2811,7 +2900,7 @@
             `<span class="runs">${runs === null ? '' : runs}</span>` +
             `<span class="best" style="color:${GRADE_COLOUR[best] || 'var(--faint)'}">${esc(best)}</span>` +
             `</button></li>`;
-        }).join('');
+        }).join('') || '<li class="none">No record by that name</li>';
         host.querySelectorAll('.song').forEach((b) =>
           b.addEventListener('click', () => {
             rr.track = b.dataset.id;
@@ -2862,7 +2951,7 @@
         status.classList.add('hidden');
         rowsEl.innerHTML = rows
           .map((r, i) =>
-            `<li class="row ${rowClass(i)}"><span class="rank">${i + 1}</span>` +
+            `<li class="row ${rowClass(i)}"${gauge(r.value, rows[0].value, false)}><span class="rank">${i + 1}</span>` +
             `<span class="name">${who(r.uid, r.name)}</span>` +
             `<span class="when">${esc(ago(r.at))}</span>` +
             `<span class="score">${num(r.value)}</span>` +

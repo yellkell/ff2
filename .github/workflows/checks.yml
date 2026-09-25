@@ -26,6 +26,8 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Stats page lists every raid record
+        run: npm run check:stats-tracks
       - name: Build
         run: npm run build
 
