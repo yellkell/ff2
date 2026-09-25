@@ -29,6 +29,8 @@ carried over verbatim: everything in it still applies to this code.
   every def). The machinery for both stays for the dev probe and a later
   bill. (THE RECITAL was already off the titans' bill; RAVE RAID's
   ROUTINE is untouched.)
+  And every titan throws the **CROSS** now, not just VULTURE: the arms
+  go out like wings and snap across the body as the side rails fire.
 
 - **THE BANK** — iron-dollars for money. The STORE has a third chip,
   BANK, and the YOU wing's purse is a door to it: four packs — 500 · 1300

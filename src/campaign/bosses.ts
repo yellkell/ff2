@@ -171,7 +171,9 @@ export const BOSSES: BossDef[] = [
     weakPattern: 'both',
     // The scrapyard learned the GATE: a fence of fire with one gap — the
     // junkyard's own move, and the plainest read in the new vocabulary.
-    grammar: { gate: 3, lanes: 2 },
+    // Every titan throws the CROSS too — the arms go out like wings and
+    // snap across the body as the side rails fire (the scissor gesture).
+    grammar: { gate: 3, lanes: 2, cross: 3 },
     beat: 0.56,
     grammarCharge: 2.1,
   },
@@ -197,7 +199,7 @@ export const BOSSES: BossDef[] = [
     // The foundry press learned the WAVE: its drumline slam was already a
     // march — now the whole deck marches (and the classic surge, weighted
     // above, rocks it lengthways).
-    grammar: { wave: 4 },
+    grammar: { wave: 4, cross: 3 },
     beat: 0.5,
     grammarCharge: 2.0,
   },
@@ -247,7 +249,7 @@ export const BOSSES: BossDef[] = [
     weakPattern: 'triple',
     // The rolling fortress learned to close its walls: row gates and the
     // donut's collapsing rim — ground that shrinks until you hold the middle.
-    grammar: { gate: 3, donut: 3 },
+    grammar: { gate: 3, donut: 3, cross: 3 },
     beat: 0.48,
     grammarCharge: 2.0,
   },
@@ -280,7 +282,7 @@ export const BOSSES: BossDef[] = [
     // night the COMBINATION (duckdonut) closes the show on the beat.
     // THE RECITAL was cut from the bill after a night on it (the machinery
     // stays in grammar.ts for the check and for a later bill).
-    grammar: { wave: 3, donut: 2, duckdonut: 0.4 },
+    grammar: { wave: 3, donut: 2, cross: 3, duckdonut: 0.4 },
     beat: 0.46,
     grammarCharge: 1.9,
   },
