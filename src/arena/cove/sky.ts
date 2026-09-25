@@ -47,7 +47,7 @@ import { SUN_DIR } from './shape.js';
 const W = 2048;
 const H = 512;
 /** Strips per bake — one per frame. */
-const STRIPS = 16;
+const STRIPS = 32;
 /** Lowest elevation stored (radians). */
 const EL0 = -10 * (Math.PI / 180);
 
@@ -212,7 +212,7 @@ float coverage(vec2 p) {
   // p in km: cells ~1 km across, clumped into fields with clear sky between
   float n = fbm2(p * 0.9);
   float field = vnoise2(ROT * p * 0.12 + 11.0);
-  return smoothstep(0.6, 0.8, n + (field - 0.5) * 0.4);
+  return smoothstep(0.62, 0.82, n + (field - 0.5) * 0.3);
 }
 float cloudDensity(vec3 p, float cov) {
   float h = (length(p) - RG - CB) / (CT - CB);
@@ -226,11 +226,20 @@ float cloudDensity(vec3 p, float cov) {
   float d = smoothstep(0.0, 0.05, h) * (1.0 - rel * rel) * (0.35 + 0.65 * cov);
   if (d <= 0.0) return 0.0;
   // cauliflower: billows eat the outline, harder toward the crown
-  vec3 q = p * 2.4;
+  // rotated off the lattice: value noise has grid planes, and level ones
+  // line up with the cloud deck as ledges
+  vec3 q = mat3(0.80, 0.36, -0.48, -0.60, 0.48, -0.64, 0.0, 0.80, 0.60) * p * 2.4;
   float n = vnoise3(q) * 0.55 + vnoise3(q * 2.3 + 3.1) * 0.3 + vnoise3(q * 5.7 - 1.7) * 0.15;
   d = clamp((d - (1.0 - n) * mix(0.18, 0.42, rel)) * 3.0, 0.0, 1.0);
   return d * 32.0; // extinction (/km)
 }
+// The march is ADAPTIVE: long strides through clear air, and the moment a
+// stride lands over a cloud's FOOTPRINT (its 2D coverage — much wider than
+// its dense core, so no stride can hop a thin edge and leave a texel that
+// missed the cloud its neighbour hit) it steps back and walks in fine steps
+// (50 m near, growing with range) until it has been clear for a while. Fixed steps
+// sampled a cloud's rounded top in slices a few hundred metres apart near
+// the horizon — the clouds came out terraced, like stacked plates.
 vec4 clouds(vec3 ro, vec3 rd, vec3 sunCol, vec3 ambTop, vec3 ambBot, out float dist) {
   dist = 0.0;
   if (rd.y < -0.02) return vec4(0.0);
@@ -239,44 +248,81 @@ vec4 clouds(vec3 ro, vec3 rd, vec3 sunCol, vec3 ambTop, vec3 ambBot, out float d
   float t0 = max(a.y, 0.0);
   float t1 = min(b.y, 38.0);
   if (t1 <= t0) return vec4(0.0);
-  int N = int(mix(28.0, 64.0, quality) * mix(1.5, 1.0, smoothstep(0.05, 0.3, rd.y)));
-  float dt = (t1 - t0) / float(N);
-  float jitter = hash12(gl_FragCoord.xy);
+  float big = mix(0.5, 0.25, smoothstep(0.05, 0.5, rd.y)) / mix(0.7, 1.0, quality);
+  // NO per-texel jitter: neighbouring texels starting their march at
+  // different offsets alternate hit/miss along a cloud's edge, and the
+  // texture filter blows that up into a halftone of dots. The fine steps
+  // are short enough not to band without it.
+  float jitter = 0.5;
   vec3 L = vec3(0.0);
   float T = 1.0;
   float c = dot(rd, sunDir);
   float phase = mix(phaseHG(c, 0.55), phaseHG(c, -0.25), 0.3) * 4.0 * PI;
   float wsum = 0.0;
-  for (int i = 0; i < 96; i++) {
-    if (i >= N || T < 0.02) break;
-    float t = t0 + (float(i) + jitter) * dt;
+  float t = t0 + jitter * big;
+  bool fine = false;
+  int empty = 0;
+  for (int i = 0; i < 220; i++) {
+    if (t > t1 || T < 0.02) break;
+    float fineStep = 0.05 + t * 0.004;
     vec3 p = ro + rd * t;
     float cov = coverage(p.xz);
-    if (cov <= 0.001) continue;
-    float s = cloudDensity(p, cov);
-    if (s <= 0.0) continue;
-    // light march toward the sun
-    float od = 0.0;
-    float ls = 0.06;
-    vec3 q = p;
-    for (int j = 0; j < 5; j++) {
-      q += sunDir * ls;
-      od += cloudDensity(q, coverage(q.xz)) * ls;
-      ls *= 1.7;
+    if (cov > 0.001 && !fine) {
+      // a stride landed over a cloud's footprint: back up and walk in
+      fine = true;
+      empty = 0;
+      t = max(t0, t - big + fineStep * jitter);
+      continue;
     }
-    float beer = exp(-od) + 0.25 * exp(-od * 0.25); // + a soft multiple-scatter tail
-    float powder = 1.0 - exp(-s * 0.12);
-    float hFrac = clamp((length(p) - RG - CB) / (CT - CB), 0.0, 1.0);
-    vec3 amb = mix(ambBot, ambTop, hFrac);
-    vec3 S = sunCol * beer * phase * mix(0.35, 1.0, powder) * 1.15 + amb * 0.85;
-    float stepT = exp(-s * dt);
-    L += T * (1.0 - stepT) * S;
-    wsum += T * (1.0 - stepT) * t;
-    T *= stepT;
+    float s = fine && cov > 0.001 ? cloudDensity(p, cov) : 0.0;
+    if (cov > 0.001) empty = 0;
+    if (s > 0.0) {
+      // light march toward the sun
+      float od = 0.0;
+      float ls = 0.06;
+      vec3 q = p;
+      for (int j = 0; j < 5; j++) {
+        q += sunDir * ls;
+        od += cloudDensity(q, coverage(q.xz)) * ls;
+        ls *= 1.7;
+      }
+      float beer = exp(-od) + 0.25 * exp(-od * 0.25); // + a soft multiple-scatter tail
+      float powder = 1.0 - exp(-s * 0.12);
+      float hFrac = clamp((length(p) - RG - CB) / (CT - CB), 0.0, 1.0);
+      vec3 amb = mix(ambBot, ambTop, hFrac);
+      vec3 S = sunCol * beer * phase * mix(0.35, 1.0, powder) * 1.15 + amb * 0.85;
+      float stepT = exp(-s * fineStep);
+      L += T * (1.0 - stepT) * S;
+      wsum += T * (1.0 - stepT) * t;
+      T *= stepT;
+    } else if (fine && cov <= 0.001 && ++empty > 6) {
+      fine = false;
+    }
+    t += fine ? fineStep : big;
   }
   float alpha = 1.0 - T;
   dist = alpha > 0.0 ? wsum / alpha : 0.0;
   return vec4(L, alpha);
+}
+
+// THE CIRRUS VEIL, 8 km up: fibrous streaks combed out along the upper
+// wind, in patches. It is the sunset's best trick — up there the sun has
+// not yet set, so the veil stays lit pink and gold while the cumulus
+// below have gone grey. No march: a thin sheet, lit once.
+const float CI = 8.0;
+vec4 cirrus(vec3 ro, vec3 rd, out float dist) {
+  dist = 0.0;
+  if (rd.y < 0.005) return vec4(0.0);
+  dist = min(raySphere(ro, rd, RG + CI).y, 250.0);
+  vec3 q = ro + rd * dist;
+  vec2 w = normalize(vec2(0.94, -0.34));
+  vec2 sq = mat2(w.x, -w.y, w.y, w.x) * q.xz;
+  float warp = fbm2(q.xz * 0.06 + 5.0) * 2.2;
+  float fib = fbm2(vec2(sq.x * 0.045, sq.y * 0.5) + warp);
+  float fine = vnoise2(vec2(sq.x * 0.2, sq.y * 2.4) + warp * 1.7);
+  float patchK = smoothstep(0.48, 0.76, fbm2(q.xz * 0.011 + 3.0));
+  float a = smoothstep(0.52, 0.84, fib * 0.8 + fine * 0.2) * patchK * 0.42;
+  return vec4(sunTransmittance(q), a);
 }
 
 void main() {
@@ -299,7 +345,9 @@ void main() {
   vec3 zen = atmosphere(ro, vec3(0.0, 1.0, 0.0), 1e9, dummy);
   vec3 hor = atmosphere(ro, normalize(vec3(-sunDir.x, 0.05, -sunDir.z)), 1e9, dummy);
   vec3 ambTop = zen * 1.0 + hor * 0.35;
-  vec3 ambBot = hor * 0.28 + vec3(0.006, 0.007, 0.008); // lit from the sea below: dim, cool
+  vec3 sunHor = atmosphere(ro, normalize(vec3(sunDir.x, 0.04, sunDir.z)), 1e9, dummy);
+  // lit from below by the sea and the afterglow on the sunward horizon
+  vec3 ambBot = hor * 0.22 + sunHor * 0.07 + vec3(0.006, 0.007, 0.008);
   float cd;
   vec4 cl = clouds(ro, rdA, sunCol, ambTop, ambBot, cd);
   vec4 outC = vec4(0.0);
@@ -312,6 +360,20 @@ void main() {
     float a = cl.a * mix(0.35, 1.0, fade);
     // premultiplied: sky = atmosphere * (1 - a) + rgb
     outC = vec4(col * a * ${SKY_EXPOSURE.toFixed(3)}, a);
+  }
+  // the veil above them, seen through whatever cumulus is in front
+  float ciD;
+  vec4 ci = cirrus(ro, rdA, ciD);
+  if (ci.a > 0.0) {
+    float cc = dot(rdA, sunDir);
+    vec3 Tci;
+    vec3 front = atmosphere(ro, rdA, ciD, Tci);
+    // ice crystals: a strong forward glow toward the sun, a little everywhere
+    vec3 lit = ci.rgb * SUN_E * (0.18 + 3.0 * phaseHG(cc, 0.7)) + ambTop * 0.35;
+    float a = ci.a * smoothstep(0.005, 0.06, rdA.y);
+    vec3 col = (lit * Tci + front * 0.5) * a * ${SKY_EXPOSURE.toFixed(3)};
+    outC.rgb += (1.0 - outC.a) * col;
+    outC.a += (1.0 - outC.a) * a;
   }
   gl_FragColor = outC;
 }
