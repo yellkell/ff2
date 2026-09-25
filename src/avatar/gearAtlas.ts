@@ -29,7 +29,8 @@
  * on the same spot everywhere.
  */
 
-import { BufferAttribute, Matrix3, Vector3, type BufferGeometry, type Group, type Mesh } from 'three';
+import { BufferAttribute, Matrix3, Matrix4, Mesh, Vector3, type BufferGeometry, type Group, type MeshStandardMaterial } from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 export interface GearMap {
   /** Identity of the piece this map was laid for (the bake memoizes on it). */
@@ -89,13 +90,78 @@ function ensureUv(geo: BufferGeometry): void {
   geo.setAttribute('uv', new BufferAttribute(uv, 2));
 }
 
+/**
+ * FACING SPLIT, for a mesh flagged `userData.atlasSplit` — an extruded
+ * blade or plate. three's ExtrudeGeometry gives its front and back faces
+ * the SAME UVs (and walls on opposite sides of an outline often overlap
+ * too), so one texel would have to be two places at once and a mark on
+ * one face would never show. So: every triangle gets its own vertices,
+ * is binned by which way it faces (±x, ±y, ±z), and is mapped flat onto
+ * the plane across that axis; each bin becomes its own island.
+ */
+function splitByFacing(mesh: Mesh): Island[] {
+  if (mesh.geometry.getIndex()) mesh.geometry = mesh.geometry.toNonIndexed();
+  const geo = mesh.geometry;
+  const pos = geo.getAttribute('position');
+  const uv = new Float32Array(pos.count * 2);
+  const bins = new Map<number, number[]>();
+  for (let t = 0; t + 2 < pos.count; t += 3) {
+    _a.fromBufferAttribute(pos, t);
+    _b.fromBufferAttribute(pos, t + 1).sub(_a);
+    _c.fromBufferAttribute(pos, t + 2).sub(_a);
+    const n = _b.cross(_c);
+    const ax = [Math.abs(n.x), Math.abs(n.y), Math.abs(n.z)];
+    const axis = ax[0] >= ax[1] && ax[0] >= ax[2] ? 0 : ax[1] >= ax[2] ? 1 : 2;
+    const bin = axis * 2 + ((axis === 0 ? n.x : axis === 1 ? n.y : n.z) >= 0 ? 0 : 1);
+    const [i, j] = axis === 0 ? [2, 1] : axis === 1 ? [0, 2] : [0, 1];
+    for (let k = 0; k < 3; k++) {
+      const vi = t + k;
+      const p = [pos.getX(vi), pos.getY(vi), pos.getZ(vi)];
+      uv[vi * 2] = p[i];
+      uv[vi * 2 + 1] = p[j];
+    }
+    if (!bins.has(bin)) bins.set(bin, []);
+    bins.get(bin)!.push(t, t + 1, t + 2);
+  }
+  geo.setAttribute('uv', new BufferAttribute(uv, 2));
+  geo.clearGroups();
+  const out: Island[] = [];
+  for (const tris of bins.values()) out.push(islandFrom(mesh, tris, tris));
+  return out;
+}
+
+/** An island's area and UV bounds, from its triangles' vertex indices. */
+function islandFrom(mesh: Mesh, tris: number[], verts: number[]): Island {
+  const pos = mesh.geometry.getAttribute('position');
+  const uv = mesh.geometry.getAttribute('uv');
+  let area = 0;
+  for (let t = 0; t + 2 < tris.length; t += 3) {
+    _a.fromBufferAttribute(pos, tris[t]).applyMatrix4(mesh.matrixWorld);
+    _b.fromBufferAttribute(pos, tris[t + 1]).applyMatrix4(mesh.matrixWorld);
+    _c.fromBufferAttribute(pos, tris[t + 2]).applyMatrix4(mesh.matrixWorld);
+    area += _b.sub(_a).cross(_c.sub(_a)).length() / 2;
+  }
+  let u0 = Infinity;
+  let v0 = Infinity;
+  let u1 = -Infinity;
+  let v1 = -Infinity;
+  for (const vi of verts) {
+    u0 = Math.min(u0, uv.getX(vi));
+    u1 = Math.max(u1, uv.getX(vi));
+    v0 = Math.min(v0, uv.getY(vi));
+    v1 = Math.max(v1, uv.getY(vi));
+  }
+  return { mesh, verts, tris, area: Math.max(area, 1e-7), u0, v0, u1, v1, x: 0, y: 0, s: 0 };
+}
+
 /** Split a mesh into islands: one per index group (a box's faces, a
- *  cylinder's side and caps), or the whole mesh when it has none. */
+ *  cylinder's side and caps), or the whole mesh when it has none — or, for
+ *  an extrusion, by facing (splitByFacing). */
 function islandsOf(mesh: Mesh): Island[] {
+  if (mesh.userData.atlasSplit) return splitByFacing(mesh);
   const geo = mesh.geometry;
   ensureUv(geo);
   const pos = geo.getAttribute('position');
-  const uv = geo.getAttribute('uv');
   const index = geo.getIndex();
   const triCount = index ? index.count : pos.count;
   const ranges = geo.groups.length ? geo.groups.map((g) => [g.start, Math.min(triCount, g.start + g.count)]) : [[0, triCount]];
@@ -113,24 +179,7 @@ function islandsOf(mesh: Mesh): Island[] {
       }
     }
     if (tris.length < 3) continue;
-    let area = 0;
-    let u0 = Infinity;
-    let v0 = Infinity;
-    let u1 = -Infinity;
-    let v1 = -Infinity;
-    for (let t = 0; t + 2 < tris.length; t += 3) {
-      _a.fromBufferAttribute(pos, tris[t]).applyMatrix4(mesh.matrixWorld);
-      _b.fromBufferAttribute(pos, tris[t + 1]).applyMatrix4(mesh.matrixWorld);
-      _c.fromBufferAttribute(pos, tris[t + 2]).applyMatrix4(mesh.matrixWorld);
-      area += _b.sub(_a).cross(_c.sub(_a)).length() / 2;
-    }
-    for (const vi of verts) {
-      u0 = Math.min(u0, uv.getX(vi));
-      u1 = Math.max(u1, uv.getX(vi));
-      v0 = Math.min(v0, uv.getY(vi));
-      v1 = Math.max(v1, uv.getY(vi));
-    }
-    out.push({ mesh, verts, tris, area: Math.max(area, 1e-7), u0, v0, u1, v1, x: 0, y: 0, s: 0 });
+    out.push(islandFrom(mesh, tris, verts));
   }
   return out;
 }
@@ -281,4 +330,68 @@ function rasterMap(islands: Island[], key: string, W: number, H: number): GearMa
     }
   }
   return { key, W, H, pos, nrm, ts, rects: [] };
+}
+
+/**
+ * ONE PIECE, A FEW DRAW CALLS. A piece of gear is built from many small
+ * parts — a spiked pad is a cap, a lame, two rims, five rivets, three
+ * spikes and three collars, twice — and every one was its own draw call
+ * (and every paintable one its own copy of the paint canvas), on every
+ * fighter in the room. Once the atlas is laid, the parts are merged into
+ * one mesh per finish, baked into the piece's own frame: the paintable
+ * primer (smooth, and faceted where a part is flat-shaded), and each trim.
+ * The atlas UVs, the paint tags and the map ride through the merge, so
+ * paint and THE MAGNET see one surface where there were twenty.
+ */
+export function mergePiece(root: Group): void {
+  root.updateMatrixWorld(true);
+  const inv = new Matrix4().copy(root.matrixWorld).invert();
+  const buckets = new Map<string, { mesh: Mesh; geos: BufferGeometry[] }>();
+  const done: Mesh[] = [];
+  root.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh || Array.isArray(m.material)) return;
+    const mat = m.material as MeshStandardMaterial;
+    const key = [
+      m.userData.trim ? 'trim' : 'paint',
+      mat.color.getHexString(),
+      mat.roughness,
+      mat.metalness,
+      mat.flatShading,
+      mat.side,
+    ].join('|');
+    let geo = m.geometry.clone();
+    if (geo.index) geo = geo.toNonIndexed();
+    geo.applyMatrix4(new Matrix4().copy(inv).multiply(m.matrixWorld));
+    geo.clearGroups();
+    for (const name of Object.keys(geo.attributes)) {
+      if (name !== 'position' && name !== 'normal' && name !== 'uv') geo.deleteAttribute(name);
+    }
+    if (!geo.getAttribute('normal')) geo.computeVertexNormals();
+    if (!geo.getAttribute('uv')) geo.setAttribute('uv', new BufferAttribute(new Float32Array(geo.getAttribute('position').count * 2), 2));
+    const b = buckets.get(key);
+    if (b) b.geos.push(geo);
+    else buckets.set(key, { mesh: m, geos: [geo] });
+    done.push(m);
+  });
+  if (done.length <= buckets.size) return; // nothing to gain
+  for (const m of done) {
+    m.removeFromParent();
+    m.geometry.dispose();
+  }
+  for (const { mesh, geos } of buckets.values()) {
+    const merged = mergeGeometries(geos, false);
+    if (!merged) continue;
+    const out = new Mesh(merged, mesh.material);
+    out.userData = { ...mesh.userData };
+    out.castShadow = mesh.castShadow;
+    out.receiveShadow = mesh.receiveShadow;
+    root.add(out);
+  }
+  // The parts' groups (a wing's pivots) are empty now.
+  const empty: Group[] = [];
+  root.traverse((o) => {
+    if (o !== root && !(o as Mesh).isMesh && o.children.length === 0) empty.push(o as Group);
+  });
+  for (const e of empty) e.removeFromParent();
 }

@@ -3449,8 +3449,8 @@
          along the body so it is true to size there; a flat banner has no
          body, so this draws them flat on the unwrap.) */
 
-      const PAINT_CANVAS = { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128, hand: 256 };
-      const WIRE_PARTS = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand'];
+      const PAINT_CANVAS = { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128, hand: 256, gearHandsR: 128 };
+      const WIRE_PARTS = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR'];
       const WIRE_PARTS_V2 = ['head', 'body'];
       const WIRE_PARTS_V1 = ['head', 'chest', 'pelvis'];
       // Index 1 is the retired splotch: read, and drawn as a dot.
@@ -3465,7 +3465,7 @@
         try { bin = atob(wire); } catch { return []; }
         if (bin.length < 9 || (bin.length - 1) % 8 !== 0) return [];
         const format = bin.charCodeAt(0);
-        if (format < 1 || format > 5) return [];
+        if (format < 1 || format > 6) return [];
         const parts = format === 1 ? WIRE_PARTS_V1 : format === 2 ? WIRE_PARTS_V2 : WIRE_PARTS;
         const kindBits = format >= 4 ? 7 : format === 3 ? 3 : 1;
         const partShift = format >= 4 ? 3 : format === 3 ? 2 : 1;
@@ -3570,6 +3570,8 @@
       const GEAR_NAMES = {
         crest: 'CREST', antennae: 'ANTENNAE', horns: 'HORNS', halo: 'HALO', mohawk: 'MOHAWK', visorband: 'VISOR BAND',
         pauldrons: 'PAULDRONS', chestplate: 'CHESTPLATE', ridge: 'RIDGE', belt: 'BELT', cuffs: 'CUFFS', knuckles: 'KNUCKLES', gauntlets: 'GAUNTLETS',
+        tail: 'TAIL', crown: 'CROWN', antlers: 'ANTLERS', wings: 'WINGS', claws: 'CLAWS', spikepads: 'SPIKED PADS',
+        vcrest: 'V-CREST', earfins: 'EAR FINS', thrusters: 'THRUSTERS', wristblades: 'WRIST BLADES',
       };
       const RUN_BOARD_NAMES = [
         ['ff2-speedrun-normal-time', 'Speedrun · Normal'], ['ff2-speedrun-hard-time', 'Speedrun · Hard'], ['ff2-speedrun-blazing-time', 'Speedrun · Blazing'],

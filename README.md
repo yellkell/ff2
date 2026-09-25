@@ -445,6 +445,45 @@ carried over verbatim: everything in it still applies to this code.
   enough for every frame. The SPLOTCH is retired (owned and worn ones
   became dots), the TRIANGLE joins (wire format 4), and bought dots and
   squares no longer vanish from the locker on a restart.
+- **GEAR: THE GLOW, EACH HAND ITS OWN, AND A FOURTH WAVE**. Every piece
+  carries one element lit in the wearer's ACCENT (the halo's lip, the
+  visor's slit, the feelers' bulbs, the pads' lower rims, a core in the
+  chestplate…): the `accent: 'glow'` finish setAvatarAccent already
+  drives, remembered on the rig so gear dressed later lights too — never
+  paint. The right hand's gear is its own paint surface (`gearHandsR`,
+  wire format 6; older hand-gear marks are copied onto both hands). New:
+  V-CREST ($180), EAR FINS ($140), THRUSTERS ($300), WRIST BLADES ($220).
+  The chestplate's sternum ridge is gone. `npm run gear:gallery` takes an
+  accent (`... out.png ids 4fb7ff`).
+- **GEAR, THE ART PASS** (`avatar/gear.ts`, `avatar/gearAtlas.ts`). Every
+  piece rebuilt to read as kit, not primitives, in one detail language —
+  primer where it takes paint, trim where it is fixed: mounts, collars,
+  bands, rims, rivets, eased edges. The CREST is one sculpted fin with a
+  serrated back on a trim rail (it was eleven stepped boxes); the MOHAWK
+  is raked blades on a rail; the ANTENNAE bow from temple bosses, banded,
+  to faceted bulbs; the HALO is a studded band with an inner lip; the
+  VISOR is a thick lens with hinges at the temples and a glass slit; the
+  CROWN's points are faceted and studded; HORNS and ANTLERS are bound at
+  the root; the TAIL is banded with a blade tip; the WINGS hang from a
+  mount on hinges; the pads are riveted; the CUFFS are a riveted bracer;
+  the KNUCKLES a duster with collared spikes; the GAUNTLETS a bevelled
+  plate; the CLAWS grow from a mount bar. A piece is MERGED after its
+  paint atlas is laid — one mesh per finish, 2–3 draw calls and one paint
+  canvas per piece where the spiked pads were thirty — and extruded parts
+  are split by facing in the atlas so both faces of a fin or blade paint
+  (the wings' never could).
+- **GEAR, POLISHED — and SPIKED PADS** (`avatar/gear.ts`). New on the
+  BODY shelf: **SPIKED PADS** ($220) — layered shoulder plate, a size up
+  from the pauldrons, three spikes a side driven up through each cap from
+  trim collars. The PAULDRONS share their build (`shoulderPad`): a domed
+  cap, a lame overlapping from under it and a trim rim on each edge,
+  SEATED on the shoulder's slope instead of standing clear of it as a
+  pair of shells. The CHESTPLATE is framed in trim with a raised ridge down
+  the sternum, so it reads against the body; the BELT is a band shaped to
+  the waist pinch with rolled edges and a buckle, not a hoop; the WINGS
+  are tapered blades, not slats; the GAUNTLETS' cuff hugs the wrist; the
+  CROWN's band is a band, not a wire. `npm run gear:gallery` renders every
+  piece worn, front and back, on one sheet.
 - **PAINT P8 — gear as decals, and a rounder head** (docs/paint.md §4,
   P8; `avatar/gearAtlas.ts`). Every piece of gear lays out its own paint
   atlas when it is built — each mesh and each face a patch sized by its
