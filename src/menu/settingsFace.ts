@@ -13,6 +13,7 @@ import { musicVolume } from '../audio/musicVolume.js';
 import { isMusicMuted, menuMusicStatus } from '../audio/menuMusic.js';
 import { voiceEnabled } from '../audio/voicePref.js';
 import { paintHiddenAll } from '../avatar/paint.js';
+import { app } from './appState.js';
 
 const W = 832;
 const M = 48;
@@ -20,6 +21,7 @@ const INNER = W - M * 2;
 const SFX = { label: 150, track: 172 };
 const MUSIC = { label: 272, track: 294 };
 const TRACK_H = 60;
+const ARENA = { label: 690, row: 714 };
 
 /** True while the wing is showing the CREDITS face. */
 let creditsOpen = false;
@@ -64,6 +66,7 @@ const CREDITS: [string, string][] = [
   ['', 'fazeway851, GODLY, Yomamaokay,'],
   ['', 'The Blaston community'],
   ['', '& The developers of Blaston'],
+  ['THE COVE', 'after Tidewater by Daniel Greenheck (MIT)'],
 ];
 
 function creditsFace(): SettingsFace {
@@ -134,6 +137,7 @@ function drawTrack(g: CanvasRenderingContext2D, label: string, value: number, to
 export function settingsFace(): SettingsFace {
   if (creditsOpen) return creditsFace();
   const third = (INNER - 2 * 20) / 3;
+  const half = (INNER - 20) / 2;
   const buttons: PanelButton[] = [
     { id: 'sfx-vol', label: '', ghost: true, x: M, y: SFX.track, w: INNER, h: TRACK_H },
     { id: 'music-vol', label: '', ghost: true, x: M, y: MUSIC.track, w: INNER, h: TRACK_H },
@@ -144,6 +148,10 @@ export function settingsFace(): SettingsFace {
       ? { id: 'settings-report', label: 'REPORT SENT ✓', x: M, y: 540, w: 360, h: 96, small: true, disabled: true }
       : { id: 'settings-report', label: 'REPORT A PROBLEM', sub: 'a player, a bug, anything harmful', x: M, y: 540, w: 360, h: 96, small: true, tone: KIT.danger },
     { id: 'settings-credits', label: 'CREDITS', x: W - M - 360, y: 540, w: 360, h: 96, small: true },
+    // ARENA: where every fight is staged — it holds across the lobby, bouts
+    // and training because it's a setting, not a room
+    { id: 'env-desert', label: 'THE DESERT', sub: 'the dying sun', x: M, y: ARENA.row, w: half, h: 96, small: true, selected: app.environment === 'desert' },
+    { id: 'env-cove', label: 'THE COVE', sub: 'sundown on the beach', x: M + half + 20, y: ARENA.row, w: half, h: 96, small: true, selected: app.environment === 'cove' },
   ];
   return {
     buttons,
@@ -159,10 +167,15 @@ export function settingsFace(): SettingsFace {
       g.fillStyle = KIT.faint;
       g.fillText(`LOBBY MUSIC · ${menuMusicStatus()}`, M + 20, MUSIC.track + 62);
       g.letterSpacing = '0px';
+      g.font = font(600, 26);
+      g.letterSpacing = '2px';
+      g.fillStyle = hover === 'env-desert' || hover === 'env-cove' ? KIT.accent : KIT.dim;
+      g.fillText('ARENA', M, ARENA.label);
+      g.letterSpacing = '0px';
       g.textAlign = 'center';
       g.font = font(500, 24);
       g.fillStyle = KIT.faint;
-      g.fillText('audio · voice · safety', W / 2, 940);
+      g.fillText('audio · voice · arena · safety', W / 2, 940);
     },
   };
 }

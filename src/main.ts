@@ -295,8 +295,8 @@ World.create(container, {
           ? SessionMode.ImmersiveVR
           : SessionMode.ImmersiveAR;
     // No passthrough in a plain-VR fallback: a saved AR backdrop would render
-    // as a black void, so promote it to the desert.
-    if (sessionMode === SessionMode.ImmersiveVR && app.environment === 'ar') app.environment = 'desert';
+    // as a black void, so promote it to the default arena, the cove.
+    if (sessionMode === SessionMode.ImmersiveVR && app.environment === 'ar') app.environment = 'cove';
     launchXR(world, { sessionMode });
 
     // Poll for the session on a TIMER, not requestAnimationFrame: Quest

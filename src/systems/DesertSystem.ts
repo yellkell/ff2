@@ -2,7 +2,7 @@
  * The optional opaque ARENA BACKDROPS — the papercraft DESERT and the
  * dilapidated FACTORY (both ported/built in the spirit of yellkell/vrenv).
  * Builds each once, hidden, then shows the one matching `app.environment`
- * ('ar' | 'desert' | 'factory') — a toggle that holds across the lobby, bot
+ * ('ar' | 'desert' | 'cove' | …) — a toggle that holds across the lobby, bot
  * bouts, quick matches and Aim Training because it's keyed off a setting.
  *
  * AR ↔ backdrop is a render switch, not a session switch: in immersive-AR
@@ -17,6 +17,7 @@ import { app, type AppEnvironment } from '../menu/appState.js';
 import { buildDesert, type Desert, type DesertSite } from '../arena/desert/index.js';
 import { buildFactory, type Factory } from '../arena/factory/index.js';
 import { buildSaltFlats, type SaltFlats } from '../arena/saltflats/index.js';
+import { buildCove, type Cove } from '../arena/cove/index.js';
 import { CONFIG } from '../arena/desert/config.js';
 
 export class DesertSystem extends createSystem({}) {
@@ -24,6 +25,9 @@ export class DesertSystem extends createSystem({}) {
   private factory?: Factory;
   private saltflats?: SaltFlats;
   private saltFog?: Fog;
+  /** THE COVE is built on first choice, not at boot, and bakes its sky a
+   *  strip a frame; until it's ready the old backdrop stays up. */
+  private cove?: Cove;
   private applied: AppEnvironment | null = null;
   private time = 0;
   private desertSky = new Color(CONFIG.sky.horizon);
@@ -47,12 +51,20 @@ export class DesertSystem extends createSystem({}) {
     // band. Near start (30 m) is well beyond the fighters/platforms (≤3 m), so
     // only the distance hazes. Applied/cleared per backdrop in apply().
     this.saltFog = new Fog(this.saltflats.skyColor.getHex(), 30, 700);
-    this.apply(app.environment); // honour the saved choice on boot
+    // Honour the saved choice on boot — except THE COVE, which isn't built
+    // yet: update() builds and bakes it, then applies it the frame it's ready.
+    if (app.environment !== 'cove') this.apply(app.environment);
   }
 
   update(delta: number): void {
     this.time += delta;
-    if (app.environment !== this.applied) this.apply(app.environment);
+    if (app.environment === 'cove' && !this.cove?.ready) {
+      if (!this.cove) {
+        this.cove = buildCove();
+        this.scene.add(this.cove.root);
+      }
+      this.cove.bake(this.world.renderer);
+    } else if (app.environment !== this.applied) this.apply(app.environment);
     // THE SITES: the desert walks you between its three clearings by what
     // you're doing (arena/desert/sites.ts) — the trailhead to wait at, the
     // flats to box on, the boneyard where titans are broken. The swap rides
@@ -66,6 +78,7 @@ export class DesertSystem extends createSystem({}) {
     if (app.environment === 'desert') this.desert?.update(delta, this.time);
     else if (app.environment === 'factory') this.factory?.update(delta, this.time);
     else if (app.environment === 'saltflats') this.saltflats?.update(delta, this.time);
+    else if (app.environment === 'cove' && this.applied === 'cove') this.cove?.update(delta, this.time);
   }
 
   /** Which desert site the current activity stands in: every campaign
@@ -89,9 +102,11 @@ export class DesertSystem extends createSystem({}) {
     if (this.desert) this.desert.root.visible = env === 'desert';
     if (this.factory) this.factory.root.visible = env === 'factory';
     if (this.saltflats) this.saltflats.root.visible = env === 'saltflats';
-    // Salt-flats fog only — melts the far pan into the horizon; cleared for
-    // every other backdrop so it never tints the desert/factory/AR.
-    this.scene.fog = env === 'saltflats' ? this.saltFog ?? null : null;
+    if (this.cove) this.cove.root.visible = env === 'cove';
+    // Fog only where a backdrop melts into its horizon (the salt pan, the
+    // cove's sea); cleared otherwise so it never tints the desert/AR.
+    this.scene.fog =
+      env === 'saltflats' ? this.saltFog ?? null : env === 'cove' && this.cove ? this.cove.fog : null;
     // Re-bake the (otherwise frozen) shadow map once to reflect the new backdrop.
     this.world.renderer.shadowMap.needsUpdate = true;
 
@@ -107,7 +122,9 @@ export class DesertSystem extends createSystem({}) {
           ? this.factory.skyColor
           : env === 'saltflats' && this.saltflats
             ? this.saltflats.skyColor
-            : this.desertSky;
+            : env === 'cove' && this.cove
+              ? this.cove.skyColor
+              : this.desertSky;
       renderer.setClearAlpha(1);
     }
   }
