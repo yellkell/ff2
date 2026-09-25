@@ -3538,8 +3538,8 @@
          along the body so it is true to size there; a flat banner has no
          body, so this draws them flat on the unwrap.) */
 
-      const PAINT_CANVAS = { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128, hand: 256, gearHandsR: 128 };
-      const WIRE_PARTS = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR'];
+      const PAINT_CANVAS = { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128, hand: 256, gearHandsR: 128, handR: 256 };
+      const WIRE_PARTS = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'handR'];
       const WIRE_PARTS_V2 = ['head', 'body'];
       const WIRE_PARTS_V1 = ['head', 'chest', 'pelvis'];
       // Index 1 is the retired splotch: read, and drawn as a dot.
@@ -3554,7 +3554,7 @@
         try { bin = atob(wire); } catch { return []; }
         if (bin.length < 9 || (bin.length - 1) % 8 !== 0) return [];
         const format = bin.charCodeAt(0);
-        if (format < 1 || format > 6) return [];
+        if (format < 1 || format > 7) return [];
         const parts = format === 1 ? WIRE_PARTS_V1 : format === 2 ? WIRE_PARTS_V2 : WIRE_PARTS;
         const kindBits = format >= 4 ? 7 : format === 3 ? 3 : 1;
         const partShift = format >= 4 ? 3 : format === 3 ? 2 : 1;

@@ -60,10 +60,12 @@ export const PAINT_KINDS: readonly PaintKind[] = ['stripe', 'dot', 'square', 'tr
  *  cuff share one material, so a stripe lands on the whole hand — both of
  *  them. Legacy 'chest'/'pelvis' units fold into the body's v range on
  *  read, so paint made before the merge survives it. */
-export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand' | 'gearHandsR';
+export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand' | 'gearHandsR' | 'handR';
 /** 'gearHands' is the LEFT hand's gear, 'gearHandsR' the right's (they
- *  were one surface, both hands wearing the same paint, until wire 6). */
-export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR'];
+ *  were one surface, both hands wearing the same paint, until wire 6);
+ *  'hand' is the LEFT hand itself and 'handR' the right (one surface
+ *  until wire 7). */
+export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'handR'];
 
 export interface PlacedPaint {
   kind: PaintKind;
@@ -93,7 +95,7 @@ const KEY = 'ff2-look';
  *  mesh of the piece in its own UVs"; from 2 it is a decal placed on the
  *  gear atlas (avatar/gearAtlas.ts). Older gear units are kept as they
  *  were — flagged LEGACY_GEAR — so nobody's paint moves under them. */
-const LOOK_VERSION = 3;
+const LOOK_VERSION = 4;
 
 /** A gear surface: laid out by the atlas, painted as decals. */
 export const isGearPart = (part: PaintPart): boolean =>
@@ -107,6 +109,14 @@ const markLegacy = (p: PlacedPaint): PlacedPaint => (isGearPart(p.part) ? { ...p
  *  each on the right hand's surface, and reads exactly as it did. */
 function splitHandGear(paint: PlacedPaint[]): PlacedPaint[] {
   const right = paint.filter((p) => p.part === 'gearHands').map((p) => ({ ...p, part: 'gearHandsR' as PaintPart }));
+  return [...paint, ...right].slice(0, PAINT.maxUnits);
+}
+
+/** The same again for the hands themselves (LOOK_VERSION 4, wire 7): one
+ *  mark on 'hand' was worn by both palms, so an older look gets a copy of
+ *  each on the right palm's own surface. */
+function splitHands(paint: PlacedPaint[]): PlacedPaint[] {
+  const right = paint.filter((p) => p.part === 'hand').map((p) => ({ ...p, part: 'handR' as PaintPart }));
   return [...paint, ...right].slice(0, PAINT.maxUnits);
 }
 
@@ -163,6 +173,7 @@ export function myLook(): Look {
     paint = (raw.paint ?? []).map(cleanUnit).filter((p): p is PlacedPaint => p !== null).slice(0, PAINT.maxUnits);
     if ((raw.v ?? 1) < 2) paint = paint.map(markLegacy);
     if ((raw.v ?? 1) < 3) paint = splitHandGear(paint);
+    if ((raw.v ?? 1) < 4) paint = splitHands(paint);
   } catch {
     /* fresh body */
   }
@@ -209,9 +220,9 @@ export function clearLook(): void {
  * A SPLOTCH in any of them reads as a dot (cleanUnit). So a look packed
  * before any of this still paints the fighter it was made for.
  */
-const WIRE_FORMAT = 6;
+const WIRE_FORMAT = 7;
 /** Part order ON THE WIRE — append-only. */
-const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR'];
+const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'handR'];
 /** Format 2's part order (the merged body, before gear was paintable). */
 const WIRE_PARTS_V2: PaintPart[] = ['head', 'body'];
 /** Format 1's part order, kept only to read looks packed before the merge. */
@@ -269,7 +280,8 @@ export function unpackLook(wire: unknown): Look {
   // FORMATS 5 and 6 are format 4's layout: 5 says the gear units are
   // atlas decals (a gear unit in anything older is flagged LEGACY_GEAR),
   // 6 that the hands' gear is split (older 'gearHands' marks are copied
-  // onto the right hand too).
+  // onto the right hand too), 7 that the hands themselves are (the same
+  // for 'hand').
   const kindBits = format >= 4 ? 7 : format === 3 ? 3 : 1;
   const partShift = format >= 4 ? 3 : format === 3 ? 2 : 1;
   const count = Math.min((bin.length - 1) / 8, PAINT.maxUnits);
@@ -290,7 +302,8 @@ export function unpackLook(wire: unknown): Look {
     });
     if (unit) paint.push(format < 5 ? markLegacy(unit) : unit);
   }
-  return { paint: format < 6 ? splitHandGear(paint) : paint };
+  const geared = format < 6 ? splitHandGear(paint) : paint;
+  return { paint: format < 7 ? splitHands(geared) : geared };
 }
 
 let packedCache = { version: -1, wire: '' };
