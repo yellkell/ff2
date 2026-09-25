@@ -51,12 +51,16 @@ console.log('=== the wire: pack / unpack ===');
   const page = await browser.newPage({ viewport: { width: 900, height: 600 } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(base, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => page.goto(base));
-  await page.evaluate(() => localStorage.setItem('ff-tutorial-done', '1'));
-  await page.waitForTimeout(800);
-  await page.click('#enter-vr');
-  await page.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 20000 });
-  await page.waitForFunction(() => !!window.__ff2?.paint, { timeout: 10000 });
+  // Boot into the lobby (again, for the restart checks below).
+  const enter = async () => {
+    await page.goto(base, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => page.goto(base));
+    await page.evaluate(() => localStorage.setItem('ff-tutorial-done', '1'));
+    await page.waitForTimeout(800);
+    await page.click('#enter-vr');
+    await page.waitForFunction(() => document.body.classList.contains('app-entered'), { timeout: 20000 });
+    await page.waitForFunction(() => !!window.__ff2?.paint, { timeout: 10000 });
+  };
+  await enter();
 
   const wire = await page.evaluate(() => {
     const p = window.__ff2.paint;
@@ -88,12 +92,12 @@ console.log('=== the wire: pack / unpack ===');
     return res;
   });
 
-  check('demo look packs (15 units ≈ 162 b64 chars)', wire.packedLen === Math.ceil((1 + 15 * 8) / 3) * 4, String(wire.packedLen));
-  check('roundtrip keeps all 15 units', wire.count === 15, String(wire.count));
+  check('demo look packs (16 units ≈ 172 b64 chars)', wire.packedLen === Math.ceil((1 + 16 * 8) / 3) * 4, String(wire.packedLen));
+  check('roundtrip keeps all 16 units', wire.count === 16, String(wire.count));
   check('pack∘unpack is byte-identical (stable quantization)', wire.idempotent);
   check('junk / empty / numeric wire → bare base tone', wire.junk === 0 && wire.empty === 0 && wire.numeric === 0);
   check('oversized wire string is refused', wire.long === 0);
-  check('tampered colour byte drops that unit only', wire.tampered === 14, String(wire.tampered));
+  check('tampered colour byte drops that unit only', wire.tampered === 15, String(wire.tampered));
   // The new geometry + the gear surface survive the wire as themselves.
   const shapes = await page.evaluate(() => {
     const p = window.__ff2.paint;
@@ -102,7 +106,7 @@ console.log('=== the wire: pack / unpack ===');
     p.clear();
     return back.map((u) => `${u.kind}@${u.part}`).slice(-3);
   });
-  check('a dot, a square and a gear-surface unit roundtrip as themselves', shapes.join(',') === 'dot@body,square@body,dot@gearHead', shapes.join(','));
+  check('a square, a TRIANGLE and a gear-surface unit roundtrip as themselves', shapes.join(',') === 'square@body,triangle@body,dot@gearHead', shapes.join(','));
   check('fields survive quantization (body stripe at u≈0.72)', wire.first.kind === 'stripe' && wire.first.part === 'body' && Math.abs(wire.first.u - 0.72) < 0.01, JSON.stringify(wire.first));
 
   // THE MERGE: chest and pelvis became one body surface, so a look packed
@@ -129,7 +133,36 @@ console.log('=== the wire: pack / unpack ===');
     const bytes = [2, ...unit(1, 1, 0.3), ...unit(0, 0, 0.6)];
     return P.unpack(btoa(String.fromCharCode(...bytes))).paint.map((u) => `${u.kind}@${u.part}`);
   });
-  check('a format-2 look still reads (splotch on the body, stripe on the head)', v2.join(',') === 'splotch@body,stripe@head', v2.join(','));
+  check('a format-2 look still reads (its splotch now a DOT on the body, stripe on the head)', v2.join(',') === 'dot@body,stripe@head', v2.join(','));
+  // …and FORMAT 3 (four kinds in bits 0..1, part in bits 2+), splotch included.
+  const v3 = await page.evaluate(() => {
+    const P = window.__ff2.paint;
+    const unit = (partIdx, kind) => [(partIdx << 2) | kind, 11, 0, 191, 128, 0, 100, 60];
+    const bytes = [3, ...unit(1, 1), ...unit(1, 2), ...unit(1, 3), ...unit(5, 0)];
+    return P.unpack(btoa(String.fromCharCode(...bytes))).paint.map((u) => `${u.kind}@${u.part}`);
+  });
+  check('a format-3 look reads (splotch→dot, dot, square, hand stripe)', v3.join(',') === 'dot@body,dot@body,square@body,stripe@hand', v3.join(','));
+
+  // THE LOCKER survives a restart — every kind (dots and squares used to
+  // vanish on the next boot), and an owned splotch comes back as a dot.
+  await page.evaluate(() => localStorage.setItem('ff2-paint-inv', JSON.stringify({ 'dot:5': 2, 'square:3': 1, 'triangle:7': 4, 'splotch:9': 3 })));
+  await enter();
+  const inv = await page.evaluate(() => {
+    const p = window.__ff2.paint;
+    return [p.owned('dot', 5), p.owned('square', 3), p.owned('triangle', 7), p.owned('dot', 9)];
+  });
+  check('owned dots, squares and triangles survive a restart; splotches came back as dots', inv.join(',') === '2,1,4,3', inv.join(','));
+
+  // PICKING by outline: a long thin stripe is lifted from its END (the old
+  // centre-distance pick missed it), and not from beside it.
+  const pick = await page.evaluate(() => {
+    const p = window.__ff2.paint;
+    p.clear();
+    p.set({ paint: [{ kind: 'stripe', part: 'body', u: 0.75, v: 0.6, angle: 0.25, len: 0.5, wid: 0.05, colour: 9, variant: 0 }] });
+    return [p.at('body', 0.75, 0.84), p.at('body', 0.66, 0.6)];
+  });
+  check('a stripe is picked at its end, not beside it', pick[0] === 0 && pick[1] === -1, pick.join(','));
+  await page.evaluate(() => window.__ff2.paint.clear());
 
   // THE RECORD (P4): the look as words + as the profile-card banner.
   console.log('\n=== the record: colour words + the banner ===');
@@ -175,6 +208,46 @@ console.log('=== the wire: pack / unpack ===');
   const handSnap = await page.evaluate(() => window.__ff2.paintSnap('mirror-avatar', 'hand'));
   check("the MIRROR's hand bakes the paint", handSnap.startsWith('data:image/png'), handSnap.slice(0, 22));
   if (handSnap) writeFileSync(join(here, 'paint-hand.png'), Buffer.from(handSnap.split(',')[1], 'base64'));
+  // THE GEAR ATLAS: each piece of gear is laid out so every mesh has its
+  // own patch of the canvas — the two PAULDRONS take paint separately —
+  // and a gear mark is a decal on the piece, found where it was placed.
+  console.log('\n=== the gear atlas: each pad its own ===');
+  await page.evaluate(() => window.__ff2.gear.equip('pauldrons'));
+  await page.waitForTimeout(700); // the rig re-dresses, the bay re-collects
+  const pads = await page.evaluate(() => {
+    const g = window.__ff2.bayGearProbe;
+    const p = window.__ff2.paint;
+    p.clear();
+    const n = g.count();
+    const a = g.spot(0);
+    const b = g.spot(1);
+    p.grant('dot', 9);
+    const placed = !!a && p.take('dot', 9) && p.place(a.part, a.u, a.v);
+    return { n, placed, onA: g.at(0), onB: g.at(1), distinct: !!a && !!b && (Math.abs(a.u - b.u) > 0.02 || Math.abs(a.v - b.v) > 0.02) };
+  });
+  check('the pauldrons are two paintable pieces with their own patches of canvas', pads.n === 2 && pads.distinct, JSON.stringify(pads));
+  check('a dot on the LEFT pad is on the left pad, not the right', pads.placed && pads.onA === 0 && pads.onB === -1, JSON.stringify(pads));
+  await page.evaluate(() => window.__ff2.gear.equip('chestplate'));
+  await page.waitForTimeout(700);
+  const plate = await page.evaluate(() => {
+    const g = window.__ff2.bayGearProbe;
+    const p = window.__ff2.paint;
+    p.clear();
+    const s = g.spot(0);
+    p.grant('triangle', 13);
+    const placed = !!s && p.take('triangle', 13) && p.place(s.part, s.u, s.v);
+    return { spot: !!s, placed, on: g.at(0) };
+  });
+  check('the CHESTPLATE takes paint (it had no UVs to paint by)', plate.spot && plate.placed && plate.on === 0, JSON.stringify(plate));
+  // A gear mark from before the atlas keeps its old look: flagged on read.
+  const legacyGear = await page.evaluate(() => {
+    const P = window.__ff2.paint;
+    const unit = [(3 << 3) | 2, 9, 0, 128, 128, 0, 60, 60]; // format 4: a dot on gearBody
+    return P.unpack(btoa(String.fromCharCode(4, ...unit))).paint[0]?.variant ?? -1;
+  });
+  check('a format-4 gear mark is read as a pre-atlas stamp (kept as it was)', legacyGear >= 128, String(legacyGear));
+  await page.evaluate(() => window.__ff2.gear.clear('body'));
+
   await page.evaluate(() => {
     window.__ff2.paint.clear();
     window.__ff2.wrap.act('paintbay-close');

@@ -263,7 +263,7 @@ await wrap(`act('wrap:tab-town')`);
 
 console.log('\n=== the right wing: LOCKER / STORE / SETTINGS ===');
 you = await wrap(`buttons('info')`);
-check('LOCKER contains gear, paint and career without currency sales', has(you, 'open-paintbay', 'open-custom', 'profile-toggle') && !you.includes('open-bank') && !you.includes('you-coins') && !you.includes('rename') && !you.includes('you-record') && !you.includes('you-tip'), notTabs(you).join(','));
+check('LOCKER wing: one CUSTOMIZE door and the career, no currency sales', has(you, 'open-custom', 'profile-toggle') && !you.includes('open-paintbay') && !you.includes('open-bank') && !you.includes('you-coins') && !you.includes('rename') && !you.includes('you-record') && !you.includes('you-tip'), notTabs(you).join(','));
 save('you', await wrap(`snap('info')`));
 await wrap(`act('wrap:tab-store')`);
 you = await wrap(`buttons('info')`);
@@ -274,6 +274,44 @@ await page.waitForTimeout(200);
 check('STORE catalogue opens directly from the wing', await page.evaluate(() => window.__ff2.modals.up('shop')));
 await wrap(`act('custom-close')`);
 check('closing the catalogue returns to STORE', (await wrap(`nav()`)).you === 'store');
+
+// THE HUB: one customization plate, three tabs — LOCKER · STORE · PAINT —
+// the same plate in the same place, the faces swapping under the tabs.
+{
+  const up = (id) => page.evaluate((i) => window.__ff2.modals.up(i), id);
+  const btns = (id) => page.evaluate((i) => window.__ff2.modals.buttons(i), id);
+  const tabs = ['open-locker', 'open-shop', 'open-paintbay'];
+  await wrap(`act('open-custom')`);
+  await page.waitForTimeout(200);
+  check('HUB: CUSTOMIZE opens the LOCKER face, wearing all three tabs', (await up('custom')) && (await btns('custom')).filter((b) => tabs.includes(b)).length === 3);
+  await wrap(`act('open-paintbay')`);
+  await page.waitForTimeout(200);
+  const bayBtns = await btns('paintbay');
+  check('HUB: the PAINT tab swaps the face — the bay is up, the locker is not', (await up('paintbay')) && !(await up('custom')) && !(await up('shop')));
+  check('HUB: the PAINT face wears the same tabs, the four shapes and the colour grid', tabs.every((t) => bayBtns.includes(t)) && ['stripe', 'dot', 'square', 'triangle'].every((k) => bayBtns.includes(`pb:kind-${k}`)) && !bayBtns.includes('pb:kind-splotch') && bayBtns.includes('pb:take-0') && bayBtns.includes('pb:undo'), bayBtns.filter((b) => b.startsWith('pb:kind')).join(','));
+  // One tap on a colour you don't own buys ONE and puts it on the pointer.
+  const bought = await page.evaluate(() => {
+    const p = window.__ff2.paint;
+    const before = p.owned('triangle', 13);
+    window.__ff2.bayClick('pb:kind-triangle');
+    window.__ff2.bayClick('pb:take-13');
+    const held = p.held();
+    window.__ff2.bayClick('pb:return');
+    return { before, held: held ? `${held.kind}:${held.colour}` : null, after: p.owned('triangle', 13) };
+  });
+  check('HUB: tapping an unowned colour buys one and puts it on the pointer', bought.held === 'triangle:13' && bought.after === bought.before + 1, JSON.stringify(bought));
+  save('paint-tab', await page.evaluate(() => window.__ff2.modals.snap('paintbay')));
+  await wrap(`act('open-shop')`);
+  await wrap(`act('tab-paint')`);
+  await page.waitForTimeout(200);
+  const shopBtns = await btns('shop');
+  check('HUB: STORE → PAINT sells the racks', (await up('shop')) && !(await up('paintbay')) && shopBtns.includes('pb:buy-0') && shopBtns.includes('pb:kind-dot'), shopBtns.filter((b) => b.startsWith('pb:')).slice(0, 6).join(','));
+  save('store-paint', await page.evaluate(() => window.__ff2.modals.snap('shop')));
+  await wrap(`act('tab-platforms')`);
+  await wrap(`act('custom-close')`);
+  await page.waitForTimeout(200);
+  check('HUB: CLOSE on any face closes the plate', !(await up('custom')) && !(await up('shop')) && !(await up('paintbay')));
+}
 
 await wrap(`act('wrap:tab-settings')`);
 you = await wrap(`buttons('info')`);
@@ -287,7 +325,7 @@ await wrap(`act('credits-back')`);
 await wrap(`act('wrap:tab-you')`);
 you = await wrap(`buttons('info')`);
 nav = await wrap(`nav()`);
-check('YOU tab again', nav.you === 'you' && you.includes('open-paintbay'), nav.you);
+check('YOU tab again', nav.you === 'you' && you.includes('open-custom'), nav.you);
 
 console.log('\n=== WHO HEARS WHOM (net/voiceRules.ts) ===');
 {

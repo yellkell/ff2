@@ -511,9 +511,10 @@ function youBoard(): Face {
     title: '',
     body: () => {},
     buttons: [
-      { id: 'open-custom', label: 'GEAR & LOADOUT', sub: lock ? SEAL_SUB : 'Equip what you own', x: 96, y: 190, w: 640, h: 190, primary: !lock, disabled: lock },
-      { id: 'open-paintbay', label: 'PAINT STUDIO', sub: lock ? SEAL_SUB : 'Paint your fighter by hand', x: 96, y: 420, w: 640, h: 170, disabled: lock },
-      { id: 'profile-toggle', label: 'CAREER PROFILE', sub: 'Rank, XP, achievements and identity', x: 96, y: 640, w: 640, h: 130, small: true },
+      // ONE door to the customization plate — LOCKER · STORE · PAINT are
+      // its tabs — and one to who you are.
+      { id: 'open-custom', label: 'CUSTOMIZE', sub: lock ? SEAL_SUB : 'Locker · Store · Paint', x: 96, y: 190, w: 640, h: 260, primary: !lock, disabled: lock },
+      { id: 'profile-toggle', label: 'CAREER PROFILE', sub: 'Rank, XP, achievements and identity', x: 96, y: 500, w: 640, h: 150, small: true },
     ],
   };
 }
@@ -523,7 +524,7 @@ function storeBoard(): Face {
     title: '',
     body: () => {},
     buttons: [
-      { id: 'open-shop', label: 'BROWSE COSMETICS', sub: 'Gear and platform finishes', x: 96, y: 190, w: 640, h: 210 },
+      { id: 'open-shop', label: 'BROWSE THE STORE', sub: 'Gear, platforms and paint', x: 96, y: 190, w: 640, h: 210 },
       { id: 'open-bank', label: 'BANK', sub: 'Top up or recover your purchases', x: 96, y: 450, w: 640, h: 150, small: true },
       { id: 'store-balance', label: `$ ${coins.balance}`, sub: 'iron-dollars available', x: 96, y: 650, w: 640, h: 110, small: true, display: true },
     ],

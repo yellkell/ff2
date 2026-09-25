@@ -238,8 +238,9 @@ export const customization = {
   /** The STORE face is up (a sub-modal of the locker); false = the LOCKER. */
   shopOpen: false,
   /** Which tab the shop / locker shows. 'colour' and 'arena' are
-   *  locker-only; 'bank' (iron-dollars for money) is the store's alone. */
-  tab: 'platforms' as 'avatars' | 'platforms' | 'gear' | 'colour' | 'arena' | 'bank',
+   *  locker-only; 'paint' (the racks) and 'bank' (iron-dollars for money)
+   *  are the store's alone. */
+  tab: 'platforms' as 'avatars' | 'platforms' | 'gear' | 'colour' | 'arena' | 'paint' | 'bank',
   /** Which SHELF of the PLATFORMS board is out (avatar/skins.ts
    *  DECK_SHELVES) — the woods, the stones, the forge, the honours. */
   platformShelf: 'timber' as DeckShelf,

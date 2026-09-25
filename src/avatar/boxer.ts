@@ -23,7 +23,7 @@ import {
   RepeatWrapping,
   Vector3,
 } from 'three';
-import { buildMannequinBody, buildMannequinHead } from './mannequin.js';
+import { HEAD_SCALE, buildMannequinBody, buildMannequinHead } from './mannequin.js';
 import { BODY_IK, PALETTE, teamColor } from '../config.js';
 import { collapseStatic } from '../arena/merge.js';
 import { buildHand } from './hands.js';
@@ -80,6 +80,8 @@ export interface BoxerRig {
   torsoYaw?: number;
   /** …and whether they are mid-turn, coming round to the head. */
   torsoFollowing?: boolean;
+  /** How long (s) the head has been looking off the shoulders' line. */
+  torsoOffFor?: number;
 }
 
 export const GLOVE_VISUAL_SCALE = 1.28;
@@ -345,9 +347,10 @@ const UP = new Vector3(0, 1, 0);
 /** Platform top in the solve's local space — the torso never sinks below it. */
 const GROUND_Y = 0.14;
 /** Hips to the head's centre when the neck SEATS: the loft's top ring
- *  (mannequin.ts BODY_RINGS, 0.488) plus the egg's half-height and a
- *  hair of air, so the head floats just clear of the collar. */
-const NECK_SEAT = 0.64;
+ *  (mannequin.ts BODY_RINGS, 0.488) plus the skull's half-height (it sits
+ *  a twentieth of a radius high in its group) and a hair of air, so the
+ *  head floats just clear of the collar. */
+const NECK_SEAT = 0.488 + BODY_IK.headRadius * (HEAD_SCALE[1] - 0.05) + 0.018;
 /** How much of the head's offset from the platform centre the hips hang
  *  back toward it (a lean), and the most they ever hang back, in metres:
  *  past that the body is not leaning but STEPPING, and steps with the
@@ -356,24 +359,39 @@ const HIP_LEAN_HOLD = 0.4;
 const HIP_LEAN_MAX = 0.12;
 /**
  * THE SHOULDERS. A head turns freely on a neck; shoulders do not follow a
- * glance. The torso yaw holds while the head is within TORSO_DEAD of it,
- * drifting square only slowly (TORSO_SETTLE, a time constant). Once the
- * head is past the dead zone the shoulders are TURNING, and keep coming
- * round — quickly (TORSO_FOLLOW), never faster than TORSO_RATE, so the
- * body can't whip — until they are square to within TORSO_SQUARE: two
- * thresholds, so a turn finishes instead of stalling at the dead zone's
- * edge with the body left looking over its own shoulder. When both hands
- * are tracked, the line between them is a better read of the shoulders
- * than the head is, and pulls the target half way — unless it disagrees
- * with the head by more than a right angle (a crossed guard), when it is
- * ignored. Solved on real time (dt), not on frames.
+ * GLANCE — but they do follow a LOOK. The difference is time: the torso
+ * holds still while the head is off its line for less than TORSO_HOLD,
+ * and once a look has been held that long (or the head swings past
+ * TORSO_DEAD, which is no glance at all) the shoulders are TURNING, and
+ * keep coming round — quickly (TORSO_FOLLOW), never faster than
+ * TORSO_RATE, so the body can't whip — until they are square to within
+ * TORSO_SQUARE. Within TORSO_GLANCE they are square already and nothing
+ * moves.
+ *
+ * (It used to hold anything inside a 37° dead zone and drift square over
+ * a FOUR-second time constant, stopping 8° short: turn to face something
+ * and the body stayed pointing where you had been for seconds, and never
+ * quite came round — "the body isn't aligned to the way I'm facing".)
+ *
+ * When both hands are tracked they say where the chest is pointing: they
+ * live in front of it. The direction from the head to their midpoint pulls
+ * the target a third of the way toward it — unless the hands are down at
+ * the sides (the midpoint under the head says nothing) or off to one side
+ * by more than TORSO_HANDS_MAX (reaching, not facing). (The old read was
+ * the LINE between the hands, which a boxing stance — one hand forward —
+ * skews by tens of degrees, and it pulled half way: the body sat turned
+ * off the head for as long as you held a guard.) Solved on real time
+ * (dt), not on frames.
  */
-const TORSO_DEAD = 0.65; // ≈37° — a glance
-const TORSO_SQUARE = 0.14; // ≈8° — square enough to stop
-const TORSO_SETTLE = 4.0; // s
-const TORSO_FOLLOW = 0.22; // s
-const TORSO_RATE = 4.0; // rad/s
-const HANDS_APART_MIN = 0.25; // m — closer than this the line says nothing
+const TORSO_GLANCE = 0.1; // ≈6° — square enough; nothing to do
+const TORSO_HOLD = 0.4; // s — a look held this long is a new facing
+const TORSO_DEAD = 0.6; // ≈34° — past this it's a turn, not a glance
+const TORSO_SQUARE = 0.035; // ≈2° — square enough to stop turning
+const TORSO_FOLLOW = 0.16; // s
+const TORSO_RATE = 5.0; // rad/s
+const TORSO_HANDS_PULL = 0.35;
+const TORSO_HANDS_MAX = 1.2; // ≈70°
+const HANDS_OUT_MIN = 0.16; // m — nearer the head than this, the hands say nothing
 const wrapAngle = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 const _hips = new Vector3();
 const _chest = new Vector3();
@@ -432,17 +450,16 @@ export function solveTorso(
   const nz = hl > 1e-3 ? _fwd.z / hl : -1;
   const headYaw = Math.atan2(-nx, -nz);
 
-  // THE SHOULDERS (see TORSO_DEAD): where the torso faces, trailing the head.
+  // THE SHOULDERS (see TORSO_HOLD): where the torso faces, trailing the head.
   let target = headYaw;
   const hands = opts?.hands;
   if (hands) {
-    const sx = hands[1].x - hands[0].x;
-    const sz = hands[1].z - hands[0].z;
-    if (Math.hypot(sx, sz) >= HANDS_APART_MIN) {
-      // Forward is the shoulder line turned a quarter: at yaw 0 the hands
-      // run left→right along +X and the body faces −Z.
-      const off = wrapAngle(Math.atan2(-sz, sx) - headYaw);
-      if (Math.abs(off) < Math.PI / 2) target = headYaw + off * 0.5;
+    // Where the hands are, seen from the head: the chest points at them.
+    const mx = (hands[0].x + hands[1].x) / 2 - headPos.x;
+    const mz = (hands[0].z + hands[1].z) / 2 - headPos.z;
+    if (Math.hypot(mx, mz) >= HANDS_OUT_MIN) {
+      const off = wrapAngle(Math.atan2(-mx, -mz) - headYaw);
+      if (Math.abs(off) < TORSO_HANDS_MAX) target = headYaw + off * TORSO_HANDS_PULL;
     }
   }
   const dt = Math.min(0.1, Math.max(0, opts?.dt ?? 1 / 72));
@@ -450,11 +467,15 @@ export function solveTorso(
   {
     const d = wrapAngle(target - ty);
     const ad = Math.abs(d);
-    const following = ad > TORSO_DEAD || (rig.torsoFollowing === true && ad > TORSO_SQUARE);
+    rig.torsoOffFor = ad > TORSO_GLANCE ? (rig.torsoOffFor ?? 0) + dt : 0;
+    const following =
+      ad > TORSO_DEAD || rig.torsoOffFor > TORSO_HOLD || (rig.torsoFollowing === true && ad > TORSO_SQUARE);
     rig.torsoFollowing = following;
-    const ease = d * (1 - Math.exp(-dt / (following ? TORSO_FOLLOW : TORSO_SETTLE)));
-    const cap = TORSO_RATE * dt;
-    ty += Math.max(-cap, Math.min(cap, ease));
+    if (following) {
+      const ease = d * (1 - Math.exp(-dt / TORSO_FOLLOW));
+      const cap = TORSO_RATE * dt;
+      ty += Math.max(-cap, Math.min(cap, ease));
+    }
   }
   ty = wrapAngle(ty);
   rig.torsoYaw = ty;
