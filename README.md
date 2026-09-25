@@ -18,6 +18,26 @@ plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 (DESIGN.md §10). [`FOUNDATION.md`](FOUNDATION.md) is FF1's own README,
 carried over verbatim: everything in it still applies to this code.
 
+- **THE TITANS, FINISHED** — the five machines stop reading as blocks.
+  A finishing pass over each rig (`finishTitan` in `campaign/bosses.ts`)
+  bevels every box and rounds every barrel without moving a pivot, and
+  each machine wears its own procedural SKIN (`materials/titanSkin.ts`:
+  colour, roughness, metalness and bump, drawn once): RUSTHOOK's blotched
+  rust, pitting and weeps; PISTONKAISER's hammer-dimpled iron with temper
+  colours; VULTURE's scale plumage; JUGGERNAUT's riveted panel armour;
+  GOLIATH's brushed black plate engraved with scrollwork. Rust and paint
+  aren't bare metal any more, so the hulls stop mirroring the room black.
+  And each theme grew: a hazard-striped salvage plate, riveted patches and
+  a live severed cable on RUSTHOOK; heat vents and molten cracks on
+  PISTONKAISER; a raised feather ruff and wing coverts on VULTURE; track
+  links and a stencilled IV on JUGGERNAUT; crown jewels and a chain of
+  office on GOLIATH. Repeated parts merge to one mesh, so draw calls barely
+  move. Dev: `/titan-preview.html` (`?t=0..4`, `&close=1`).
+- **STATS** — the boards get a podium (medal discs, a lit edge, the
+  leader's row in gold) and a gauge under every row showing how close it
+  runs to the leader; RAVE RAID's record list is alphabetical with a find
+  box; OVERTIME joins the shelf, and `npm run check:stats-tracks` (in CI)
+  fails whenever the page's song list falls behind the raid shelf.
 - **NO FALLING BLOCKS, NO CHASING LASER** — two titan attacks cut after
   play: the **SLAM** (the ghost block hanging over a disc on your pad,
   dropping with the countdown and crashing down) weighs zero on every

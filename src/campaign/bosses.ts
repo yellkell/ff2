@@ -26,14 +26,27 @@
 
 import {
   BoxGeometry,
+  type BufferGeometry,
+  CanvasTexture,
   CylinderGeometry,
+  Euler,
   Group,
+  Matrix4,
   Mesh,
   MeshStandardMaterial,
+  PlaneGeometry,
+  Quaternion,
   SphereGeometry,
+  SRGBColorSpace,
+  TorusGeometry,
+  Vector3,
   type Object3D,
 } from 'three';
 import { GOOPLIATH, PALETTE, RAID, type Difficulty } from '../config.js';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { hazardTexture } from '../materials/hazard.js';
+import { titanSkin, type TitanSkinId } from '../materials/titanSkin.js';
 
 /**
  * 'volley' is the one attack aimed at YOU instead of the floor: the shoulder
@@ -458,16 +471,133 @@ export interface TitanRig {
 }
 
 /** Per-style paint: chassis steel + dark trim (accent glows come from defs). */
+// (A shade lighter than they were flat: the skins multiply over the paint
+// and average a little under white, and the trims were so near black that
+// no grain could show on them.)
 const STYLE_PAINT: Record<TitanStyle, { chassis: number; trim: number }> = {
-  hook: { chassis: 0x4a3b2b, trim: 0x2c2318 }, // oxidised rust-brown
-  piston: { chassis: 0x33373f, trim: 0x1a1d23 }, // foundry iron
-  vulture: { chassis: 0x2e3428, trim: 0x171b14 }, // olive plumage steel
-  fortress: { chassis: 0x342e40, trim: 0x1b1724 }, // bruised violet plate
-  king: { chassis: 0x17181d, trim: 0x0c0d10 }, // near-black royal plate
+  hook: { chassis: 0x6b5236, trim: 0x3d3021 }, // oxidised rust-brown
+  piston: { chassis: 0x5a606b, trim: 0x353a44 }, // foundry iron
+  vulture: { chassis: 0x3b4333, trim: 0x262c21 }, // olive plumage steel
+  fortress: { chassis: 0x433a52, trim: 0x2d2640 }, // bruised violet plate
+  king: { chassis: 0x1c1d23, trim: 0x131419 }, // near-black royal plate
   goop: { chassis: 0x14602f, trim: 0x0a2e18 }, // bottle-green gel (never built as a rig)
 };
 
 const GOLD = 0xd9a832;
+
+/** Which procedural skin each chassis wears (materials/titanSkin.ts). */
+const STYLE_SKIN: Partial<Record<TitanStyle, TitanSkinId>> = {
+  hook: 'rust',
+  piston: 'forged',
+  vulture: 'plumage',
+  fortress: 'armour',
+  king: 'royal',
+};
+
+/** Many small copies of one shape (track links, chain links) as ONE mesh's
+ *  geometry — a row of thirty parts costs one draw, not thirty. Each entry
+ *  is a position and an optional rotation. */
+function repeated(geo: BufferGeometry, at: Array<[number, number, number, number?, number?, number?]>): BufferGeometry {
+  const m = new Matrix4();
+  const q = new Quaternion();
+  const one = new Vector3(1, 1, 1);
+  const parts = at.map(([x, y, z, rx = 0, ry = 0, rz = 0]) => {
+    m.compose(new Vector3(x, y, z), q.setFromEuler(new Euler(rx, ry, rz)), one);
+    return geo.clone().applyMatrix4(m);
+  });
+  const merged = mergeGeometries(parts) ?? geo.clone();
+  parts.forEach((g) => g.dispose());
+  geo.dispose();
+  return merged;
+}
+
+/** A stencilled word for a plate — off-white paint, sprayed and scuffed,
+ *  on a transparent card the plate shows through. */
+function stencil(text: string): CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 160;
+  const g = c.getContext('2d')!;
+  g.fillStyle = 'rgba(232,226,210,0.92)';
+  g.font = '900 128px Impact, "Arial Black", sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 128, 84);
+  // The stencil's bridges and the wear: knock holes out of the paint.
+  g.globalCompositeOperation = 'destination-out';
+  g.fillRect(0, 78, 256, 7);
+  for (let i = 0; i < 260; i++) {
+    g.fillStyle = `rgba(0,0,0,${0.3 + Math.random() * 0.7})`;
+    g.fillRect(Math.random() * 256, Math.random() * 160, 1 + Math.random() * 5, 1 + Math.random() * 3);
+  }
+  const t = new CanvasTexture(c);
+  t.colorSpace = SRGBColorSpace;
+  return t;
+}
+
+/**
+ * THE FINISH — the pass that takes a titan off the drawing board. Every
+ * part above is authored as a plain box or cylinder (the numbers stay
+ * readable that way); this runs once over the finished rig:
+ *
+ *  - every box becomes a BEVELLED box, the same size — the edges catch a
+ *    highlight instead of cutting off hard, and the machine stops reading
+ *    as blocks;
+ *  - every cylinder of eight sides or more gets enough of them to read as
+ *    round (tiny parts — bolts, claws, spikes — keep their few);
+ *  - every plate (not the glows, not the gold) wears the machine's SKIN,
+ *    its UVs scaled to the part's size so a small plate and a big one
+ *    carry the same grain.
+ *
+ * Geometry sizes never change, so the pivots, the hitboxes and every
+ * animation keep their numbers.
+ */
+function finishTitan(root: Group, style: TitanStyle, s: number): void {
+  const skinId = STYLE_SKIN[style];
+  const skin = skinId ? titanSkin(skinId) : null;
+  const tile = 0.32 * s; // world metres per repeat of the skin
+  root.traverse((o) => {
+    const m = o as Mesh;
+    if (!m.isMesh) return;
+    const g = m.geometry;
+    let su = 1;
+    let sv = 1;
+    if (g instanceof BoxGeometry) {
+      const { width, height, depth } = g.parameters;
+      const r = Math.min(width, height, depth) * 0.22;
+      m.geometry = new RoundedBoxGeometry(width, height, depth, 2, r);
+      g.dispose();
+      su = sv = Math.max(width, height, depth) / tile;
+    } else if (g instanceof CylinderGeometry) {
+      const p = g.parameters;
+      if (p.radialSegments >= 8 && p.radialSegments < 20) {
+        m.geometry = new CylinderGeometry(p.radiusTop, p.radiusBottom, p.height, 20, p.heightSegments, p.openEnded, p.thetaStart, p.thetaLength);
+        g.dispose();
+      }
+      su = (Math.PI * (p.radiusTop + p.radiusBottom)) / tile;
+      sv = p.height / tile;
+    }
+    const mat = m.material as MeshStandardMaterial;
+    if (!skin || !mat.isMeshStandardMaterial || mat.emissiveIntensity >= 0.15 || mat.transparent || mat.map) return;
+    const uv = m.geometry.getAttribute('uv');
+    if (uv) {
+      const k = [Math.max(0.35, su), Math.max(0.35, sv)];
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * k[0], uv.getY(i) * k[1]);
+      uv.needsUpdate = true;
+    }
+    // The accent's faint self-glow on a plate stays a hint: on RUSTHOOK's
+    // dark rust it was outshining the paint and the steel read ice-blue.
+    mat.emissiveIntensity *= 0.3;
+    mat.map = skin.map;
+    mat.roughnessMap = skin.roughnessMap;
+    mat.roughness = 1;
+    mat.metalnessMap = skin.metalnessMap;
+    mat.metalness = 1;
+    mat.bumpMap = skin.bumpMap;
+    mat.bumpScale = skin.bumpScale * 3;
+    mat.needsUpdate = true;
+  });
+}
 
 function steelMat(color: number, emissive = 0, intensity = 0): MeshStandardMaterial {
   return new MeshStandardMaterial({
@@ -652,6 +782,19 @@ export function buildTitan(def: BossDef): TitanRig {
         spike.position.set(Math.cos(a) * headR * 0.78, headR * 1.35, Math.sin(a) * headR * 0.78);
         head.add(spike);
       }
+      // A jewel set in the band under every spike, burning the king's colour.
+      head.add(
+        new Mesh(
+          repeated(
+            new SphereGeometry(0.019 * s, 10, 8),
+            [0, 1, 2, 3, 4].map((i) => {
+              const a = (i / 5) * Math.PI * 2;
+              return [Math.cos(a) * headR * 0.97, headR * 0.9, Math.sin(a) * headR * 0.97] as [number, number, number];
+            }),
+          ),
+          glowMat(accent, 1.3),
+        ),
+      );
       const visor = new Mesh(new BoxGeometry(headR * 1.5, 0.035 * s, 0.03 * s), visorMat);
       visor.position.set(0, 0.01 * s, -headR * 0.95);
       head.add(visor);
@@ -721,6 +864,17 @@ export function buildTitan(def: BossDef): TitanRig {
       const spar1 = new Mesh(new BoxGeometry(0.5 * s, 0.05 * s, 0.035 * s), chassis(accent, 0.04));
       spar1.position.x = side * 0.25 * s;
       wing.add(spar1);
+      // Coverts: short overlapping plates shingled along the arm spar, the
+      // way a real wing's small feathers cover the bones.
+      wing.add(
+        new Mesh(
+          repeated(
+            new BoxGeometry(0.075 * s, 0.1 * s, 0.014 * s),
+            [0, 1, 2, 3].map((f) => [side * (0.07 + f * 0.1) * s, -0.02 * s, -0.022 * s, 0, 0, side * 0.35] as [number, number, number, number, number, number]),
+          ),
+          chassis(accent, 0.04),
+        ),
+      );
       for (let f = 0; f < 3; f++) {
         // Inner primaries hang off the arm spar, splaying slightly outward.
         const len = (0.3 + f * 0.06) * s;
@@ -800,6 +954,15 @@ export function buildTitan(def: BossDef): TitanRig {
       slab.position.set(0, y * s, z * s);
       chest.add(slab);
     }
+    // The hull's number, stencilled on the upper plate beside the core:
+    // the fourth machine of the gauntlet, and it wants you to know it.
+    const unit = new Mesh(
+      new PlaneGeometry(0.15 * s, 0.094 * s),
+      new MeshStandardMaterial({ map: stencil('IV'), transparent: true, roughness: 0.9, metalness: 0, depthWrite: false }),
+    );
+    unit.position.set(0.21 * s, 0.05 * s, -0.212 * s);
+    unit.rotation.y = Math.PI; // the plate's front faces −z
+    chest.add(unit);
   }
   if (def.style === 'hook') {
     // Exposed rib struts where the chest plate rusted away.
@@ -833,6 +996,40 @@ export function buildTitan(def: BossDef): TitanRig {
     const weep = new Mesh(new BoxGeometry(0.05 * s, 0.28 * s, 0.008 * s), steelMat(0x14110c));
     weep.position.set(0.08 * s, -0.34 * s, -0.175 * s);
     chest.add(weep);
+    // Every patch is riveted at its corners — crude, proud, uneven.
+    const rivets: Array<[number, number, number]> = [];
+    for (const [px, py, rot, w, h] of [
+      [-0.18, -0.14, 0.3, 0.16, 0.12],
+      [0.14, -0.3, -0.2, 0.13, 0.16],
+    ] as const) {
+      for (const [cx, cy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+        const lx = cx * (w / 2 - 0.016);
+        const ly = cy * (h / 2 - 0.016);
+        rivets.push([(px + lx * Math.cos(rot) - ly * Math.sin(rot)) * s, (py + lx * Math.sin(rot) + ly * Math.cos(rot)) * s, -0.2 * s]);
+      }
+    }
+    const rivetGeo = new CylinderGeometry(0.01 * s, 0.012 * s, 0.012 * s, 6);
+    chest.add(new Mesh(repeated(rivetGeo, rivets.map(([x, y, z]) => [x, y, z, Math.PI / 2])), steelMat(0x8a7560)));
+    // A SALVAGE PLATE off some yard machine, bolted over the left pauldron
+    // at whatever angle it fit — its hazard stripes half scoured away.
+    const hz = hazardTexture('#c8961e');
+    hz.repeat.set(2.2, 1.1);
+    const salvage = new Mesh(
+      new BoxGeometry(0.22 * s, 0.13 * s, 0.014 * s),
+      new MeshStandardMaterial({ map: hz, metalness: 0.35, roughness: 0.85, color: 0xb9ab98 }),
+    );
+    salvage.position.set(-0.38 * s, 0.07 * s, -0.168 * s);
+    salvage.rotation.z = 0.38;
+    chest.add(salvage);
+    // A SEVERED CABLE hanging from the bare right stub, still live: its
+    // frayed end spits the accent.
+    const cable = new Mesh(new CylinderGeometry(0.011 * s, 0.011 * s, 0.26 * s, 6), dark());
+    cable.position.set(0.4 * s, -0.06 * s, -0.07 * s);
+    cable.rotation.z = 0.25;
+    chest.add(cable);
+    const spark = new Mesh(new SphereGeometry(0.02 * s, 10, 8), glowMat(accent, 2.2));
+    spark.position.set(0.432 * s, -0.188 * s, -0.07 * s);
+    chest.add(spark);
   }
   if (def.style === 'piston') {
     // Riveted slab chest plate.
@@ -866,6 +1063,20 @@ export function buildTitan(def: BossDef): TitanRig {
     chest.add(needle);
   }
   if (def.style === 'king') {
+    // THE CHAIN OF OFFICE: heavy gold links slung shoulder to shoulder,
+    // sagging across the chest above the core — worn, not bolted.
+    // (Every link lies in the chest's plane, each overlapping the next: a
+    // real chain's alternate links turn edge-on, and from the front that
+    // read as a row of bars.)
+    const links: Array<[number, number, number, number, number, number]> = [];
+    const n = 19;
+    for (let k = 0; k < n; k++) {
+      const t = k / (n - 1);
+      const x = (-0.3 + t * 0.6) * s;
+      const y = (0.11 - Math.sin(t * Math.PI) * 0.09) * s;
+      links.push([x, y, (-0.272 - (k % 2) * 0.006) * s, 0, 0, 0]);
+    }
+    chest.add(new Mesh(repeated(new TorusGeometry(0.02 * s, 0.0065 * s, 6, 14), links), steelMat(GOLD, GOLD, 0.3)));
     // A gold X braced behind the core — four arms on the true diagonals,
     // each running radially so the whole mark reads as one clean cross.
     for (const rot of [Math.PI / 4, (3 * Math.PI) / 4, -Math.PI / 4, (-3 * Math.PI) / 4]) {
@@ -886,6 +1097,23 @@ export function buildTitan(def: BossDef): TitanRig {
       ring.position.set(0, ny * s, -0.02 * s);
       chest.add(ring);
     }
+    // THE RUFF: a collar of spiked feathers standing up behind the skull,
+    // fanned wide and leaning back — the executioner's hood, raised.
+    const ruff: Array<[number, number, number, number, number, number]> = [];
+    const ruffTips: Array<[number, number, number, number, number, number]> = [];
+    const quillLen = 0.3 * s;
+    for (let i = -3; i <= 3; i++) {
+      const rz = -i * 0.24;
+      const x = i * 0.05 * s;
+      // The quill is centred on its mount; its tip is half a length out.
+      const cy = 0.2 * s + Math.cos(rz) * quillLen * 0.5 * Math.cos(0.4);
+      const cz = 0.1 * s + quillLen * 0.5 * Math.sin(0.4);
+      const cx = x - Math.sin(rz) * quillLen * 0.5;
+      ruff.push([cx, cy, cz, -0.4, 0, rz]);
+      ruffTips.push([x - Math.sin(rz) * quillLen, 0.2 * s + Math.cos(rz) * quillLen * Math.cos(0.4), 0.1 * s + quillLen * Math.sin(0.4), -0.4, 0, rz]);
+    }
+    chest.add(new Mesh(repeated(new BoxGeometry(0.05 * s, quillLen, 0.012 * s), ruff), dark()));
+    chest.add(new Mesh(repeated(new BoxGeometry(0.044 * s, 0.035 * s, 0.013 * s), ruffTips), glowMat(accent, 0.35)));
     // The folded-wing cloak: long plates hanging down the BACK in a loose
     // fan — from behind it's all plumage, from the front all blade.
     for (let f = -2; f <= 2; f++) {
@@ -1001,6 +1229,14 @@ export function buildTitan(def: BossDef): TitanRig {
       const guard = new Mesh(new BoxGeometry(0.05 * s, 0.05 * s, 0.5 * s), chassis(accent, 0.03));
       guard.position.set(side * 0.44 * s, hipY - 0.32 * s, 0.02 * s);
       root.add(guard);
+      // THE TRACK: a run of cleated links over the road wheels and under
+      // them — the fortress never stopped being a tank.
+      const links: Array<[number, number, number]> = [];
+      for (let k = 0; k < 8; k++) {
+        const z = (-0.21 + k * 0.06) * s;
+        links.push([side * 0.46 * s, hipY - 0.425 * s, z], [side * 0.46 * s, hipY - 0.575 * s, z]);
+      }
+      root.add(new Mesh(repeated(new BoxGeometry(0.07 * s, 0.022 * s, 0.05 * s), links), steelMat(0x2c2636)));
     }
     // The glacis: a clean raked front plate behind the curtain, no glow, no
     // trim — dark bow armour whose only statement is its rake.
@@ -1110,6 +1346,20 @@ export function buildTitan(def: BossDef): TitanRig {
         bolt.position.set(bx * s, -0.2 * s, bz * s);
         hand.add(bolt);
       }
+      // Molten CRACKS across the block's face and flanks — the fist has hit
+      // so much iron that its own is splitting, and the fire shows through.
+      const crack = new BoxGeometry(0.075 * s, 0.009 * s, 0.006 * s);
+      const cracks = new Mesh(
+        repeated(crack, [
+          [-0.05 * s, 0.02 * s, -0.152 * s, 0, 0, 0.5],
+          [0.012 * s, -0.01 * s, -0.152 * s, 0, 0, -0.35],
+          [0.07 * s, 0.03 * s, -0.152 * s, 0, 0, 0.9],
+          [0.152 * s, -0.02 * s, 0.03 * s, 0, Math.PI / 2, 0.6],
+          [-0.152 * s, 0.03 * s, -0.04 * s, 0, Math.PI / 2, -0.4],
+        ]),
+        glowMat(accent, 1.4),
+      );
+      hand.add(cracks);
       // A drop-forge has no fingers — the whole block is the fist.
       return { hand, digits };
     }
@@ -1198,6 +1448,11 @@ export function buildTitan(def: BossDef): TitanRig {
       const rod = new Mesh(new CylinderGeometry(0.02 * s, 0.02 * s, 0.24 * s, 6), steelMat(0x8d949f));
       rod.position.set(side * 0.02 * s, -0.36 * s, -0.1 * s);
       pivot.add(rod);
+      // HEAT VENTS down the outside of each girder: the press runs so hot
+      // the arms breathe fire through their louvres.
+      const vent = new BoxGeometry(0.008 * s, 0.014 * s, 0.085 * s);
+      const vents = new Mesh(repeated(vent, [0, 1, 2, 3].map((k) => [side * 0.056 * s, (-0.1 - k * 0.045) * s, 0] as [number, number, number])), glowMat(accent, 1.1));
+      pivot.add(vents);
     }
     // THE ELBOW: a real joint at the upper arm's end. Its cap is the old
     // barrel; an accent lamp peeks out either side of it, so the fold reads
@@ -1240,6 +1495,7 @@ export function buildTitan(def: BossDef): TitanRig {
   }) as [TitanArm, TitanArm];
 
   const height = headY + 0.35 * s;
+  finishTitan(root, def.style, s);
 
   return {
     root,
