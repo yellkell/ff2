@@ -35,7 +35,7 @@
 
 import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, IcosahedronGeometry, LatheGeometry, Mesh, MeshStandardMaterial, type Object3D, Quaternion, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { BODY_IK, PAINT } from '../config.js';
-import { EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
+import { BODY_RINGS, EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
 import { atlasGear, mergePiece } from './gearAtlas.js';
 
 export type GearSlot = 'head' | 'body' | 'hands';
@@ -379,78 +379,199 @@ function roundRect(w: number, h: number, c: number): Shape {
   return sh;
 }
 
+/** The body's ring at hip-local height y — the same surface the
+ *  mannequin's loft draws (BODY_RINGS, linear between rings). */
+function bodyRing(y: number): { w: number; d: number; z: number } {
+  const R = BODY_RINGS; // top → down
+  if (y >= R[0].y) return { w: R[0].w, d: R[0].d, z: R[0].z ?? 0 };
+  for (let i = 0; i < R.length - 1; i++) {
+    const a = R[i];
+    const b = R[i + 1];
+    if (y <= a.y && y >= b.y) {
+      const f = (a.y - y) / (a.y - b.y);
+      return { w: a.w + (b.w - a.w) * f, d: a.d + (b.d - a.d) * f, z: (a.z ?? 0) + ((b.z ?? 0) - (a.z ?? 0)) * f };
+    }
+  }
+  const e = R[R.length - 1];
+  return { w: e.w, d: e.d, z: e.z ?? 0 };
+}
+
 /**
- * ONE SHOULDER'S ARMOUR — the pauldron both pads are built from. A domed
- * CAP over the shoulder point, a LAME (a second, wider band of plate)
- * overlapping out from under its edge, and a rim of trim along each lower
- * edge so the plates read as plates and not as one lump. It is SEATED:
- * centred just inside the shoulder point (BODY_RINGS' widest ring is
- * ±0.252 at y 0.395) and tilted to the slope of the shoulder, so it
- * rests on the body instead of standing clear of it like a shell.
- * `k` scales the whole pad; `spikes` studs the cap (the SPIKED PADS).
+ * A PLATE LOFTED OVER THE SHOULDER — the way the chestplate is made: rows
+ * at heights down the body, columns round it by the loft's own angle t
+ * (t = 0 is the right side, π the left), every point pushed out along the
+ * body's own ring by `proud(u, v)` metres (u 0→1 top to bottom, v 0→1
+ * front to back). The body's surface is the ring itself, so a positive
+ * `proud` is outside it everywhere: the plate can never be cut by the
+ * shoulder it sits on. A second skin `thick` inside and a wall round the
+ * rim close it into a slab. `at(u, v, lift)` gives a point on the outer
+ * skin and its normal, for what gets mounted on the plate.
+ */
+function shoulderShell(
+  mat: MeshStandardMaterial,
+  side: 1 | -1,
+  yTop: number,
+  yBot: number,
+  half: number | ((u: number) => number),
+  proud: (u: number, v: number) => number,
+  thick: number,
+): { mesh: Mesh; at: (u: number, v: number, lift?: number) => { p: Vector3; n: Vector3 }; edge: (fixU: number | null, fixV: number | null, out: number) => Vector3[] } {
+  const ROWS = 9;
+  const COLS = 16;
+  const t0 = side > 0 ? 0 : Math.PI;
+  // Front is −z. On the right side (t = 0) sin t < 0 is the front, on the
+  // left (t = π) sin t > 0 is — so v runs front to back on both.
+  const halfAt = typeof half === 'number' ? (): number => half : half;
+  const tOf = (u: number, v: number): number => t0 + side * (v - 0.5) * 2 * halfAt(u);
+  const point = (u: number, v: number, o: number, out = new Vector3()): Vector3 => {
+    const y = yTop + (yBot - yTop) * u;
+    const r = bodyRing(y);
+    const t = tOf(u, v);
+    return out.set(Math.cos(t) * (r.w + o), y, Math.sin(t) * (r.d + o) + r.z);
+  };
+  const outerAt = (u: number, v: number, lift = 0): Vector3 => point(u, v, proud(u, v) + lift);
+  const pos: number[] = [];
+  const inner: number[] = [];
+  const idx: number[] = [];
+  const uvs: number[] = [];
+  const tmp = new Vector3();
+  for (let r = 0; r <= ROWS; r++) {
+    for (let c = 0; c <= COLS; c++) {
+      const u = r / ROWS;
+      const v = c / COLS;
+      const o = proud(u, v);
+      point(u, v, o, tmp);
+      pos.push(tmp.x, tmp.y, tmp.z);
+      point(u, v, Math.max(0.0015, o - thick), tmp);
+      inner.push(tmp.x, tmp.y, tmp.z);
+      uvs.push(v, 1 - u);
+      if (r < ROWS && c < COLS) {
+        const i0 = r * (COLS + 1) + c;
+        const i1 = i0 + COLS + 1;
+        // Wound so the outer skin faces out on either shoulder.
+        if (side > 0) idx.push(i0, i0 + 1, i1, i0 + 1, i1 + 1, i1);
+        else idx.push(i0, i1, i0 + 1, i0 + 1, i1, i1 + 1);
+      }
+    }
+  }
+  const n = pos.length / 3;
+  const all = [...pos, ...inner];
+  const uv = [...uvs, ...uvs];
+  const outerTri = idx;
+  const innerTri = idx.map((i) => i + n).reverse();
+  const wallTri: number[] = [];
+  let run = 0;
+  const wall = (a0: number, a1: number): void => {
+    const base = all.length / 3;
+    for (const v of [a0, a1, a0 + n, a1 + n]) all.push(all[v * 3], all[v * 3 + 1], all[v * 3 + 2]);
+    uv.push(run, 0, run + 1, 0, run, 1, run + 1, 1);
+    run += 1;
+    wallTri.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
+  };
+  const last = ROWS * (COLS + 1);
+  for (let c = 0; c < COLS; c++) {
+    wall(c, c + 1);
+    wall(last + c + 1, last + c);
+  }
+  for (let r = 0; r < ROWS; r++) {
+    wall((r + 1) * (COLS + 1), r * (COLS + 1));
+    wall(r * (COLS + 1) + COLS, (r + 1) * (COLS + 1) + COLS);
+  }
+  for (let i = uv.length - run * 8; i < uv.length; i += 2) uv[i] /= run;
+  const geo = new BufferGeometry();
+  geo.setAttribute('position', new Float32BufferAttribute(all, 3));
+  geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+  geo.setIndex([...outerTri, ...innerTri, ...wallTri]);
+  geo.computeVertexNormals();
+  const slabMat = mat.clone();
+  slabMat.side = DoubleSide; // a hand-wound slab must never cull itself away
+  const mesh = new Mesh(geo, slabMat);
+  const at = (u: number, v: number, lift = 0): { p: Vector3; n: Vector3 } => {
+    const p = outerAt(u, v, lift);
+    const e = 0.01;
+    const du = outerAt(Math.min(1, u + e), v, lift).sub(outerAt(Math.max(0, u - e), v, lift));
+    const dv = outerAt(u, Math.min(1, v + e), lift).sub(outerAt(u, Math.max(0, v - e), lift));
+    const nrm = du.cross(dv).normalize();
+    // Point it away from the body's axis, whichever way the cross fell.
+    if (nrm.x * side < 0 || (Math.abs(nrm.x) < 1e-3 && nrm.y < 0)) nrm.negate();
+    return { p, n: nrm };
+  };
+  // A line along the outer skin — a row (fixU) or a column (fixV) — for trim.
+  const edge = (fixU: number | null, fixV: number | null, out: number): Vector3[] => {
+    const pts: Vector3[] = [];
+    const count = fixU !== null ? COLS : ROWS;
+    for (let i = 0; i <= count; i++) {
+      const u = fixU ?? i / ROWS;
+      const v = fixV ?? i / COLS;
+      pts.push(outerAt(u, v, out));
+    }
+    return pts;
+  };
+  return { mesh, at, edge };
+}
+
+/**
+ * ONE SHOULDER'S ARMOUR — the pauldron both pads are built from: a domed
+ * CAP over the top of the shoulder, framed in trim, and a LAME (a second
+ * band of plate) tucked under its lower edge and hanging down the side,
+ * its own lower edge lit. Both are lofted over the body's shoulder
+ * (shoulderShell), so they sit ON it: the old pads were ellipsoid domes
+ * set on the shoulder's slope, and the trapezius rose straight through
+ * the inner half of every one. `k` scales the whole pad; `spikes` drives
+ * three spikes through the cap (the SPIKED PADS).
  */
 function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial, s: 1 | -1, k: number, spikes: boolean): Group {
   const pad = new Group();
-  pad.position.set(s * 0.2, 0.388, 0.004);
-  pad.rotation.z = -s * 0.36;
-  // THE CAP: an ellipsoid dome, (a, b, c) its half-extents.
-  const a = 0.104 * k;
-  const b = 0.07 * k;
-  const c = 0.118 * k;
-  const capY = -0.018 * k;
-  const cap = new Mesh(new SphereGeometry(1, 24, 9, 0, Math.PI * 2, 0, Math.PI * 0.43), mat);
-  cap.scale.set(a, b, c);
-  cap.position.y = capY;
-  pad.add(cap);
-  // THE LAME: a band of the same dome, a size up, lower, overlapping.
-  const lame = new Mesh(new SphereGeometry(1, 24, 3, 0, Math.PI * 2, Math.PI * 0.4, Math.PI * 0.17), mat);
-  lame.scale.set(a * 1.07, b, c * 1.06);
-  lame.position.y = capY - 0.012 * k;
-  pad.add(lame);
-  // THE RIMS: a thin roll of trim along each plate's lower edge.
-  const rim = (theta: number, sx: number, sz: number, y: number, lit = false): void => {
-    const ring = lit ? asGlow(new Mesh(new TorusGeometry(1, 0.045, 5, 32), glowMat)) : asTrim(new Mesh(new TorusGeometry(1, 0.045, 5, 32), trimMat));
-    ring.rotation.x = Math.PI / 2;
-    const rr = Math.sin(theta);
-    ring.scale.set(sx * rr, sz * rr, 0.1 * k);
-    ring.position.y = y + Math.cos(theta) * b;
-    pad.add(ring);
-  };
-  rim(Math.PI * 0.43, a, c, capY);
-  rim(Math.PI * 0.57, a * 1.07, c * 1.06, capY - 0.012 * k, true); // the lower edge is lit
-  // Rivets round the lame's outer face, where it is fixed to the cap.
-  for (const deg of [-64, -32, 0, 32, 64]) {
-    const f = (deg * Math.PI) / 180;
-    const out = new Vector3(s * Math.cos(f), 0, Math.sin(f));
-    const at = new Vector3(out.x * a * 1.07 * 1.005, capY - 0.012 * k, out.z * c * 1.06 * 1.005);
-    const n = new Vector3(out.x / (a * a), 0, out.z / (c * c)).normalize();
-    pad.add(rivet(trimMat, at, n, 0.0048 * k));
+  const grow = k - 1;
+  // A dome: nothing at the rim (so the plate rests on the body), most at
+  // the shoulder's point.
+  const dome = (u: number, v: number): number => Math.sin(Math.PI * u) ** 0.8 * Math.cos((v - 0.5) * Math.PI) ** 1.1;
+  // Narrow at the top, where the body closes in toward the neck, and full
+  // width over the shoulder's point — the pauldron's own outline. (A
+  // constant span bunched the top edge into a notch by the collar.)
+  const capHalf = (u: number): number => (0.98 + grow * 0.6) * (0.5 + 0.5 * Math.sqrt(u));
+  const cap = shoulderShell(mat, s, 0.43, 0.372 - grow * 0.1, capHalf, (u, v) => k * (0.006 + 0.032 * dome(u, v)), 0.006);
+  pad.add(cap.mesh);
+  // The lame starts under the cap's lower third and drops down the side.
+  const lameCurve = (u: number, v: number): number => Math.cos((v - 0.5) * Math.PI) ** 1.1 * (1 - u * 0.6);
+  const lame = shoulderShell(mat, s, 0.386, 0.334 - grow * 0.12, 1.08 + grow * 0.6, (u, v) => k * (0.004 + 0.013 * lameCurve(u, v)), 0.005);
+  pad.add(lame.mesh);
+  const tube = (pts: Vector3[], r: number, m: MeshStandardMaterial): Mesh => new Mesh(new TubeGeometry(new CatmullRomCurve3(pts), pts.length * 3, r, 6), m);
+  // Trim rolls along the cap's collar and lower edges, and the lame's
+  // lower edge is LIT. (Only the edges that run AROUND the body: an edge
+  // running down it follows the loft's ring-to-ring corners, and a trim
+  // roll laid on one zig-zagged; the plate's own wall reads there.)
+  pad.add(asTrim(tube(cap.edge(0, null, 0.002), 0.0045 * k, trimMat)));
+  pad.add(asTrim(tube(cap.edge(1, null, 0.002), 0.005 * k, trimMat)));
+  pad.add(asGlow(tube(lame.edge(1, null, 0.002), 0.0048 * k, glowMat)));
+  // Rivets across the lame, where it's fixed under the cap.
+  for (const v of [0.14, 0.32, 0.5, 0.68, 0.86]) {
+    const { p, n } = lame.at(0.5, v, 0.001);
+    pad.add(rivet(trimMat, p, n, 0.0048 * k));
   }
   if (spikes) {
     // Three spikes up out of the cap: the big one off the top, leaning
     // out over the arm, and a smaller one fore and aft. Each rises along
-    // the dome's own normal from a trim collar, so it looks driven
+    // the plate's own normal from a trim collar, so it looks driven
     // through the plate, not glued to it.
     const spec: Array<[number, number, number, number]> = [
-      [s * 0.42, 1, 0, 0.1],
-      [s * 0.62, 0.8, -0.62, 0.07],
-      [s * 0.62, 0.8, 0.62, 0.07],
+      // u, v, length, lean out
+      [0.42, 0.5, 0.1, 0.35],
+      [0.5, 0.2, 0.07, 0.2],
+      [0.5, 0.8, 0.07, 0.2],
     ];
-    for (const [dx, dy, dz, len] of spec) {
-      const dir = new Vector3(dx, dy, dz).normalize();
-      // Where that direction leaves the ellipsoid, and the normal there.
-      const t = 1 / Math.sqrt((dir.x / a) ** 2 + (dir.y / b) ** 2 + (dir.z / c) ** 2);
-      const at = dir.clone().multiplyScalar(t).add(new Vector3(0, capY, 0));
-      const n = new Vector3((dir.x * t) / (a * a), (dir.y * t) / (b * b), (dir.z * t) / (c * c)).normalize();
-      const q = new Quaternion().setFromUnitVectors(UP, n);
+    for (const [u, v, len, lean] of spec) {
+      const { p, n } = cap.at(u, v);
+      const dir = n.clone().add(new Vector3(s * lean, 0.25, 0)).normalize();
+      const q = new Quaternion().setFromUnitVectors(UP, dir);
       const L = len * k;
       const spike = new Mesh(new ConeGeometry(0.014 * k, L, 12), mat);
       spike.quaternion.copy(q);
-      spike.position.copy(at).addScaledVector(n, L / 2 - 0.003);
+      spike.position.copy(p).addScaledVector(dir, L / 2 - 0.003);
       pad.add(spike);
       const collar = asTrim(new Mesh(new TorusGeometry(0.0155 * k, 0.0035 * k, 6, 16), trimMat));
       collar.quaternion.copy(q).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2));
-      collar.position.copy(at).addScaledVector(n, 0.002);
+      collar.position.copy(p).addScaledVector(dir, 0.002);
       pad.add(collar);
     }
   }
