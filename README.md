@@ -398,8 +398,13 @@ carried over verbatim: everything in it still applies to this code.
   (never names who fell, never breaks the fourth wall, never resolves the
   denial), his dictionary from the game's words to Gasket's, and the shape
   of an edition — headline, subhead, body, mood, plus a WANTED poster for
-  the top climber, the Sheriff's NOTICE and the WEATHER (it is always
-  dusk), all laid out on the lobby's front page. The daily command lives in
+  the top climber, the Sheriff's NOTICE and the WEATHER, all laid out on
+  the lobby's front page. Since THE COVE the paper is about **scrapping on
+  the beach**: Gasket is GASKET COVE on the masthead, the Clankers scrap in
+  the torch ring on the sand, titans come up out of the surf past the
+  point and get beached, raids run on the harbour clock, newcomers wash
+  up on the boardwalk, it is always sundown, and the salt air is doing
+  something to the Sheriff's knee. The daily command lives in
   this repo (`.claude/commands/daily-gazette.md`); the wire report now
   names each fighter's gear and deck beside their paint.
 - **GEAR** — the attachments shop (DESIGN.md §5.2): fifteen shapes that

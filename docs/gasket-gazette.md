@@ -1,23 +1,29 @@
 # The Gasket Gazette
 
-A daily, AI-written in-world newspaper. **Sheriff Cole Ironside** — a tin-star
-lawman of the frontier town of **Gasket**, who despises the metal "Clankers"
-(the players) wrecking his peace, and who is secretly a Clanker himself in
-furious denial — reads the ladder each day and files an editorial. It lands in
-the lobby behind a small round paper button above the right-hand panel; the
-button wears a **red notification dot** until you've read the latest edition.
+A daily, AI-written in-world newspaper about the scrapping on the beach.
+**Sheriff Cole Ironside** — tin-star lawman of **Gasket Cove**, a salt-bitten
+beach township where the metal "Clankers" (the players) scrap in a ring of
+tiki torches at sundown, who despises every one of them and is secretly a
+Clanker himself in furious denial (the sea air is not kind to his knee) —
+reads the ladder each day and files an editorial. It lands in the lobby
+behind a small round paper button above the right-hand panel; the button
+wears a **red notification dot** until you've read the latest edition.
+
+Gasket was a desert town before THE COVE; the paper followed the fighting
+down to the sand. The desert is still in the voice, as "the old flats,
+inland", for anyone who fights there.
 
 **The voice lives in [`gazette-voice.md`](gazette-voice.md)** — who Cole is,
 how he sounds, what he never does, his dictionary (the game's words →
-Gasket's), the shape of an edition and two worked examples. The daily
+the cove's), the shape of an edition and two worked examples. The daily
 command (`.claude/commands/daily-gazette.md`, in this repo now) writes
 from it.
 
 Since THE VOICE phase an edition also carries three sections the lobby
 page lays out under the byline: a **WANTED** poster for the top climber
 (`{ name, crime, reward }`), the Sheriff's one-line **NOTICE**, and the
-**WEATHER** (it is always dusk). The wire report grew each fighter's
-**gear** (the shapes bolted on, already in Cole's words) and **pad** (the
+**WEATHER** (it is always sundown on the cove). The wire report grew each
+fighter's **gear** (the shapes bolted on, already in Cole's words) and **pad** (the
 deck they stand on, by material) beside their paint colours — and learned
 the paint's format-2 wire, which it had been rejecting since the body
 merged (every painted fighter read as blank for a while).
