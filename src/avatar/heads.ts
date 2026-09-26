@@ -979,21 +979,27 @@ function buildFrogHead(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial,
   const skull = new Mesh(loftGeometry(st, r), mat);
   g.add(skull);
 
-  // THE SMILE: ONE line, along the skull at a fixed angle just below its
-  // equator, from under one eardrum round the snout to the other. The
-  // snout's tip is a flat cap, and a line laid straight across it sank
-  // into it — the mouth read as two strokes with a gap under the nose — so
-  // the line is carried round the FRONT of the cap on a shallow arc.
-  const smile = loftSmile(st, -0.18, 2, 5, r, 1.025);
-  const lip = smile[smile.length / 2]; // the right-hand end, at the lip station
-  const tipZ = ((st[6].top[1] + st[6].bot[1]) / 2) * r;
-  const front: Vector3[] = [];
-  for (let k = 1; k < 8; k++) {
-    const t = -1 + (2 * k) / 8; // -1..1 across the snout, ends excluded
-    front.push(new Vector3(lip.x * t * 0.95, lip.y - r * 0.01 * (1 - t * t), tipZ - r * 0.04 * (1 - t * t) + (lip.z - tipZ) * t * t));
+  // THE SMILE: ONE line, corner to corner. It is swept, not stitched: a
+  // fan of rays from inside the head at mouth height, round from under
+  // one eardrum, across the front of the snout, to the other, each landing
+  // on the skin (drape). One ray per point, in order, so the line can never
+  // double back over itself — the pieced-together first cuts overlapped
+  // where they met. The corners lift a touch: it is a grin.
+  const axisZ = -r * 0.1;
+  const sweep = 1.75; // radians either side of dead ahead
+  const aim: Vector3[] = [];
+  for (let k = 0; k <= 64; k++) {
+    const th = -sweep + (2 * sweep * k) / 64;
+    const y = -r * 0.2 + r * 0.08 * (th / sweep) ** 2;
+    aim.push(new Vector3(Math.sin(th) * r * 3, y, axisZ - Math.cos(th) * r * 3));
   }
-  const line = [...smile.slice(0, smile.length / 2), ...front, ...smile.slice(smile.length / 2)];
-  g.add(groove(drape(skull, line, -r * 0.2, r * 0.012), r * 0.026, trimMat));
+  const line = drape(skull, aim, axisZ, r * 0.014);
+  // Two passes of smoothing take out the facets of the loft underneath.
+  for (let pass = 0; pass < 2; pass++) {
+    const prev = line.map((p) => p.clone());
+    for (let k = 1; k < line.length - 1; k++) line[k].copy(prev[k - 1]).add(prev[k + 1]).multiplyScalar(0.25).addScaledVector(prev[k], 0.5);
+  }
+  g.add(groove(line, r * 0.024, trimMat));
 
   // The turrets: domes sunk into the crown, a big lit lens in each — no
   // pupil, the glass is the eye — and a heavy lid over the top.
