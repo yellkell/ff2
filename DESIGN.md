@@ -380,7 +380,8 @@ its contrast under whatever the plate is painted. FF1's wallet/shop/locker plumb
 (`wallet.ts`, `customization.ts`, owned-lists, try-before-buy preview)
 carries over; the catalogue changes from skins to attachments.
 
-**SHIPPED — GEAR** (`src/avatar/gear.ts`): fourteen shapes in three SLOTS
+**SHIPPED — GEAR** (`src/avatar/gear.ts`; the slots grew to five since —
+THE HEADS and THE SHOULDERS, below): fourteen shapes in three SLOTS
 — head (CREST, ANTENNAE, HORNS, HALO, MOHAWK, VISOR BAND), body
 (PAULDRONS, CHESTPLATE, COLLAR, RIDGE, BELT) and hands
 (CUFFS, KNUCKLES, GAUNTLETS) — one worn per slot, every piece primed in
@@ -443,6 +444,26 @@ floor, so the inner edge rests on the slope to the neck. The SPIKED PADS
 are the same seated shell a size up (`shellPad`), three spikes driven
 through the crown on the dome's own normal from trim collars — one family
 with the pauldrons, where they had been a separate lofted plate.
+
+**SHIPPED — THE SHOULDERS** (a fifth gear slot, `shoulders`). The pads
+were body pieces, so they could never be worn with a chestplate, a cape
+or wings; they hang off the same body group now but as their own slot
+(`gear-shoulders` beside `gear`, their own canvas `gearShoulders`, part 9
+on the wire). The slot packs LAST, so an older reader still wears a
+pauldron as its body piece (it knows the id) and drops what it doesn't;
+the catalogue indices don't move (PAULDRONS stays tile 6). A saved look
+(LOOK_VERSION 5) whose worn body piece was a pair of pads moves its
+`gearBody` marks onto `gearShoulders`, so the pads keep their paint. New
+on the shelf: the WARLORD (the paladin pauldron from the raid-boss era:
+a deep dome seated like the shell pads, a heavy rolled rim found on the
+dome's own edge and pushed out with it by `seatPoint`, three flame
+tongues on the crown broad face forward, a trim lame flaring under the
+rim, lit studs), EPAULETS (piped boards on the shoulder slope, a crescent
+and a plumb bullion fringe, a lit button) and the GLADIATOR (asymmetric:
+four lames down the left arm, each tucked under the one above, and a
+standing guard with a lit boss). The body gets a CAPE and a TABARD — the
+two things that hang where the pads used to crowd it. Five slots' longest
+ids run to ~50 characters, so the gear string's cap is 64 everywhere.
 
 **SHIPPED — THE PADS, rebuilt entire.** The platform shop no longer sells
 neon tints over one steel slab with a grin, a bolt and a grid on top. A

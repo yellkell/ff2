@@ -389,7 +389,7 @@ function handleEvent(senderId, ev) {
       const p = players.get(senderId);
       if (p) {
         p.lk = String(ev.lk || '').slice(0, 1024);
-        if (ev.gr !== undefined) p.gr = String(ev.gr || '').slice(0, 48);
+        if (ev.gr !== undefined) p.gr = String(ev.gr || '').slice(0, 64);
       }
       broadcast({ t: 'ev', from: senderId, ev }, senderId);
       break;
@@ -627,7 +627,7 @@ wss.on('connection', (ws, req) => {
         avc: Number.isFinite(msg.avc) ? msg.avc : -1, // custom armour hue (0..1) or -1
         avl: Number.isFinite(msg.avl) ? msg.avl : 0.5, // custom armour lightness (0..1)
         lk: String(msg.lk || '').slice(0, 1024), // packed paint look (clients re-validate)
-        gr: String(msg.gr || '').slice(0, 48), // worn gear ids (clients re-validate)
+        gr: String(msg.gr || '').slice(0, 64), // worn gear ids (clients re-validate)
         head: ZERO_POSE,
         left: ZERO_POSE,
         right: ZERO_POSE,

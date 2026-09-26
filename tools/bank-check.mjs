@@ -278,7 +278,14 @@ try {
     await wrap(`act('gear-body')`);
     await page.waitForTimeout(200);
     ids = await m(`buttons('shop')`);
-    check('BODY offers the WINGS', ids.includes('shop-gr-15'), ids.filter((b) => b.startsWith('shop-gr-')).join(','));
+    check('BODY offers the WINGS, the CAPE and the TABARD — and no pads', has(ids, 'shop-gr-15', 'shop-gr-33', 'shop-gr-34') && !ids.includes('shop-gr-6') && !ids.includes('shop-gr-17'), ids.filter((b) => b.startsWith('shop-gr-')).join(','));
+    // THE SHOULDERS shelf: the two old pads (catalogue 6 and 17, where they
+    // always were) and the fifth wave's three (30..32).
+    await wrap(`act('gear-shoulders')`);
+    await page.waitForTimeout(200);
+    ids = await m(`buttons('shop')`);
+    check('SHOULDERS offers PAULDRONS, SPIKED PADS, WARLORD, EPAULETS, GLADIATOR', [6, 17, 30, 31, 32].every((i) => ids.includes(`shop-gr-${i}`)) && !ids.includes('shop-gr-7'), ids.filter((b) => b.startsWith('shop-gr-')).join(','));
+    await shot('store-shoulders');
     await wrap(`act('gear-hands')`);
     await page.waitForTimeout(200);
     ids = await m(`buttons('shop')`);

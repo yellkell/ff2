@@ -257,7 +257,7 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
         ctx.stroke();
       }
     }
-  } else if (def.slot === 'body') {
+  } else if (def.slot === 'body' || def.slot === 'shoulders') {
     ctx.fillStyle = dim;
     ctx.beginPath();
     ctx.moveTo(cx - r * 0.62, cy - r * 0.55);
@@ -339,6 +339,98 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
             ctx.stroke();
           }
         }
+        break;
+      case 'warlord':
+        // Great domes, a dark rolled rim under each, flames off the crown.
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.ellipse(cx + s * r * 0.6, cy - r * 0.42, r * 0.36, r * 0.32, 0, Math.PI, Math.PI * 2);
+          ctx.fill();
+          for (const [dx, h, lean] of [[-0.12, 0.34, 0.14], [0.06, 0.5, 0.26], [0.22, 0.34, 0.3]] as const) {
+            const bx = cx + s * r * (0.6 + dx);
+            const by = cy - r * 0.68;
+            ctx.beginPath();
+            ctx.moveTo(bx - r * 0.07, by);
+            ctx.quadraticCurveTo(bx - r * 0.06, by - r * h * 0.7, bx + s * r * lean, by - r * h);
+            ctx.quadraticCurveTo(bx + s * r * 0.02, by - r * h * 0.45, bx + r * 0.07, by);
+            ctx.closePath();
+            ctx.fill();
+          }
+        }
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = Math.max(1.5, line * 0.5);
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(cx + s * r * 0.24, cy - r * 0.42);
+          ctx.lineTo(cx + s * r * 0.96, cy - r * 0.42);
+          ctx.stroke();
+        }
+        break;
+      case 'epaulets':
+        // Flat boards along the shoulders, a fringe off each point.
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.roundRect(s > 0 ? cx + r * 0.2 : cx - r * 0.78, cy - r * 0.66, r * 0.58, r * 0.14, r * 0.07);
+          ctx.fill();
+          ctx.lineWidth = Math.max(1.5, line * 0.4);
+          for (let i = 0; i < 5; i++) {
+            const x = cx + s * r * (0.6 + i * 0.05);
+            ctx.beginPath();
+            ctx.moveTo(x, cy - r * 0.54);
+            ctx.lineTo(x, cy - r * 0.2);
+            ctx.stroke();
+          }
+        }
+        break;
+      case 'gladiator':
+        // ONE shoulder armoured — the fighter's left, the tile's right:
+        // lames stepping down, and the guard standing off the top.
+        ctx.lineWidth = line * 1.1;
+        for (let i = 0; i < 4; i++) {
+          ctx.beginPath();
+          ctx.arc(cx + r * (0.54 + i * 0.04), cy - r * (0.4 - i * 0.12), r * 0.26, Math.PI * (1.25 - i * 0.12), Math.PI * (1.95 - i * 0.1));
+          ctx.stroke();
+        }
+        ctx.fillRect(cx + r * 0.3, cy - r * 1.0, r * 0.1, r * 0.38);
+        break;
+      case 'cape':
+        // Hung off the shoulders, flaring wider than the body as it falls.
+        ctx.globalAlpha = 0.85;
+        ctx.moveTo(cx - r * 0.5, cy - r * 0.52);
+        ctx.lineTo(cx + r * 0.5, cy - r * 0.52);
+        ctx.lineTo(cx + r * 0.8, cy + r * 0.92);
+        ctx.lineTo(cx - r * 0.8, cy + r * 0.92);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = dim;
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.44, cy - r * 0.5);
+        ctx.lineTo(cx + r * 0.44, cy - r * 0.5);
+        ctx.lineTo(cx + r * 0.3, cy + r * 0.75);
+        ctx.lineTo(cx - r * 0.3, cy + r * 0.75);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      case 'tabard':
+        // A panel down the middle, cinched at the waist, a device on it.
+        ctx.moveTo(cx - r * 0.3, cy - r * 0.55);
+        ctx.lineTo(cx + r * 0.3, cy - r * 0.55);
+        ctx.lineTo(cx + r * 0.2, cy + r * 0.2);
+        ctx.lineTo(cx + r * 0.26, cy + r * 0.95);
+        ctx.lineTo(cx - r * 0.26, cy + r * 0.95);
+        ctx.lineTo(cx - r * 0.2, cy + r * 0.2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - r * 0.38);
+        ctx.lineTo(cx + r * 0.1, cy - r * 0.22);
+        ctx.lineTo(cx, cy - r * 0.06);
+        ctx.lineTo(cx - r * 0.1, cy - r * 0.22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillRect(cx - r * 0.24, cy + r * 0.17, r * 0.48, r * 0.07);
         break;
       case 'belt':
         ctx.moveTo(cx - r * 0.42, cy + r * 0.32);

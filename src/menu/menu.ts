@@ -174,6 +174,7 @@ export type MenuAction =
   | 'gear-body'
   | 'gear-hands'
   | 'gear-face'
+  | 'gear-shoulders'
   | 'tab-colour'
   /** The STORE's paint racks (its `pb:buy-*` ids route through paintbay.ts). */
   | 'tab-paint'
