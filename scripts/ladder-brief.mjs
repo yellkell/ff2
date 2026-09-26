@@ -59,7 +59,7 @@ function paintColours(wire, max = 3) {
   // dots and squares), 4 (the triangle), 5 (gear marks as decals) or 6
   // (each hand's gear its own) — the colour byte sits in the same place in
   // all six (docs/paint.md §3).
-  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || bytes[0] < 1 || bytes[0] > 6) return [];
+  if (bytes.length < 9 || (bytes.length - 1) % 8 !== 0 || bytes[0] < 1 || bytes[0] > 7) return [];
   const tally = new Map();
   for (let o = 1; o + 8 <= bytes.length; o += 8) {
     const c = bytes[o + 1];

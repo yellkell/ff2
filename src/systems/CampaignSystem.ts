@@ -3838,10 +3838,11 @@ export class CampaignSystem extends createSystem({
     // the bout shape, any first GOLIATH fell crowns (line-up bout, run stage,
     // raid finale) and nothing else does. (The tide crowns no one — that pad
     // is the KING's bounty.)
+    // It joins the locker and waits there: the pad you stand on is yours to
+    // choose, so the crown is never put on for you.
     const crowned = this.def.name === 'GOLIATH' && !platformOwned('champion');
     if (crowned) {
       ownPlatform('champion');
-      setPlatformSkin('champion');
       playCash();
     }
 

@@ -87,7 +87,9 @@ export function buildHand(side: 1 | -1): Group {
   // THE PAINT SURFACE: the back of the hand — the piece you actually look
   // at all match, and the one the bay's ray can hit on the mirror.
   const palm = new Mesh(new BoxGeometry(0.078, 0.024, 0.09), palmMat);
-  palm.userData.paintPart = 'hand';
+  // Each palm is its own surface: the right hand (side −1, the gear
+  // atlas's convention too) paints as 'handR'.
+  palm.userData.paintPart = side === -1 ? 'handR' : 'hand';
   hand.add(palm);
   const cuff = new Mesh(new BoxGeometry(0.07, 0.032, 0.038), mat);
   cuff.position.z = 0.062;

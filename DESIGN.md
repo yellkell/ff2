@@ -403,7 +403,7 @@ animal heads come back as a fourth gear slot, `face` (the HEADS shelf,
 first on the GEAR board; the old HEAD shelf is now HEADGEAR). BEAR,
 PANTHER, EAGLE, KNIGHT, STALLION, WOLF, FROG and BUNNY keep FF1's lofted
 skulls — the shapes the bare egg never had — re-made for the blank: the
-shell in the body's primer (a paint surface, `gearFace`, part 7 on the
+shell in the body's primer (a paint surface, `gearFace`, part 8 on the
 wire), only the holes in TRIM (nose pads, sockets, inner ears, slits),
 and only the EYES lit in the accent (FF1's neon blazes, vanes, rims and
 lit teeth are gone — paint does markings now). Fur, manes, crests and

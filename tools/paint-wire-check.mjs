@@ -111,8 +111,8 @@ console.log('=== the wire: pack / unpack ===');
     return back.map((u) => `${u.kind}@${u.part}`).slice(-3);
   });
   check('a square, a TRIANGLE and a gear-surface unit roundtrip as themselves', shapes.join(',') === 'square@body,triangle@body,dot@gearHead', shapes.join(','));
-  // THE HEADS (avatar/heads.ts): a worn head is its own surface, part 7 on
-  // the wire — and a wire-6 reader that predates it drops the unit, never
+  // THE HEADS (avatar/heads.ts): a worn head is its own surface, part 8 on
+  // the wire — and a wire-7 reader that predates it drops the unit, never
   // paints it somewhere else.
   const face = await page.evaluate(() => {
     const p = window.__ff2.paint;
@@ -120,7 +120,7 @@ console.log('=== the wire: pack / unpack ===');
     const packed = p.pack();
     const back = p.unpack(packed).paint.map((u) => `${u.kind}@${u.part}`);
     // Part index past the end of the table: what an older client sees.
-    const unknown = p.unpack(btoa(String.fromCharCode(6, (31 << 3) | 2, 9, 0, 128, 128, 0, 60, 60))).paint.length;
+    const unknown = p.unpack(btoa(String.fromCharCode(7, (31 << 3) | 2, 9, 0, 128, 128, 0, 60, 60))).paint.length;
     p.clear();
     return { back, unknown };
   });
@@ -160,7 +160,8 @@ console.log('=== the wire: pack / unpack ===');
     const bytes = [3, ...unit(1, 1), ...unit(1, 2), ...unit(1, 3), ...unit(5, 0)];
     return P.unpack(btoa(String.fromCharCode(...bytes))).paint.map((u) => `${u.kind}@${u.part}`);
   });
-  check('a format-3 look reads (splotch→dot, dot, square, hand stripe)', v3.join(',') === 'dot@body,dot@body,square@body,stripe@hand', v3.join(','));
+  // (A format-3 hand mark was worn by both palms, so it reads on both.)
+  check('a format-3 look reads (splotch→dot, dot, square, hand stripe on both palms)', v3.join(',') === 'dot@body,dot@body,square@body,stripe@hand,stripe@handR', v3.join(','));
 
   // THE LOCKER survives a restart — every kind (dots and squares used to
   // vanish on the next boot), and an owned splotch comes back as a dot.
@@ -278,6 +279,34 @@ console.log('=== the wire: pack / unpack ===');
   check('a dot on the LEFT cuff is not on the RIGHT cuff', cuffs.placed && cuffs.onL === 0 && cuffs.onR === -1, JSON.stringify(cuffs));
   check('a hand-gear mark from before the split is worn on both hands', cuffs.old.join(',') === 'gearHands,gearHandsR', cuffs.old.join(','));
   await page.evaluate(() => window.__ff2.gear.clear('hands'));
+  await page.waitForTimeout(700);
+
+  // EACH PALM ITS OWN: the hands themselves split too ('hand' · 'handR',
+  // wire 7) — a mark on the left palm is not on the right one, and a look
+  // from before the split still wears its hand marks on both.
+  const palms = await page.evaluate(() => {
+    const p = window.__ff2.paint;
+    p.clear();
+    p.grant('dot', 11);
+    const placed = p.take('dot', 11) && p.place('hand', 0.5, 0.5);
+    const onL = p.at('hand', 0.5, 0.5);
+    const onR = p.at('handR', 0.5, 0.5);
+    // A wire-6 look with one mark on the (then shared) hand.
+    const unit = [(5 << 3) | 2, 9, 0, 128, 128, 0, 60, 60];
+    const old = p.unpack(btoa(String.fromCharCode(6, ...unit))).paint.map((u) => u.part);
+    return { placed, onL, onR, old };
+  });
+  // The mirror re-bakes next frame; then each palm wears its own canvas.
+  await page.waitForTimeout(700);
+  Object.assign(palms, await page.evaluate(() => {
+    const snapL = window.__ff2.paintSnap('mirror-avatar', 'hand');
+    const snapR = window.__ff2.paintSnap('mirror-avatar', 'handR');
+    window.__ff2.paint.clear();
+    return { both: !!snapL && !!snapR, differ: snapL !== snapR };
+  }));
+  check('the mirror\'s two palms are two surfaces (hand · handR), baked apart', palms.both && palms.differ, JSON.stringify({ both: palms.both, differ: palms.differ }));
+  check('a dot on the LEFT palm is not on the RIGHT palm', palms.placed && palms.onL === 0 && palms.onR === -1, JSON.stringify(palms));
+  check('a hand mark from before the split is worn on both palms', palms.old.join(',') === 'hand,handR', palms.old.join(','));
 
   // THE FACING SPLIT: an extruded piece (the CREST's fin) gave its two
   // faces the same UVs, so a mark on one face could never show. A dot on
