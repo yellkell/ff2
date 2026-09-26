@@ -284,7 +284,7 @@ try {
     await wrap(`act('gear-shoulders')`);
     await page.waitForTimeout(200);
     ids = await m(`buttons('shop')`);
-    check('SHOULDERS offers PAULDRONS, SPIKED PADS, WARLORD, EPAULETS, GLADIATOR', [6, 17, 30, 31, 32].every((i) => ids.includes(`shop-gr-${i}`)) && !ids.includes('shop-gr-7'), ids.filter((b) => b.startsWith('shop-gr-')).join(','));
+    check('SHOULDERS offers PAULDRONS, SPIKED PADS, WARLORD, EPAULETS, GLADIATOR, BASTION', [6, 17, 30, 31, 32, 35].every((i) => ids.includes(`shop-gr-${i}`)) && !ids.includes('shop-gr-7'), ids.filter((b) => b.startsWith('shop-gr-')).join(','));
     await shot('store-shoulders');
     await wrap(`act('gear-hands')`);
     await page.waitForTimeout(200);

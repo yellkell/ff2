@@ -1209,20 +1209,50 @@ export const HEAD_PIECES: Record<string, HeadBuilder> = Object.fromEntries(
 );
 
 /**
- * Where each head's CROWN sits, for the head gear worn over it (the scale
- * the egg-fitted pieces ride out to, and the lift in metres) — see
- * FACE_FIT in avatar/gear.ts.
+ * THE FIT of the head GEAR (horns, crests, crowns…) to each head's own
+ * skull. Every head piece was modelled on the bare skull; worn over an
+ * animal it has to land on THAT animal's cranium — the dome behind the
+ * face, not the snout, the ears or the fur. Each head's cranium is
+ * measured by casting from inside it (the snout's cone, the ears and the
+ * tufts left out): its crown height, its width at the temples, and its
+ * depth from the brow to the back of the skull. The fit scales the bare
+ * skull onto it per axis (`s`: width, height, depth) and moves it (`y`,
+ * `z`, metres) so the tops meet — crowns and halos ride the crown, crests
+ * run brow to nape, horns root at the temples. Measured at the HEAD_SIZE
+ * and SEAT above; re-measure if either changes.
  */
-const CROWN: Record<string, { scale: number; lift: number }> = {
-  bear: { scale: 1.22, lift: 0.015 },
-  panther: { scale: 1.12, lift: 0.01 },
-  eagle: { scale: 1.4, lift: 0.05 },
-  knight: { scale: 1.2, lift: 0.03 },
-  stallion: { scale: 1.1, lift: 0.0 },
-  wolf: { scale: 1.2, lift: 0.02 },
-  frog: { scale: 1.0, lift: 0.0 },
-  bunny: { scale: 1.18, lift: 0.01 },
+export const HEAD_FIT: Record<string, { s: [number, number, number]; y: number; z: number }> = {
+  bear: { s: [0.928, 0.86, 0.792], y: -0.0016, z: 0.0055 },
+  panther: { s: [0.815, 0.743, 0.671], y: -0.0174, z: 0.0052 },
+  eagle: { s: [0.636, 0.671, 0.706], y: 0.0177, z: -0.0281 },
+  // The helm is a flat-topped barrel, not a dome: raised, so a crown sits
+  // ON it instead of sinking into the barrel's side.
+  knight: { s: [1.046, 1.085, 1.125], y: -0.0085, z: -0.0134 },
+  // A horse's cranium is small against its long face: carried 1.3× the
+  // measure (top still pinned), or a crown was a ring between the ears.
+  stallion: { s: [0.711, 0.699, 0.688], y: -0.0112, z: 0.0022 },
+  wolf: { s: [0.758, 0.713, 0.669], y: -0.021, z: 0.0131 },
+  // Wide and FLAT: height eased to 0.75 (top pinned) — squashed to the
+  // measure, a crest or a mohawk came out a stub. The pieces that live at
+  // the brow are placed one by one (PIECE_FIT).
+  frog: { s: [1.1, 0.75, 0.85], y: -0.0549, z: 0.0046 },
+  bunny: { s: [0.841, 0.81, 0.779], y: 0.0018, z: 0.0002 },
 };
-export const HEAD_FIT: Record<string, { scale: number; lift: number }> = Object.fromEntries(
-  Object.entries(CROWN).map(([id, c]) => [id, { scale: c.scale * (HEAD_SIZE[id] ?? 1), lift: c.lift - (SEAT[id] ?? 0) }]),
-);
+
+/**
+ * Where one head needs one piece placed by hand, over its HEAD_FIT: a
+ * whole fit (`s`, `y`, `z`, as above) and a tilt about x (`rx`, radians,
+ * negative tips the front down). Ram's horns meant for a skull are too
+ * much on a frog's flat head or a horse's small cranium.
+ */
+export const PIECE_FIT: Record<string, Record<string, Partial<{ s: [number, number, number]; y: number; z: number; rx: number }>>> = {
+  // (The frog's VISOR and CROWN, and the horse's VISOR, are not fitted at
+  // all: those heads wear their own cut of the piece — goggles, a Frog
+  // Prince's crown, blinkers — VARIANTS in avatar/gear.ts.)
+  frog: {
+    horns: { s: [0.74, 0.58, 0.62], y: -0.038, z: 0.012 },
+  },
+  stallion: {
+    horns: { s: [0.57, 0.56, 0.55], y: 0.004 },
+  },
+};
