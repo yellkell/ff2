@@ -1,32 +1,40 @@
-Write and publish today's edition of The Gasket Gazette — the paper of
-Gasket Cove, where the Clankers scrap on the beach.
+Write and publish today's edition of The Gasket Gazette — the game's daily
+paper: what happened on the boards, the hardest clears, and what players can
+go and do today.
 
-Read `docs/gazette-voice.md` first — every line of the edition is written in
-Sheriff Cole Ironside's voice, under its rules (never name who fell; never
-break the fourth wall; translate every game term into the cove's words —
-scraps on the sand, titans up out of the surf, the harbour clock; one tin
-tell; it is always sundown; the page's length). Then:
+Read the style guide in `docs/gasket-gazette.md` first ("The page" and "The
+style guide"). Plain, specific newspaper reporting: no character voice, no
+invented vocabulary, the game's own names for things. Lead with the most
+impressive feat (difficulty first, then hardcore, then the clock), never name
+anyone who dropped or lost, and never turn a points figure into a match count.
+Then:
 
-1. Run `node scripts/ladder-brief.mjs` and read the wire report it prints:
-   climbers and the busiest (never fallers), the raid wire (titans beached
-   since the last edition, squads, clock times), who washed up new, and for
-   each fighter their `tone`, most-used paint `colours`, worn `gear` and the
-   `pad` they stand on — in the cove's own words already.
-2. Write the edition as ONE JSON object to `/tmp/gazette.json` with exactly
-   these fields: `headline`, `subhead`, `body`, `mood`, `wanted`
-   (`{ name, crime, reward }`), `notice`, `weather`. Sizes: headline under 60
-   characters; body 180–320 words in 3–5 blank-line-separated paragraphs;
-   `wanted.crime` under 80 characters; `notice` under 160; `weather` one line.
-   The lede is the wire's biggest change; the raid wire is paragraph two if
-   there is one; the beach's paint, ironmongery and decks are paragraph three;
-   the grumble and the tin tell close it. A quiet wire still gets an edition
-   (see the voice doc's second example) and a `wanted` for the top of the roll.
+1. Run `node scripts/ladder-brief.mjs` and read the brief it prints: the
+   season race, climbers and the busiest, the `recordBook` (the holder of
+   every feat, hardest first), `newClears` since the last edition and where
+   they placed (place 1 = a new record), `openFeats` nobody has cleared yet,
+   and `thinFeats` with a podium place going. Read its `legend` before quoting
+   any number.
+2. Write the edition as ONE JSON object to `/tmp/gazette.json` with these
+   fields:
+   - `headline` (under 70 characters) and `subhead` (one sentence);
+   - `stats`: up to 4 `{ value, label }` figures from the brief (games played,
+     new records, days left in the season, active players…);
+   - `body`: 2–4 short paragraphs, blank-line separated, 120–260 words. The
+     biggest feat or record first, then the season race and climbers, then
+     anything else worth a line;
+   - `records`: up to 6 `{ feat, time, who }` taken from `recordBook`,
+     hardest feats first (copy `feat`, `time` and `who` as the brief gives
+     them);
+   - `todo`: 3–5 `{ title, text }` things a reader can do today, each concrete
+     and reachable from the menu (give the path, e.g. `PLAY › TITANS › CO-OP
+     RAID`). Draw on `openFeats`, `thinFeats`, the season clock and any record
+     that just fell. Titles up to 36 characters, text up to 180.
+   A quiet day still gets an edition: lead with the standing records and the
+   season race, and let `todo` point at the open feats.
 3. Run `node scripts/publish-gazette.mjs /tmp/gazette.json`. It validates the
-   fields, bumps the edition number, writes `gazette/latest` (the lobby's
-   red dot lights for every player), rolls `gazette/_snapshot` forward and
-   archives a copy under `gazette-archive/`.
-4. Commit the archive file it wrote with the message
+   fields and sizes, bumps the edition number, writes `gazette/latest` (the
+   NEWS tab's red dot lights for every player), rolls `gazette/_snapshot`
+   forward and archives a copy under `gazette-archive/`.
+4. Commit the archive files it wrote with the message
    `Gazette No. <edition>: <headline>` and push.
-
-Never publish a draft that names a fighter who fell, uses ELO/XP/rank/
-"player"/"game", or ends with Cole admitting what he is.

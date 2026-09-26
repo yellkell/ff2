@@ -208,25 +208,43 @@ save('ladder', await wrap(`snap('duel')`));
 await wrap(`act('lb-arcade')`);
 town = await wrap(`buttons('duel')`);
 check('LADDER › ARCADE: aim + the run boards', has(town, 'lb-training', 'lb-gauntlet', 'lb-raid', 'lb-goopliath') && !town.includes('lb-ranked'), notTabs(town).join(','));
+await wrap(`act('lb-raid')`);
+town = await wrap(`buttons('duel')`);
+check('LADDER › RAID: the FEATS view strip, with HC ONLY', has(town, 'lb-view-feats', 'lb-view-normal', 'lb-view-hard', 'lb-view-blazing', 'lb-view-hc'), notTabs(town).join(','));
+save('ladder-raid', await wrap(`snap('duel')`));
+await wrap(`act('lb-goopliath')`);
+town = await wrap(`buttons('duel')`);
+check('LADDER › GOOP RAID: the view strip without HC ONLY (the tide has no hardcore)', has(town, 'lb-view-feats', 'lb-view-blazing') && !town.includes('lb-view-hc'), notTabs(town).join(','));
 await wrap(`act('lb-xp')`);
 town = await wrap(`buttons('duel')`);
 check('LADDER › XP: no sub-row', !town.includes('lb-ranked') && !town.includes('lb-training'), notTabs(town).join(','));
 await wrap(`act('wrap:tab-town')`);
 
-// THE GAZETTE (net/gazette.ts + menu.ts): inject an edition with the voice's
-// sections — a WANTED poster, the NOTICE, the WEATHER — open the paper (the
-// NEWS tab) and snap the wing; it must lay out and render without a page error.
+// THE GAZETTE (net/gazette.ts + menu.ts): inject an edition with every
+// section — BY THE NUMBERS, THE RECORD BOOK, WHAT TO DO TODAY — open the
+// paper (the NEWS tab) and snap the wing; it must lay out and render without
+// a page error.
 {
   const before = errors.length;
   await page.evaluate(() => {
     window.__ff2.gazette.inject({
-      headline: 'VOLTAIRE UP NINE RUNGS; SOMEBODY CHECK THE TIDE',
-      subhead: 'A pair scrap, a beach brawl, and a coat of OXBLOOD this office did not authorise.',
-      body: 'VOLTAIRE rose nine rungs on the roll overnight, which is not a climb so much as a flood. Eleven scraps on the sand, most of them one-on-one.\n\nOut past the point a squad put down JUGGERNAUT in eight minutes on the harbour clock. They came back round the point at sundown making the noise they make, and dripping.\n\nSomebody has moved the tiki torches again. My knee has been squeaking since the wind came in off the sea; the doctor says it is the salt.',
-      mood: 'AGGRIEVED',
-      wanted: { name: 'VOLTAIRE', crime: 'Excessive scrapping. Also the paint.', reward: '200 iron-dollars' },
-      notice: 'No scrapping below the tide line. The sea has enough to put up with.',
-      weather: 'Sundown. The sun has been going down since the metal arrived and has not finished.',
+      headline: "FIRST BLAZING HARDCORE TITAN RAID FALLS TO VOLTAIRE'S SQUAD",
+      subhead: 'Four players beat all five titans with no healing between bosses, a feat nobody had managed.',
+      body: 'VOLTAIRE, GRINDR, PUMPKIN and REDWOLF9 cleared the titan raid on BLAZING HARDCORE in 18:42.1, the first time anyone has finished it.\n\nOn the ranked ladder, REDWOLF9 climbed six places and now sits third for the season, 40 points behind the leader with eight days to play.\n\nThe NORMAL speedrun record changed hands twice. CRYSTALZACH holds it at 0:46.3.',
+      stats: [
+        { value: '37', label: 'games played' },
+        { value: '3', label: 'new records' },
+        { value: '8', label: 'days left in season' },
+      ],
+      records: [
+        { feat: 'TITAN RAID · BLAZING · HARDCORE', time: '18:42.1', who: 'VOLTAIRE · GRINDR · PUMPKIN · REDWOLF9' },
+        { feat: 'SPEEDRUN · HARD', time: '2:10.8', who: 'YK1' },
+        { feat: 'SPEEDRUN · NORMAL', time: '0:46.3', who: 'CRYSTALZACH' },
+      ],
+      todo: [
+        { title: 'Take the first blazing speedrun', text: 'Nobody has finished the campaign on BLAZING. PLAY › TITANS › CAMPAIGN, set BLAZING, and the record is yours.' },
+        { title: 'Chase the season podium', text: 'Eight days left. PLAY › VERSUS › RANKED: a win is 20 points, more against a stronger opponent.' },
+      ],
     });
     window.__ff2.gazette.open();
   });

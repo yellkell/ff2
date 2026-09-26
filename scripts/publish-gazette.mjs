@@ -3,15 +3,18 @@
  *
  * Usage:  node scripts/publish-gazette.mjs <article.json>
  *
- * Takes Sheriff Cole Ironside's finished article (written by the scheduled
- * Claude task from the ladder brief) and:
+ * Takes the day's finished edition (written by the scheduled Claude task
+ * from the ladder brief — docs/gasket-gazette.md) and:
  *   1. writes it to Firestore `gazette/latest` with a bumped edition number
  *      and a publish timestamp — the lobby reads this and lights the red dot;
  *   2. rolls `gazette/_snapshot` forward to the CURRENT standings, so the
  *      next `ladder-brief.mjs` run diffs against today, not last week.
  *
- * The article JSON must have: headline, subhead, body, mood. Optional:
- * byline (defaults to Sheriff Cole Ironside), dateline (auto-built if absent).
+ * The article JSON must have: headline, subhead, body. Optional: byline
+ * (defaults to "The Gazette Desk"), dateline (auto-built if absent), and the
+ * page's three sections — `stats` (BY THE NUMBERS), `records` (THE RECORD
+ * BOOK) and `todo` (WHAT TO DO TODAY). Sizes match src/net/gazette.ts
+ * GAZETTE_LIMITS, which is what the lobby page lays out.
  *
  * WRITES AS AN ADMIN, and has to. `gazette/latest` is what every player reads
  * on the lobby wall, so the security rules make it read-only to clients —
@@ -73,34 +76,43 @@ if (!file) {
 }
 
 const article = JSON.parse(readFileSync(file, 'utf8'));
+const fail = (msg) => {
+  console.error(msg);
+  process.exit(1);
+};
 for (const field of ['headline', 'body']) {
-  if (!article[field] || typeof article[field] !== 'string') {
-    console.error(`article is missing a string "${field}"`);
-    process.exit(1);
-  }
+  if (!article[field] || typeof article[field] !== 'string') fail(`article is missing a string "${field}"`);
 }
-// THE VOICE's sections (docs/gazette-voice.md §5): a WANTED poster, the
-// Sheriff's NOTICE and the WEATHER line. Optional, but checked when present
-// so the page never has to guess — sizes match what the lobby lays out.
-const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
-const wanted =
-  article.wanted && typeof article.wanted === 'object'
-    ? { name: str(article.wanted.name, 24), crime: str(article.wanted.crime, 80), reward: str(article.wanted.reward, 40) }
-    : null;
-if (wanted && !wanted.name) {
-  console.error('wanted poster needs a name');
-  process.exit(1);
+if (article.headline.length > 70) fail(`headline is ${article.headline.length} characters — keep it under 70`);
+
+// The page's sections. Each is a list of small objects with capped string
+// fields — the same caps the lobby reader applies (src/net/gazette.ts
+// GAZETTE_LIMITS), checked here so an over-long field is caught at the desk
+// rather than silently clipped on the page.
+const str = (v) => (typeof v === 'string' ? v.trim() : '');
+function section(name, max, fields, required) {
+  const v = article[name];
+  if (v === undefined) return [];
+  if (!Array.isArray(v)) fail(`"${name}" must be a list`);
+  if (v.length > max) fail(`"${name}" has ${v.length} entries — the page fits ${max}`);
+  return v.map((item, i) => {
+    const row = {};
+    for (const [k, cap] of Object.entries(fields)) {
+      row[k] = str(item?.[k]);
+      if (row[k].length > cap) fail(`${name}[${i}].${k} is ${row[k].length} characters — the page fits ${cap}`);
+    }
+    if (!row[required]) fail(`${name}[${i}] needs a "${required}"`);
+    return row;
+  });
 }
-const notice = str(article.notice, 160);
-const weather = str(article.weather, 90);
-if (article.mood && /\s/.test(String(article.mood).trim())) {
-  console.error('mood must be ONE word');
-  process.exit(1);
+const stats = section('stats', 4, { label: 24, value: 12 }, 'value');
+const records = section('records', 6, { feat: 40, time: 12, who: 60 }, 'feat');
+const todo = section('todo', 5, { title: 36, text: 180 }, 'title');
+if (!todo.length) fail('an edition needs at least one WHAT TO DO TODAY item — telling readers what they can do is the point of the paper');
+for (const old of ['mood', 'wanted', 'notice', 'weather']) {
+  if (article[old] !== undefined) fail(`"${old}" belongs to the old Sheriff format and is no longer printed — see docs/gasket-gazette.md`);
 }
-if (/\b(ELO|XP|players?|gamers?|the game|servers?)\b/i.test(article.body)) {
-  console.error('the body breaks the fourth wall (ELO/XP/player/game/server) — see docs/gazette-voice.md §3');
-  process.exit(1);
-}
+const byline = str(article.byline).slice(0, 40) || 'The Gazette Desk';
 
 const db = getFirestore(
   getApps().length ? getApps()[0] : initializeApp({ credential: credentials(), projectId: PROJECT_ID }),
@@ -123,11 +135,10 @@ await db.doc('gazette/latest').set({
   headline: article.headline,
   subhead: article.subhead ?? '',
   body: article.body,
-  byline: article.byline ?? 'Sheriff Cole Ironside',
-  mood: article.mood ?? '',
-  wanted,
-  notice,
-  weather,
+  byline,
+  stats,
+  records,
+  todo,
   publishedAt: FieldValue.serverTimestamp(),
 });
 
@@ -142,18 +153,20 @@ await db.doc('gazette/latest').set({
     headline: article.headline,
     subhead: article.subhead ?? '',
     body: article.body,
-    byline: article.byline ?? 'Sheriff Cole Ironside',
-    mood: article.mood ?? '',
-    wanted,
-    notice,
-    weather,
+    byline,
+    stats,
+    records,
+    todo,
   };
   writeFileSync(`gazette-archive/no-${n}.json`, JSON.stringify(record, null, 2) + '\n');
-  const extras =
-    (wanted ? `\n\n> **WANTED — ${wanted.name}.** ${wanted.crime} Reward: ${wanted.reward}.` : '') +
-    (notice ? `\n\n> **NOTICE.** ${notice}` : '') +
-    (weather ? `\n\n_Weather: ${weather}_` : '');
-  const md = `# The Gasket Gazette — No. ${edition}\n\n**${dateline}** · _${record.mood}_\n\n## ${record.headline}\n\n*${record.subhead}*\n\n${record.body}\n\n— ${record.byline}${extras}\n`;
+  const numbers = stats.length ? `\n\n**By the numbers:** ${stats.map((s) => `${s.value} ${s.label.toLowerCase()}`).join(' · ')}` : '';
+  const book = records.length
+    ? `\n\n### The record book\n\n${records.map((r) => `- **${r.feat}** — ${r.time}${r.who ? ` — ${r.who}` : ''}`).join('\n')}`
+    : '';
+  const whatToDo = todo.length
+    ? `\n\n### What to do today\n\n${todo.map((t, i) => `${i + 1}. **${t.title}.** ${t.text}`).join('\n')}`
+    : '';
+  const md = `# The Gasket Gazette — No. ${edition}\n\n**${dateline}**\n\n## ${record.headline}\n\n*${record.subhead}*${numbers}\n\n${record.body}\n\n— ${byline}${book}${whatToDo}\n`;
   writeFileSync(`gazette-archive/no-${n}.md`, md);
 }
 

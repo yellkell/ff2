@@ -23,9 +23,11 @@ import {
   leaderboardRows,
   myProfileRow,
   runRows,
+  RUN_VIEW_TIERS,
   type LbRow,
   type LeaderboardTab,
   type RunRow,
+  type RunViewTier,
   type SeasonAward,
 } from '../net/leaderboard.js';
 import { paintBanner } from '../avatar/paint.js';
@@ -42,7 +44,16 @@ const SUB_Y = 132;
 const SUB_H = 62;
 const SUB2_Y = 208;
 const SUB2_H = 54;
+/** The run boards' third strip: FEATS · NORMAL · HARD · BLAZING · HC ONLY. */
+const VIEW_Y = 276;
+const VIEW_H = 48;
 const ROW_STEP = 56;
+/** The run rows' columns: rank · the FEAT (difficulty + HC) · squad · clock. */
+const FEAT_X = M + 64;
+const FEAT_W = 148;
+const NAMES_X = FEAT_X + FEAT_W + 14;
+/** Feat colours, shared with the profile's achievement badges. */
+const BLAZE = '#ff5a1f';
 
 /** The top strip of boards. BATTLE fronts the three live-fight boards,
  *  ARCADE fronts AIM plus the run-time boards; each lights for any of its
@@ -73,8 +84,11 @@ function activeSubs(): Array<[LeaderboardTab, string, string]> | null {
 }
 
 function rowY0(): number {
+  if (isRunTab(leaderboard.tab)) return VIEW_Y + VIEW_H + 30;
   return activeSubs() ? SUB2_Y + SUB2_H + 30 : SUB_Y + SUB_H + 30;
 }
+
+const VIEW_LABEL: Record<RunViewTier, string> = { feats: 'FEATS', normal: 'NORMAL', hard: 'HARD', blazing: 'BLAZING' };
 
 /** "SEASON 2 · ENDS IN 41D 7H" — the ranked footer's countdown. */
 function seasonLabel(): string {
@@ -129,7 +143,33 @@ export function ladderFace(): LadderFace {
   }
   const y0 = rowY0();
   const run = isRunTab(leaderboard.tab);
-  if (!run) {
+  if (run) {
+    // THE VIEW STRIP: FEATS (everyone's hardest clear, hardest first) or one
+    // difficulty's fastest clears — and HC ONLY, which narrows either to
+    // hardcore runs. The tide has no hardcore, so GOOP RAID drops the toggle.
+    const hcOk = leaderboard.tab !== 'goopliath';
+    const gap = 12;
+    const hcW = 170;
+    const span = INNER - (hcOk ? hcW + gap * 2 : 0);
+    const vw = (span - (RUN_VIEW_TIERS.length - 1) * gap) / RUN_VIEW_TIERS.length;
+    RUN_VIEW_TIERS.forEach((t, i) => {
+      buttons.push({
+        id: `lb-view-${t}`,
+        label: VIEW_LABEL[t],
+        x: M + i * (vw + gap),
+        y: VIEW_Y,
+        w: vw,
+        h: VIEW_H,
+        small: true,
+        px: 20,
+        selected: leaderboard.runView.tier === t,
+        tone: t === 'blazing' ? BLAZE : t === 'hard' ? KIT.accent : undefined,
+      });
+    });
+    if (hcOk) {
+      buttons.push({ id: 'lb-view-hc', label: 'HC ONLY', x: W - M - hcW, y: VIEW_Y, w: hcW, h: VIEW_H, small: true, px: 20, selected: leaderboard.runView.hc, tone: KIT.danger });
+    }
+  } else {
     // Data rows are ghost buttons: hit-testable, painted by the body.
     const n = Math.min(LEADERBOARD_VISIBLE_ROWS, leaderboardRows().length - boardScroll());
     for (let i = 0; i < n; i++) {
@@ -188,61 +228,97 @@ function drawDataRows(g: CanvasRenderingContext2D, y0: number, hover: string | n
   }
 }
 
-/** The feat markers a run row wears: flame (blazing) / HARD, + HC. */
-function drawRunFeats(g: CanvasRenderingContext2D, r: RunRow, xRight: number, y: number): number {
-  let x = xRight;
-  g.textAlign = 'right';
-  g.font = font(700, 18);
+/** A clear's weight for the FEATS dividers: difficulty, then hardcore. */
+function featKey(r: RunRow): number {
+  return (r.difficulty === 'blazing' ? 3 : r.difficulty === 'hard' ? 2 : 1) * 2 + (r.hardcore ? 1 : 0);
+}
+
+/**
+ * THE FEAT a run row wears, in its own column left of the squad: the
+ * difficulty as a coloured plate (BLAZING carries the flame) and, beside it,
+ * a red HC plate for a hardcore run. It used to be a pair of small marks
+ * tucked against the clock, which is exactly where nobody looks — the feat is
+ * what makes a slow run impressive, so it reads before the names do.
+ */
+function drawRunFeat(g: CanvasRenderingContext2D, r: RunRow, y: number): void {
+  const tierName = r.difficulty === 'blazing' ? 'BLAZING' : r.difficulty === 'hard' ? 'HARD' : 'NORMAL';
+  const color = r.difficulty === 'blazing' ? BLAZE : r.difficulty === 'hard' ? KIT.accent : KIT.dim;
+  const hcW = 42;
+  const tw = FEAT_W - hcW - 6; // the same width with or without HC — the column stays a column
+  const h = 34;
+  chip(g, FEAT_X, y - h / 2, tw, h, color);
+  if (r.difficulty === 'blazing') drawFlame(g, FEAT_X + 16, y + 10, 20);
+  g.textAlign = 'center';
+  g.font = font(700, 16);
+  g.letterSpacing = '1.5px';
+  g.fillStyle = color;
+  const tx = r.difficulty === 'blazing' ? FEAT_X + 16 + (tw - 16) / 2 : FEAT_X + tw / 2;
+  g.fillText(tierName, tx, y + 1, tw - (r.difficulty === 'blazing' ? 30 : 12));
   if (r.hardcore) {
+    const hx = FEAT_X + tw + 6;
     g.fillStyle = KIT.danger;
-    g.fillText('HC', x, y);
-    x -= g.measureText('HC').width + 12;
+    g.beginPath();
+    g.roundRect(hx, y - h / 2, hcW, h, 10);
+    g.fill();
+    g.fillStyle = '#1a0406';
+    g.fillText('HC', hx + hcW / 2, y + 1);
   }
-  if (r.difficulty === 'blazing') {
-    drawFlame(g, x - 8, y + 11, 24);
-    x -= 26;
-  } else if (r.difficulty === 'hard') {
-    g.fillStyle = KIT.accent;
-    g.fillText('HARD', x, y);
-    x -= g.measureText('HARD').width + 12;
-  }
-  return x;
+  g.letterSpacing = '0px';
 }
 
 function drawRunRows(g: CanvasRenderingContext2D, y0: number): void {
   const rows = runRows();
   const offset = boardScroll();
+  const view = leaderboard.runView;
+  const feats = view.tier === 'feats';
   rows.slice(offset, offset + LEADERBOARD_VISIBLE_ROWS).forEach((r, i) => {
     const y = y0 + i * ROW_STEP;
-    if (r.me) {
-      g.fillStyle = KIT.accentFaint;
+    // The hardest clears glow: a hardcore row carries a red wash, a blazing
+    // one an ember wash, so the top of a FEATS board reads from across the room.
+    const wash = r.me ? KIT.accentFaint : r.hardcore ? 'rgba(255,82,102,0.10)' : r.difficulty === 'blazing' ? 'rgba(255,90,31,0.09)' : null;
+    if (wash) {
+      g.fillStyle = wash;
       g.beginPath();
       g.roundRect(M, y - ROW_STEP / 2 + 3, INNER, ROW_STEP - 6, 12);
       g.fill();
     }
+    // FEATS: a hairline where one feat gives way to the next one down.
+    const above = rows[offset + i - 1];
+    if (feats && i > 0 && above && featKey(above) !== featKey(r)) {
+      g.fillStyle = KIT.line;
+      g.fillRect(M + 14, y - ROW_STEP / 2, INNER - 28, 1.5);
+    }
     g.textAlign = 'left';
     g.font = font(600, 28);
     g.fillStyle = r.me ? KIT.accent : KIT.dim;
-    g.fillText(`${offset + i + 1}.`, M + 14, y);
+    g.fillText(`${offset + i + 1}.`, M + 10, y);
+    drawRunFeat(g, r, y);
     g.textAlign = 'right';
     g.font = font(700, 28);
-    g.fillStyle = KIT.accent;
+    g.fillStyle = r.me ? KIT.accent : KIT.textHi;
     g.fillText(fmtRunTime(r.seconds), W - M - 16, y);
-    const featLeft = drawRunFeats(g, r, W - M - 130, y);
     g.textAlign = 'left';
-    const names = r.names.join('  ·  ') || '—';
-    g.font = font(600, 24);
+    const names = r.names.join(' · ') || '—';
+    g.font = font(600, r.names.length > 2 ? 20 : 24);
     g.fillStyle = r.me ? KIT.textHi : KIT.text;
-    g.fillText(names, M + 80, y, featLeft - (M + 80) - 16);
+    g.fillText(names, NAMES_X, y, W - M - 150 - NAMES_X);
   });
   g.textAlign = 'center';
-  g.font = font(500, 24);
+  g.font = font(500, 22);
+  const hcOk = leaderboard.tab !== 'goopliath';
+  const scope = `${view.hc && hcOk ? 'hardcore ' : ''}${feats ? '' : `${view.tier} `}`;
+  const hcNote = hcOk ? ' · HC = no healing between bosses' : '';
   if (!rows.length) {
     g.fillStyle = KIT.faint;
-    g.fillText(leaderboard.status || 'no runs yet — set the pace', W / 2, y0 + 4 * ROW_STEP);
+    g.fillText(leaderboard.status || `no ${scope}clears yet — be the first`, W / 2, y0 + 4 * ROW_STEP);
   } else {
     g.fillStyle = KIT.faint;
-    g.fillText("ranked by the whole run's fight time", W / 2, 948);
+    g.fillText(
+      feats ? `each squad's hardest ${scope}clear, hardest first${hcNote}` : `fastest ${scope}clears${hcNote}`,
+      W / 2,
+      948,
+      INNER,
+    );
   }
 }
 
@@ -508,7 +584,7 @@ export function drawProfileBlock(g: CanvasRenderingContext2D, row: LbRow, x: num
       g.fillStyle = st.color;
       g.fillText(s.count > 1 ? `${st.label} ×${s.count}` : st.label, s.x + s.w / 2, s.y + s.h / 2);
     } else {
-      const color = s.hardcore ? KIT.danger : s.tier >= 3 ? '#ff5a1f' : s.tier === 2 ? KIT.accent : KIT.dim;
+      const color = s.hardcore ? KIT.danger : s.tier >= 3 ? BLAZE : s.tier === 2 ? KIT.accent : KIT.dim;
       chip(g, s.x, s.y, s.w, s.h, color);
       // The medallion: a dark disc with the glyph in it, so three different
       // shapes read as three badges of one kind rather than three loose marks.

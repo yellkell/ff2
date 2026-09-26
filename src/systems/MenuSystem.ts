@@ -139,6 +139,8 @@ import {
   sendReport,
   scrollLeaderboard,
   setLeaderboardTab,
+  setRunView,
+  type RunViewTier,
   setPlayerName,
   setPlayerNote,
   setProfileView,
@@ -1334,6 +1336,15 @@ export class MenuSystem extends createSystem({}) {
       case 'lb-goopliath':
         setLeaderboardTab('goopliath');
         break;
+      case 'lb-view-feats':
+      case 'lb-view-normal':
+      case 'lb-view-hard':
+      case 'lb-view-blazing':
+        setRunView({ tier: action.slice(8) as RunViewTier });
+        break;
+      case 'lb-view-hc':
+        setRunView({ hc: !leaderboard.runView.hc });
+        break;
       case 'lb-duo':
         setLeaderboardTab('duo');
         break;
@@ -1866,11 +1877,10 @@ export class MenuSystem extends createSystem({}) {
             headline: '',
             subhead: '',
             body: '',
-            byline: 'Sheriff Cole Ironside',
-            mood: '',
-            wanted: null,
-            notice: '',
-            weather: '',
+            byline: 'The Gazette Desk',
+            stats: [],
+            records: [],
+            todo: [],
             ...art,
           };
           gazette.status = '';

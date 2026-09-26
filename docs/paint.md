@@ -281,9 +281,8 @@ Free placement can draw things we don't want in a room:
    legibility scrim; an unpainted fighter keeps the clean card. The look
    also became WORDS: the palette gained index-parallel `colourNames`
    (BONE WHITE … CHROME), `paintColourNames` ranks a look's most-used
-   colours, the gazette's wire report (scripts/ladder-brief.mjs) now
-   carries every player's `tone` + `colours` so Cole can write "the
-   EMBER-and-CYAN machine", and stats.html rows wear paint chips decoded
+   colours, the gazette's wire report carried every player's `tone` +
+   `colours` (dropped when the paper went to plain reporting), and stats.html rows wear paint chips decoded
    from the same doc field. Probed in `npm run check:paint`'s record
    stage (colour words + banner render both tones + no-banner-when-bare).
 5. **P5 — gear, dots and squares.** **SHIPPED**: every worn piece of GEAR

@@ -16,7 +16,7 @@
  */
 
 import { FIREBASE_ENABLED, cloud, cloudNote, cloudUid, type Cloud } from './firebase.js';
-import { BOARD, boardRows, fetchBoard, postScore, RANKED_TIERS, speedrunBoard, type BoardRow } from './boards.js';
+import { boardRows, fetchBoard, postScore, runBoardsFor, runPostBoards, type BoardRow } from './boards.js';
 import { xpForArcade, xpForBot, xpForCampaign, xpForMatch, xpForTraining, xpForTutorial } from '../menu/progression.js';
 import { myPackedLook } from '../avatar/paint.js';
 import { customization, myPackedGear } from '../menu/customization.js';
@@ -81,38 +81,30 @@ export type LeaderboardTab =
 /** Score/count boards (one numeric value per PLAYER doc). */
 type DataTab = 'ranked' | 'xp' | 'training' | 'duo' | 'ffa';
 /** RUN-TIME boards — each row is one completed RUN (a squad + a clock), not a
- *  player. Ranked by lowest cumulative fight time. One board per mode —
- *  GOOPLIATH raids race their own clock (one long fight is a different race
- *  from a five-titan run, so they never share a board with titan raids).
- *  Hardcore and higher difficulties ride their board wearing symbols; EASY
- *  runs never rank at all. */
+ *  player. One tab per mode — GOOPLIATH raids race their own clock (one long
+ *  fight is a different race from a five-titan run, so they never share a
+ *  board with titan raids). Behind each tab sit its FEAT boards (difficulty ×
+ *  hardcore), and the tab's view (runView) decides whether it ranks by feat
+ *  or by one tier's clock; EASY runs never rank at all. */
 export type RunTab = 'gauntlet' | 'raid' | 'goopliath';
 const RUN_TABS: RunTab[] = ['gauntlet', 'raid', 'goopliath'];
 /**
- * The board id per run tab. These are `-time` boards, which is not cosmetic:
- * firestore.rules reads that suffix to decide which way the ratchet turns, so
- * a run board named without it would let a SLOWER clear overwrite a faster one.
- *
- * (Replaces the old `runGauntlet` / `runRaid` / `runGoopliath` collections —
- * append-only logs of every attempt ever made, plus the retired `runHardcore`
- * and `runRaidHardcore` pair. See pullRuns for what that shape cost on read.)
- */
-/**
- * The board (or boards) behind a run tab. SPEEDRUN is three — one per
- * ranking difficulty (boards.ts speedrunBoard) — so a tier's best is its
- * own row rather than one row per player across every tier. The lobby's
- * board reads all three and shows them as one ranked list wearing their
- * difficulty symbols; stats.html splits them back out into sub-tabs.
+ * The boards behind a run tab: every FEAT board of that run family — one per
+ * difficulty, and one per difficulty for HARDCORE — plus the legacy mixed
+ * board where there is one (boards.ts runBoard has the why). They are all
+ * `-time` boards, which is not cosmetic: firestore.rules reads that suffix
+ * to decide which way the ratchet turns.
  */
 function runBoards(tab: RunTab): string[] {
-  if (tab === 'gauntlet') return RANKED_TIERS.map((tier) => speedrunBoard(tier));
-  return [tab === 'raid' ? BOARD.raid : BOARD.goopliath];
+  return runBoardsFor(tab);
 }
 
 /** One entry on a run board: the whole squad (one name for a solo gauntlet,
  *  up to five for a raid), the run's cumulative fight-time clock, and the
  *  feat's markers (difficulty + hardcore) for the row symbols. */
 export interface RunRow {
+  /** Who posted the row (each raider posts their own). */
+  uid: string;
   names: string[];
   seconds: number;
   /** 'normal' | 'hard' | 'blazing' (legacy rows read as normal). */
@@ -120,6 +112,51 @@ export interface RunRow {
   hardcore: boolean;
   /** My callsign is on this run — the UI highlights it. */
   me: boolean;
+}
+
+/**
+ * How a run board is being looked at. FEATS is the landing view: everyone's
+ * HARDEST clear, hardest first — blazing hardcore above blazing above hard
+ * hardcore … — and the clock only breaks ties inside a feat. A difficulty
+ * picks that tier's fastest clears. `hc` narrows either to hardcore runs.
+ */
+export type RunViewTier = 'feats' | 'normal' | 'hard' | 'blazing';
+export const RUN_VIEW_TIERS: RunViewTier[] = ['feats', 'normal', 'hard', 'blazing'];
+
+/** A clear's weight: difficulty first, hardcore breaking the tie. */
+function featRank(r: Pick<RunRow, 'difficulty' | 'hardcore'>): number {
+  const tier = r.difficulty === 'blazing' ? 3 : r.difficulty === 'hard' ? 2 : 1;
+  return tier * 2 + (r.hardcore ? 1 : 0);
+}
+
+/**
+ * Build a run board's VIEW from every row its boards returned.
+ *
+ * The same run lands on more than one board (its tier board, its hardcore
+ * board, the legacy mixed board) and every raider posts their own copy, so
+ * the raw pile is full of repeats. Per player, keep the one row that answers
+ * the view's question; then fold raiders who posted the SAME run into one
+ * squad row.
+ */
+function buildRunView(raw: RunRow[], tier: RunViewTier, hc: boolean): RunRow[] {
+  const pool = raw.filter((r) => (!hc || r.hardcore) && (tier === 'feats' || r.difficulty === tier));
+  const better = (a: RunRow, b: RunRow): boolean =>
+    tier === 'feats' ? featRank(a) > featRank(b) || (featRank(a) === featRank(b) && a.seconds < b.seconds) : a.seconds < b.seconds;
+  const best = new Map<string, RunRow>();
+  for (const r of pool) {
+    const cur = best.get(r.uid);
+    if (!cur || better(r, cur)) best.set(r.uid, r);
+  }
+  const squads = new Map<string, RunRow>();
+  for (const r of best.values()) {
+    const key = `${[...r.names].sort().join('|')}#${r.seconds}#${r.difficulty}#${r.hardcore}`;
+    const cur = squads.get(key);
+    if (cur) cur.me = cur.me || r.me;
+    else squads.set(key, { ...r });
+  }
+  return [...squads.values()]
+    .sort((a, b) => (tier === 'feats' ? featRank(b) - featRank(a) : 0) || a.seconds - b.seconds)
+    .slice(0, LEADERBOARD_FETCH_LIMIT);
 }
 
 const LEADERBOARD_FETCH_LIMIT = 50;
@@ -140,6 +177,10 @@ export const leaderboard = {
   gauntlet: [] as RunRow[],
   raid: [] as RunRow[],
   goopliath: [] as RunRow[],
+  /** Every row the run tabs' boards returned, before the view is applied. */
+  runRaw: { gauntlet: [], raid: [], goopliath: [] } as Record<RunTab, RunRow[]>,
+  /** How the run tabs are being looked at (shared by all three). */
+  runView: { tier: 'feats' as RunViewTier, hc: false },
   scroll: {
     ranked: 0,
     xp: 0,
@@ -269,6 +310,23 @@ export function setLeaderboardTab(tab: LeaderboardTab): void {
     leaderboard.scroll[tab] = mine >= 0 ? Math.max(0, mine - 4) : 0;
     clampLeaderboardScroll(tab);
   }
+}
+
+/** Re-apply the run view to all three run tabs (after a fetch or a filter). */
+function applyRunViews(): void {
+  for (const tab of RUN_TABS) {
+    // The tide has no hardcore: HC ONLY means nothing on GOOPLIATH's board.
+    leaderboard[tab] = buildRunView(leaderboard.runRaw[tab], leaderboard.runView.tier, leaderboard.runView.hc && tab !== 'goopliath');
+    clampLeaderboardScroll(tab);
+  }
+}
+
+/** Change how the run boards are looked at — a difficulty (or FEATS), and
+ *  whether to show hardcore runs only. Lands where you are, as a tab switch does. */
+export function setRunView(view: Partial<{ tier: RunViewTier; hc: boolean }>): void {
+  Object.assign(leaderboard.runView, view);
+  applyRunViews();
+  if (isRunTab(leaderboard.tab)) setLeaderboardTab(leaderboard.tab);
 }
 
 /** Open a player's profile face (null = your own). */
@@ -574,46 +632,39 @@ export async function refreshLeaderboard(force = false): Promise<void> {
         // points now — per-season, and raw ELO stays hidden for matchmaking.)
         .filter((r) => r.value > 0);
     };
-    // RUN boards: fastest clears, one row per player. Each is pulled in its
-    // OWN try so a rules gap or a cold board degrades THOSE alone — the score
-    // boards, which hit the `players` collection, keep working regardless.
+    // RUN boards: every FEAT board of the family, pulled together. Each
+    // family is pulled in its OWN try so a rules gap or a cold board degrades
+    // THOSE alone — the score boards, which hit the `players` collection,
+    // keep working regardless.
     const pullRuns = async (tab: RunTab): Promise<RunRow[]> => {
       try {
-        // Run boards are now `boards/ff2-<tab>-time/rows/{uid}` — ONE ROW PER
-        // PLAYER, holding their fastest clear, rather than the old append-only
-        // collection holding every attempt anyone ever made.
+        // Run boards are `boards/<id>/rows/{uid}` — ONE ROW PER PLAYER PER
+        // BOARD, holding their fastest clear, and the RULES refuse a write
+        // that isn't actually faster. So each board arrives deduplicated and
+        // honest; what's left to do is lay the feat boards side by side.
+        // buildRunView folds the repeats (one run lands on several boards,
+        // and every raider posts their own copy) back into one row per feat.
         //
-        // The old shape needed all of the dedup work below it on READ: it kept
-        // every run for ever, so the client pulled fifty rows and sifted them
-        // for each squad's best. Now a better run overwrites its own row and
-        // the RULES refuse a write that isn't actually faster, so the board
-        // arrives already deduplicated and already honest. The dedup pass, the
-        // easy-run filter and the immortal-legacy-row apology all go with it.
-        //
-        // DIFFICULTY no longer splits the board. Your row is your fastest
-        // clear whatever you cleared it on, with the difficulty carried in
-        // `meta` for the row symbols. Nothing is lost by that: which
-        // difficulties you have BEATEN is a separate fact, banked on your
-        // profile by reportRunClear() as the clear-badge tier, and that is
-        // what the badge on your card has always read from.
+        // Not forced: a family is up to seven boards, and a 1v1 result has no
+        // business re-reading all of them. Each board keeps its own minute of
+        // cache, and a board you just posted to is marked stale by postScore,
+        // so your own run still shows the moment it lands.
         const ids = runBoards(tab);
-        await Promise.all(ids.map((id) => fetchBoard(id, force)));
-        // SPEEDRUN arrives as three boards; the lobby wants one ranked list,
-        // so they are merged and re-sorted by the clock. Each board is
-        // already one row per player, so nothing needs deduplicating.
-        return ids
-          .flatMap((id) => boardRows(id))
-          .sort((a, b) => a.value - b.value)
-          .slice(0, LEADERBOARD_FETCH_LIMIT)
-          .map((r: BoardRow) => ({
+        await Promise.all(ids.map((id) => fetchBoard(id)));
+        return ids.flatMap((id) =>
+          boardRows(id).map((r: BoardRow) => ({
+            uid: r.uid,
             names: Array.isArray(r.meta.names) ? (r.meta.names as unknown[]).map(String) : [r.name],
             seconds: r.value,
             difficulty: ((r.meta.difficulty as Difficulty) ?? 'normal') as Difficulty,
-            hardcore: !!r.meta.hardcore,
+            // A hardcore board's rows are hardcore by where they live, even
+            // if an old row forgot to say so in its meta.
+            hardcore: !!r.meta.hardcore || id.endsWith('-hc-time'),
             me: r.isMe,
-          }));
+          })),
+        );
       } catch {
-        return leaderboard[tab]; // keep whatever we last had
+        return leaderboard.runRaw[tab]; // keep whatever we last had
       }
     };
     const [rk, xp, tr, du, ff, gt, rd, gp] = await Promise.all([
@@ -631,10 +682,9 @@ export async function refreshLeaderboard(force = false): Promise<void> {
     leaderboard.training = tr;
     leaderboard.duo = du;
     leaderboard.ffa = ff;
-    leaderboard.gauntlet = gt;
-    leaderboard.raid = rd;
-    leaderboard.goopliath = gp;
-    (['ranked', 'xp', 'training', 'duo', 'ffa', ...RUN_TABS] as const).forEach(clampLeaderboardScroll);
+    leaderboard.runRaw = { gauntlet: gt, raid: rd, goopliath: gp };
+    applyRunViews();
+    (['ranked', 'xp', 'training', 'duo', 'ffa'] as const).forEach(clampLeaderboardScroll);
     leaderboard.status = '';
   } catch {
     leaderboard.status = 'leaderboard unreachable';
@@ -662,16 +712,16 @@ export function reportRun(tab: RunTab, seconds: number, names: string[], difficu
   const clean = names.map((n) => String(n).slice(0, 12)).filter(Boolean).slice(0, 5);
   if (!clean.length) return;
   void (async () => {
-    // SPEEDRUN posts to its DIFFICULTY's board; raid and goopliath to their one.
-    const board = tab === 'gauntlet' ? speedrunBoard(difficulty) : runBoards(tab)[0];
-    const landed = await postScore(board, Math.max(0, Math.round(seconds * 10) / 10), profile.name, {
-      names: clean,
-      difficulty,
-      hardcore,
-    });
-    // Only re-read the board when something actually changed on it. A run
-    // that didn't beat your best leaves the board exactly as it was.
-    if (landed) await refreshLeaderboard(true);
+    // Every FEAT board this run belongs on: its tier's board, its tier's
+    // HARDCORE board when it was one, and the legacy mixed board for raids
+    // (boards.ts runPostBoards). Each ratchets on its own, so a slow
+    // hardcore clear keeps its place even when a faster plain run exists.
+    const value = Math.max(0, Math.round(seconds * 10) / 10);
+    const meta = { names: clean, difficulty, hardcore };
+    const landed = await Promise.all(runPostBoards(tab, difficulty, hardcore).map((b) => postScore(b, value, profile.name, meta)));
+    // Only re-read the boards when something actually changed on them. A
+    // run that didn't beat any best leaves every board exactly as it was.
+    if (landed.some(Boolean)) await refreshLeaderboard(true);
   })();
 }
 

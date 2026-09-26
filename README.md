@@ -13,6 +13,28 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
+- **THE FEAT BOARDS, and a plain-spoken GAZETTE** — the run boards could
+  not keep the runs worth bragging about. RAID and GOOPLIATH held one row
+  per player across every difficulty, and the rules only let a row get
+  *faster*, so a twenty-minute BLAZING HARDCORE clear was refused if you
+  had a quicker NORMAL one on file; a hardcore speedrun slower than your
+  plain one on that tier went the same way. Every FEAT (run × difficulty ×
+  hardcore) now has its own board (`runBoard`, `net/boards.ts`), a
+  hardcore run also counts on its tier's plain board, and the legacy mixed
+  boards are still written and read so older runs keep counting. RANKINGS
+  › ARCADE's run boards open on **FEATS** (each squad's hardest clear,
+  hardest first, with the clock only breaking ties inside a feat) with
+  NORMAL / HARD / BLAZING and **HC ONLY** filters; every row leads with its
+  feat as a coloured plate, hardcore and blazing rows glow, and raiders who
+  posted the same run fold into one squad row. `stats.html` gets the same
+  views. **The Gasket Gazette** drops Sheriff Cole and the beach-town
+  vocabulary: it's straight reporting now, with a **BY THE NUMBERS**
+  strip, **THE RECORD BOOK** (the hardest clears on the boards) and **WHAT
+  TO DO TODAY** (open feats nobody has cleared, thin boards with a podium
+  place going, the season clock), and the welcome edition is a real guide
+  to every mode. The brief (`scripts/ladder-brief.mjs`) hands the daily
+  task the record book, new clears, open feats and the season race;
+  `docs/gasket-gazette.md` is the style guide.
 - **HEADGEAR FITS THE HEADS, and BASTION** — every head piece (horns,
   crests, crowns, halos, visors…) was modelled on the bare skull and was
   worn over an animal with one uniform scale and a lift that OVERWROTE the
@@ -487,8 +509,8 @@ carried over verbatim: everything in it still applies to this code.
   saved retired id falls back to SMOULDER. Tiles show a material swatch.
   Preview: `/skin-preview.html?pads=slate,marble,bullion`; the deck's
   telegraph shapes still at `/deck-preview.html?shape=gate|donut|x|routine`.
-- **THE GASKET GAZETTE'S VOICE** — Sheriff Cole Ironside has a bible now
-  ([`docs/gazette-voice.md`](docs/gazette-voice.md)): who he is (a tin-star
+- **THE GASKET GAZETTE'S VOICE** *(since retired for plain reporting — see
+  THE FEAT BOARDS above)* — Sheriff Cole Ironside had a bible: who he is (a tin-star
   who despises the Clankers and is one), how he sounds, what he never does
   (never names who fell, never breaks the fourth wall, never resolves the
   denial), his dictionary from the game's words to Gasket's, and the shape
