@@ -55,6 +55,7 @@ import { PerfHudSystem } from './systems/PerfHudSystem.js';
 import { FOVEATION, warmRoomServer } from './config.js';
 import { claimPurchases } from './net/bank.js';
 import { initWalletSync } from './net/walletSync.js';
+import { initGifts } from './net/gifts.js';
 
 installCrashTrap(); // headset playtests have no console — trap + persist crashes
 
@@ -154,6 +155,7 @@ World.create(container, {
   // was off lands now.
   initWalletSync();
   void claimPurchases();
+  initGifts(); // THE NAME GIFT (config.ts RENAME_GIFT), once, from its hour
   // Check in. The doors (experience/clubNavigation.ts) hand presence on from
   // here as you move between the arena, the venue and the rave.
   enterRoom('arena', myName(), myPackedLook());
