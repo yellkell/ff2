@@ -206,7 +206,7 @@ export class PubPlayerSystem extends createSystem({}) {
         const punter = pub.punters.get(from);
         if (!punter) return;
         punter.lk = typeof ev.lk === 'string' ? ev.lk.slice(0, 1024) : '';
-        if (typeof ev.gr === 'string') punter.gr = ev.gr.slice(0, 48);
+        if (typeof ev.gr === 'string') punter.gr = ev.gr.slice(0, 64);
         this.bakePaint(punter);
       }),
     );
@@ -419,7 +419,7 @@ export class PubPlayerSystem extends createSystem({}) {
       av: p.av ?? '',
       pf: p.pf ?? '',
       lk: typeof p.lk === 'string' ? p.lk.slice(0, 1024) : '',
-      gr: typeof p.gr === 'string' ? p.gr.slice(0, 48) : '',
+      gr: typeof p.gr === 'string' ? p.gr.slice(0, 64) : '',
       rig,
       nameTag,
       head: p.head,

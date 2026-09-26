@@ -116,7 +116,12 @@ console.log('=== the wire: pack / unpack ===');
   // paints it somewhere else.
   const face = await page.evaluate(() => {
     const p = window.__ff2.paint;
-    p.set({ paint: [{ kind: 'dot', part: 'gearFace', colour: 9, variant: 0, u: 0.5, v: 0.5, angle: 0, len: 0.2, wid: 0.2 }] });
+    p.set({
+      paint: [
+        { kind: 'dot', part: 'gearFace', colour: 9, variant: 0, u: 0.5, v: 0.5, angle: 0, len: 0.2, wid: 0.2 },
+        { kind: 'dot', part: 'gearShoulders', colour: 9, variant: 0, u: 0.5, v: 0.5, angle: 0, len: 0.2, wid: 0.2 },
+      ],
+    });
     const packed = p.pack();
     const back = p.unpack(packed).paint.map((u) => `${u.kind}@${u.part}`);
     // Part index past the end of the table: what an older client sees.
@@ -124,7 +129,7 @@ console.log('=== the wire: pack / unpack ===');
     p.clear();
     return { back, unknown };
   });
-  check('a mark on a HEAD (gearFace) roundtrips as itself', face.back.join(',') === 'dot@gearFace', face.back.join(','));
+  check('a mark on a HEAD (gearFace) and on the SHOULDERS (gearShoulders) roundtrip as themselves', face.back.join(',') === 'dot@gearFace,dot@gearShoulders', face.back.join(','));
   check('a mark on a part the reader does not know is dropped', face.unknown === 0, String(face.unknown));
   check('fields survive quantization (body stripe at u≈0.72)', wire.first.kind === 'stripe' && wire.first.part === 'body' && Math.abs(wire.first.u - 0.72) < 0.01, JSON.stringify(wire.first));
 
@@ -249,11 +254,26 @@ console.log('=== the wire: pack / unpack ===');
       const b = aimAt(-1);
       p.grant('dot', 9);
       const placed = !!a && p.take('dot', 9) && p.place(a.part, a.u, a.v);
-      return { gear: g.count(), a: !!a, b: !!b, placed, onA: aimAt(1)?.at, onB: aimAt(-1)?.at };
+      return { gear: g.count(), a: !!a, b: !!b, placed, onA: aimAt(1)?.at, onB: aimAt(-1)?.at, part: a?.part };
     });
     check(`${id}: a few merged surfaces, not dozens of parts`, pads.gear >= 1 && pads.gear <= 3, JSON.stringify(pads));
     check(`${id}: a dot on one pad is on that pad, not the other`, pads.a && pads.b && pads.placed && pads.onA === 0 && pads.onB === -1, JSON.stringify(pads));
+    check(`${id}: the pads are the SHOULDERS' own surface (gearShoulders)`, pads.part === 'gearShoulders', JSON.stringify(pads));
   }
+  // THE SHOULDERS are their own slot: pads and a body piece are worn at
+  // once, and the pads' pack rides last on the wire.
+  const both = await page.evaluate(() => {
+    const G = window.__ff2.gear;
+    G.equip('cape');
+    return { worn: G.worn(), pack: G.pack(), old: G.clean('pauldrons,chestplate') };
+  });
+  check('SPIKED PADS and a CAPE are worn together', both.worn.join(',') === 'cape,spikepads' && both.pack === 'cape,spikepads', JSON.stringify(both));
+  check('an old wire naming PAULDRONS and a CHESTPLATE now wears both', both.old.join(',') === 'chestplate,pauldrons', JSON.stringify(both));
+  await page.evaluate(() => {
+    window.__ff2.gear.clear('shoulders');
+    window.__ff2.gear.clear('body');
+  });
+  await page.waitForTimeout(700);
   // EACH HAND ITS OWN: the right hand's gear is its own surface
   // ('gearHandsR'), so a mark on the left cuff is not on the right one —
   // and a look from before the split still wears its hand marks on both.

@@ -508,7 +508,7 @@ check('CLOSE folds it', !(await wrap(`visible('profilecard')`)));
   }));
   await page.evaluate(() => {
     window.__ff2.gear.clear('head');
-    window.__ff2.gear.clear('body');
+    window.__ff2.gear.clear('shoulders'); // the pauldrons' slot now
   });
   check('GEAR: the podium wears what you equip (crest + pauldrons)', Array.isArray(worn) && worn.includes('crest') && worn.includes('pauldrons') && (before?.length ?? 0) === 0, JSON.stringify({ before, worn }));
   check('GEAR: the wire packs slot-ordered and drops junk / a second head', wire.packed === 'crest,pauldrons' && wire.junk.join(',') === 'crest,pauldrons', JSON.stringify(wire));

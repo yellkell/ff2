@@ -2,8 +2,9 @@
  * GEAR — the attachments shop (DESIGN.md §5.2: "shapes, never colour").
  *
  * Coins buy SHAPES that bolt onto THE BLANK: crests, antennae, horns and
- * halos for the head; pauldrons, SPIKED PADS, a chestplate, a TAIL and a
- * belt for the body; knuckle spikes and cuffs for the hands. Every piece
+ * halos for the head; pauldrons, SPIKED PADS and a WARLORD's flamed domes
+ * for the shoulders; a chestplate, a TAIL, a CAPE and a belt for the body;
+ * knuckle spikes and cuffs for the hands. Every piece
  * can be seen worn, front and back, on one sheet: `npm run gear:gallery`
  * (tools/gear-gallery.mjs, with the dev server up). (A COLLAR and a dorsal
  * RIDGE were sold for a while and withdrawn — the collar never sat right
@@ -19,9 +20,10 @@
  * the rig's head / body / glove groups and the BODY_IK hitboxes never
  * move, so a horned fighter is exactly as hittable as a bare one.
  *
- * One piece per SLOT (head · body · hands · face — the last is THE HEADS,
- * FF1's animals worn in place of the skull, avatar/heads.ts). The equipped
- * set is up to four ids, packed for the wire as a short comma-joined
+ * One piece per SLOT (head · body · hands · face · shoulders — face is THE
+ * HEADS, FF1's animals worn in place of the skull, avatar/heads.ts; the
+ * shoulders hang off the body group beside the body piece). The equipped
+ * set is up to five ids, packed for the wire as a short comma-joined
  * string that every receiver re-validates against this catalogue (unknown
  * id → dropped, one per slot, hard length cap) — the same fail-soft law as
  * THE PAINT's look.
@@ -42,11 +44,14 @@ import { atlasGear, mergePiece } from './gearAtlas.js';
 import { HEAD_FIT, HEAD_PIECES } from './heads.js';
 
 /** 'face' is THE HEADS (avatar/heads.ts): a whole head worn in place of
- *  the bare skull. It came after the other three, so it packs LAST — the
- *  wire is slot-ordered, and an older reader simply drops an id it doesn't
- *  know. */
-export type GearSlot = 'head' | 'body' | 'hands' | 'face';
-export const GEAR_SLOTS: readonly GearSlot[] = ['head', 'body', 'hands', 'face'];
+ *  the bare skull. It came after the other three, so it packs after them —
+ *  the wire is slot-ordered, and an older reader simply drops an id it
+ *  doesn't know. 'shoulders' came last of all: the pads were BODY pieces,
+ *  so a pair of pauldrons and a cape could never be worn together. They
+ *  are their own slot now, packed last; an older reader still takes a
+ *  pauldron as its body piece (it knows the id), and drops the rest. */
+export type GearSlot = 'head' | 'body' | 'hands' | 'face' | 'shoulders';
+export const GEAR_SLOTS: readonly GearSlot[] = ['head', 'body', 'hands', 'face', 'shoulders'];
 
 export interface GearDef {
   id: string;
@@ -68,7 +73,10 @@ export const GEAR: GearDef[] = [
   { id: 'mohawk', name: 'MOHAWK', slot: 'head', price: 120, blurb: 'a row of spikes over the crown' },
   { id: 'visorband', name: 'VISOR BAND', slot: 'head', price: 80, blurb: 'a wraparound band across the eyes' },
   // ── body ──────────────────────────────────────────────────────────────
-  { id: 'pauldrons', name: 'PAULDRONS', slot: 'body', price: 100, blurb: 'plates on both shoulders' },
+  // (PAULDRONS was the first body piece; it keeps its place in the list —
+  // the store's tile ids are the catalogue indices — but wears on the
+  // SHOULDERS now.)
+  { id: 'pauldrons', name: 'PAULDRONS', slot: 'shoulders', price: 100, blurb: 'plates on both shoulders' },
   { id: 'chestplate', name: 'CHESTPLATE', slot: 'body', price: 120, blurb: 'one plate over the heart' },
   { id: 'tail', name: 'TAIL', slot: 'body', price: 140, blurb: 'swept back off the spine, tip flicked up' },
   { id: 'belt', name: 'BELT', slot: 'body', price: 60, blurb: 'a band round the waist, buckled' },
@@ -84,7 +92,7 @@ export const GEAR: GearDef[] = [
   { id: 'wings', name: 'WINGS', slot: 'body', price: 320, blurb: 'swept plates off the shoulder blades' },
   { id: 'claws', name: 'CLAWS', slot: 'hands', price: 200, blurb: 'three talons over the knuckles' },
   // ── the third wave (appended, as ever) ──
-  { id: 'spikepads', name: 'SPIKED PADS', slot: 'body', price: 220, blurb: 'layered plates, three spikes a side' },
+  { id: 'spikepads', name: 'SPIKED PADS', slot: 'shoulders', price: 220, blurb: 'layered plates, three spikes a side' },
   // ── the fourth wave ──
   { id: 'vcrest', name: 'V-CREST', slot: 'head', price: 180, blurb: 'twin blades in a V off a brow emblem' },
   { id: 'earfins', name: 'EAR FINS', slot: 'head', price: 140, blurb: 'swept fins at the temples' },
@@ -101,6 +109,13 @@ export const GEAR: GearDef[] = [
   { id: 'wolf', name: 'WOLF', slot: 'face', price: 450, blurb: 'a long muzzle, ears up, a ruff' },
   { id: 'frog', name: 'FROG', slot: 'face', price: 300, blurb: 'a wide flat grin, eyes up top' },
   { id: 'bunny', name: 'BUNNY', slot: 'face', price: 350, blurb: 'tall ears, buck teeth' },
+  // ── the fifth wave: THE SHOULDERS get a shelf of their own, and the body
+  // two pieces that hang where the pads used to crowd it. ──
+  { id: 'warlord', name: 'WARLORD', slot: 'shoulders', price: 380, blurb: 'great domes, a rolled rim, flames rising' },
+  { id: 'epaulets', name: 'EPAULETS', slot: 'shoulders', price: 160, blurb: 'dress boards, a fringe over the arm' },
+  { id: 'gladiator', name: 'GLADIATOR', slot: 'shoulders', price: 240, blurb: 'one arm armoured, lames stepping down' },
+  { id: 'cape', name: 'CAPE', slot: 'body', price: 260, blurb: 'hung from the shoulders, pleated' },
+  { id: 'tabard', name: 'TABARD', slot: 'body', price: 200, blurb: 'a panel front and back, cinched' },
 ];
 
 export function gearDef(id: string): GearDef | undefined {
@@ -108,7 +123,9 @@ export function gearDef(id: string): GearDef | undefined {
 }
 
 /** Hard caps: the wire string and what it may carry. */
-const WIRE_MAX = 48;
+// Five slots' longest ids joined run to ~50 characters; every relay caps
+// the gear string at 64 to match.
+const WIRE_MAX = 64;
 
 /**
  * Validate a set of gear ids (any order, any junk) down to at most one KNOWN
@@ -324,24 +341,31 @@ function seatOnBody(mesh: Mesh, gap: number): void {
   mesh.rotation.set(0, 0, 0);
   mesh.scale.set(1, 1, 1);
   const pos = geo.getAttribute('position');
+  const v = new Vector3();
   for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    const skin = skinAt(y);
-    if (!skin) continue;
-    const x = pos.getX(i);
-    const dz = pos.getZ(i) - skin.z;
-    const q = Math.hypot(x / skin.w, dz / skin.d);
-    const want = 1 + gap / ((skin.w + skin.d) / 2);
-    // A SOFT floor (softplus), not a clamp: a clamp leaves a jagged notch
-    // where the pushed and unpushed vertices meet along the rim; this
-    // eases the piece onto the skin over a short band instead.
-    const band = 0.07;
-    if (q >= want + band * 5 || q < 1e-6) continue;
-    const k = (want + band * Math.log1p(Math.exp((q - want) / band))) / q;
-    pos.setXYZ(i, x * k, y, skin.z + dz * k);
+    v.fromBufferAttribute(pos, i);
+    if (seatPoint(v, gap)) pos.setXYZ(i, v.x, v.y, v.z);
   }
   pos.needsUpdate = true;
   geo.computeVertexNormals();
+}
+
+/** seatOnBody's push for ONE body-local point, in place — so a rim or a
+ *  strap laid along a seated edge can follow it. True if it moved. */
+function seatPoint(v: Vector3, gap: number): boolean {
+  const skin = skinAt(v.y);
+  if (!skin) return false;
+  const dz = v.z - skin.z;
+  const q = Math.hypot(v.x / skin.w, dz / skin.d);
+  const want = 1 + gap / ((skin.w + skin.d) / 2);
+  // A SOFT floor (softplus), not a clamp: a clamp leaves a jagged notch
+  // where the pushed and unpushed vertices meet along the rim; this
+  // eases the piece onto the skin over a short band instead.
+  const band = 0.07;
+  if (q >= want + band * 5 || q < 1e-6) return false;
+  const k = (want + band * Math.log1p(Math.exp((q - want) / band))) / q;
+  v.set(v.x * k, v.y, skin.z + dz * k);
+  return true;
 }
 
 function rivet(trimMat: MeshStandardMaterial, at: Vector3, n: Vector3, r: number): Mesh {
@@ -1279,21 +1303,455 @@ const FOURTH_BUILDERS: Record<string, Builder> = {
   },
 };
 
-Object.assign(BUILDERS, MORE_BUILDERS, THIRD_BUILDERS, FOURTH_BUILDERS);
+/* ── the fifth wave: THE SHOULDERS' own shelf, and two hung body pieces ── */
+
+/** A point on a dome of half-extents (a, b, c) along dome-local `dir`,
+ *  and its normal, carried through the dome's placement (tipped `tip`
+ *  about z, then moved to `at`) — where a fin or a stud is seated. */
+function domePoint(a: number, b: number, c: number, tip: number, at: Vector3, dir: Vector3): { p: Vector3; n: Vector3 } {
+  const rot = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), tip);
+  const d = dir.clone().normalize();
+  const t = 1 / Math.sqrt((d.x / a) ** 2 + (d.y / b) ** 2 + (d.z / c) ** 2);
+  const p = d.multiplyScalar(t);
+  const n = new Vector3(p.x / (a * a), p.y / (b * b), p.z / (c * c)).normalize().applyQuaternion(rot);
+  return { p: p.applyQuaternion(rot).add(at), n };
+}
+
+/** A FLAME TONGUE: root `w` wide on the origin, rising `h` and licking
+ *  over to `lean`·h at the tip (toward +x, mirrored by `s`), with a second,
+ *  smaller lick breaking off its outer edge half way up. */
+function flameShape(h: number, w: number, lean: number, s: 1 | -1): Shape {
+  const X = (x: number): number => x * s;
+  const tip: [number, number] = [lean * h, h];
+  const notch: [number, number] = [lean * h * 0.42 + w * 0.12, h * 0.56];
+  const tip2: [number, number] = [lean * h * 0.55 + w * 0.62, h * 0.64];
+  const sh = new Shape();
+  sh.moveTo(X(-w / 2), 0);
+  sh.quadraticCurveTo(X(-w * 0.62), h * 0.7, X(tip[0]), tip[1]);
+  sh.quadraticCurveTo(X(lean * h * 0.62 + w * 0.12), h * 0.74, X(notch[0]), notch[1]);
+  sh.quadraticCurveTo(X(lean * h * 0.5 + w * 0.42), h * 0.5, X(tip2[0]), tip2[1]);
+  sh.quadraticCurveTo(X(w * 0.78), h * 0.28, X(w / 2), 0);
+  sh.closePath();
+  return sh;
+}
+
+/**
+ * ONE WARLORD PAD — the great pauldron of the old raid-boss paladins: a
+ * deep, round steel dome (rounder and a size up on the PAULDRONS' shell,
+ * seated the same way), a heavy ROLLED RIM of trim round its whole edge,
+ * a crest of three FLAME TONGUES rising off the crown and licking out over
+ * the arm, and a pair of lit studs fore and aft. The dome is the paint
+ * surface; the rim and the flames are the trim that frames it.
+ */
+function warlordPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial, s: 1 | -1): Group {
+  const g = new Group();
+  const a = 0.13;
+  const b = 0.108;
+  const c = 0.122;
+  const theta = Math.PI * 0.6; // the dome runs a little past its equator
+  const tip = -s * 0.44;
+  const at = new Vector3(s * 0.234, 0.378, 0);
+  const pad = new Mesh(new SphereGeometry(0.1, 48, 28, 0, Math.PI * 2, 0, theta), mat);
+  pad.scale.set(a / 0.1, b / 0.1, c / 0.1);
+  pad.position.copy(at);
+  pad.rotation.z = tip;
+  pad.updateMatrix();
+  // THE RIM: the dome's own open edge, found before the dome is seated
+  // and then pushed out exactly as its vertices will be (a tube's width
+  // further), so the roll stays on the edge where the edge meets the body.
+  const rimR = 0.011;
+  const rim: Vector3[] = [];
+  for (let i = 0; i < 64; i++) {
+    const phi = (i / 64) * Math.PI * 2;
+    const v = new Vector3(-0.1 * Math.cos(phi) * Math.sin(theta), 0.1 * Math.cos(theta), 0.1 * Math.sin(phi) * Math.sin(theta)).applyMatrix4(pad.matrix);
+    seatPoint(v, 0.004 + rimR);
+    rim.push(v);
+  }
+  const on = (x: number, y: number, z: number): { p: Vector3; n: Vector3 } => domePoint(a, b, c, tip, at, new Vector3(s * x, y, z));
+  seatOnBody(pad, 0.004);
+  g.add(pad);
+  g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(rim, true, 'centripetal'), 128, rimR, 8, true), trimMat)));
+  // THE FLAMES: three tongues standing on the crown, broad face to the
+  // front (the silhouette you see across the arena), the middle one the
+  // tallest. Each is stood up a little off the dome's own normal (which
+  // is tipped out over the arm) and licks outward at its tip — so the
+  // crest rises, then sweeps out, like the ones in the old raids.
+  const flames: Array<[number, number, number, number, number]> = [
+    // dome-local seat (x out, y up, z back), height, how far stood up
+    [0.05, 1, -0.55, 0.1, 0.2],
+    [0.2, 1, 0, 0.14, 0.26],
+    [0.05, 1, 0.55, 0.1, 0.2],
+  ];
+  for (const [x, y, z, h, up] of flames) {
+    const { p, n } = on(x, y, z);
+    const fin = asTrim(plate(flameShape(h, 0.058, 0.42, s), 0.007, 0.0022, trimMat));
+    fin.rotation.z = Math.atan2(-n.x, n.y) + s * up;
+    fin.position.copy(p).addScaledVector(n, -0.016);
+    g.add(fin);
+  }
+  // THE SKIRT: a lame of trim tucked under the rim on the outside,
+  // flaring down over the top of the arm — the dome's lower tier.
+  const skirt = asTrim(lame(trimMat, 0.1, 0.11, -0.05, -0.95, 0.19, s));
+  skirt.position.set(s * 0.222, 0.35, 0);
+  g.add(skirt);
+  // THE STUDS: two lit bosses on the dome's front and back faces.
+  for (const z of [-0.72, 0.72]) {
+    const { p, n } = on(0.5, 0.7, z);
+    g.add(asGlow(rivet(glowMat, p, n, 0.014)));
+  }
+  return g;
+}
+
+/**
+ * ONE EPAULET — the dress board: a flat plate laid along the slope of the
+ * shoulder from the neck to the point, piped round in trim, ending in a
+ * rolled CRESCENT over the point of the shoulder with a FRINGE of bullion
+ * hanging off it, and a lit button at the neck end. Stiff, as a board is:
+ * it bridges the shoulder rather than wrapping it.
+ */
+function epaulet(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial, s: 1 | -1): Group {
+  const g = new Group();
+  const L = 0.172;
+  const W = 0.112;
+  const T = 0.015;
+  // The board's own frame: its shape plane is the group's XY (x along the
+  // board, outward at +s), thickness along z; the group lays it flat on
+  // the slope of the shoulder.
+  g.quaternion
+    .setFromAxisAngle(new Vector3(0, 0, 1), -s * 0.3)
+    .multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2));
+  g.position.set(s * 0.186, 0.434, -0.004);
+  // The outline: square at the neck, rounded at the point.
+  const sh = new Shape();
+  const x0 = -L / 2;
+  const x1 = L / 2;
+  const hw = W / 2;
+  const X = (x: number): number => x * s;
+  sh.moveTo(X(x0), -hw * 0.8);
+  sh.lineTo(X(x1 - hw), -hw);
+  sh.absarc(X(x1 - hw), 0, hw, s > 0 ? -Math.PI / 2 : (Math.PI * 3) / 2, s > 0 ? Math.PI / 2 : Math.PI / 2, s < 0);
+  sh.lineTo(X(x0), hw * 0.8);
+  sh.closePath();
+  g.add(plate(sh, T, 0.003, mat));
+  // The piping: a roll of trim round the whole outline, on its top face.
+  const pipe = sh.getSpacedPoints(64).map((q) => new Vector3(q.x, q.y, T / 2 + 0.002));
+  pipe.pop();
+  g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(pipe, true), 96, 0.0032, 6, true), trimMat)));
+  // THE CRESCENT: a half-roll round the rounded end, primer, fat.
+  const cr = new Mesh(new TorusGeometry(hw * 0.84, 0.015, 10, 28, Math.PI * 1.1), mat);
+  cr.position.set(X(x1 - hw), 0, T / 2 + 0.008);
+  cr.rotation.z = s > 0 ? -Math.PI * 0.55 : Math.PI * 0.45;
+  g.add(cr);
+  // THE FRINGE: bullion strands hung off the crescent. The board's frame
+  // is tipped, so each strand is aimed at the body's DOWN (the group's
+  // inverse turns it into board-local), to hang plumb.
+  const down = new Vector3(0, -1, 0).applyQuaternion(g.quaternion.clone().invert());
+  const strands = 17;
+  for (let i = 0; i < strands; i++) {
+    const ang = -Math.PI * 0.48 + (i / (strands - 1)) * Math.PI * 0.96;
+    const root = new Vector3(X(x1 - hw) + s * Math.cos(ang) * hw * 0.92, Math.sin(ang) * hw * 0.92, T / 2 + 0.002);
+    const len = 0.066 + 0.01 * Math.cos(ang);
+    const strand = asTrim(new Mesh(new CylinderGeometry(0.0042, 0.0052, len, 6), trimMat));
+    aim(strand, down);
+    strand.position.copy(root).addScaledVector(down, len / 2);
+    g.add(strand);
+  }
+  // THE BUTTON at the neck end, lit.
+  g.add(asGlow(rivet(glowMat, new Vector3(X(x0 + 0.018), 0, T / 2 + 0.001), FWD, 0.011)));
+  return g;
+}
+
+/** One LAME of a laminated guard: a band of plate curved over the arm
+ *  (an annular arc of `r0`..`r1` from angle `a0` down to `a1`, 0 = out
+ *  over the arm, mirrored by `s`) and `depth` long fore and aft, its ends
+ *  drawn in so it reads as a shell, not a length of pipe. */
+function lame(mat: MeshStandardMaterial, r0: number, r1: number, a0: number, a1: number, depth: number, s: 1 | -1): Mesh {
+  const sh = new Shape();
+  const N = 18;
+  for (let i = 0; i <= N; i++) {
+    const a = a0 + ((a1 - a0) * i) / N;
+    if (i === 0) sh.moveTo(s * Math.cos(a) * r1, Math.sin(a) * r1);
+    else sh.lineTo(s * Math.cos(a) * r1, Math.sin(a) * r1);
+  }
+  for (let i = N; i >= 0; i--) {
+    const a = a0 + ((a1 - a0) * i) / N;
+    sh.lineTo(s * Math.cos(a) * r0, Math.sin(a) * r0);
+  }
+  sh.closePath();
+  const geo = new ExtrudeGeometry(sh, { depth, steps: 10, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2, curveSegments: 4 });
+  geo.translate(0, 0, -depth / 2);
+  const pos = geo.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    const t = pos.getZ(i) / (depth / 2);
+    const k = 1 - 0.24 * Math.min(1, t * t);
+    pos.setXY(i, pos.getX(i) * k, pos.getY(i) * k);
+  }
+  geo.computeVertexNormals();
+  const m = new Mesh(geo, mat);
+  m.userData.atlasSplit = true;
+  return m;
+}
+
+const FIFTH_BUILDERS: Record<string, Builder> = {
+  /* shoulders — the body group's frame (origin at the hips, front −z) */
+  warlord: (mat, _side, trimMat, glowMat) => {
+    // THE WARLORD: a pair of great flamed domes (warlordPad).
+    const g = new Group();
+    for (const s of [-1, 1] as const) g.add(warlordPad(mat, trimMat, glowMat, s));
+    return g;
+  },
+  epaulets: (mat, _side, trimMat, glowMat) => {
+    // EPAULETS: a dress board on each shoulder (epaulet).
+    const g = new Group();
+    for (const s of [-1, 1] as const) g.add(epaulet(mat, trimMat, glowMat, s));
+    return g;
+  },
+  gladiator: (mat, _side, trimMat, glowMat) => {
+    // THE GLADIATOR: ONE shoulder armoured, the other bare — the net-man's
+    // guard. Four lames step down over the LEFT arm, each tucked under the
+    // one above, riveted at both ends, and a flat GUARD stands up off the
+    // top at the neck side, flared away from the head, with a lit boss.
+    const g = new Group();
+    const s = -1 as const; // the fighter's left (front is −z, so left is −x)
+    const C = new Vector3(s * 0.196, 0.34, 0);
+    const lames: Array<[number, number, number, number, number]> = [
+      // radius (outer), start angle, end angle, depth, drop
+      [0.09, 1.95, 0.4, 0.23, 0],
+      [0.095, 1.45, 0.0, 0.216, 0.026],
+      [0.1, 1.0, -0.38, 0.2, 0.052],
+      [0.105, 0.56, -0.74, 0.182, 0.078],
+    ];
+    // Drawn bottom lame first: each is set a hair INSIDE the one above
+    // (a smaller radius where they overlap) by stepping its centre out and
+    // down the arm, so the upper plate laps over the lower.
+    lames.forEach(([r1, a0, a1, depth, drop], i) => {
+      const m = lame(mat, r1 - 0.014, r1, a0, a1, depth, s);
+      m.position.set(C.x + s * drop * 0.55, C.y - drop, 0);
+      m.position.x -= s * i * 0.002;
+      seatOnBody(m, 0.004);
+      g.add(m);
+      // Rivets at both ends, mid-arc, on the drawn-in caps.
+      const am = (a0 + a1) / 2;
+      const rm = (r1 - 0.007) * 0.76;
+      for (const zs of [-1, 1]) {
+        const at = new Vector3(C.x + s * drop * 0.55 - s * i * 0.002 + s * Math.cos(am) * rm, C.y - drop + Math.sin(am) * rm, zs * (depth / 2 + 0.003));
+        g.add(rivet(trimMat, at, new Vector3(0, 0, zs), 0.0065));
+      }
+    });
+    // THE GUARD: a flat plate standing on the top lame at the neck side,
+    // broad face to the side, its top edge a shallow arch, leaning out.
+    const gw = 0.17;
+    const gh = 0.1;
+    const gsh = new Shape();
+    gsh.moveTo(-gw * 0.4, 0);
+    gsh.lineTo(gw * 0.4, 0);
+    gsh.quadraticCurveTo(gw * 0.52, gh * 0.6, gw * 0.5, gh);
+    gsh.quadraticCurveTo(0, gh * 1.25, -gw * 0.5, gh);
+    gsh.quadraticCurveTo(-gw * 0.52, gh * 0.6, -gw * 0.4, 0);
+    const guard = plate(gsh, 0.008, 0.0025, mat);
+    guard.quaternion
+      .setFromAxisAngle(new Vector3(0, 0, 1), -s * 0.26)
+      .multiply(new Quaternion().setFromAxisAngle(UP, Math.PI / 2));
+    guard.position.set(s * 0.15, 0.4, 0);
+    g.add(guard);
+    // Its edge rolled in trim, and the lit boss at its heart.
+    const outN = new Vector3(s, 0, 0).applyAxisAngle(new Vector3(0, 0, 1), -s * 0.26);
+    const edge = gsh.getSpacedPoints(48).map((q) => new Vector3(q.x, q.y, 0).applyQuaternion(guard.quaternion).add(guard.position));
+    edge.pop();
+    g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(edge, true), 72, 0.0036, 6, true), trimMat)));
+    const boss = new Vector3(0, gh * 0.5, 0).applyQuaternion(guard.quaternion).add(guard.position).addScaledVector(outN, 0.0045);
+    g.add(asGlow(rivet(glowMat, boss, outN, 0.013)));
+    return g;
+  },
+
+  /* body */
+  cape: (mat, _side, trimMat, glowMat) => {
+    // A CAPE: one sheet hung from the back of the shoulder line, falling
+    // past the tip of the body, flaring as it drops and billowing back
+    // off the spine, laid in five soft PLEATS that deepen toward the hem,
+    // the hem itself dipping at the middle. Seated (seatOnBody) so it
+    // drapes over the shoulder blades instead of through them. A roll of
+    // trim along its top edge, and a cord from each top corner over the
+    // shoulder to a lit clasp at the collarbone.
+    const g = new Group();
+    const U = 24;
+    const V = 26;
+    const top = 0.405;
+    const L = 0.64;
+    const half = 0.165;
+    const ring = bodyRing(top);
+    const backAt = (x: number): number => ring.z + ring.d * Math.sqrt(Math.max(0, 1 - (x / ring.w) ** 2));
+    const pos: number[] = [];
+    const uv: number[] = [];
+    const idx: number[] = [];
+    for (let j = 0; j <= V; j++) {
+      const v = j / V;
+      for (let i = 0; i <= U; i++) {
+        const u = i / U;
+        const x0 = (u * 2 - 1) * half;
+        const x = x0 * (1 + 0.5 * v);
+        const pleat = 0.013 * (0.5 - 0.5 * Math.cos(u * Math.PI * 2 * 5)) * Math.min(1, v * 2.5);
+        const z = backAt(x0) + 0.008 + 0.075 * Math.pow(v, 1.4) + pleat;
+        const y = top - v * L - 0.035 * Math.sin(Math.PI * u) * v * v;
+        pos.push(x, y, z);
+        uv.push(u, 1 - v);
+        if (i < U && j < V) {
+          const a = j * (U + 1) + i;
+          const c = a + U + 1;
+          idx.push(a, a + 1, c, a + 1, c + 1, c);
+        }
+      }
+    }
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+    geo.setIndex(idx);
+    const clothMat = mat.clone();
+    clothMat.side = DoubleSide; // one sheet, seen from both sides
+    const cloth = new Mesh(geo, clothMat);
+    seatOnBody(cloth, 0.006);
+    g.add(cloth);
+    // The yoke: a roll of trim along the seated top edge.
+    const cpos = cloth.geometry.getAttribute('position');
+    const yoke: Vector3[] = [];
+    for (let i = 0; i <= U; i++) yoke.push(new Vector3().fromBufferAttribute(cpos, i).add(new Vector3(0, 0.002, 0.003)));
+    g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(yoke), 64, 0.0055, 6), trimMat)));
+    // The cords and the clasps.
+    for (const s of [-1, 1] as const) {
+      const corner = s < 0 ? yoke[0] : yoke[U];
+      const x = s * 0.14;
+      const front = bodyRing(0.4);
+      const fz = front.z - front.d * Math.sqrt(Math.max(0, 1 - (x / front.w) ** 2));
+      const cord = [
+        corner.clone(),
+        new Vector3(x * 1.05, 0.425, 0.035),
+        new Vector3(x, 0.438, -0.012),
+        new Vector3(x * 0.98, 0.422, -0.05),
+        new Vector3(x * 0.95, 0.4, fz),
+      ];
+      for (const q of cord) seatPoint(q, 0.007);
+      g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(cord), 32, 0.0045, 6), trimMat)));
+      const clasp = cord[cord.length - 1].clone();
+      const n = new Vector3(clasp.x * 0.3, 0.1, clasp.z - front.z).normalize();
+      const bezel = asTrim(new Mesh(new CylinderGeometry(0.016, 0.018, 0.006, 20), trimMat));
+      bezel.position.copy(clasp);
+      aim(bezel, n);
+      g.add(bezel);
+      const gem = asGlow(new Mesh(new CylinderGeometry(0.011, 0.011, 0.004, 20), glowMat));
+      gem.position.copy(clasp).addScaledVector(n, 0.003);
+      aim(gem, n);
+      g.add(gem);
+    }
+    return g;
+  },
+  tabard: (mat, _side, trimMat, glowMat) => {
+    // A TABARD: a panel down the front and another down the back, broad
+    // across the chest and narrowing to the waist, where a cord of trim
+    // CINCHES them to the body, then falling free past the hips (hung from
+    // the hip line, flaring a little), hemmed in trim on both sides and
+    // the bottom. Two straps over the shoulders hold the panels together;
+    // a lit lozenge in a trim frame sits on the chest, the house's device.
+    const g = new Group();
+    const rows = 30;
+    const cols = 10;
+    const yTop = 0.41;
+    const yBot = -0.25;
+    const HIP = -0.02;
+    const hwAt = (y: number): number =>
+      y > 0.3 ? 0.07 + (0.112 - 0.07) * ((y - 0.3) / (yTop - 0.3)) : y > 0.13 ? 0.066 + 0.004 * ((y - 0.13) / 0.17) : 0.066 + 0.026 * ((0.13 - y) / (0.13 - yBot));
+    const clothMat = mat.clone();
+    clothMat.side = DoubleSide;
+    for (const sgn of [-1, 1] as const) {
+      // sgn −1 = the front panel (−z), +1 = the back.
+      const pos: number[] = [];
+      const uv: number[] = [];
+      const idx: number[] = [];
+      for (let j = 0; j <= rows; j++) {
+        const t = j / rows;
+        const y = yTop + (yBot - yTop) * t;
+        const ring = bodyRing(Math.max(y, HIP));
+        const hang = y < HIP ? 0.028 * Math.pow((HIP - y) / (HIP - yBot), 1.4) : 0;
+        const hw = hwAt(y);
+        for (let i = 0; i <= cols; i++) {
+          const x = (i / cols) * 2 * hw - hw;
+          const xr = Math.min(0.97, Math.abs(x) / ring.w);
+          const z = ring.z + sgn * (ring.d * Math.sqrt(1 - xr * xr) + 0.006 + hang);
+          pos.push(x, y, z);
+          uv.push(i / cols, 1 - t);
+          if (i < cols && j < rows) {
+            const a = j * (cols + 1) + i;
+            const c = a + cols + 1;
+            if (sgn < 0) idx.push(a, c, a + 1, a + 1, c, c + 1);
+            else idx.push(a, a + 1, c, a + 1, c + 1, c);
+          }
+        }
+      }
+      const geo = new BufferGeometry();
+      geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
+      geo.setIndex(idx);
+      const panel = new Mesh(geo, clothMat);
+      seatOnBody(panel, 0.006);
+      g.add(panel);
+      // The hem: both sides and the bottom, one run of trim, a hair proud.
+      const pp = panel.geometry.getAttribute('position');
+      const at = (i: number, j: number): Vector3 => new Vector3().fromBufferAttribute(pp, j * (cols + 1) + i).add(new Vector3(0, 0, sgn * 0.0025));
+      const hem: Vector3[] = [];
+      for (let j = 0; j <= rows; j++) hem.push(at(0, j));
+      for (let i = 1; i <= cols; i++) hem.push(at(i, rows));
+      for (let j = rows - 1; j >= 0; j--) hem.push(at(cols, j));
+      g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(hem, false, 'centripetal'), 160, 0.004, 6), trimMat)));
+    }
+    // The straps over the shoulders, panel top to panel top.
+    for (const s of [-1, 1] as const) {
+      const x = s * 0.104;
+      const strap = [
+        new Vector3(x, 0.405, -0.1),
+        new Vector3(x, 0.43, -0.062),
+        new Vector3(x, 0.45, -0.02),
+        new Vector3(x, 0.43, 0.036),
+        new Vector3(x, 0.405, 0.075),
+      ];
+      for (const q of strap) seatPoint(q, 0.008);
+      g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(strap), 32, 0.0075, 6), trimMat)));
+    }
+    // The cinch at the waist pinch (BODY_RINGS: ±0.090 by ±0.074 at 0.13).
+    const W = 0.098;
+    const D = 0.083;
+    const cinch = asTrim(new Mesh(new TorusGeometry(1, 0.0055 / W, 6, 56), trimMat));
+    cinch.rotation.x = Math.PI / 2;
+    cinch.scale.set(W, D, W);
+    cinch.position.y = 0.13;
+    g.add(cinch);
+    // THE DEVICE: a lit lozenge in a trim frame on the chest.
+    const chest = bodyRing(0.3);
+    const devAt = new Vector3(0, 0.3, chest.z - chest.d - 0.006 - 0.004);
+    const lozenge = (w: number, h: number): Shape => outline([[0, h / 2], [w / 2, 0], [0, -h / 2], [-w / 2, 0]]);
+    const frame = asTrim(plate(lozenge(0.056, 0.074), 0.004, 0.0015, trimMat));
+    face(frame, devAt, new Vector3(0, 0, -1));
+    g.add(frame);
+    const gem = asGlow(plate(lozenge(0.036, 0.05), 0.004, 0.0015, glowMat));
+    face(gem, devAt.clone().add(new Vector3(0, 0, -0.003)), new Vector3(0, 0, -1));
+    g.add(gem);
+    return g;
+  },
+};
+
+Object.assign(BUILDERS, MORE_BUILDERS, THIRD_BUILDERS, FOURTH_BUILDERS, FIFTH_BUILDERS);
 for (const [id, build] of Object.entries(HEAD_PIECES)) BUILDERS[id] = (mat, _side, trimMat, glowMat) => build(mat, trimMat, glowMat);
 
 /** The rig groups gear can hang off, by the names buildBoxer gives them —
  *  the head carries two slots: its GEAR (horns, crest…) and its FACE. */
 const SLOTS_OF_NAME: Record<string, readonly GearSlot[]> = {
   'opponent-head': ['face', 'head'],
-  'opponent-body': ['body'],
+  'opponent-body': ['body', 'shoulders'],
   'opponent-glove-left': ['hands'],
   'opponent-glove-right': ['hands'],
 };
 
 /** The child each slot builds under its rig group ('gear' for the three
  *  that came first, so every probe that looks for it still finds it). */
-const childName = (slot: GearSlot): string => (slot === 'face' ? 'gear-face' : 'gear');
+const childName = (slot: GearSlot): string => (slot === 'face' ? 'gear-face' : slot === 'shoulders' ? 'gear-shoulders' : 'gear');
 
 /**
  * Dress a rig (or any subtree holding rig pieces) in a gear set. Finds the
@@ -1336,7 +1794,7 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
 
 /** Build (or keep) one slot's piece under a rig group. */
 function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, face: string): void {
-  const keyName = slot === 'face' ? 'faceKey' : 'gearKey';
+  const keyName = slot === 'face' ? 'faceKey' : slot === 'shoulders' ? 'shouldersKey' : 'gearKey';
   // The head gear is fitted to whatever face it sits on, so a new face is
   // a new fit.
   const key = slot === 'head' ? `${id}|${tone}|${face}` : `${id}|${tone}`;
@@ -1376,7 +1834,17 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
   // Each HAND's gear is its own surface — the right hand's is
   // 'gearHandsR' — so a pair of cuffs can be painted two ways.
   const part =
-    slot === 'face' ? 'gearFace' : slot === 'head' ? 'gearHead' : slot === 'body' ? 'gearBody' : side === -1 ? 'gearHandsR' : 'gearHands';
+    slot === 'face'
+      ? 'gearFace'
+      : slot === 'head'
+        ? 'gearHead'
+        : slot === 'body'
+          ? 'gearBody'
+          : slot === 'shoulders'
+            ? 'gearShoulders'
+            : side === -1
+              ? 'gearHandsR'
+              : 'gearHands';
   const paintable: Mesh[] = [];
   g.traverse((m) => {
     const mesh = m as Mesh;
@@ -1409,7 +1877,7 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
 export function wornGear(root: Object3D): string[] {
   const out: string[] = [];
   root.traverse((o) => {
-    if ((o.name === 'gear' || o.name === 'gear-face') && typeof o.userData.gear === 'string') out.push(o.userData.gear);
+    if ((o.name === 'gear' || o.name === 'gear-face' || o.name === 'gear-shoulders') && typeof o.userData.gear === 'string') out.push(o.userData.gear);
   });
   return out;
 }

@@ -136,7 +136,7 @@ export const PAINT = {
    * drop it to 512 if a full club's textures ever cost more than the
    * paint is worth.
    */
-  canvas: { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128, gearHandsR: 128, hand: 256, handR: 256, gearFace: 384 } as Record<string, number>,
+  canvas: { head: 256, body: 768, gearHead: 256, gearBody: 256, gearHands: 128, gearHandsR: 128, hand: 256, handR: 256, gearFace: 384, gearShoulders: 256 } as Record<string, number>,
   /** Unit prices in coins; racks multiply (see tierOf). Paint is CHEAP —
    *  every unit lands between five and ten, under a game's pay, so a first
    *  paint job is an afternoon's idea and not a saving-up. DOTS are the

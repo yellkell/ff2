@@ -1541,6 +1541,7 @@ export class MenuSystem extends createSystem({}) {
       case 'gear-body':
       case 'gear-hands':
       case 'gear-face':
+      case 'gear-shoulders':
         customization.tab = 'gear';
         customization.gearSlot = action.slice(5) as GearSlot;
         break;

@@ -13,6 +13,22 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
+- **THE SHOULDERS, a slot of their own** — pads were BODY gear, so a pair
+  of pauldrons shut out a cape or a chestplate. The GEAR board has a
+  SHOULDERS shelf now (HEADS · HEADGEAR · SHOULDERS · BODY · HANDS):
+  PAULDRONS and SPIKED PADS move onto it, joined by the **WARLORD** (great
+  round domes in a heavy rolled rim, a crest of three flame tongues
+  licking out over the arm, a flared lower tier and lit studs — the old
+  raid-boss paladin's pauldrons), **EPAULETS** (dress boards piped in
+  trim, a crescent and a bullion fringe off each point, a lit button) and
+  the **GLADIATOR** (one arm armoured: four lames stepping down the left
+  arm and a flat guard standing off the top). The BODY shelf gains a
+  **CAPE** (pleated, hung off the shoulder line, corded to lit clasps at
+  the collarbones) and a **TABARD** (a panel front and back, cinched at the
+  waist, a lit lozenge on the chest). Shoulders are their own paint
+  surface (`gearShoulders`, part 9 on the wire); a saved look whose body
+  piece was a pair of pads carries their marks across. The gear string's
+  cap is 64 on every relay now (five slots). `avatar/gear.ts`.
 - **THE HEADS** — FIRE FIGHT 1's animals are back, on the blank: a new
   HEADS shelf on the GEAR board sells BEAR, PANTHER, EAGLE, KNIGHT,
   STALLION, WOLF, FROG and BUNNY, each worn in place of the bare egg

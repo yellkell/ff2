@@ -179,6 +179,7 @@ export function lockerFace(locker: boolean): LockerFace {
     const shelves: Array<[GearSlot, string]> = [
       ['face', 'HEADS'],
       ['head', 'HEADGEAR'],
+      ['shoulders', 'SHOULDERS'],
       ['body', 'BODY'],
       ['hands', 'HANDS'],
     ];

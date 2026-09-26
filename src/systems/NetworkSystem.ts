@@ -265,7 +265,7 @@ export class NetworkSystem extends createSystem({
         rival.avColor = typeof msg.avc === 'number' ? msg.avc : -1;
         rival.avLight = typeof msg.avl === 'number' ? msg.avl : 0.5;
         rival.look = typeof msg.lk === 'string' ? msg.lk : '';
-        rival.gear = typeof msg.gr === 'string' ? msg.gr.slice(0, 48) : '';
+        rival.gear = typeof msg.gr === 'string' ? msg.gr.slice(0, 64) : '';
         break;
       case 'state':
         if (app.side === 1) this.applyHostState(msg);

@@ -60,12 +60,14 @@ export const PAINT_KINDS: readonly PaintKind[] = ['stripe', 'dot', 'square', 'tr
  *  cuff share one material, so a stripe lands on the whole hand — both of
  *  them. Legacy 'chest'/'pelvis' units fold into the body's v range on
  *  read, so paint made before the merge survives it. */
-export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand' | 'gearHandsR' | 'handR' | 'gearFace';
+export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand' | 'gearHandsR' | 'handR' | 'gearFace' | 'gearShoulders';
 /** 'gearHands' is the LEFT hand's gear, 'gearHandsR' the right's (they
  *  were one surface, both hands wearing the same paint, until wire 6);
  *  'hand' is the LEFT hand itself and 'handR' the right (one surface
- *  until wire 7). 'gearFace' is a worn HEAD (avatar/heads.ts). */
-export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'handR', 'gearFace'];
+ *  until wire 7). 'gearFace' is a worn HEAD (avatar/heads.ts), and
+ *  'gearShoulders' the SHOULDERS slot's pads (they were body gear, and
+ *  painted on 'gearBody', until the slot split). */
+export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'handR', 'gearFace', 'gearShoulders'];
 
 export interface PlacedPaint {
   kind: PaintKind;
@@ -95,11 +97,11 @@ const KEY = 'ff2-look';
  *  mesh of the piece in its own UVs"; from 2 it is a decal placed on the
  *  gear atlas (avatar/gearAtlas.ts). Older gear units are kept as they
  *  were — flagged LEGACY_GEAR — so nobody's paint moves under them. */
-const LOOK_VERSION = 4;
+const LOOK_VERSION = 5;
 
 /** A gear surface: laid out by the atlas, painted as decals. */
 export const isGearPart = (part: PaintPart): boolean =>
-  part === 'gearHead' || part === 'gearBody' || part === 'gearHands' || part === 'gearHandsR' || part === 'gearFace';
+  part === 'gearHead' || part === 'gearBody' || part === 'gearHands' || part === 'gearHandsR' || part === 'gearFace' || part === 'gearShoulders';
 /** `variant` bit: a gear unit placed before the atlas (see LOOK_VERSION). */
 const LEGACY_GEAR = 0x80;
 const markLegacy = (p: PlacedPaint): PlacedPaint => (isGearPart(p.part) ? { ...p, variant: p.variant | LEGACY_GEAR } : p);
@@ -118,6 +120,23 @@ function splitHandGear(paint: PlacedPaint[]): PlacedPaint[] {
 function splitHands(paint: PlacedPaint[]): PlacedPaint[] {
   const right = paint.filter((p) => p.part === 'hand').map((p) => ({ ...p, part: 'handR' as PaintPart }));
   return [...paint, ...right].slice(0, PAINT.maxUnits);
+}
+
+/** The pads were BODY gear until the SHOULDERS slot (LOOK_VERSION 5):
+ *  their paint sat on 'gearBody'. If the body piece you were wearing was
+ *  a pair of pads ('ff-gear', customization.ts), those marks move to the
+ *  shoulders' own surface, so your pads keep their paint. (Anyone else's
+ *  older look reads as it was — their pads just wear it bare.) */
+const PADS_THAT_WERE_BODY = ['pauldrons', 'spikepads'];
+function moveBodyPadPaint(paint: PlacedPaint[]): PlacedPaint[] {
+  let worn = '';
+  try {
+    worn = localStorage.getItem('ff-gear') ?? '';
+  } catch {
+    /* nothing saved — nothing to move */
+  }
+  if (!worn.split(',').some((id) => PADS_THAT_WERE_BODY.includes(id))) return paint;
+  return paint.map((p) => (p.part === 'gearBody' ? { ...p, part: 'gearShoulders' as PaintPart } : p));
 }
 
 /** Bumped on every look change — applyOwnSkins repaints when it moves. */
@@ -174,6 +193,7 @@ export function myLook(): Look {
     if ((raw.v ?? 1) < 2) paint = paint.map(markLegacy);
     if ((raw.v ?? 1) < 3) paint = splitHandGear(paint);
     if ((raw.v ?? 1) < 4) paint = splitHands(paint);
+    if ((raw.v ?? 1) < 5) paint = moveBodyPadPaint(paint);
   } catch {
     /* fresh body */
   }
@@ -224,8 +244,9 @@ const WIRE_FORMAT = 7;
 /** Part order ON THE WIRE — append-only. */
 // 'gearFace' (THE HEADS, avatar/heads.ts) is index 8: an older reader
 // finds no part there and drops the unit — its fighter just wears the
-// head bare, never the wrong paint.
-const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'handR', 'gearFace'];
+// head bare, never the wrong paint. 'gearShoulders' is index 9 on the same
+// law (the part takes five bits, so there is room for 32).
+const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'handR', 'gearFace', 'gearShoulders'];
 /** Format 2's part order (the merged body, before gear was paintable). */
 const WIRE_PARTS_V2: PaintPart[] = ['head', 'body'];
 /** Format 1's part order, kept only to read looks packed before the merge. */

@@ -244,9 +244,9 @@ export const customization = {
   /** Which SHELF of the PLATFORMS board is out (avatar/skins.ts
    *  DECK_SHELVES) — the woods, the stones, the forge, the honours. */
   platformShelf: 'timber' as DeckShelf,
-  /** Which of the GEAR board's three shelves is out — head, body or
-   *  hands. Fifteen pieces on one board crushed the tiles until the
-   *  prices fell off them; a shelf holds six at full size. */
+  /** Which of the GEAR board's shelves is out — heads, headgear,
+   *  shoulders, body or hands. Fifteen pieces on one board crushed the
+   *  tiles until the prices fell off them; a shelf holds six at full size. */
   gearSlot: 'face' as GearSlot,
   /** STORE try-on: the unowned skin the mirror (avatar) or your pad (platform)
    *  is modelling right now; its tile grows a BUY button. Nothing is owned or
