@@ -59,8 +59,8 @@ import { mirrorRefs } from '../club/build.js';
 import { CLUB } from '../club/config.js';
 import { buildCoupe, type CoupeRefs } from '../club/props.js';
 import { buildDancer, type DancerPose, type DancerRig } from '../game/blankDancer.js';
-import { myGear, myTone } from '../../menu/customization.js';
-import { myLook } from '../../avatar/paint.js';
+import { customization, myGear, myTone } from '../../menu/customization.js';
+import { myLook, paintState } from '../../avatar/paint.js';
 import { danceHue } from '../game/profile.js';
 import { match } from '../game/state.js';
 import { course } from '../course/state.js';
@@ -156,6 +156,12 @@ function smokedMaterial(src: Material): Material {
   return m;
 }
 
+/** Is `o` still in `root`'s tree (not removed with an old gear piece)? */
+function isUnder(o: Object3D, root: Object3D): boolean {
+  for (let p: Object3D | null = o; p; p = p.parent) if (p === root) return true;
+  return false;
+}
+
 function countDrawables(root: Object3D): number {
   let n = 0;
   root.traverse((o) => {
@@ -238,7 +244,7 @@ export class ClubMirrorSystem extends createSystem({}) {
   private shadows = new Map<number, Shadow>();
   /** MY source: a private rig, solved from my live head + hands, never in
    *  the scene — its world matrices are what my shadow copies. */
-  private me: { rig: DancerRig; hue: number } | null = null;
+  private me: { rig: DancerRig; hue: number; body: string } | null = null;
   private mine = freshPose();
   /** Mirrored drinks by GLASS id. */
   private cups = new Map<number, CoupeRefs>();
@@ -302,13 +308,17 @@ export class ClubMirrorSystem extends createSystem({}) {
       const myIdx = net.myIdx;
       const meMember = net.members.find((m) => m.idx === myIdx);
       const hue = meMember ? memberHue(meMember) : danceHue(Math.max(0, myIdx), true);
-      if (this.me && Math.abs(this.me.hue - hue) > 1e-4) {
+      // Rebuilt when my colour OR my body changes: gear, paint and tone are
+      // baked into the rig, and the bay is open with the mirror standing —
+      // built once, the glass kept showing whatever you walked in wearing.
+      const body = `${customization.version}|${paintState.version}`;
+      if (this.me && (Math.abs(this.me.hue - hue) > 1e-4 || this.me.body !== body)) {
         this.me.rig.dispose();
         this.me = null;
       }
       if (!this.me) {
         // My tone, gear and paint — the body the arena shows everyone.
-        this.me = { rig: buildDancer(hue, { tone: myTone(), gear: myGear(), look: myLook(), sticks: false }), hue };
+        this.me = { rig: buildDancer(hue, { tone: myTone(), gear: myGear(), look: myLook(), sticks: false }), hue, body };
         const old = this.shadows.get(-1);
         if (old) {
           disposeShadow(old);
@@ -436,7 +446,10 @@ export class ClubMirrorSystem extends createSystem({}) {
    */
   private cast(idx: number, source: Object3D, into: Object3D): void {
     let s = this.shadows.get(idx);
-    if (s && (s.source !== source || countDrawables(source) !== s.count)) {
+    // Rebuilt when the source is a new rig, or its drawables are not the
+    // ones twinned: a count alone missed a piece swapped for another with
+    // as many meshes, and the glass kept the old one.
+    if (s && (s.source !== source || countDrawables(source) !== s.count || s.twins.some((t) => !isUnder(t.src, source)))) {
       disposeShadow(s);
       s = undefined;
     }

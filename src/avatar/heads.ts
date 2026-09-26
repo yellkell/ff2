@@ -1159,15 +1159,39 @@ const RAW: Record<string, HeadBuilder> = {
  * knight's helm was already only just over the skull, so it barely moves.
  */
 const HEAD_SIZE: Record<string, number> = {
-  bear: 1,
-  panther: 1,
-  eagle: 0.8,
-  knight: 0.92,
-  stallion: 1,
-  // (the FF2 builds are made at their final size)
-  wolf: 1,
-  frog: 1,
-  bunny: 1,
+  // Four-fifths was a step too far for the round heads: a bear no wider
+  // than the bare skull reads as a small head, not an animal's. They are
+  // carried about a tenth bigger again; the eagle (narrow, all beak) and
+  // the bunny (its size is its ears) a little more than the rest.
+  bear: 1.1,
+  panther: 1.12,
+  eagle: 0.92,
+  knight: 0.95,
+  stallion: 1.05,
+  // (the FF2 builds were made at their final size — and came out small)
+  wolf: 1.06,
+  frog: 1.08,
+  bunny: 1.1,
+};
+
+/**
+ * THE SEAT: how far (metres) each head is dropped so its underside sits
+ * over the neck the way the bare skull does — a centimetre and a bit of
+ * air, no more. The heads were each placed on the head's centre, and the
+ * space under a jaw, a beak or a ruff differs head to head, so on the
+ * blank they hovered 4–8 cm clear of the collar and read as floating.
+ * Measured over the neck's own column (the loft's top ring, just behind
+ * the head centre) at the sizes above; re-measure if a size changes.
+ */
+const SEAT: Record<string, number> = {
+  bear: 0.037,
+  panther: 0.047,
+  eagle: 0.058,
+  knight: 0.022,
+  stallion: 0.062,
+  wolf: 0.06,
+  frog: 0.027,
+  bunny: 0.02,
 };
 
 /** Every head, by its gear id (avatar/gear.ts). */
@@ -1177,6 +1201,7 @@ export const HEAD_PIECES: Record<string, HeadBuilder> = Object.fromEntries(
     (mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial): Group => {
       const g = build(mat, trimMat, glowMat);
       g.scale.multiplyScalar(HEAD_SIZE[id] ?? 1);
+      g.position.y -= SEAT[id] ?? 0;
       tagFinishes(g, trimMat, glowMat);
       return g;
     },
@@ -1199,5 +1224,5 @@ const CROWN: Record<string, { scale: number; lift: number }> = {
   bunny: { scale: 1.18, lift: 0.01 },
 };
 export const HEAD_FIT: Record<string, { scale: number; lift: number }> = Object.fromEntries(
-  Object.entries(CROWN).map(([id, c]) => [id, { scale: c.scale * (HEAD_SIZE[id] ?? 1), lift: c.lift }]),
+  Object.entries(CROWN).map(([id, c]) => [id, { scale: c.scale * (HEAD_SIZE[id] ?? 1), lift: c.lift - (SEAT[id] ?? 0) }]),
 );

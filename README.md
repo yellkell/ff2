@@ -13,6 +13,16 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
+- **THE HEADS, SEATED** — the animal heads hovered 4–8 cm over the neck
+  (each was placed on the head's centre, and the room under a jaw, beak
+  or ruff differs head to head); each now drops by its own measured SEAT
+  so its underside clears the collar by the bare skull's centimetre, and
+  headgear drops with it. The round heads are carried about a tenth
+  bigger (a bear no wider than the bare skull read small). THE CLUB's
+  MIRROR now rebuilds your reflection when your gear, paint or tone
+  changes (it was built once, on the way in), a room-mate who re-gears
+  mid-visit gets a fresh rig on the floor and in the glass, and a
+  reflection re-twins when a piece is swapped for one with as many meshes.
 - **THE SHOULDERS, a slot of their own** — pads were BODY gear, so a pair
   of pauldrons shut out a cape or a chestplate. The GEAR board has a
   SHOULDERS shelf now (HEADS · HEADGEAR · SHOULDERS · BODY · HANDS):

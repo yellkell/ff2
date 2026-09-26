@@ -128,6 +128,8 @@ interface ClubPuppet {
   name: string;
   /** The hue this figure was built in — respawned if their pick changes. */
   hue: number;
+  /** Their BODY off the wire (tone|gear|paint) — respawned if it changes. */
+  body: string;
   rig: DancerRig;
   tag: Mesh;
   tagMat: MeshBasicMaterial;
@@ -470,7 +472,7 @@ export class ClubSocialSystem extends createSystem({}) {
 
     // Everyone but me, in the colour they dance in — their own pick if they
     // made one back in the foyer, otherwise the neon their slot handed out.
-    const want = new Map<number, { name: string; hue: number; body: BlankDress }>();
+    const want = new Map<number, { name: string; hue: number; bodyKey: string; body: BlankDress }>();
     if (connected) {
       for (const m of net.members) {
         if (m.idx === net.myIdx) continue;
@@ -478,15 +480,19 @@ export class ClubSocialSystem extends createSystem({}) {
         want.set(m.idx, {
           name: m.name,
           hue: memberHue(m),
+          bodyKey: `${m.tn ?? ''}|${m.gr ?? ''}|${m.lk ?? ''}`,
           body: { tone: m.tn === 'onyx' ? 'onyx' : 'white', gear: cleanGear(m.gr ?? ''), look: unpackLook(m.lk ?? '') },
         });
       }
     }
-    // Despawn the departed — and anyone whose name or colour changed under
-    // them, since both are baked into the rig and the tag's texture.
+    // Despawn the departed — and anyone whose name, colour or BODY changed
+    // under them: all three are baked into the rig (and the name and colour
+    // into the tag). The body was in the roster key but not here, so a
+    // dancer who re-geared or repainted mid-visit kept their old rig — on
+    // the floor and in the mirror.
     for (const [idx, p] of [...this.puppets]) {
       const w = want.get(idx);
-      if (!w || w.name !== p.name || Math.abs(w.hue - p.hue) > 1e-4) {
+      if (!w || w.name !== p.name || Math.abs(w.hue - p.hue) > 1e-4 || w.bodyKey !== p.body) {
         p.rig.dispose();
         p.tag.removeFromParent();
         p.tagMat.map?.dispose();
@@ -496,7 +502,7 @@ export class ClubSocialSystem extends createSystem({}) {
       }
     }
     // Spawn the new (parked invisible until their first pose arrives).
-    for (const [idx, { name, hue, body }] of want) {
+    for (const [idx, { name, hue, bodyKey, body }] of want) {
       const existing = this.puppets.get(idx);
       if (existing) continue;
       // No glowsticks on the floor: the club is a room you talk in, and a
@@ -520,7 +526,7 @@ export class ClubSocialSystem extends createSystem({}) {
         slump: 0,
       };
       this.puppets.set(idx, {
-        idx, name, hue, rig, tag, tagMat, pose,
+        idx, name, hue, body: bodyKey, rig, tag, tagMat, pose,
         tgt: { ...pose }, motion: new PoseMotion(), live: false,
       });
       // The mirror watches the same pose object the puppet dances with.
