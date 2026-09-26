@@ -23,7 +23,11 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
   skull is mapped onto it per axis from a wrapper round the piece, so a
   piece keeps its own lift and tilt. The knight, stallion and frog are
   hand-tuned on top (a flat-topped helm, a small cranium on a long face, a
-  wide flat head). New on the SHOULDERS shelf: **BASTION**, the rounded
+  wide flat head), and `PIECE_FIT` places single pieces where one fit
+  can't: the frog's visor rides its eye turrets as goggles, its crown
+  rings the plateau and its horns root on the skull, not the eyes; the
+  horse's visor follows its sloping face and its ram's horns are cut
+  down. New on the SHOULDERS shelf: **BASTION**, the rounded
   set with no spikes — great smooth domes, a ridge over the crown, a
   heavy rolled rim, a piped tier down the arm, lit studs.
 - **THE HEADS, SEATED** — the animal heads hovered 4–8 cm over the neck

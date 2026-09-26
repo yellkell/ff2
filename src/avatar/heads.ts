@@ -1232,8 +1232,30 @@ export const HEAD_FIT: Record<string, { s: [number, number, number]; y: number; 
   // measure (top still pinned), or a crown was a ring between the ears.
   stallion: { s: [0.711, 0.699, 0.688], y: -0.0112, z: 0.0022 },
   wolf: { s: [0.758, 0.713, 0.669], y: -0.021, z: 0.0131 },
-  // Wide and FLAT: height squashed to 0.5 (top pinned) so the brow line —
-  // the visor, the horns' roots, a crown's band — comes up off the mouth.
-  frog: { s: [1.172, 0.5, 0.79], y: -0.0211, z: 0.0046 },
+  // Wide and FLAT: height eased to 0.75 (top pinned) — squashed to the
+  // measure, a crest or a mohawk came out a stub. The pieces that live at
+  // the brow are placed one by one (PIECE_FIT).
+  frog: { s: [1.1, 0.75, 0.85], y: -0.0549, z: 0.0046 },
   bunny: { s: [0.841, 0.81, 0.779], y: 0.0018, z: 0.0002 },
+};
+
+/**
+ * Where one head needs one piece placed by hand, over its HEAD_FIT: a
+ * whole fit (`s`, `y`, `z`, as above) and a tilt about x (`rx`, radians,
+ * negative tips the front down). A frog's eyes are turrets on TOP of a
+ * flat head, so its visor rides them as goggles and its crown rings the
+ * plateau; a horse's face slopes away long and narrow, so its visor
+ * follows the slope like blinkers; ram's horns meant for a skull are too
+ * much on either.
+ */
+export const PIECE_FIT: Record<string, Record<string, Partial<{ s: [number, number, number]; y: number; z: number; rx: number }>>> = {
+  frog: {
+    crown: { s: [1.2, 0.75, 0.95], y: -0.021 },
+    visorband: { s: [0.98, 0.85, 0.82], y: 0.052, z: -0.012 },
+    horns: { s: [0.74, 0.58, 0.62], y: -0.038, z: 0.012 },
+  },
+  stallion: {
+    horns: { s: [0.57, 0.56, 0.55], y: 0.004 },
+    visorband: { s: [0.56, 0.6, 0.86], y: 0.006, z: -0.03, rx: -0.2 },
+  },
 };

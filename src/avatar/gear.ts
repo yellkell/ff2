@@ -41,7 +41,7 @@ import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, ConeGeo
 import { BODY_IK, PAINT } from '../config.js';
 import { BODY_RINGS, EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
 import { atlasGear, mergePiece } from './gearAtlas.js';
-import { HEAD_FIT, HEAD_PIECES } from './heads.js';
+import { HEAD_FIT, HEAD_PIECES, PIECE_FIT } from './heads.js';
 
 /** 'face' is THE HEADS (avatar/heads.ts): a whole head worn in place of
  *  the bare skull. It came after the other three, so it packs after them —
@@ -1912,7 +1912,7 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
   // frame and kept per piece, so it must be the same map whatever face the
   // piece first met — the mark rides out with the horn, the same mark on
   // every headset.
-  const fit = slot === 'head' ? HEAD_FIT[face] : undefined;
+  const fit = slot === 'head' && HEAD_FIT[face] ? { rx: 0, ...HEAD_FIT[face], ...PIECE_FIT[face]?.[id] } : undefined;
   if (fit) {
     const w = new Group();
     w.name = g.name;
@@ -1921,6 +1921,7 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
     delete g.userData.gear;
     w.scale.set(fit.s[0], fit.s[1], fit.s[2]);
     w.position.set(0, fit.y, fit.z);
+    w.rotation.x = fit.rx;
     w.add(g);
     o.add(w);
     return;
