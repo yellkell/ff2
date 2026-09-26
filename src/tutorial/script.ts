@@ -4,6 +4,11 @@
  * recorded per docs/tutorial-ember.md) and `text` is the subtitle caption the
  * plate under the orb mirrors, so the tutorial reads correctly even before
  * (or without) the voice clips being present.
+ *
+ * THE CAPTION IS A TRANSCRIPT OF THE TAKE. Every `text` matches what the
+ * shipped clip actually says, word for word — not a rewrite of it. A caption
+ * that says something the voice doesn't reads as a mistake (and the voice
+ * wins), so if a line needs to say more, re-record it; don't grow the caption.
  */
 
 export interface TutorLine {
@@ -24,7 +29,7 @@ export const LINES = {
   },
   begin: {
     id: 'e012',
-    text: "Clear yourself a little room, Clanker. Then press BEGIN on the console here, and we'll go.",
+    text: "Clear yourself a little room, Clanker. Then press the button here, and we'll begin.",
   },
 
   // Beat 1 — ignite
@@ -40,7 +45,7 @@ export const LINES = {
   throwDone: { id: 'e031', text: 'Good job. He felt that.' },
   throwSoft: {
     id: 'e032',
-    text: 'Activate a ball, punch towards him, and release the trigger at the end of the swing!',
+    text: 'Spin up a ball, punch towards him, and release the trigger at the end of the swing.',
   },
 
   // Beat 3 — recall
@@ -80,7 +85,7 @@ export const LINES = {
   },
 
   // Beat 6 — attachments
-  attach: { id: 'e070', text: 'Now, my favourite part. Come look. This is your ball loadout — the attachments.' },
+  attach: { id: 'e070', text: 'Now, my favourite part. Come look. This is your ball loadout.' },
   attachList: {
     id: 'e071',
     text: 'Split breaks it into three on the way home. Grow makes it big and mean. Shrink makes it small and spiteful. Curve bends around their guard. Pick one.',
@@ -100,11 +105,11 @@ export const LINES = {
   fightLow: { id: 'e083', text: "It's done for. Finish it." },
   win: {
     id: 'e084',
-    text: "Down goes the rust bucket. Well done, well done, well done. That's fifty iron-dollars for graduating — go see CUSTOMIZATION and the store, get yourself some drip. Then find the CLUB. Gasket's waiting for you, Clanker.",
+    text: "Down goes the rust bucket. Well done, well done, well done. Go check out the locker and the store, get yourself some drip. Gasket's waiting for you, Clanker.",
   },
   lose: {
     id: 'e085',
-    text: "Up you get. He's been at this for years. You, about ten minutes. Come back swinging — I'll be here, and so will he.",
+    text: "Up you get. He's been at this for years. You, about ten minutes. Come back swinging. I'll be here.",
   },
 
   // Praise pool — repeat successes; rotate, never repeating the last pick.
