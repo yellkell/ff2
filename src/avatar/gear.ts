@@ -37,7 +37,7 @@
 
 import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, ConeGeometry, CylinderGeometry, DoubleSide, ExtrudeGeometry, Float32BufferAttribute, Group, IcosahedronGeometry, LatheGeometry, Mesh, MeshStandardMaterial, type Object3D, Quaternion, Shape, SphereGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3 } from 'three';
 import { BODY_IK, PAINT } from '../config.js';
-import { EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
+import { BODY_RINGS, EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
 import { atlasGear, mergePiece } from './gearAtlas.js';
 import { HEAD_FIT, HEAD_PIECES } from './heads.js';
 
@@ -300,6 +300,59 @@ function aim(o: Object3D, dir: Vector3): void {
 }
 
 /** A rivet (a low dome) in the trim, at `at`, domed along `n`. */
+/** THE BODY'S SKIN at height `y` (hip-local, BODY_RINGS interpolated as
+ *  the loft interpolates them): half-width, half-depth, fore/aft centre —
+ *  or null above the neck, where there is no body to meet. */
+function skinAt(y: number): { w: number; d: number; z: number } | null {
+  const R = BODY_RINGS;
+  if (y > R[0].y || y < R[R.length - 1].y) return null;
+  for (let k = 1; k < R.length; k++) {
+    if (y < R[k].y) continue;
+    const a = R[k - 1];
+    const b = R[k];
+    const t = (y - b.y) / (a.y - b.y || 1);
+    const lerp = (p: number, q: number): number => q + (p - q) * t;
+    return { w: lerp(a.w, b.w), d: lerp(a.d, b.d), z: lerp(a.z ?? 0, b.z ?? 0) };
+  }
+  return null;
+}
+
+/**
+ * SEAT a body piece ON the body: bake the mesh's placement into its
+ * geometry (body-local — body gear hangs at the body group's origin), and
+ * push every vertex that falls inside the loft, or within `gap` of it,
+ * straight out from the spine to `gap` above the skin. The outside of the
+ * piece keeps its shape; only what would have been buried is moved, so
+ * the piece meets the body instead of vanishing into it.
+ */
+function seatOnBody(mesh: Mesh, gap: number): void {
+  mesh.updateMatrix();
+  const geo = mesh.geometry;
+  geo.applyMatrix4(mesh.matrix);
+  mesh.position.set(0, 0, 0);
+  mesh.rotation.set(0, 0, 0);
+  mesh.scale.set(1, 1, 1);
+  const pos = geo.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const skin = skinAt(y);
+    if (!skin) continue;
+    const x = pos.getX(i);
+    const dz = pos.getZ(i) - skin.z;
+    const q = Math.hypot(x / skin.w, dz / skin.d);
+    const want = 1 + gap / ((skin.w + skin.d) / 2);
+    // A SOFT floor (softplus), not a clamp: a clamp leaves a jagged notch
+    // where the pushed and unpushed vertices meet along the rim; this
+    // eases the piece onto the skin over a short band instead.
+    const band = 0.07;
+    if (q >= want + band * 5 || q < 1e-6) continue;
+    const k = (want + band * Math.log1p(Math.exp((q - want) / band))) / q;
+    pos.setXYZ(i, x * k, y, skin.z + dz * k);
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+}
+
 function rivet(trimMat: MeshStandardMaterial, at: Vector3, n: Vector3, r: number): Mesh {
   const m = asTrim(new Mesh(new SphereGeometry(r, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2), trimMat));
   m.position.copy(at);
@@ -398,7 +451,8 @@ function roundRect(w: number, h: number, c: number): Shape {
 }
 
 /**
- * ONE SHOULDER'S ARMOUR — the pauldron both pads are built from. A domed
+ * ONE SHOULDER'S ARMOUR — the SPIKED PADS' plate (PAULDRONS wore it too
+ * for a while, and went back to plain shells). A domed
  * CAP over the shoulder point, a LAME (a second, wider band of plate)
  * overlapping out from under its edge, and a rim of trim along each lower
  * edge so the plates read as plates and not as one lump. It is SEATED:
@@ -706,12 +760,25 @@ const BUILDERS: Record<string, Builder> = {
   },
 
   /* body — origin at the hips, +y up, front −z, shoulders at (±0.126, 0.395) */
-  pauldrons: (mat, _side, trimMat, glowMat) => {
-    // Plate on both shoulders — cap, lame and rims (shoulderPad), seated
-    // on the shoulder. (They were bare half-spheres standing clear of the
-    // body, and read as a pair of shells.)
+  pauldrons: (mat) => {
+    // THE SHELLS, back: one smooth dome per shoulder, tipped down over the
+    // arm — the first cut's shape, which was the one people liked. (A
+    // riveted cap-lame-rim plate replaced it for a while, because the
+    // tipped dome's INSIDE edge dove into the trapezius.) So the shape is
+    // kept and the dive is fixed: seatOnBody pushes whatever part of the
+    // shell falls inside the body back out onto its skin, and the inner
+    // edge now hugs the slope up to the neck instead of cutting into it.
     const g = new Group();
-    for (const s of [-1, 1] as const) g.add(shoulderPad(mat, trimMat, glowMat, s, 1, false));
+    for (const s of [-1, 1]) {
+      const pad = new Mesh(new SphereGeometry(0.1, 48, 28, 0, Math.PI * 2, 0, Math.PI * 0.55), mat);
+      pad.scale.set(1.1, 0.8, 1.05);
+      // A whisker further out and a touch less tipped than the first cut,
+      // so there is less of it to seat — the shape reads the same.
+      pad.position.set(s * 0.222, 0.385, 0);
+      pad.rotation.z = -s * 0.4;
+      seatOnBody(pad, 0.004);
+      g.add(pad);
+    }
     return g;
   },
   chestplate: (mat, _side, trimMat, glowMat) => {

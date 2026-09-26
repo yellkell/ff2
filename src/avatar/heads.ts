@@ -23,7 +23,10 @@
  *    read as panel lines on mirror steel and as playing cards on porcelain;
  *    they are rounded masses (ellipsoid) and tapered tufts (tuft) now.
  *  - SMOOTHER: denser lofts and spheres, UV'd for the gear atlas; the
- *    knight's cross and sight wrap the barrel instead of standing off it.
+ *    knight's cross and sight wrap the barrel instead of standing off it,
+ *    and its skirt is primer, the body's colour.
+ *  - REDESIGNED: the WOLF, FROG and BUNNY are FF2 builds, not FF1 ports
+ *    (see their notes below).
  *
  * Frame (as every head piece): origin at the head centre, front −z, sized
  * off BODY_IK.headRadius.
@@ -32,6 +35,7 @@
 import {
   BoxGeometry,
   BufferGeometry,
+  CatmullRomCurve3,
   ConeGeometry,
   CylinderGeometry,
   Float32BufferAttribute,
@@ -41,6 +45,7 @@ import {
   type MeshStandardMaterial,
   type Object3D,
   SphereGeometry,
+  TubeGeometry,
   Vector2,
   Vector3,
 } from 'three';
@@ -590,8 +595,9 @@ function buildKnightHead(mat: MeshStandardMaterial, trimMat: MeshStandardMateria
     g.add(stud);
   }
 
-  // Gorget neck base flaring under the helm.
-  const gorget = new Mesh(new CylinderGeometry(r * 0.72, r * 0.9, r * 0.34, 16), trimMat);
+  // Gorget neck base flaring under the helm — the SKIRT, in the body's own
+  // base colour (it was trim, and read as a dark collar cut off the body).
+  const gorget = new Mesh(new CylinderGeometry(r * 0.72, r * 0.9, r * 0.34, 32), mat);
   gorget.position.y = -r * 0.64;
   g.add(gorget);
   return g;
@@ -801,381 +807,359 @@ function buildStallionHead(mat: MeshStandardMaterial, trimMat: MeshStandardMater
   return g;
 }
 
-/** WOLF (KAVIC) → lofted for accuracy, and MEAN: the lean hunter's skull —
- *  a modest dome, a light stop at the brow, then a LONG tapering muzzle (the
- *  opposite of the bear's short deep one), BIG ears pinned back, slit eyes
- *  glaring under a heavy V-brow, swept cheek ruffs and a layered nape ruff.
- *  The face stays clean — the menace is the glare and the ear set. */
+/* ── FF2 redesigns: the WOLF, the FROG and the BUNNY ────────────────────
+ * These three were carried over from FF1 first and asked for again: the
+ * wolf read as a rat (faceted pyramid ears, a lumpy muzzle, ruffs too small
+ * to find), the frog had four eyes (its black eardrums) and a mouth of
+ * floating bars, and the bunny was a ball with two pipes on it. Rebuilt
+ * from the same toolkit — lofts, leaves, tufts — around one strong idea
+ * each: the wolf's RUFF, the frog's LIDDED turrets and wrap-round SMILE,
+ * the bunny's EARS. */
+
+/** A point ON a loft's surface: station `i`'s ring at angle `a` (0 = the
+ *  +x side, π/2 = the topline, −π/2 = the underline), pushed `out` along
+ *  the section so a line laid there sits proud of the skin. */
+function onLoft(st: HeadStation, a: number, scale: number, out = 1.0): Vector3 {
+  const midY = (st.top[0] + st.bot[0]) / 2;
+  const midZ = (st.top[1] + st.bot[1]) / 2;
+  const hy = (st.top[0] - st.bot[0]) / 2;
+  const hz = (st.top[1] - st.bot[1]) / 2;
+  const e = 2 / st.n;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const u = Math.sign(c) * Math.abs(c) ** e;
+  const v = Math.sign(s) * Math.abs(s) ** e;
+  return new Vector3(st.w * u * out * scale, (midY + hy * v * out) * scale, (midZ + hz * v * out) * scale);
+}
+
+/** A line drawn along a loft at a fixed ring angle, stations `from`..`to`,
+ *  for both sides at once (a → the +x side, π − a → the −x side), joined
+ *  across the front: a mouth that follows the head it is cut into. */
+function loftSmile(stations: HeadStation[], a: number, from: number, to: number, scale: number, out: number): Vector3[] {
+  const right: Vector3[] = [];
+  for (let i = from; i <= to; i++) right.push(onLoft(stations[i], a, scale, out));
+  const left = right.map((p) => new Vector3(-p.x, p.y, p.z)).reverse();
+  return [...left, ...right];
+}
+
+/** A thin trim line through `pts` — a mouth, a seam. */
+function groove(pts: Vector3[], radius: number, trimMat: MeshStandardMaterial): Mesh {
+  const curve = new CatmullRomCurve3(pts);
+  return new Mesh(new TubeGeometry(curve, pts.length * 8, radius, 8, false), trimMat);
+}
+
+/** A LEAF — an ear: an ellipsoid w × h × d drawn to a soft point at the
+ *  top (`point` 0..1), its root rounded at −y, the upper half swept back
+ *  by `bend` metres (quadratic, so it curls rather than kinks). */
+function leaf(w: number, h: number, d: number, point: number, bend: number): BufferGeometry {
+  const geo = new SphereGeometry(0.5, 24, 24);
+  const pos = geo.getAttribute('position');
+  for (let i = 0; i < pos.count; i++) {
+    const t = pos.getY(i) + 0.5; // 0 root → 1 tip
+    const k = 1 - point * Math.max(0, t - 0.45) * 1.4;
+    pos.setX(i, pos.getX(i) * w * k);
+    pos.setZ(i, pos.getZ(i) * d * (0.6 + 0.4 * k) + bend * t * t);
+    pos.setY(i, pos.getY(i) * h);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** FOLD a piece forward (toward −z) about a hinge at height `at`: above
+ *  it, the centreline (x = 0, z = 0) runs round an arc of radius `R` for
+ *  `angle` radians and then straight on, and every vertex keeps its offset
+ *  from the centreline in the turning frame — so a flopped ear bends like
+ *  felt, and a leaf laid on its front face folds with it on the inside. */
+function fold(geo: BufferGeometry, at: number, R: number, angle: number): void {
+  const pos = geo.getAttribute('position');
+  const arc = R * angle;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    if (y <= at) continue;
+    const s = y - at;
+    const dz = pos.getZ(i);
+    const phi = Math.min(s, arc) / R;
+    let cy = at + R * Math.sin(phi);
+    let cz = -R * (1 - Math.cos(phi));
+    if (s > arc) {
+      cy += (s - arc) * Math.cos(angle);
+      cz -= (s - arc) * Math.sin(angle);
+    }
+    // The frame turns with the arc: the ear's depth axis tips from +z over.
+    pos.setY(i, cy + dz * Math.sin(phi));
+    pos.setZ(i, cz + dz * Math.cos(phi));
+  }
+  geo.computeVertexNormals();
+}
+
+/** A tuft planted at `root`, growing along `dir` (a teardrop, see tuft). */
+function tuftAt(mat: MeshStandardMaterial, root: Vector3, dir: Vector3, w: number, h: number, d: number): Mesh {
+  const n = dir.clone().normalize();
+  const m = new Mesh(tuft(w, h, d), mat);
+  m.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), n);
+  m.position.copy(root).addScaledVector(n, h * 0.42);
+  return m;
+}
+
+/** WOLF — a timber wolf, alert rather than snarling. A broad crown and a
+ *  real STOP dropping onto a long, square-ended muzzle over a separate
+ *  lower jaw; tall leaf ears standing up and a touch out; almond eyes
+ *  under a heavy brow; and THE RUFF — a mane of long tufts sweeping back
+ *  off the cheeks and jaw and round the nape, which is the silhouette
+ *  that says wolf from across the arena. */
 function buildWolfHead(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial): Group {
   const r = BODY_IK.headRadius;
   const g = new Group();
-  g.scale.setScalar(1.49); // carried big — a hair under the bear's 1.5
-  g.position.y = 0.03;
+  g.scale.setScalar(1.18);
+  g.position.y = 0.02;
 
-  // The skull loft, occiput → nose tip. Half the head is muzzle: the taper
-  // starts at the cheeks and runs shallow and straight — no bear dome, no
-  // horse convexity — with only a light dish at the stop.
-  const skull = new Mesh(
-    loftGeometry(
-      [
-        { top: [0.42, 0.55], bot: [-0.35, 0.6], w: 0.38, n: 2.0 }, // occiput
-        { top: [0.68, 0.28], bot: [-0.48, 0.42], w: 0.46, n: 2.05 }, // crown
-        { top: [0.64, -0.02], bot: [-0.52, 0.2], w: 0.5, n: 2.1 }, // cheeks (widest)
-        { top: [0.5, -0.3], bot: [-0.5, -0.08], w: 0.44, n: 2.1 }, // brow
-        { top: [0.3, -0.52], bot: [-0.46, -0.32], w: 0.3, n: 1.95 }, // the light stop
-        { top: [0.18, -0.78], bot: [-0.4, -0.6], w: 0.24, n: 1.9 }, // muzzle root
-        { top: [0.1, -1.05], bot: [-0.34, -0.92], w: 0.19, n: 1.85 }, // mid muzzle
-        { top: [0.05, -1.28], bot: [-0.26, -1.18], w: 0.14, n: 1.8 }, // toward the nose
-        { top: [0.02, -1.38], bot: [-0.2, -1.32], w: 0.09, n: 1.75 }, // tip
-      ],
-      r,
-    ),
-    mat,
-  );
-  g.add(skull);
-
-  // Ears PINNED BACK — the aggressive set, not the alert prick — with their
-  // bases buried in the crown's midline where the loft is still tall (out at
-  // ±0.36r the surface has already fallen away and the outer halves floated).
-  // Geometry pre-spun 45° so a flat face fronts before the thin z-squash.
-  // Raked back, but with real THICKNESS. Squashed to z 0.55 and pinned this
-  // far back they were paper triangles from the front — the one view that
-  // matters — so the ear reads as a solid wedge now, with a dark cup.
+  const skullSt: HeadStation[] = [
+    { top: [0.45, 0.6], bot: [-0.32, 0.58], w: 0.4, n: 2.0 }, // occiput
+    { top: [0.72, 0.3], bot: [-0.46, 0.4], w: 0.52, n: 2.05 }, // crown
+    { top: [0.66, -0.02], bot: [-0.5, 0.14], w: 0.57, n: 2.1 }, // cheeks (widest)
+    { top: [0.54, -0.3], bot: [-0.46, -0.12], w: 0.5, n: 2.1 }, // brow
+    { top: [0.28, -0.5], bot: [-0.4, -0.36], w: 0.33, n: 2.1 }, // THE STOP
+    { top: [0.2, -0.72], bot: [-0.3, -0.6], w: 0.26, n: 2.2 }, // muzzle root
+    { top: [0.15, -0.98], bot: [-0.26, -0.9], w: 0.215, n: 2.35 }, // mid muzzle
+    { top: [0.1, -1.2], bot: [-0.22, -1.14], w: 0.18, n: 2.5 }, // square end
+    { top: [0.04, -1.29], bot: [-0.16, -1.27], w: 0.12, n: 2.3 }, // tip
+  ];
+  g.add(new Mesh(loftGeometry(skullSt, r), mat));
+  // The lower jaw, its own lean loft under the muzzle.
+  const jawSt: HeadStation[] = [
+    { top: [-0.2, -0.3], bot: [-0.48, -0.1], w: 0.3, n: 2.0 },
+    { top: [-0.24, -0.66], bot: [-0.44, -0.56], w: 0.21, n: 2.1 },
+    { top: [-0.24, -1.0], bot: [-0.37, -0.96], w: 0.15, n: 2.2 },
+    { top: [-0.23, -1.12], bot: [-0.31, -1.11], w: 0.09, n: 2.0 },
+  ];
+  g.add(new Mesh(loftGeometry(jawSt, r), mat));
+  // The mouth: a dark line where jaw meets muzzle, running back to the
+  // corner under the cheek.
+  const mouth: Vector3[] = [];
+  for (const [x, y, z] of [
+    [0.24, -0.2, -0.46], [0.2, -0.24, -0.72], [0.15, -0.25, -0.98], [0.08, -0.24, -1.14], [0, -0.24, -1.17],
+  ] as const) mouth.push(new Vector3(x * r, y * r, z * r));
+  g.add(groove([...mouth.map((p) => new Vector3(-p.x, p.y, p.z)), ...mouth.slice(0, -1).reverse()], r * 0.02, trimMat));
+  // Fangs, just showing under the lip.
   for (const side of [-1, 1]) {
-    const earGeo = new ConeGeometry(r * 0.3, r * 0.76, 4);
-    earGeo.rotateY(Math.PI / 4);
-    const ear = new Mesh(earGeo, mat);
-    ear.scale.set(1, 1, 0.78);
-    ear.position.set(side * r * 0.3, r * 0.78, r * 0.22);
-    ear.rotation.set(0.2, side * -0.18, side * -0.16); // still raked, less pinned
-    g.add(ear);
-    // The dark inner sits PROUD of the outer cone's front face (the bigger
-    // ear swallowed it and the ears read as flat spikes) — that shadowed
-    // cavity is what sells the ear's depth.
-    const innerGeo = new ConeGeometry(r * 0.18, r * 0.52, 4);
-    innerGeo.rotateY(Math.PI / 4);
-    const inner = new Mesh(innerGeo, trimMat);
-    inner.scale.set(1, 1, 0.42);
-    inner.position.set(side * r * 0.3, r * 0.74, r * 0.02);
-    inner.rotation.set(0.2, side * -0.18, side * -0.16);
-    g.add(inner);
-  }
-
-  // The GLARE: heavy brow ridges in the angry V — INNER ends dropped hard
-  // toward the nose — with narrow slit eyes slanted to match beneath them.
-  // (Sign note: the face is on −z and read mirrored; the first cut used the
-  // other sign and the brows tilted quizzical, not angry.)
-  for (const side of [-1, 1]) {
-    const ridge = new Mesh(ellipsoid(r * 0.34, r * 0.09, r * 0.13), mat);
-    ridge.position.set(side * r * 0.22, r * 0.4, -r * 0.48);
-    ridge.rotation.set(0.2, 0, side * 0.42);
-    g.add(ridge);
-    const socket = new Mesh(new SphereGeometry(r * 0.13, 28, 19), trimMat);
-    socket.scale.set(1.25, 0.62, 0.6);
-    socket.position.set(side * r * 0.25, r * 0.28, -r * 0.52);
-    socket.rotation.z = side * 0.42;
-    g.add(socket);
-    const iris = new Mesh(new SphereGeometry(r * 0.095, 28, 19), glowMat);
-    iris.scale.set(1.2, 0.5, 0.65);
-    iris.position.set(side * r * 0.25, r * 0.28, -r * 0.56);
-    iris.rotation.z = side * 0.42;
-    g.add(iris);
-    // A slit pupil down the middle of the glow — a lit slot with nothing in it
-    // just blooms into a white dash at range.
-    const pupil = new Mesh(new BoxGeometry(r * 0.032, r * 0.09, r * 0.03), trimMat);
-    pupil.position.set(side * r * 0.25, r * 0.28, -r * 0.6);
-    pupil.rotation.z = side * 0.42;
-    g.add(pupil);
-  }
-
-  // The muzzle read. Head-on, a LONG snout is the most foreshortened thing on
-  // the head — it was vanishing entirely and leaving an egg. A raised bridge
-  // and two lean cheek masses give it edges to be read against.
-  const bridge = new Mesh(ellipsoid(r * 0.155, r * 0.09, r * 0.78), mat);
-  bridge.position.set(0, r * 0.09, -r * 0.95);
-  bridge.rotation.x = -0.05;
-  g.add(bridge);
-  for (const side of [-1, 1]) {
-    const cheek = new Mesh(new SphereGeometry(r * 0.15, 24, 16), mat);
-    cheek.scale.set(0.8, 0.85, 1.5);
-    cheek.position.set(side * r * 0.16, -r * 0.1, -r * 0.86);
-    g.add(cheek);
-  }
-
-  // The nose pad, with nostrils. (No wrinkle bars on the bridge — they read as
-  // a stray black stripe across the snout, not a snarl scrunch.)
-  const nose = new Mesh(new SphereGeometry(r * 0.125, 28, 19), trimMat);
-  nose.scale.set(1.15, 0.75, 0.75);
-  nose.position.set(0, 0.0, -r * 1.37);
-  g.add(nose);
-  for (const side of [-1, 1]) {
-    const nostril = new Mesh(new SphereGeometry(r * 0.028, 20, 14), mat);
-    nostril.scale.set(1, 1.2, 0.6);
-    nostril.position.set(side * r * 0.055, -r * 0.01, -r * 1.44);
-    g.add(nostril);
-  }
-
-  // The mouth line — and FANGS, in primer under the dark mouth line (FF1
-  // lit them; a wolf with no teeth was throwing away its best tell).
-  const mouth = new Mesh(new BoxGeometry(r * 0.035, r * 0.035, r * 0.62), trimMat);
-  mouth.position.set(0, -r * 0.27, -r * 1.02);
-  mouth.rotation.x = -0.08;
-  g.add(mouth);
-  for (const side of [-1, 1]) {
-    const fang = new Mesh(new ConeGeometry(r * 0.036, r * 0.125, 8), mat);
-    fang.rotation.set(Math.PI, 0, side * 0.12); // point down
-    fang.position.set(side * r * 0.07, -r * 0.32, -r * 1.2);
+    const fang = new Mesh(new ConeGeometry(r * 0.03, r * 0.11, 12), mat);
+    fang.rotation.x = Math.PI;
+    fang.position.set(side * r * 0.1, -r * 0.29, -r * 1.06);
     g.add(fang);
   }
+  // The nose: a broad pad capping the square muzzle.
+  const nose = new Mesh(ellipsoid(r * 0.26, r * 0.15, r * 0.17), trimMat);
+  nose.position.set(0, r * 0.04, -r * 1.29);
+  nose.rotation.x = 0.2;
+  g.add(nose);
 
-  // Cheek ruffs swept back and down — leaner, longer sweeps than the bear's.
+  // Eyes: almond, set forward, outer corners lifted — under a brow that
+  // drops toward the stop.
   for (const side of [-1, 1]) {
-    for (let i = 0; i < 2; i++) {
-      const ruff = new Mesh(tuft(r * 0.045, r * (0.3 - i * 0.06), r * (0.44 - i * 0.08)), mat);
-      ruff.position.set(side * r * (0.46 - i * 0.04), -r * (0.16 + i * 0.18), r * (0.08 - i * 0.16));
-      ruff.rotation.set(0.18, side * 0.7, side * (0.3 + i * 0.2));
-      g.add(ruff);
+    const socket = new Mesh(ellipsoid(r * 0.27, r * 0.14, r * 0.12), trimMat);
+    socket.position.set(side * r * 0.25, r * 0.3, -r * 0.52);
+    socket.rotation.set(0, side * -0.45, side * 0.32);
+    g.add(socket);
+    const eye = new Mesh(ellipsoid(r * 0.21, r * 0.09, r * 0.1), glowMat);
+    eye.position.set(side * r * 0.26, r * 0.3, -r * 0.55);
+    eye.rotation.set(0, side * -0.45, side * 0.32);
+    g.add(eye);
+    const brow = new Mesh(ellipsoid(r * 0.34, r * 0.1, r * 0.16), mat);
+    brow.position.set(side * r * 0.23, r * 0.43, -r * 0.47);
+    brow.rotation.set(0.2, side * -0.3, side * 0.36);
+    g.add(brow);
+  }
+
+  // Ears: tall leaves, standing, tipped a little out and back, each with a
+  // dark inner leaf set into its front face.
+  for (const side of [-1, 1]) {
+    const ear = new Group();
+    ear.position.set(side * r * 0.3, r * 0.6, r * 0.12);
+    ear.rotation.set(0.12, side * -0.25, side * -0.22);
+    g.add(ear);
+    const shell = new Mesh(leaf(r * 0.36, r * 0.66, r * 0.16, 0.9, r * 0.05), mat);
+    shell.position.y = r * 0.28;
+    ear.add(shell);
+    const inner = new Mesh(leaf(r * 0.2, r * 0.46, r * 0.06, 0.9, r * 0.04), trimMat);
+    inner.position.set(0, r * 0.26, -r * 0.06);
+    ear.add(inner);
+  }
+
+  // THE RUFF. Cheek tufts fanning back and down off the jaw line, a
+  // longer rank behind them, and a collar of tufts round the nape.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4;
+      const root = new Vector3(side * r * (0.5 - t * 0.08), r * (0.12 - t * 0.5), r * (-0.06 + t * 0.06));
+      const dir = new Vector3(side * (0.75 - t * 0.2), -0.25 - t * 0.55, 0.62);
+      g.add(tuftAt(mat, root, dir, r * 0.2, r * (0.5 + Math.sin(t * Math.PI) * 0.12), r * 0.09));
+    }
+    for (let i = 0; i < 4; i++) {
+      const t = i / 3;
+      const root = new Vector3(side * r * (0.44 - t * 0.1), r * (0.32 - t * 0.6), r * (0.2 + t * 0.06));
+      const dir = new Vector3(side * 0.55, -0.1 - t * 0.5, 0.9);
+      g.add(tuftAt(mat, root, dir, r * 0.22, r * 0.5, r * 0.1));
     }
   }
-  // The nape ruff: a fan of plates around the back of the skull.
   for (let i = 0; i < 5; i++) {
-    const a = ((-40 + i * 20) * Math.PI) / 180;
-    const plate = new Mesh(tuft(r * 0.14, r * 0.34, r * 0.05), mat);
-    plate.position.set(Math.sin(a) * r * 0.42, -r * 0.05, r * (0.52 + Math.cos(a) * 0.12));
-    plate.rotation.set(0.35, a, 0);
-    g.add(plate);
+    const a = ((-50 + i * 25) * Math.PI) / 180;
+    const root = new Vector3(Math.sin(a) * r * 0.3, -r * 0.2, r * (0.4 + Math.cos(a) * 0.08));
+    const dir = new Vector3(Math.sin(a) * 0.5, -0.55, 0.75);
+    g.add(tuftAt(mat, root, dir, r * 0.24, r * 0.5, r * 0.1));
   }
   return g;
 }
 
-/** FROG (LEGS) → lofted for accuracy: the pond heavyweight — a broad FLAT
- *  head wider than it is long, big dome eye-turrets perched ON TOP (the frog
- *  signature), a wide smile line wrapping the snout, a throat sac tucked
- *  under the jaw, and two pin nostrils up top. Smooth and gel-glossy — no
- *  fur, no plates. */
+/** FROG — a tree frog, round and pleased with itself. One wide, flat,
+ *  smooth skull; two eye TURRETS sunk into the crown, each lens under a
+ *  heavy half-closed LID (the look that makes it a character, not a toy);
+ *  a SMILE cut round the snout along the skull's own surface, corner to
+ *  corner; soft eardrum discs in the body's own colour; two pin nostrils. */
 function buildFrogHead(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial): Group {
   const r = BODY_IK.headRadius;
   const g = new Group();
-  g.scale.set(2.03, 1.51, 1.78); // wide and low, and HUGE — the flat pond profile fills the guard
-  g.position.y = 0.0;
+  g.scale.setScalar(1.2);
 
-  // The skull loft: low flat crown, widest at the cheeks, then a broad round
-  // snout sloping to the lip — no stop, no muzzle, just one smooth wedge.
-  const skull = new Mesh(
-    loftGeometry(
-      [
-        { top: [0.28, 0.5], bot: [-0.3, 0.52], w: 0.5, n: 2.2 }, // back of skull
-        { top: [0.42, 0.2], bot: [-0.42, 0.3], w: 0.62, n: 2.3 }, // crown (flat, wide)
-        { top: [0.4, -0.12], bot: [-0.48, 0.02], w: 0.66, n: 2.3 }, // cheeks (widest)
-        { top: [0.3, -0.42], bot: [-0.46, -0.3], w: 0.58, n: 2.2 }, // eye line
-        { top: [0.14, -0.7], bot: [-0.4, -0.6], w: 0.46, n: 2.1 }, // snout
-        { top: [0.02, -0.92], bot: [-0.3, -0.86], w: 0.3, n: 2.0 }, // lip
-        { top: [-0.04, -1.0], bot: [-0.22, -0.98], w: 0.16, n: 1.9 }, // tip (rounded)
-      ],
-      r,
-    ),
-    mat,
-  );
-  g.add(skull);
+  const st: HeadStation[] = [
+    { top: [0.3, 0.62], bot: [-0.34, 0.6], w: 0.6, n: 2.2 }, // back
+    { top: [0.44, 0.3], bot: [-0.5, 0.36], w: 0.8, n: 2.3 }, // crown
+    { top: [0.42, -0.05], bot: [-0.56, 0.04], w: 0.86, n: 2.4 }, // cheeks (widest)
+    { top: [0.32, -0.4], bot: [-0.54, -0.3], w: 0.78, n: 2.35 }, // eye line
+    { top: [0.16, -0.7], bot: [-0.46, -0.62], w: 0.6, n: 2.25 }, // snout
+    { top: [0.02, -0.9], bot: [-0.36, -0.86], w: 0.4, n: 2.1 }, // lip
+    { top: [-0.06, -0.98], bot: [-0.26, -0.97], w: 0.2, n: 2.0 }, // tip
+  ];
+  g.add(new Mesh(loftGeometry(st, r), mat));
 
-  // The eye turrets: big domes on TOP of the skull, each a dark socket cup
-  // with a glowing lens set INTO it and a slit pupil sunk in the glass.
-  //
-  // The lens used to be a bare glow ball with the pupil floating as a bar in
-  // front of it — two headlights with a slot across them, which is where the
-  // "toy" read came from. Ringing the lens in dark and sinking the slit gives
-  // it somewhere to sit.
+  // THE SMILE: along the skull at a fixed angle just below its equator,
+  // from under the eardrums round the snout and back.
+  g.add(groove(loftSmile(st, -0.42, 2, 6, r, 1.012), r * 0.024, trimMat));
+
+  // The turrets: domes sunk into the crown, a big lit lens in each, a
+  // horizontal pupil set into the glass, and a heavy lid over the top.
   for (const side of [-1, 1]) {
-    const dome = new Mesh(new SphereGeometry(r * 0.27, 32, 19), mat);
-    dome.position.set(side * r * 0.38, r * 0.5, -r * 0.32);
+    const c = new Vector3(side * r * 0.44, r * 0.42, -r * 0.3);
+    const dome = new Mesh(new SphereGeometry(r * 0.3, 32, 24), mat);
+    dome.position.copy(c);
     g.add(dome);
-    const socket = new Mesh(new SphereGeometry(r * 0.21, 32, 19), trimMat);
-    socket.scale.set(1, 1, 0.9);
-    socket.position.set(side * r * 0.38, r * 0.52, -r * 0.4);
-    g.add(socket);
-    const lens = new Mesh(new SphereGeometry(r * 0.165, 28, 19), glowMat);
-    lens.position.set(side * r * 0.38, r * 0.53, -r * 0.46);
+    const look = new Vector3(side * 0.35, 0.15, -1).normalize();
+    const lens = new Mesh(new SphereGeometry(r * 0.24, 32, 24), glowMat);
+    lens.position.copy(c).addScaledVector(look, r * 0.1);
     g.add(lens);
-    // The slit, sunk into the lens rather than hovering off it.
-    // Sat at -0.56 this was swallowed INSIDE the lens sphere (whose front face
-    // is out at -0.625) and the eye read blank. Bring it to the glass.
-    const pupil = new Mesh(new BoxGeometry(r * 0.2, r * 0.055, r * 0.05), trimMat);
-    pupil.position.set(side * r * 0.38, r * 0.53, -r * 0.61);
+    const pupil = new Mesh(ellipsoid(r * 0.24, r * 0.08, r * 0.06), trimMat);
+    pupil.quaternion.setFromUnitVectors(new Vector3(0, 0, -1), look);
+    pupil.position.copy(lens.position).addScaledVector(look, r * 0.225);
     g.add(pupil);
-    // (No brow shelf over the turret — a frog has no brow, and the bar sitting
-    // on top of each dome read as an eyebrow glued on rather than anatomy.)
-    // TYMPANUM: the big round eardrum disc behind each eye. No frog reads as
-    // a frog without them, and this head had nothing at all on its cheeks.
-    const drum = new Mesh(new SphereGeometry(r * 0.14, 28, 19), trimMat);
-    drum.scale.set(0.5, 1, 1);
-    drum.position.set(side * r * 0.62, r * 0.12, -r * 0.12);
+    // The LID: a cap of the dome drawn down over the top of the lens.
+    const lid = new Mesh(new SphereGeometry(r * 0.262, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.4), mat);
+    lid.position.copy(lens.position);
+    lid.rotation.set(0.12, 0, side * -0.12); // half down over the glass
+    g.add(lid);
+  }
+
+  // Eardrums: soft discs in the shell's own colour, behind the eyes —
+  // FF1 made them dark, and the frog had four eyes.
+  for (const side of [-1, 1]) {
+    const drum = new Mesh(ellipsoid(r * 0.08, r * 0.3, r * 0.3), mat);
+    drum.position.set(side * r * 0.82, r * 0.05, r * 0.06);
+    drum.rotation.y = side * 0.15;
     g.add(drum);
   }
-
-  // The smile: ONE continuous line wrapping the snout, built from overlapping
-  // segments that meet. As three separate bars with gaps at the joins it read
-  // as scratches under the nose rather than a mouth.
-  const smileMid = new Mesh(new BoxGeometry(r * 0.66, r * 0.04, r * 0.035), trimMat);
-  smileMid.position.set(0, -r * 0.22, -r * 0.89);
-  g.add(smileMid);
+  // Nostrils, high on the snout.
   for (const side of [-1, 1]) {
-    // Hugging the snout's curve — any longer/straighter and the ends poked
-    // past the cheeks like whiskers.
-    const corner = new Mesh(new BoxGeometry(r * 0.42, r * 0.04, r * 0.035), trimMat);
-    corner.position.set(side * r * 0.36, -r * 0.185, -r * 0.74);
-    corner.rotation.set(0, side * 0.72, side * 0.14);
-    g.add(corner);
-  }
-
-  // The throat sac, tucked under the jaw — a warmer sheen than the shell so
-  // it reads soft; and two pin nostrils high on the snout.
-  const sac = new Mesh(new SphereGeometry(r * 0.3, 32, 19), mat);
-  sac.scale.set(1.25, 0.7, 0.95);
-  sac.position.set(0, -r * 0.44, -r * 0.5);
-  g.add(sac);
-  for (const side of [-1, 1]) {
-    const nostril = new Mesh(new SphereGeometry(r * 0.035, 20, 14), trimMat);
-    nostril.position.set(side * r * 0.1, r * 0.12, -r * 0.9);
+    const nostril = new Mesh(new SphereGeometry(r * 0.035, 16, 12), trimMat);
+    nostril.position.set(side * r * 0.12, r * 0.07, -r * 0.88);
     g.add(nostril);
   }
   return g;
 }
 
-/** OSWALD — the lucky rabbit, cast in iron. A HUGE round skull (the biggest
- *  head on the roster), the white MUZZLE MASK that gives Oswald his face, big
- *  close-set oval eyes with dark pupils, a round button nose, and the
- *  BUCK TEETH we keep from the old bunny. The signature is the EARS: two tall
- *  STAND-UP blades off the crown that lean out, break back once at the hinge
- *  and again near the tip — stood proud like Bugs, still soft enough to read
- *  floppy. Each ear is one pivot chain (root → hinge → tip) so it moves as a
- *  single limb, never separate parts.
- *
- *  The skin id stays 'bunny': it's the save key for owned/worn prefs and the
- *  per-skin geometry tag, so only the display name changed. */
-function buildOswaldHead(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial): Group {
+/** BUNNY — a rabbit, not a ball. An egg of a head widest at the cheeks,
+ *  whisker pads either side of a small dark nose, the Y of the mouth,
+ *  two buck teeth; big bright eyes; and THE EARS — long leaves standing
+ *  off the crown with dark inner leaves, one straight and one flopped
+ *  over at the tip, which is all the personality a rabbit needs. */
+function buildBunnyHead(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial): Group {
   const r = BODY_IK.headRadius;
   const g = new Group();
-  g.scale.setScalar(1.58); // the biggest head on the roster — that's the joke
-  g.position.y = 0.04;
+  g.scale.setScalar(1.12);
+  g.position.y = 0.01;
 
-  // The skull loft: one big rounded dome — Oswald is drawn from circles, so
-  // the cheeks stay nearly as wide as the crown and the muzzle is barely a
-  // muzzle at all, just a short rounded push forward.
-  const skull = new Mesh(
-    loftGeometry(
-      [
-        { top: [0.32, 0.62], bot: [-0.5, 0.54], w: 0.42, n: 2.1 }, // occiput
-        { top: [0.72, 0.28], bot: [-0.62, 0.38], w: 0.54, n: 2.15 }, // crown — tall and round
-        { top: [0.7, -0.08], bot: [-0.67, 0.14], w: 0.57, n: 2.15 }, // brow (widest)
-        { top: [0.46, -0.4], bot: [-0.62, -0.18], w: 0.51, n: 2.1 }, // cheeks
-        { top: [0.18, -0.62], bot: [-0.48, -0.46], w: 0.34, n: 2.0 }, // muzzle root
-        { top: [0.02, -0.76], bot: [-0.34, -0.68], w: 0.22, n: 1.9 }, // blunt nose end
-      ],
-      r,
-    ),
-    mat,
-  );
-  g.add(skull);
+  const st: HeadStation[] = [
+    { top: [0.46, 0.62], bot: [-0.42, 0.55], w: 0.44, n: 2.0 }, // back
+    { top: [0.76, 0.28], bot: [-0.6, 0.36], w: 0.58, n: 2.05 }, // crown
+    { top: [0.7, -0.12], bot: [-0.7, 0.04], w: 0.64, n: 2.1 }, // cheeks (widest)
+    { top: [0.46, -0.48], bot: [-0.66, -0.3], w: 0.58, n: 2.05 }, // lower face
+    { top: [0.14, -0.72], bot: [-0.54, -0.58], w: 0.4, n: 2.0 }, // muzzle
+    { top: [-0.02, -0.82], bot: [-0.42, -0.76], w: 0.22, n: 1.9 }, // nose end
+  ];
+  g.add(new Mesh(loftGeometry(st, r), mat));
 
-  // THE EARS — tall, standing, with two soft breaks backward.
+  // Whisker pads — the two soft mounds the mouth hangs between.
   for (const side of [-1, 1]) {
-    const ear = new Group();
-    // Pivot buried INSIDE the dome (0.24r in, 0.52r up) with the root run
-    // long past it — pivoted at crown height the base hovers visibly clear of
-    // the skull and the ears read as detached.
-    ear.position.set(side * r * 0.24, r * 0.52, r * 0.1);
-    ear.rotation.set(-0.05, 0, side * -0.17); // stands tall, leaning out a hair
-    g.add(ear);
-    const root = new Mesh(new CylinderGeometry(r * 0.15, r * 0.2, r * 0.46, 12), mat);
-    root.scale.z = 0.55; // flattened front-to-back — an ear, not a horn
-    root.position.y = r * 0.14;
-    ear.add(root);
-
-    // The hinge: everything above sweeps BACK a touch (+X rotation is back).
-    const hinge = new Group();
-    hinge.position.y = r * 0.36;
-    hinge.rotation.set(0.22, 0, side * -0.1);
-    ear.add(hinge);
-    const blade = new Mesh(new CylinderGeometry(r * 0.12, r * 0.16, r * 0.58, 12), mat);
-    blade.scale.z = 0.5;
-    blade.position.y = r * 0.28;
-    hinge.add(blade);
-
-    // The floppy break near the tip — what keeps a standing ear from reading
-    // as a rigid spike.
-    const tipJoint = new Group();
-    tipJoint.position.y = r * 0.56;
-    tipJoint.rotation.x = 0.38;
-    hinge.add(tipJoint);
-    const tipBlade = new Mesh(new CylinderGeometry(r * 0.085, r * 0.12, r * 0.28, 12), mat);
-    tipBlade.scale.z = 0.5;
-    tipBlade.position.y = r * 0.13;
-    tipJoint.add(tipBlade);
-    const cap = new Mesh(new SphereGeometry(r * 0.085, 24, 16), mat);
-    cap.scale.set(1.0, 1.15, 0.5);
-    cap.position.y = r * 0.26;
-    tipJoint.add(cap);
-
-    // The dark inner channel, turned FORWARD (-Z) and split at the tip break
-    // so it follows the bend instead of shearing through it.
-    const innerLo = new Mesh(new BoxGeometry(r * 0.15, r * 0.54, r * 0.02), trimMat);
-    innerLo.position.set(0, r * 0.28, -r * 0.075);
-    hinge.add(innerLo);
-    const innerHi = new Mesh(new BoxGeometry(r * 0.1, r * 0.26, r * 0.02), trimMat);
-    innerHi.position.set(0, r * 0.13, -r * 0.055);
-    tipJoint.add(innerHi);
+    const pad = new Mesh(new SphereGeometry(r * 0.17, 32, 24), mat);
+    pad.scale.set(1.0, 0.82, 0.8);
+    pad.position.set(side * r * 0.12, -r * 0.28, -r * 0.76);
+    g.add(pad);
   }
-
-  // THE MASK — Oswald's face is a white muzzle mound on a black head, and
-  // that two-tone read is most of the likeness. A wide squashed dome sitting
-  // proud of the skull; the cheek puffs flank it. (FF1 lit it in the accent;
-  // in FF2 it is primer, so the two-tone likeness is yours to PAINT.)
-  const mask = new Mesh(new SphereGeometry(r * 0.31, 36, 22), mat);
-  mask.scale.set(1.5, 1.05, 1.0);
-  mask.position.set(0, -r * 0.3, -r * 0.5);
-  g.add(mask);
+  // The nose: a small dark heart-ish pad above the pads.
+  const nose = new Mesh(ellipsoid(r * 0.16, r * 0.1, r * 0.1), trimMat);
+  nose.position.set(0, -r * 0.13, -r * 0.86);
+  g.add(nose);
+  // The Y: down from the nose, then out and up either side.
+  g.add(groove([new Vector3(0, -r * 0.17, -r * 0.9), new Vector3(0, -r * 0.33, -r * 0.92)], r * 0.014, trimMat));
   for (const side of [-1, 1]) {
-    const puff = new Mesh(new SphereGeometry(r * 0.17, 24, 16), mat);
-    puff.scale.set(1.0, 0.85, 0.8);
-    puff.position.set(side * r * 0.28, -r * 0.26, -r * 0.46);
-    g.add(puff);
+    g.add(groove([
+      new Vector3(0, -r * 0.33, -r * 0.92),
+      new Vector3(side * r * 0.08, -r * 0.39, -r * 0.9),
+      new Vector3(side * r * 0.17, -r * 0.36, -r * 0.84),
+    ], r * 0.014, trimMat));
   }
-
-  // The eyes: big CLOSE-SET ovals — white sclera, dark pupil, ringed dark so
-  // they pop off the black skull the way ink outlines do.
+  // Buck teeth under the Y.
   for (const side of [-1, 1]) {
-    const ring = new Mesh(new SphereGeometry(r * 0.185, 32, 22), trimMat);
-    ring.scale.set(0.82, 1.15, 0.4);
-    ring.position.set(side * r * 0.17, r * 0.18, -r * 0.5);
-    g.add(ring);
-    const sclera = new Mesh(new SphereGeometry(r * 0.155, 32, 22), glowMat);
-    sclera.scale.set(0.82, 1.15, 0.42);
-    sclera.position.set(side * r * 0.17, r * 0.18, -r * 0.54);
-    g.add(sclera);
-    const pupil = new Mesh(new SphereGeometry(r * 0.075, 28, 19), trimMat);
-    pupil.scale.set(0.9, 1.2, 0.4);
-    pupil.position.set(side * r * 0.19, r * 0.16, -r * 0.6);
+    const tooth = new Mesh(new BoxGeometry(r * 0.075, r * 0.13, r * 0.035), mat);
+    tooth.position.set(side * r * 0.042, -r * 0.43, -r * 0.88);
+    tooth.rotation.x = 0.12;
+    g.add(tooth);
+  }
+  // Eyes: big and bright, set to the sides of the face, a dark pupil in
+  // each looking forward.
+  for (const side of [-1, 1]) {
+    const socket = new Mesh(new SphereGeometry(r * 0.205, 32, 24), trimMat);
+    socket.scale.set(0.85, 1.12, 0.5);
+    socket.position.set(side * r * 0.27, r * 0.17, -r * 0.56);
+    socket.rotation.y = side * -0.42;
+    g.add(socket);
+    const eye = new Mesh(new SphereGeometry(r * 0.178, 32, 24), glowMat);
+    eye.scale.set(0.85, 1.12, 0.5);
+    eye.position.set(side * r * 0.275, r * 0.17, -r * 0.59);
+    eye.rotation.y = side * -0.42;
+    g.add(eye);
+    const pupil = new Mesh(new SphereGeometry(r * 0.085, 24, 16), trimMat);
+    pupil.scale.set(0.85, 1.15, 0.45);
+    pupil.position.set(side * r * 0.235, r * 0.15, -r * 0.665);
+    pupil.rotation.y = side * -0.42;
     g.add(pupil);
   }
-
-  // Muzzle furniture: the round button nose, the philtrum, and the BUCK TEETH
-  // — two plates dropping from the mouth line, kept from the old bunny.
-  const nose = new Mesh(new SphereGeometry(r * 0.1, 24, 16), trimMat);
-  nose.scale.set(1.1, 0.95, 0.85);
-  nose.position.set(0, -r * 0.12, -r * 0.78);
-  g.add(nose);
-  const philtrum = new Mesh(new BoxGeometry(r * 0.028, r * 0.13, r * 0.03), trimMat);
-  philtrum.position.set(0, -r * 0.26, -r * 0.82);
-  philtrum.rotation.x = 0.15;
-  g.add(philtrum);
-  // The teeth hang from the mouth line and OVER the lip — they have to clear
-  // the mask ellipsoid in both z and y or the muzzle simply eats them, which
-  // is what the first pass did.
+  // THE EARS: long leaves off the crown, tipped out; the left stands, the
+  // right FOLDS forward over the brow at the tip (a fold back is invisible
+  // from the front, which is where anyone looks at you from).
   for (const side of [-1, 1]) {
-    const tooth = new Mesh(new BoxGeometry(r * 0.09, r * 0.2, r * 0.05), mat);
-    tooth.position.set(side * r * 0.05, -r * 0.6, -r * 0.7);
-    tooth.rotation.x = 0.1;
-    g.add(tooth);
+    const flop = side === 1;
+    const ear = new Group();
+    ear.position.set(side * r * 0.22, r * 0.62, r * 0.14);
+    ear.rotation.set(0.14, side * -0.2, side * -0.16);
+    g.add(ear);
+    const shellGeo = leaf(r * 0.34, r * 1.2, r * 0.13, 0.55, r * 0.12);
+    shellGeo.translate(0, r * 0.55, 0);
+    const innerGeo = leaf(r * 0.19, r * 0.94, r * 0.05, 0.55, r * 0.09);
+    innerGeo.translate(0, r * 0.58, -r * 0.055);
+    if (flop) {
+      // Hinged a little over halfway up, the tip hanging down in front.
+      fold(shellGeo, r * 0.5, r * 0.12, 2.25);
+      fold(innerGeo, r * 0.5, r * 0.12, 2.25);
+    }
+    ear.add(new Mesh(shellGeo, mat), new Mesh(innerGeo, trimMat));
   }
   return g;
 }
@@ -1202,7 +1186,7 @@ const RAW: Record<string, HeadBuilder> = {
   stallion: buildStallionHead,
   wolf: buildWolfHead,
   frog: buildFrogHead,
-  bunny: buildOswaldHead,
+  bunny: buildBunnyHead,
 };
 
 /**
@@ -1218,9 +1202,10 @@ const HEAD_SIZE: Record<string, number> = {
   eagle: 0.8,
   knight: 0.92,
   stallion: 0.84,
-  wolf: 0.8,
-  frog: 0.78,
-  bunny: 0.78,
+  // (wolf, frog and bunny were redesigned for FF2 at their final size)
+  wolf: 1,
+  frog: 1,
+  bunny: 1,
 };
 
 /** Every head, by its gear id (avatar/gear.ts). */
@@ -1247,9 +1232,9 @@ const CROWN: Record<string, { scale: number; lift: number }> = {
   eagle: { scale: 1.4, lift: 0.05 },
   knight: { scale: 1.2, lift: 0.03 },
   stallion: { scale: 1.25, lift: 0.0 },
-  wolf: { scale: 1.49, lift: 0.03 },
-  frog: { scale: 1.2, lift: 0.0 },
-  bunny: { scale: 1.58, lift: 0.04 },
+  wolf: { scale: 1.2, lift: 0.02 },
+  frog: { scale: 1.0, lift: 0.0 },
+  bunny: { scale: 1.18, lift: 0.01 },
 };
 export const HEAD_FIT: Record<string, { scale: number; lift: number }> = Object.fromEntries(
   Object.entries(CROWN).map(([id, c]) => [id, { scale: c.scale * (HEAD_SIZE[id] ?? 1), lift: c.lift }]),

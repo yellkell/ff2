@@ -21,7 +21,12 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
   in your accent and nothing else, tufts for fur and feathers where FF1
   had flat plates, and sized down to sit on the slender mannequin. Wear
   headgear with them — horns and crests ride out to the bigger crown.
-  Purely visual: the head hitbox never moves. DESIGN.md §5.2.
+  Purely visual: the head hitbox never moves. DESIGN.md §5.2. The WOLF
+  (ruff, leaf ears, a proper jaw), FROG (lidded turrets, a wrap-round
+  smile) and BUNNY (leaf ears, one folded over) are FF2 redesigns; the
+  KNIGHT's skirt wears the body's colour.
+- **PAULDRONS** — the plain shell domes are back, now seated on the body
+  so their inner edges rest on the shoulders instead of cutting into them.
 This repo is seeded with the complete FIRE FIGHT 1 engine — it builds and
 plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 (DESIGN.md §10). [`FOUNDATION.md`](FOUNDATION.md) is FF1's own README,

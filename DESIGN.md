@@ -417,6 +417,22 @@ the BODY_IK head sphere never moves. `face` packs last, so a reader from
 before it simply drops the id. Dev: `node tools/gear-gallery.mjs out.png
 bear,panther,eagle,knight,stallion,wolf,frog,bunny`.
 
+Second pass: the WOLF, FROG and BUNNY were rebuilt outright — the wolf
+around a real stop, a separate jaw, standing leaf ears and a RUFF of long
+tufts off the cheeks and nape; the frog around lidded eye turrets, a
+smile laid along the skull's own surface and eardrums in the shell's
+colour (dark ones gave it four eyes); the bunny around leaf ears, one
+FOLDED forward over the brow, whisker pads, a Y mouth and buck teeth.
+The knight's gorget skirt is primer, the body's own colour.
+
+**PAULDRONS, the shells again.** The first cut's plain tilted domes were
+the shape people liked; they were swapped for a riveted cap-lame-rim
+plate because their inside edges dove into the trapezius. The domes are
+back, and `seatOnBody` (gear.ts) fixes the dive instead of the shape: the
+piece is baked into body-local space and every vertex inside the loft (or
+within a few millimetres of it) is eased out onto the skin with a soft
+floor, so the inner edge rests on the slope to the neck.
+
 **SHIPPED — THE PADS, rebuilt entire.** The platform shop no longer sells
 neon tints over one steel slab with a grin, a bolt and a grid on top. A
 platform skin is a MATERIAL (`arena/decks.ts`): thirteen procedural
