@@ -1,7 +1,7 @@
 /**
  * THE LADDER — the leaderboard, brought in off the back wall and onto the
  * TOWN wing as a tab (MENUS 2). Same data (net/leaderboard.ts), same
- * boards — BATTLE (1v1 · 2v2 · ffa), XP, ARCADE (aim · gauntlet · raid ·
+ * boards — BATTLE (1v1 · 2v2 · ffa), XP, ARCADE (aim · speedrun · raid ·
  * goop raid) — drawn in the panel kit's language: a sub-strip of small
  * chips, ten rows, the season clock, tap a name for the profile.
  *
@@ -70,7 +70,7 @@ const BATTLE_SUBS: Array<[LeaderboardTab, string, string]> = [
 ];
 const ARCADE_SUBS: Array<[LeaderboardTab, string, string]> = [
   ['training', 'AIM', 'lb-training'],
-  ['gauntlet', 'GAUNTLET', 'lb-gauntlet'],
+  ['gauntlet', 'SPEEDRUN', 'lb-gauntlet'], // the campaign run, named as the profile badge and stats.html name it
   ['raid', 'RAID', 'lb-raid'],
   ['goopliath', 'GOOP RAID', 'lb-goopliath'],
 ];
