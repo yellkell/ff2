@@ -366,6 +366,28 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
           ctx.stroke();
         }
         break;
+      case 'bastion':
+        // Great smooth domes, a ridge over each crown, a dark rim under.
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.ellipse(cx + s * r * 0.6, cy - r * 0.42, r * 0.38, r * 0.36, 0, Math.PI, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.ellipse(cx + s * r * 0.64, cy - r * 0.34, r * 0.28, r * 0.12, 0, 0, Math.PI);
+          ctx.fill();
+        }
+        ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+        ctx.lineWidth = Math.max(1.5, line * 0.5);
+        for (const s of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(cx + s * r * 0.22, cy - r * 0.42);
+          ctx.lineTo(cx + s * r * 0.98, cy - r * 0.42);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.ellipse(cx + s * r * 0.6, cy - r * 0.42, r * 0.1, r * 0.3, 0, Math.PI, Math.PI * 1.5, s < 0);
+          ctx.stroke();
+        }
+        break;
       case 'epaulets':
         // Flat boards along the shoulders, a fringe off each point.
         for (const s of [-1, 1]) {

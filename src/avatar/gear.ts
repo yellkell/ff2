@@ -116,6 +116,8 @@ export const GEAR: GearDef[] = [
   { id: 'gladiator', name: 'GLADIATOR', slot: 'shoulders', price: 240, blurb: 'one arm armoured, lames stepping down' },
   { id: 'cape', name: 'CAPE', slot: 'body', price: 260, blurb: 'hung from the shoulders, pleated' },
   { id: 'tabard', name: 'TABARD', slot: 'body', price: 200, blurb: 'a panel front and back, cinched' },
+  // ── the sixth wave ──
+  { id: 'bastion', name: 'BASTION', slot: 'shoulders', price: 280, blurb: 'great smooth domes, a ridge, two tiers' },
 ];
 
 export function gearDef(id: string): GearDef | undefined {
@@ -1343,11 +1345,13 @@ function flameShape(h: number, w: number, lean: number, s: 1 | -1): Shape {
  * the arm, and a pair of lit studs fore and aft. The dome is the paint
  * surface; the rim and the flames are the trim that frames it.
  */
-function warlordPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial, s: 1 | -1): Group {
+function warlordPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial, s: 1 | -1, bastion = false): Group {
   const g = new Group();
-  const a = 0.13;
-  const b = 0.108;
-  const c = 0.122;
+  // BASTION (below) is this pad with the fire taken out: a touch rounder
+  // and fuller, so it reads as a smooth great dome and not a bare warlord.
+  const a = bastion ? 0.126 : 0.13;
+  const b = bastion ? 0.112 : 0.108;
+  const c = bastion ? 0.124 : 0.122;
   const theta = Math.PI * 0.6; // the dome runs a little past its equator
   const tip = -s * 0.44;
   const at = new Vector3(s * 0.234, 0.378, 0);
@@ -1376,12 +1380,14 @@ function warlordPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, gl
   // tallest. Each is stood up a little off the dome's own normal (which
   // is tipped out over the arm) and licks outward at its tip — so the
   // crest rises, then sweeps out, like the ones in the old raids.
-  const flames: Array<[number, number, number, number, number]> = [
-    // dome-local seat (x out, y up, z back), height, how far stood up
-    [0.05, 1, -0.55, 0.1, 0.2],
-    [0.2, 1, 0, 0.14, 0.26],
-    [0.05, 1, 0.55, 0.1, 0.2],
-  ];
+  const flames: Array<[number, number, number, number, number]> = bastion
+    ? []
+    : [
+        // dome-local seat (x out, y up, z back), height, how far stood up
+        [0.05, 1, -0.55, 0.1, 0.2],
+        [0.2, 1, 0, 0.14, 0.26],
+        [0.05, 1, 0.55, 0.1, 0.2],
+      ];
   for (const [x, y, z, h, up] of flames) {
     const { p, n } = on(x, y, z);
     const fin = asTrim(plate(flameShape(h, 0.058, 0.42, s), 0.007, 0.0022, trimMat));
@@ -1389,11 +1395,38 @@ function warlordPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, gl
     fin.position.copy(p).addScaledVector(n, -0.016);
     g.add(fin);
   }
-  // THE SKIRT: a lame of trim tucked under the rim on the outside,
-  // flaring down over the top of the arm — the dome's lower tier.
-  const skirt = asTrim(lame(trimMat, 0.1, 0.11, -0.05, -0.95, 0.19, s));
-  skirt.position.set(s * 0.222, 0.35, 0);
-  g.add(skirt);
+  if (bastion) {
+    // THE RIDGE: a rolled band of trim over the crown, brow to back,
+    // following the dome's own surface — the one line on a smooth shell.
+    const ridge: Vector3[] = [];
+    for (let i = 0; i <= 24; i++) {
+      const t = -1.25 + (i / 24) * 2.5;
+      const { p, n } = on(0.12, Math.cos(t), Math.sin(t));
+      ridge.push(p.addScaledVector(n, 0.004));
+    }
+    g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(ridge), 64, 0.0075, 8), trimMat)));
+    // A rounded TIER under the rim, primer like the dome, stepping down
+    // over the arm, its lower edge piped in trim so it reads as a plate.
+    const [r, a0, a1, depth] = [0.108, -0.1, -0.68, 0.22];
+    const at = new Vector3(s * 0.218, 0.352, 0);
+    const tier = lame(mat, r - 0.014, r, a0, a1, depth, s);
+    tier.position.copy(at);
+    g.add(tier);
+    const edge: Vector3[] = [];
+    for (let i = 0; i <= 16; i++) {
+      const z = (i / 16 - 0.5) * depth * 0.96;
+      const t = z / (depth / 2);
+      const k = 1 - 0.24 * Math.min(1, t * t);
+      edge.push(new Vector3(at.x + s * Math.cos(a1) * (r - 0.004) * k, at.y + Math.sin(a1) * (r - 0.004) * k, z));
+    }
+    g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(edge), 32, 0.0045, 6), trimMat)));
+  } else {
+    // THE SKIRT: a lame of trim tucked under the rim on the outside,
+    // flaring down over the top of the arm — the dome's lower tier.
+    const skirt = asTrim(lame(trimMat, 0.1, 0.11, -0.05, -0.95, 0.19, s));
+    skirt.position.set(s * 0.222, 0.35, 0);
+    g.add(skirt);
+  }
   // THE STUDS: two lit bosses on the dome's front and back faces.
   for (const z of [-0.72, 0.72]) {
     const { p, n } = on(0.5, 0.7, z);
@@ -1498,6 +1531,14 @@ const FIFTH_BUILDERS: Record<string, Builder> = {
     // THE WARLORD: a pair of great flamed domes (warlordPad).
     const g = new Group();
     for (const s of [-1, 1] as const) g.add(warlordPad(mat, trimMat, glowMat, s));
+    return g;
+  },
+  bastion: (mat, _side, trimMat, glowMat) => {
+    // BASTION: the great round dome with no fire and no spikes — a ridge
+    // over the crown, a heavy rim, two rounded tiers down the arm, lit
+    // studs (warlordPad, bastion).
+    const g = new Group();
+    for (const s of [-1, 1] as const) g.add(warlordPad(mat, trimMat, glowMat, s, true));
     return g;
   },
   epaulets: (mat, _side, trimMat, glowMat) => {
@@ -1859,16 +1900,30 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
   const map = atlasGear(g, paintable, `${id}|${side}`, PAINT.canvas[part] ?? 256);
   for (const mesh of paintable) mesh.userData.paintMap = map;
   mergePiece(g); // a few draw calls per piece, not dozens (gearAtlas.ts)
-  // …and out to a worn head's crown (HEAD_FIT): the heads are bigger than
-  // the skull, and a horn fitted to the egg would sink inside a bear's
-  // dome. Only AFTER the atlas: its map is measured in the piece's frame
-  // and kept per piece, so it must be the same map whatever face the
+  // …and onto a worn head's own skull (HEAD_FIT): every head piece was
+  // modelled on the bare skull, and each animal's cranium is a different
+  // size, shape and seat — a bear's is low and broad, a horse's small and
+  // high between its ears, a frog's wide and flat. The fit maps the bare
+  // skull onto the head's measured cranium, per axis, from a WRAPPER round
+  // the piece: the piece keeps its own lift and tilt (a halo still floats
+  // over the crown, a visor still sits at the brow), where the old fit
+  // overwrote the piece's height with one lift and sent the halo through
+  // the snout. Only AFTER the atlas: its map is measured in the piece's
+  // frame and kept per piece, so it must be the same map whatever face the
   // piece first met — the mark rides out with the horn, the same mark on
   // every headset.
   const fit = slot === 'head' ? HEAD_FIT[face] : undefined;
   if (fit) {
-    g.scale.multiplyScalar(fit.scale);
-    g.position.y = fit.lift;
+    const w = new Group();
+    w.name = g.name;
+    w.userData.gear = id;
+    g.name = '';
+    delete g.userData.gear;
+    w.scale.set(fit.s[0], fit.s[1], fit.s[2]);
+    w.position.set(0, fit.y, fit.z);
+    w.add(g);
+    o.add(w);
+    return;
   }
   o.add(g);
 }

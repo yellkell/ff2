@@ -13,6 +13,19 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
+- **HEADGEAR FITS THE HEADS, and BASTION** — every head piece (horns,
+  crests, crowns, halos, visors…) was modelled on the bare skull and was
+  worn over an animal with one uniform scale and a lift that OVERWROTE the
+  piece's own height, so halos cut through snouts and crowns floated. Each
+  head now carries a measured fit (`HEAD_FIT`, `avatar/heads.ts`): its
+  cranium — crown height, temple width, brow-to-back depth, cast from
+  inside the head with the snout, ears and fur left out — and the bare
+  skull is mapped onto it per axis from a wrapper round the piece, so a
+  piece keeps its own lift and tilt. The knight, stallion and frog are
+  hand-tuned on top (a flat-topped helm, a small cranium on a long face, a
+  wide flat head). New on the SHOULDERS shelf: **BASTION**, the rounded
+  set with no spikes — great smooth domes, a ridge over the crown, a
+  heavy rolled rim, a piped tier down the arm, lit studs.
 - **THE HEADS, SEATED** — the animal heads hovered 4–8 cm over the neck
   (each was placed on the head's centre, and the room under a jaw, beak
   or ruff differs head to head); each now drops by its own measured SEAT
