@@ -459,186 +459,63 @@ function bodyRing(y: number): { w: number; d: number; z: number } {
 }
 
 /**
- * A PLATE LOFTED OVER THE SHOULDER — the way the chestplate is made: rows
- * at heights down the body, columns round it by the loft's own angle t
- * (t = 0 is the right side, π the left), every point pushed out along the
- * body's own ring by `proud(u, v)` metres (u 0→1 top to bottom, v 0→1
- * front to back). The body's surface is the ring itself, so a positive
- * `proud` is outside it everywhere: the plate can never be cut by the
- * shoulder it sits on. A second skin `thick` inside and a wall round the
- * rim close it into a slab. `at(u, v, lift)` gives a point on the outer
- * skin and its normal, for what gets mounted on the plate.
+ * ONE SHOULDER'S SHELL — the pad PAULDRONS and SPIKED PADS are both made
+ * from: one smooth dome tipped down over the arm (the first cut's shape,
+ * the one people liked), SEATED so whatever part of it would sit inside
+ * the body eases out onto the skin (seatOnBody) — its inside edge rests on
+ * the slope to the neck instead of diving into the trapezius. `k` scales
+ * the dome; `spikes` drives three spikes up through it, each along the
+ * dome's own normal from a trim collar: the big one off the top leaning
+ * out over the arm, a smaller one fore and aft.
  */
-function shoulderShell(
-  mat: MeshStandardMaterial,
-  side: 1 | -1,
-  yTop: number,
-  yBot: number,
-  half: number | ((u: number) => number),
-  proud: (u: number, v: number) => number,
-  thick: number,
-): { mesh: Mesh; at: (u: number, v: number, lift?: number) => { p: Vector3; n: Vector3 }; edge: (fixU: number | null, fixV: number | null, out: number) => Vector3[] } {
-  const ROWS = 9;
-  const COLS = 16;
-  const t0 = side > 0 ? 0 : Math.PI;
-  // Front is −z. On the right side (t = 0) sin t < 0 is the front, on the
-  // left (t = π) sin t > 0 is — so v runs front to back on both.
-  const halfAt = typeof half === 'number' ? (): number => half : half;
-  const tOf = (u: number, v: number): number => t0 + side * (v - 0.5) * 2 * halfAt(u);
-  const point = (u: number, v: number, o: number, out = new Vector3()): Vector3 => {
-    const y = yTop + (yBot - yTop) * u;
-    const r = bodyRing(y);
-    const t = tOf(u, v);
-    return out.set(Math.cos(t) * (r.w + o), y, Math.sin(t) * (r.d + o) + r.z);
-  };
-  const outerAt = (u: number, v: number, lift = 0): Vector3 => point(u, v, proud(u, v) + lift);
-  const pos: number[] = [];
-  const inner: number[] = [];
-  const idx: number[] = [];
-  const uvs: number[] = [];
-  const tmp = new Vector3();
-  for (let r = 0; r <= ROWS; r++) {
-    for (let c = 0; c <= COLS; c++) {
-      const u = r / ROWS;
-      const v = c / COLS;
-      const o = proud(u, v);
-      point(u, v, o, tmp);
-      pos.push(tmp.x, tmp.y, tmp.z);
-      point(u, v, Math.max(0.0015, o - thick), tmp);
-      inner.push(tmp.x, tmp.y, tmp.z);
-      uvs.push(v, 1 - u);
-      if (r < ROWS && c < COLS) {
-        const i0 = r * (COLS + 1) + c;
-        const i1 = i0 + COLS + 1;
-        // Wound so the outer skin faces out on either shoulder.
-        if (side > 0) idx.push(i0, i0 + 1, i1, i0 + 1, i1 + 1, i1);
-        else idx.push(i0, i1, i0 + 1, i0 + 1, i1, i1 + 1);
-      }
-    }
-  }
-  const n = pos.length / 3;
-  const all = [...pos, ...inner];
-  const uv = [...uvs, ...uvs];
-  const outerTri = idx;
-  const innerTri = idx.map((i) => i + n).reverse();
-  const wallTri: number[] = [];
-  let run = 0;
-  const wall = (a0: number, a1: number): void => {
-    const base = all.length / 3;
-    for (const v of [a0, a1, a0 + n, a1 + n]) all.push(all[v * 3], all[v * 3 + 1], all[v * 3 + 2]);
-    uv.push(run, 0, run + 1, 0, run, 1, run + 1, 1);
-    run += 1;
-    wallTri.push(base, base + 1, base + 2, base + 1, base + 3, base + 2);
-  };
-  const last = ROWS * (COLS + 1);
-  for (let c = 0; c < COLS; c++) {
-    wall(c, c + 1);
-    wall(last + c + 1, last + c);
-  }
-  for (let r = 0; r < ROWS; r++) {
-    wall((r + 1) * (COLS + 1), r * (COLS + 1));
-    wall(r * (COLS + 1) + COLS, (r + 1) * (COLS + 1) + COLS);
-  }
-  for (let i = uv.length - run * 8; i < uv.length; i += 2) uv[i] /= run;
-  const geo = new BufferGeometry();
-  geo.setAttribute('position', new Float32BufferAttribute(all, 3));
-  geo.setAttribute('uv', new Float32BufferAttribute(uv, 2));
-  geo.setIndex([...outerTri, ...innerTri, ...wallTri]);
-  geo.computeVertexNormals();
-  const slabMat = mat.clone();
-  slabMat.side = DoubleSide; // a hand-wound slab must never cull itself away
-  const mesh = new Mesh(geo, slabMat);
-  const at = (u: number, v: number, lift = 0): { p: Vector3; n: Vector3 } => {
-    const p = outerAt(u, v, lift);
-    const e = 0.01;
-    const du = outerAt(Math.min(1, u + e), v, lift).sub(outerAt(Math.max(0, u - e), v, lift));
-    const dv = outerAt(u, Math.min(1, v + e), lift).sub(outerAt(u, Math.max(0, v - e), lift));
-    const nrm = du.cross(dv).normalize();
-    // Point it away from the body's axis, whichever way the cross fell.
-    if (nrm.x * side < 0 || (Math.abs(nrm.x) < 1e-3 && nrm.y < 0)) nrm.negate();
-    return { p, n: nrm };
-  };
-  // A line along the outer skin — a row (fixU) or a column (fixV) — for trim.
-  const edge = (fixU: number | null, fixV: number | null, out: number): Vector3[] => {
-    const pts: Vector3[] = [];
-    const count = fixU !== null ? COLS : ROWS;
-    for (let i = 0; i <= count; i++) {
-      const u = fixU ?? i / ROWS;
-      const v = fixV ?? i / COLS;
-      pts.push(outerAt(u, v, out));
-    }
-    return pts;
-  };
-  return { mesh, at, edge };
-}
-
-/**
- * ONE SHOULDER'S ARMOUR — the SPIKED PADS' plate (PAULDRONS wore it too
- * for a while, and went back to the plain shells people liked): a domed
- * CAP over the top of the shoulder, framed in trim, and a LAME (a second
- * band of plate) tucked under its lower edge and hanging down the side,
- * its own lower edge lit. Both are lofted over the body's shoulder
- * (shoulderShell), so they sit ON it: the old pads were ellipsoid domes
- * set on the shoulder's slope, and the trapezius rose straight through
- * the inner half of every one. `k` scales the whole pad; `spikes` drives
- * three spikes through the cap (the SPIKED PADS).
- */
-function shoulderPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, glowMat: MeshStandardMaterial, s: 1 | -1, k: number, spikes: boolean): Group {
-  const pad = new Group();
-  const grow = k - 1;
-  // A dome: nothing at the rim (so the plate rests on the body), most at
-  // the shoulder's point.
-  const dome = (u: number, v: number): number => Math.sin(Math.PI * u) ** 0.8 * Math.cos((v - 0.5) * Math.PI) ** 1.1;
-  // Narrow at the top, where the body closes in toward the neck, and full
-  // width over the shoulder's point — the pauldron's own outline. (A
-  // constant span bunched the top edge into a notch by the collar.)
-  const capHalf = (u: number): number => (0.98 + grow * 0.6) * (0.5 + 0.5 * Math.sqrt(u));
-  const cap = shoulderShell(mat, s, 0.43, 0.372 - grow * 0.1, capHalf, (u, v) => k * (0.006 + 0.032 * dome(u, v)), 0.006);
-  pad.add(cap.mesh);
-  // The lame starts under the cap's lower third and drops down the side.
-  const lameCurve = (u: number, v: number): number => Math.cos((v - 0.5) * Math.PI) ** 1.1 * (1 - u * 0.6);
-  const lame = shoulderShell(mat, s, 0.386, 0.334 - grow * 0.12, 1.08 + grow * 0.6, (u, v) => k * (0.004 + 0.013 * lameCurve(u, v)), 0.005);
-  pad.add(lame.mesh);
-  const tube = (pts: Vector3[], r: number, m: MeshStandardMaterial): Mesh => new Mesh(new TubeGeometry(new CatmullRomCurve3(pts), pts.length * 3, r, 6), m);
-  // Trim rolls along the cap's collar and lower edges, and the lame's
-  // lower edge is LIT. (Only the edges that run AROUND the body: an edge
-  // running down it follows the loft's ring-to-ring corners, and a trim
-  // roll laid on one zig-zagged; the plate's own wall reads there.)
-  pad.add(asTrim(tube(cap.edge(0, null, 0.002), 0.0045 * k, trimMat)));
-  pad.add(asTrim(tube(cap.edge(1, null, 0.002), 0.005 * k, trimMat)));
-  pad.add(asGlow(tube(lame.edge(1, null, 0.002), 0.0048 * k, glowMat)));
-  // Rivets across the lame, where it's fixed under the cap.
-  for (const v of [0.14, 0.32, 0.5, 0.68, 0.86]) {
-    const { p, n } = lame.at(0.5, v, 0.001);
-    pad.add(rivet(trimMat, p, n, 0.0048 * k));
-  }
+function shellPad(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial, s: 1 | -1, k: number, spikes: boolean): Group {
+  const g = new Group();
+  // The dome's half-extents (a sphere of 0.1 scaled 1.1 · 0.8 · 1.05).
+  const a = 0.11 * k;
+  const b = 0.08 * k;
+  const c = 0.105 * k;
+  const pad = new Mesh(new SphereGeometry(0.1, 48, 28, 0, Math.PI * 2, 0, Math.PI * 0.55), mat);
+  pad.scale.set(a / 0.1, b / 0.1, c / 0.1);
+  // A whisker further out and a touch less tipped than the first cut, so
+  // there is less of it to seat — the shape reads the same. A bigger dome
+  // rides a little higher so it grows up and out, not into the chest.
+  pad.position.set(s * (0.222 + (k - 1) * 0.04), 0.385 + (k - 1) * 0.04, 0);
+  pad.rotation.z = -s * 0.4;
+  pad.updateMatrix();
+  // Spike seats, found on the dome BEFORE it is seated: they are all high
+  // on its outer face, which the seating leaves where it is.
+  const seats: Array<{ p: Vector3; n: Vector3; len: number }> = [];
   if (spikes) {
-    // Three spikes up out of the cap: the big one off the top, leaning
-    // out over the arm, and a smaller one fore and aft. Each rises along
-    // the plate's own normal from a trim collar, so it looks driven
-    // through the plate, not glued to it.
     const spec: Array<[number, number, number, number]> = [
-      // u, v, length, lean out
-      [0.42, 0.5, 0.1, 0.35],
-      [0.5, 0.2, 0.07, 0.2],
-      [0.5, 0.8, 0.07, 0.2],
+      // dome-local direction (x out over the arm, y up, z back), length
+      [s * 0.05, 1, 0, 0.1],
+      [s * 0.15, 0.85, -0.6, 0.07],
+      [s * 0.15, 0.85, 0.6, 0.07],
     ];
-    for (const [u, v, len, lean] of spec) {
-      const { p, n } = cap.at(u, v);
-      const dir = n.clone().add(new Vector3(s * lean, 0.25, 0)).normalize();
-      const q = new Quaternion().setFromUnitVectors(UP, dir);
-      const L = len * k;
-      const spike = new Mesh(new ConeGeometry(0.014 * k, L, 12), mat);
-      spike.quaternion.copy(q);
-      spike.position.copy(p).addScaledVector(dir, L / 2 - 0.003);
-      pad.add(spike);
-      const collar = asTrim(new Mesh(new TorusGeometry(0.0155 * k, 0.0035 * k, 6, 16), trimMat));
-      collar.quaternion.copy(q).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2));
-      collar.position.copy(p).addScaledVector(dir, 0.002);
-      pad.add(collar);
+    const rot = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), pad.rotation.z);
+    for (const [dx, dy, dz, len] of spec) {
+      const dir = new Vector3(dx, dy, dz).normalize();
+      const t = 1 / Math.sqrt((dir.x / a) ** 2 + (dir.y / b) ** 2 + (dir.z / c) ** 2);
+      const p = dir.clone().multiplyScalar(t);
+      const n = new Vector3(p.x / (a * a), p.y / (b * b), p.z / (c * c)).normalize().applyQuaternion(rot);
+      seats.push({ p: p.applyQuaternion(rot).add(pad.position), n, len });
     }
   }
-  return pad;
+  seatOnBody(pad, 0.004);
+  g.add(pad);
+  for (const { p, n, len } of seats) {
+    const q = new Quaternion().setFromUnitVectors(UP, n);
+    const L = len * k;
+    const spike = new Mesh(new ConeGeometry(0.014 * k, L, 16), mat);
+    spike.quaternion.copy(q);
+    spike.position.copy(p).addScaledVector(n, L / 2 - 0.003);
+    g.add(spike);
+    const collar = asTrim(new Mesh(new TorusGeometry(0.0155 * k, 0.0035 * k, 8, 20), trimMat));
+    collar.quaternion.copy(q).multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2));
+    collar.position.copy(p).addScaledVector(n, 0.002);
+    g.add(collar);
+  }
+  return g;
 }
 
 /** A feather-blade outline, root at the origin, tip at +x (mirrored for
@@ -872,25 +749,10 @@ const BUILDERS: Record<string, Builder> = {
   },
 
   /* body — origin at the hips, +y up, front −z, shoulders at (±0.126, 0.395) */
-  pauldrons: (mat) => {
-    // THE SHELLS, back: one smooth dome per shoulder, tipped down over the
-    // arm — the first cut's shape, which was the one people liked. (A
-    // riveted cap-lame-rim plate replaced it for a while, because the
-    // tipped dome's INSIDE edge dove into the trapezius.) So the shape is
-    // kept and the dive is fixed: seatOnBody pushes whatever part of the
-    // shell falls inside the body back out onto its skin, and the inner
-    // edge now hugs the slope up to the neck instead of cutting into it.
+  pauldrons: (mat, _side, trimMat) => {
+    // THE SHELLS: one smooth seated dome per shoulder (shellPad).
     const g = new Group();
-    for (const s of [-1, 1]) {
-      const pad = new Mesh(new SphereGeometry(0.1, 48, 28, 0, Math.PI * 2, 0, Math.PI * 0.55), mat);
-      pad.scale.set(1.1, 0.8, 1.05);
-      // A whisker further out and a touch less tipped than the first cut,
-      // so there is less of it to seat — the shape reads the same.
-      pad.position.set(s * 0.222, 0.385, 0);
-      pad.rotation.z = -s * 0.4;
-      seatOnBody(pad, 0.004);
-      g.add(pad);
-    }
+    for (const s of [-1, 1] as const) g.add(shellPad(mat, trimMat, s, 1, false));
     return g;
   },
   chestplate: (mat, _side, trimMat, glowMat) => {
@@ -1280,12 +1142,12 @@ const MORE_BUILDERS: Record<string, Builder> = {
 /* ── the third wave ──────────────────────────────────────────────────── */
 
 const THIRD_BUILDERS: Record<string, Builder> = {
-  spikepads: (mat, _side, trimMat, glowMat) => {
-    // SPIKED PADS: the pauldron's cap-lame-rim armour a size up, with
-    // three spikes driven up through each cap from trim collars — the big
-    // one off the top, leaning out over the arm, one fore, one aft.
+  spikepads: (mat, _side, trimMat) => {
+    // SPIKED PADS: the PAULDRONS' shell a size up, three spikes driven
+    // up through each dome from trim collars (shellPad) — the same shape
+    // as the plain pair, so the two read as one family.
     const g = new Group();
-    for (const s of [-1, 1] as const) g.add(shoulderPad(mat, trimMat, glowMat, s, 1.14, true));
+    for (const s of [-1, 1] as const) g.add(shellPad(mat, trimMat, s, 1.14, true));
     return g;
   },
 };

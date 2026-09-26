@@ -439,7 +439,10 @@ plate because their inside edges dove into the trapezius. The domes are
 back, and `seatOnBody` (gear.ts) fixes the dive instead of the shape: the
 piece is baked into body-local space and every vertex inside the loft (or
 within a few millimetres of it) is eased out onto the skin with a soft
-floor, so the inner edge rests on the slope to the neck.
+floor, so the inner edge rests on the slope to the neck. The SPIKED PADS
+are the same seated shell a size up (`shellPad`), three spikes driven
+through the crown on the dome's own normal from trim collars — one family
+with the pauldrons, where they had been a separate lofted plate.
 
 **SHIPPED — THE PADS, rebuilt entire.** The platform shop no longer sells
 neon tints over one steel slab with a grin, a bolt and a grid on top. A

@@ -27,7 +27,9 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
   no lumps), PANTHER (a proper cat) and STALLION (bridle, clean nose)
   are FF2 redesigns; the KNIGHT's skirt wears the body's colour.
 - **PAULDRONS** — the plain shell domes are back, now seated on the body
-  so their inner edges rest on the shoulders instead of cutting into them.
+  so their inner edges rest on the shoulders instead of cutting into them;
+  the **SPIKED PADS** are the same shell a size up, three spikes through it.
+
 This repo is seeded with the complete FIRE FIGHT 1 engine — it builds and
 plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 (DESIGN.md §10). [`FOUNDATION.md`](FOUNDATION.md) is FF1's own README,
