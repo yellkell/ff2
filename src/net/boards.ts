@@ -51,9 +51,10 @@ export const BOARD = {
   aim: 'ff2-aim',
   /** THE SPEEDRUN, the titan line-up against a clock. Not here: it is one
    *  board PER DIFFICULTY, so see speedrunBoard() below. */
-  /** The raid — fastest clear. */
+  /** The raid — fastest clear, ANY difficulty (the legacy mixed board; the
+   *  per-feat boards are runBoard('raid', …)). */
   raid: 'ff2-raid-time',
-  /** GOOPLIATH — fastest fell. */
+  /** GOOPLIATH — fastest fell, any difficulty (legacy mixed board). */
   goopliath: 'ff2-goopliath-time',
   /** OCTA HUNT, the pub's arcade cabinet. */
   octaHunt: 'pub-octahunt',
@@ -73,13 +74,66 @@ export type RankedTier = (typeof RANKED_TIERS)[number];
  * Three boards means three personal bests, and the stats page can rank each
  * tier honestly instead of filtering a pile that already lost the losers.
  *
- * (RAID and GOOPLIATH still share one board apiece, difficulty in `meta` —
- * they are group feats run far less often, and splitting them would mostly
- * produce empty charts.)
+ * RAID and GOOPLIATH now split the same way, and hardcore runs get boards
+ * of their own too — see runBoard() below.
  */
 export function speedrunBoard(difficulty: string): string {
+  return runBoard('gauntlet', difficulty, false);
+}
+
+/** The three PvE run families that race a clock. */
+export type RunMode = 'gauntlet' | 'raid' | 'goopliath';
+
+/**
+ * THE FEAT BOARDS: one board per (run, difficulty, hardcore).
+ *
+ *   ff2-speedrun-<tier>-time      ff2-speedrun-<tier>-hc-time
+ *   ff2-raid-<tier>-time          ff2-raid-<tier>-hc-time
+ *   ff2-goopliath-<tier>-time     (the tide has no hardcore)
+ *
+ * The same ratchet problem that split SPEEDRUN by tier (above) was still
+ * eating the hardest runs everywhere else. RAID and GOOPLIATH kept ONE row
+ * per player across every difficulty, so a blazing hardcore clear that took
+ * longer than your normal clear was refused at the door — the board only
+ * ever held the easy, fast one. And a hardcore speedrun slower than your
+ * plain one on the same tier went the same way. The most impressive runs in
+ * the game were the ones the boards could not keep.
+ *
+ * So every feat gets its own personal best. A hardcore run ALSO posts to its
+ * tier's plain board (it is a clear of that tier, under stricter rules), so
+ * the tier board still answers "fastest on BLAZING, any rules".
+ *
+ * The legacy mixed boards (BOARD.raid, BOARD.goopliath) keep being written
+ * too, so their history and older clients stay whole; the lobby reads them
+ * alongside the feat boards and files each legacy row under its own feat.
+ */
+export function runBoard(mode: RunMode, difficulty: string, hardcore: boolean): string {
   const tier = (RANKED_TIERS as readonly string[]).includes(difficulty) ? difficulty : 'normal';
-  return `ff2-speedrun-${tier}-time`;
+  const family = mode === 'gauntlet' ? 'speedrun' : mode;
+  const hc = hardcore && mode !== 'goopliath' ? '-hc' : '';
+  return `ff2-${family}-${tier}${hc}-time`;
+}
+
+/** Every board a run family's feats live on — tier boards, hardcore boards,
+ *  and the legacy mixed board where there is one. */
+export function runBoardsFor(mode: RunMode): string[] {
+  const ids: string[] = [];
+  for (const tier of RANKED_TIERS) {
+    ids.push(runBoard(mode, tier, false));
+    if (mode !== 'goopliath') ids.push(runBoard(mode, tier, true));
+  }
+  if (mode === 'raid') ids.push(BOARD.raid);
+  if (mode === 'goopliath') ids.push(BOARD.goopliath);
+  return ids;
+}
+
+/** Every board one finished run should post to (see runBoard). */
+export function runPostBoards(mode: RunMode, difficulty: string, hardcore: boolean): string[] {
+  const ids = [runBoard(mode, difficulty, false)];
+  if (hardcore && mode !== 'goopliath') ids.push(runBoard(mode, difficulty, true));
+  if (mode === 'raid') ids.push(BOARD.raid);
+  if (mode === 'goopliath') ids.push(BOARD.goopliath);
+  return ids;
 }
 
 /** RAVE RAID charts are per track AND per difficulty — one board each. */

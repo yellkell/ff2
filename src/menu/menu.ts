@@ -133,6 +133,12 @@ export type MenuAction =
   | 'lb-gauntlet'
   | 'lb-raid'
   | 'lb-goopliath'
+  /** The run boards' view strip: FEATS or one difficulty, and HC ONLY. */
+  | 'lb-view-feats'
+  | 'lb-view-normal'
+  | 'lb-view-hard'
+  | 'lb-view-blazing'
+  | 'lb-view-hc'
   | `lb-row-${number}`
   /** THE PROFILE pop-out (MENUS 2): the chip toggles the card; CLOSE folds it. */
   | 'profile-toggle'
@@ -1173,9 +1179,9 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number,
 }
 
 // --- THE GASKET GAZETTE -----------------------------------------------------
-// Gasket Cove's paper — the scrapping on the beach, as the Sheriff sees it
-// (docs/gazette-voice.md). An aged-newsprint front page (serif type on cream, a
-// deliberate break from the smoked-steel lobby). MENUS 2: it renders on its
+// The game's daily paper — results, records and what to play next
+// (docs/gasket-gazette.md). An aged-newsprint front page (serif type on cream,
+// a deliberate break from the smoked-steel lobby). MENUS 2: it renders on its
 // own portrait canvas here and the TOWN wing's NEWS tab blits it (wrap.ts);
 // the paper button and the modal are gone.
 
@@ -1241,15 +1247,14 @@ export function resetNewsScroll(): void {
   newsScroll = 0;
 }
 
-/** A tin sheriff's star, drawn as a bold newsprint engraving (sepia ink): a
- *  double ring and a solid five-point ball-tipped star. */
-function drawSheriffBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
+/** The masthead's mark: a fireball drawn as a bold newsprint engraving —
+ *  a double ring, and a flame in solid ink with a paper-coloured core. */
+function drawMastheadMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number): void {
   ctx.save();
   ctx.strokeStyle = NEWS_INK;
-  ctx.fillStyle = NEWS_INK;
   ctx.lineJoin = 'round';
 
-  // Double ring — a struck-tin rim.
+  // Double ring — a struck-metal rim.
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -1259,39 +1264,47 @@ function drawSheriffBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number,
   ctx.arc(cx, cy, r * 0.86, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Solid five-point star.
-  const tips = 5;
-  const outer = r * 0.72;
-  const inner = r * 0.3;
-  ctx.beginPath();
-  for (let i = 0; i < tips * 2; i++) {
-    const ang = -Math.PI / 2 + (i * Math.PI) / tips;
-    const rad = i % 2 === 0 ? outer : inner;
-    const x = cx + Math.cos(ang) * rad;
-    const y = cy + Math.sin(ang) * rad;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // A small ball at each of the five points.
-  const ballR = r * 0.1;
-  for (let i = 0; i < tips; i++) {
-    const ang = -Math.PI / 2 + (i * 2 * Math.PI) / tips;
+  // The flame: an outer tongue in ink, an inner one knocked out in paper.
+  const flame = (h: number, w: number, baseY: number, color: string): void => {
     ctx.beginPath();
-    ctx.arc(cx + Math.cos(ang) * outer, cy + Math.sin(ang) * outer, ballR, 0, Math.PI * 2);
+    ctx.moveTo(cx, baseY);
+    ctx.bezierCurveTo(cx - w * 0.55, baseY - h * 0.12, cx - w * 0.42, baseY - h * 0.55, cx - w * 0.1, baseY - h * 0.62);
+    ctx.bezierCurveTo(cx - w * 0.28, baseY - h * 0.8, cx + w * 0.02, baseY - h * 0.9, cx + w * 0.08, baseY - h);
+    ctx.bezierCurveTo(cx + w * 0.42, baseY - h * 0.68, cx + w * 0.55, baseY - h * 0.3, cx, baseY);
+    ctx.closePath();
+    ctx.fillStyle = color;
     ctx.fill();
-  }
+  };
+  const base = cy + r * 0.58;
+  flame(r * 1.2, r * 1.3, base, NEWS_INK);
+  flame(r * 0.62, r * 0.72, base - r * 0.06, '#e9e2cf');
   ctx.restore();
 }
 
 /** Where the scrolling article column begins (just below the dateline rule). */
 const NEWS_CONTENT_TOP = 272;
 
-/** Lay out the whole article — headline, subhead, rule, body, byline — from
- *  `top` downward, returning the y past the last line. `draw = false` measures
- *  only (for scroll clamping); the y arithmetic is identical either way so the
+/** A section's head: a heavy rule over a thin one, the label letterspaced
+ *  between rules. Returns the y the section's content starts at. */
+function newsSection(ctx: CanvasRenderingContext2D, label: string, y: number, draw: boolean): number {
+  if (draw) {
+    newsRule(ctx, y, 3);
+    newsRule(ctx, y + 6, 1);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = NEWS_INK;
+    ctx.font = `bold 18px ${NEWS_SERIF}`;
+    ctx.letterSpacing = '4px';
+    ctx.fillText(label, NW / 2, y + 32);
+    ctx.letterSpacing = '0px';
+    newsRule(ctx, y + 44, 1);
+  }
+  return y + 72;
+}
+
+/** Lay out the whole article — headline, subhead, the numbers, the body, the
+ *  byline, THE RECORD BOOK and WHAT TO DO TODAY — from `top` downward,
+ *  returning the y past the last line. `draw = false` measures only (for
+ *  scroll clamping); the y arithmetic is identical either way so the
  *  measured height matches what's drawn. */
 function layoutArticle(ctx: CanvasRenderingContext2D, art: GazetteArticle, top: number, draw: boolean): number {
   ctx.textAlign = 'center';
@@ -1300,10 +1313,34 @@ function layoutArticle(ctx: CanvasRenderingContext2D, art: GazetteArticle, top: 
   let y = flowParagraph(ctx, art.headline.toUpperCase(), NW / 2, top, NW - 110, 50, draw);
   if (art.subhead) {
     ctx.font = `italic 24px ${NEWS_SERIF}`;
-    y = flowParagraph(ctx, art.subhead, NW / 2, y + 18, NW - 150, 30, draw) + 6;
+    y = flowParagraph(ctx, art.subhead, NW / 2, y + 2, NW - 150, 30, draw) + 6;
   }
   if (draw) newsRule(ctx, y + 6, 2);
   y += 34;
+
+  // BY THE NUMBERS — a row of figures under the headline, ruled apart like
+  // a stock table: the value large, what it counts in small capitals.
+  if (art.stats.length) {
+    const n = art.stats.length;
+    const cellW = (NW - 100) / n;
+    art.stats.forEach((st, i) => {
+      const cx = 50 + cellW * (i + 0.5);
+      if (draw) {
+        ctx.textAlign = 'center';
+        ctx.fillStyle = NEWS_INK;
+        ctx.font = `900 38px ${NEWS_SERIF}`;
+        ctx.fillText(st.value, cx, y + 26, cellW - 16);
+        ctx.font = `bold 13px ${NEWS_SERIF}`;
+        ctx.letterSpacing = '2px';
+        ctx.fillText(st.label.toUpperCase(), cx, y + 50, cellW - 12);
+        ctx.letterSpacing = '0px';
+        if (i > 0) ctx.fillRect(50 + cellW * i, y - 10, 1, 68);
+      }
+    });
+    y += 66;
+    if (draw) newsRule(ctx, y, 1);
+    y += 34;
+  }
 
   ctx.textAlign = 'left';
   ctx.fillStyle = NEWS_INK;
@@ -1311,70 +1348,67 @@ function layoutArticle(ctx: CanvasRenderingContext2D, art: GazetteArticle, top: 
   for (const para of art.body.split(/\n\s*\n/)) y = flowParagraph(ctx, para, 50, y, NW - 100, 30, draw) + 12;
 
   ctx.textAlign = 'right';
-  ctx.font = `italic bold 22px ${NEWS_SERIF}`;
-  if (draw) ctx.fillText(`— ${art.byline}, Gasket Cove`, NW - 50, y + 8);
-  y += 40;
+  ctx.font = `italic bold 20px ${NEWS_SERIF}`;
+  if (draw) ctx.fillText(`— ${art.byline}`, NW - 50, y + 8);
+  y += 44;
 
-  // THE VOICE's sections (docs/gazette-voice.md §5), under the byline:
-  // the WANTED poster, the Sheriff's NOTICE, and the weather. Each is
-  // measured the same way it's drawn, so the scroll clamp stays honest.
-  if (art.wanted) {
-    const w = art.wanted;
-    const bx = 70;
-    const bw = NW - 140;
-    const top = y + 6;
-    ctx.textAlign = 'center';
-    ctx.font = `900 40px ${NEWS_SERIF}`;
-    let yy = top + 52;
-    if (draw) ctx.fillText('WANTED', NW / 2, yy);
-    yy += 12;
-    if (draw) {
-      // The poster's own rule, inside its frame — not the page's.
-      ctx.strokeStyle = NEWS_INK;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(bx + 26, yy);
-      ctx.lineTo(bx + bw - 26, yy);
-      ctx.stroke();
+  // THE RECORD BOOK — the hardest clears on the boards, set like a race
+  // card: the feat left, the clock right, a dotted leader between, and the
+  // squad on the line under it.
+  if (art.records.length) {
+    y = newsSection(ctx, 'THE RECORD BOOK', y, draw);
+    for (const rec of art.records) {
+      ctx.font = `bold 20px ${NEWS_SERIF}`;
+      const timeW = ctx.measureText(rec.time).width;
+      ctx.font = `bold 19px ${NEWS_SERIF}`;
+      const featMax = NW - 100 - timeW - 40;
+      const featW = Math.min(featMax, ctx.measureText(rec.feat.toUpperCase()).width);
+      if (draw) {
+        ctx.fillStyle = NEWS_INK;
+        ctx.textAlign = 'left';
+        ctx.fillText(rec.feat.toUpperCase(), 50, y, featMax);
+        ctx.textAlign = 'right';
+        ctx.font = `bold 20px ${NEWS_SERIF}`;
+        ctx.fillText(rec.time, NW - 50, y);
+        // The leader: a row of dots from the feat to the clock.
+        for (let dx = 50 + featW + 10; dx < NW - 50 - timeW - 8; dx += 8) ctx.fillRect(dx, y - 4, 2, 2);
+      }
+      y += 26;
+      if (rec.who) {
+        ctx.textAlign = 'left';
+        ctx.font = `italic 18px ${NEWS_SERIF}`;
+        y = flowParagraph(ctx, rec.who, 50, y, NW - 100, 24, draw);
+      }
+      y += 16;
     }
-    yy += 30;
-    ctx.font = `bold 30px ${NEWS_SERIF}`;
-    if (draw) ctx.fillText(w.name.toUpperCase(), NW / 2, yy);
-    yy += 22;
-    ctx.font = `italic 20px ${NEWS_SERIF}`;
-    yy = flowParagraph(ctx, w.crime, NW / 2, yy, bw - 60, 26, draw) + 2;
-    if (w.reward) {
-      ctx.font = `bold 18px ${NEWS_SERIF}`;
-      if (draw) ctx.fillText(`REWARD · ${w.reward.toUpperCase()}`, NW / 2, yy + 14);
-      yy += 30;
-    }
-    const bh = yy - top + 14;
-    if (draw) {
-      // A poster tacked to the page: a heavy frame with a thin inner rule.
-      ctx.strokeStyle = NEWS_INK;
-      ctx.lineWidth = 3;
-      ctx.strokeRect(bx, top, bw, bh);
-      ctx.lineWidth = 1;
-      ctx.strokeRect(bx + 6, top + 6, bw - 12, bh - 12);
-    }
-    y = top + bh + 18;
+    y += 6;
   }
-  if (art.notice) {
-    ctx.textAlign = 'left';
-    ctx.font = `bold 17px ${NEWS_SERIF}`;
-    if (draw) ctx.fillText('NOTICE FROM THE SHERIFF\'S OFFICE', 50, y + 10);
-    y += 22;
-    ctx.font = `italic 21px ${NEWS_SERIF}`;
-    y = flowParagraph(ctx, art.notice, 50, y + 14, NW - 100, 28, draw) + 10;
-  }
-  if (art.weather) {
-    if (draw) newsRule(ctx, y + 2, 1);
-    ctx.textAlign = 'left';
-    ctx.font = `bold 16px ${NEWS_SERIF}`;
-    if (draw) ctx.fillText('WEATHER', 50, y + 30);
-    ctx.font = `italic 19px ${NEWS_SERIF}`;
-    // Clear of the WEATHER label's own width, or the two run together.
-    y = flowParagraph(ctx, art.weather, 158, y + 30, NW - 208, 26, draw) + 8;
+
+  // WHAT TO DO TODAY — numbered, each a bold title and a line or two on how.
+  if (art.todo.length) {
+    y = newsSection(ctx, 'WHAT TO DO TODAY', y, draw);
+    art.todo.forEach((item, i) => {
+      if (draw) {
+        // The number, reversed out of an ink disc.
+        ctx.fillStyle = NEWS_INK;
+        ctx.beginPath();
+        ctx.arc(64, y - 7, 14, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#e9e2cf';
+        ctx.textAlign = 'center';
+        ctx.font = `bold 16px ${NEWS_SERIF}`;
+        ctx.fillText(String(i + 1), 64, y - 1);
+        ctx.fillStyle = NEWS_INK;
+      }
+      ctx.textAlign = 'left';
+      ctx.font = `bold 21px ${NEWS_SERIF}`;
+      y = flowParagraph(ctx, item.title, 92, y, NW - 142, 26, draw);
+      if (item.text) {
+        ctx.font = `19px ${NEWS_SERIF}`;
+        y = flowParagraph(ctx, item.text, 92, y + 2, NW - 142, 26, draw);
+      }
+      y += 18;
+    });
   }
   return y;
 }
@@ -1398,27 +1432,27 @@ function drawNews(ctx: CanvasRenderingContext2D): void {
 
   const art = frontPage();
 
-  // Masthead — a tin sheriff's star crests the page.
+  // Masthead — a fireball crests the page.
   ctx.fillStyle = NEWS_INK;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  drawSheriffBadge(ctx, NW / 2, 64, 30);
+  drawMastheadMark(ctx, NW / 2, 64, 30);
   newsRule(ctx, 102);
   ctx.fillStyle = NEWS_INK;
   ctx.font = `900 58px ${NEWS_SERIF}`;
   ctx.fillText('The Gasket Gazette', NW / 2, 152);
   ctx.font = `italic 17px ${NEWS_SERIF}`;
-  ctx.fillText('GASKET COVE · EST. 2226 · PRICE ONE CENT', NW / 2, 178);
+  ctx.fillText('RESULTS · RECORDS · WHAT TO PLAY TODAY', NW / 2, 178);
   newsRule(ctx, 192, 2);
 
   // Dateline strip — edition number left, the date centred. Strip any
-  // "GASKET TERRITORY —" / "GASKET COVE —" prefix (older editions stored
-  // one) so the date stays short and never collides.
+  // "GASKET TERRITORY —" / "GASKET COVE —" prefix (the oldest editions
+  // stored one) so the date stays short and never collides.
   ctx.font = `bold 16px ${NEWS_SERIF}`;
   ctx.textAlign = 'left';
   ctx.fillText(art ? (art.edition > 0 ? `No. ${art.edition}` : 'WELCOME') : 'No. —', 50, 216);
   let dateText = (art?.dateline || '').replace(/^\s*GASKET (TERRITORY|COVE)\s*[—–-]\s*/i, '').trim();
-  if (!dateText) dateText = 'GASKET COVE';
+  if (!dateText) dateText = 'THE DAILY EDITION';
   ctx.textAlign = 'center';
   ctx.fillText(dateText, NW / 2, 216);
   newsRule(ctx, 228, 2);

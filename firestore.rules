@@ -115,8 +115,11 @@ service cloud.firestore {
     //   ff2-ranked                the 1v1 ladder            (high wins)
     //   ff2-aim                   aim training              (high wins)
     //   ff2-speedrun-<tier>-time  the titan run, per tier   (low wins)
-    //   ff2-raid-time             raid clear                (low wins)
-    //   ff2-goopliath-time        GOOPLIATH felled          (low wins)
+    //   ff2-raid-<tier>-time      raid clear, per tier      (low wins)
+    //   ff2-goopliath-<tier>-time GOOPLIATH felled, per tier(low wins)
+    //   ff2-<run>-<tier>-hc-time  the same, HARDCORE runs   (low wins)
+    //   ff2-raid-time             raid clear, any tier      (low wins)
+    //   ff2-goopliath-time        GOOPLIATH, any tier       (low wins)
     //   rave-<track>-<difficulty> one chart per difficulty  (high wins)
     //   pub-octahunt              the arcade cabinet        (high wins)
 

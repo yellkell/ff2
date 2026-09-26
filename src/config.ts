@@ -169,8 +169,7 @@ export const PAINT = {
     0xd8b24a, 0xe9e2f2, 0x050507, 0xc9d2dd,
   ],
   /** Colour NAMES, index-parallel to `colours` — the racks label their
-   *  swatches with these, and the gazette describes a champion's paint in
-   *  them (scripts/ladder-brief.mjs carries a copy: keep both in step). */
+   *  swatches with these. */
   colourNames: [
     'BONE WHITE', 'JET BLACK', 'OXBLOOD', 'RUST', 'BRASS', 'OLIVE DRAB', 'NAVY', 'UMBER',
     'AMBER', 'EMBER', 'HOT MAGENTA', 'CYAN', 'VIOLET', 'LIME', 'TEAL', 'PINK',

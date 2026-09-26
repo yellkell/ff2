@@ -641,7 +641,8 @@
         height: 4px;
       }
       .rail.tier {
-        max-width: 460px;
+        /* FEATS · NORMAL · HARD · BLAZING · HARDCORE */
+        max-width: 640px;
       }
       .rail.lab {
         max-width: 380px;
@@ -872,7 +873,13 @@
       }
       .diff-chip.hard { color: var(--warn); border-color: rgba(255, 180, 84, 0.4); }
       .diff-chip.blazing { color: var(--ember); border-color: rgba(255, 122, 24, 0.45); }
-      .diff-chip.hc { color: var(--danger); border-color: rgba(255, 82, 102, 0.45); }
+      .diff-chip.hc { color: #1a0406; background: var(--danger); border-color: var(--danger); }
+      /* THE FEAT reads before the names: a run row leads with what it was
+         cleared on, and the hardest clears carry a wash of their colour. */
+      .feat-lead { flex: none; display: inline-flex; min-width: 136px; }
+      .feat-lead .diff-chip { margin-left: 0; margin-right: 6px; }
+      .row.feat-blazing { background: linear-gradient(90deg, rgba(255, 122, 24, 0.12), transparent 75%); }
+      .row.feat-hc { background: linear-gradient(90deg, rgba(255, 82, 102, 0.14), transparent 75%); }
 
       /* What a board says instead of rows. */
       .status { padding: 26px 12px 30px; }
@@ -2046,6 +2053,82 @@
       ];
 
       /**
+       * How a run board is looked at (mirrors src/net/leaderboard.ts). FEATS
+       * is everyone's HARDEST clear, hardest first — blazing hardcore, then
+       * blazing, then hard hardcore … — with the clock breaking ties inside a
+       * feat. A difficulty is that tier's fastest clears. HARDCORE is the
+       * feats view narrowed to hardcore runs (the tide has none).
+       */
+      const RUN_VIEWS = [
+        { id: 'feats', label: 'Feats' },
+        ...TIERS,
+        { id: 'hc', label: 'Hardcore' },
+      ];
+
+      /**
+       * Every board a run family's feats live on (src/net/boards.ts
+       * runBoardsFor): one per tier, one per tier for hardcore, plus the
+       * legacy mixed board. Hardcore and harder runs used to share a row with
+       * the easy ones, and a slower hard clear lost the ratchet to a faster
+       * easy one — so each feat keeps its own personal best now.
+       */
+      function runBoardsFor(family) {
+        const ids = [];
+        for (const t of TIERS) {
+          ids.push(`ff2-${family}-${t.id}-time`);
+          if (family !== 'goopliath') ids.push(`ff2-${family}-${t.id}-hc-time`);
+        }
+        if (family !== 'speedrun') ids.push(`ff2-${family}-time`);
+        return ids;
+      }
+
+      const featRank = (r) => (r.difficulty === 'blazing' ? 3 : r.difficulty === 'hard' ? 2 : 1) * 2 + (r.hardcore ? 1 : 0);
+
+      /** One view of a family's rows: per player the row that answers the
+       *  view's question, then raiders who posted the SAME run folded into
+       *  one squad row. */
+      function buildRunView(raw, view) {
+        const feats = view === 'feats' || view === 'hc';
+        const pool = raw.filter((r) => (view !== 'hc' || r.hardcore) && (feats || r.difficulty === view));
+        const better = (a, b) =>
+          feats ? featRank(a) > featRank(b) || (featRank(a) === featRank(b) && a.value < b.value) : a.value < b.value;
+        const best = new Map();
+        for (const r of pool) {
+          const cur = best.get(r.uid);
+          if (!cur || better(r, cur)) best.set(r.uid, r);
+        }
+        const squads = new Map();
+        for (const r of best.values()) {
+          const key = `${[...r.names].sort().join('|')}#${r.value}#${r.difficulty}#${r.hardcore}`;
+          if (!squads.has(key)) squads.set(key, r);
+        }
+        return [...squads.values()].sort((a, b) => (feats ? featRank(b) - featRank(a) : 0) || a.value - b.value);
+      }
+
+      /** Every row of every board in a run family, pulled side by side. */
+      async function loadRunFamily(family) {
+        const ids = runBoardsFor(family);
+        const lists = await Promise.all(
+          ids.map((id) =>
+            runQuery('rows', { parent: `boards/${id}`, orderBy: 'value', dir: 'ASCENDING', limit: 100 })
+              .catch(() => [])
+              .then((docs) =>
+                docs.map((d) => ({
+                  uid: d.id,
+                  name: d.data.name || '???',
+                  value: Number(d.data.value) || 0,
+                  names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [],
+                  difficulty: d.data.meta?.difficulty || (/-(hard|blazing)-/.exec(id)?.[1] ?? 'normal'),
+                  hardcore: !!d.data.meta?.hardcore || id.endsWith('-hc-time'),
+                  at: Number(d.data.at) || 0,
+                })),
+              ),
+          ),
+        );
+        return lists.flat();
+      }
+
+      /**
        * The FIRE FIGHT rail. `kind` says where a board's rows come from:
        *   'player'  a field on every players/{uid} doc, ranked high to low
        *   'run'     a boards/{id}/rows subcollection, ranked low to high
@@ -2057,20 +2140,16 @@
         { id: 'aim', label: 'Aim', kind: 'player', field: () => 'training', col: 'Score' },
         { id: 'duo', label: '2v2', kind: 'player', field: () => 'duo', col: 'Wins' },
         { id: 'ffa', label: 'FFA', kind: 'player', field: () => 'ffa', col: 'Wins' },
-        { id: 'speedrun', label: 'Speedrun', kind: 'run', tiers: true, col: 'Time' },
-        { id: 'raid', label: 'Raid', kind: 'run', board: 'ff2-raid-time', col: 'Time' },
-        { id: 'goopliath', label: 'Goopliath', kind: 'run', board: 'ff2-goopliath-time', col: 'Time' },
+        { id: 'speedrun', label: 'Speedrun', kind: 'run', family: 'speedrun', hc: true, col: 'Time' },
+        { id: 'raid', label: 'Raid', kind: 'run', family: 'raid', hc: true, col: 'Time' },
+        { id: 'goopliath', label: 'Goopliath', kind: 'run', family: 'goopliath', hc: false, col: 'Time' },
         { id: 'lab', label: 'The Lab', kind: 'lab', col: '' },
       ];
 
-      const ff = { board: 'speedrun', tier: 'normal', rows: [], players: [], cache: new Map(), loaded: false };
-      ff.board = 'ranked';
+      const ff = { board: 'ranked', tier: 'feats', rows: [], players: [], cache: new Map(), loaded: false };
 
-      /** The board id a rail tab reads from, tier included. */
-      function ffBoardId(def, tier) {
-        if (def.tiers) return `ff2-speedrun-${tier}-time`;
-        return def.board;
-      }
+      /** The run views a board offers — the tide has no hardcore. */
+      const viewsFor = (def) => RUN_VIEWS.filter((v) => v.id !== 'hc' || def.hc);
 
       async function loadFf(force) {
         const def = FF_BOARDS.find((b) => b.id === ff.board);
@@ -2078,13 +2157,16 @@
         if (def.kind === 'lab') return loadLab(force);
         const status = document.getElementById('ff-status');
         const rowsEl = document.getElementById('ff-rows');
-        const key = def.kind === 'player' ? `p:${def.field()}` : `b:${ffBoardId(def, ff.tier)}`;
-        document.getElementById('ff-title').textContent = def.label + (def.tiers ? ` · ${ff.tier}` : '');
+        if (def.kind === 'run' && !viewsFor(def).some((v) => v.id === ff.tier)) ff.tier = 'feats';
+        const view = RUN_VIEWS.find((v) => v.id === ff.tier);
+        const key = def.kind === 'player' ? `p:${def.field()}` : `r:${def.family}`;
+        document.getElementById('ff-title').textContent = def.label + (def.kind === 'run' ? ` · ${view.label}` : '');
         document.getElementById('ff-caps').innerHTML =
           `<span class="c-rank">#</span><span class="c-name">${def.kind === 'run' ? 'Run' : 'Player'}</span>` +
           `<span class="c-score">${esc(def.col)}</span>`;
 
-        if (!force && ff.cache.has(key)) return paintFf(def, ff.cache.get(key));
+        const viewOf = (rows) => (def.kind === 'run' ? buildRunView(rows, ff.tier) : rows);
+        if (!force && ff.cache.has(key)) return paintFf(def, viewOf(ff.cache.get(key)));
         rowsEl.innerHTML = '';
         showStatus(status, 'READING THE BOARD', '', false);
         setStatus('READING THE BOARD', 'warn');
@@ -2103,24 +2185,10 @@
               .filter((r) => r.value > 0);
             if (!ff.players.length) ff.players = docs;
           } else {
-            const docs = await runQuery('rows', {
-              parent: `boards/${ffBoardId(def, ff.tier)}`,
-              orderBy: 'value',
-              dir: 'ASCENDING',
-              limit: 100,
-            });
-            rows = docs.map((d) => ({
-              uid: d.id,
-              name: d.data.name || '???',
-              value: Number(d.data.value) || 0,
-              names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [],
-              difficulty: d.data.meta?.difficulty || 'normal',
-              hardcore: !!d.data.meta?.hardcore,
-              at: Number(d.data.at) || 0,
-            }));
+            rows = await loadRunFamily(def.family);
           }
           ff.cache.set(key, rows);
-          paintFf(def, rows);
+          paintFf(def, viewOf(rows));
           setStatus('BOARD IS LIVE', 'live');
         } catch (err) {
           showStatus(status, 'THE BOARD IS UNREACHABLE', 'Try again in a minute.', true);
@@ -2154,11 +2222,15 @@
               ? r.names.map((n) => (n === r.name ? who(r.uid, n) : esc(n))).join(' · ')
               : who(r.uid, r.name);
             const chips =
-              (r.difficulty === 'hard' ? '<span class="diff-chip hard">HARD</span>' : '') +
-              (r.difficulty === 'blazing' ? '<span class="diff-chip blazing">BLAZING</span>' : '') +
+              `<span class="diff-chip ${r.difficulty}">${esc(String(r.difficulty).toUpperCase())}</span>` +
               (r.hardcore ? '<span class="diff-chip hc">HC</span>' : '');
-            return `<li class="row ${rowClass(i)}"${gauge(r.value, rows[0].value, true)}><span class="rank">${i + 1}</span>` +
-              `<span class="name">${squad}${chips}</span>` +
+            const wash = r.hardcore ? ' feat-hc' : r.difficulty === 'blazing' ? ' feat-blazing' : '';
+            // A gauge only means something between clocks of the same feat:
+            // FEATS and HARDCORE rank different races, so they go without.
+            const sameRace = ff.tier !== 'feats' && ff.tier !== 'hc';
+            return `<li class="row ${rowClass(i)}${wash}"${sameRace ? gauge(r.value, rows[0].value, true) : ''}><span class="rank">${i + 1}</span>` +
+              `<span class="feat-lead">${chips}</span>` +
+              `<span class="name">${squad}</span>` +
               `<span class="when">${esc(ago(r.at))}</span>` +
               `<span class="score">${runClock(r.value)}</span></li>`;
           })
@@ -2167,19 +2239,16 @@
       }
 
       /** The strip over the FIRE FIGHT rail: who leads, how deep the board
-       *  goes, and the fastest speedrun anyone has posted. */
+       *  goes, and the hardest speedrun anyone has posted. */
       function drawFfStrip() {
         const host = document.getElementById('ff-strip');
         const ranked = ff.cache.get(`p:score_s${seasonIndex()}`) || [];
         const xp = ff.cache.get('p:xp') || [];
-        let fastest = null;
-        for (const tier of TIERS) {
-          const rows = ff.cache.get(`b:ff2-speedrun-${tier.id}-time`) || [];
-          if (rows[0] && (!fastest || rows[0].value < fastest.value)) fastest = { ...rows[0], tier: tier.label };
-        }
+        const top = buildRunView(ff.cache.get('r:speedrun') || [], 'feats')[0];
+        const featName = (r) => `${r.difficulty[0].toUpperCase()}${r.difficulty.slice(1)}${r.hardcore ? ' hardcore' : ''}`;
         const tiles = [
           { cap: `Season ${seasonIndex()} leader`, val: ranked[0] ? who(ranked[0].uid, ranked[0].name) : '—', sub: ranked[0] ? `${num(ranked[0].value)} points` : 'nobody has banked a point' },
-          { cap: 'Fastest speedrun', val: fastest ? runClock(fastest.value) : '—', sub: fastest ? `${esc(fastest.name)} · ${fastest.tier}` : 'the titans stand unbeaten', minor: true },
+          { cap: 'Top speedrun feat', val: top ? runClock(top.value) : '—', sub: top ? `${esc(top.name)} · ${featName(top)}` : 'the titans stand unbeaten', minor: true },
           { cap: 'Most experience', val: xp[0] ? num(xp[0].value) : '—', sub: xp[0] ? who(xp[0].uid, xp[0].name) : 'no XP banked yet', minor: true },
         ];
         host.innerHTML = tiles
@@ -2195,9 +2264,10 @@
         });
         const def = FF_BOARDS.find((b) => b.id === ff.board);
         const tierRail = document.getElementById('tier-rail');
-        if (def && def.tiers) {
+        if (def && def.kind === 'run') {
           tierRail.classList.remove('hidden');
-          fillRail('tier-rail', 'tier-marker', TIERS, ff.tier, (id) => {
+          if (!viewsFor(def).some((v) => v.id === ff.tier)) ff.tier = 'feats';
+          fillRail('tier-rail', 'tier-marker', viewsFor(def), ff.tier, (id) => {
             ff.tier = id;
             drawFfRail();
             void loadFf(false);
@@ -3662,9 +3732,20 @@
         tail: 'TAIL', crown: 'CROWN', antlers: 'ANTLERS', wings: 'WINGS', claws: 'CLAWS', spikepads: 'SPIKED PADS',
         vcrest: 'V-CREST', earfins: 'EAR FINS', thrusters: 'THRUSTERS', wristblades: 'WRIST BLADES',
       };
+      /** Every feat board a profile's record reads, labelled — and the
+       *  legacy mixed boards last, shown only when a player has no feat-board
+       *  row in that family yet (runs filed before the boards split). */
       const RUN_BOARD_NAMES = [
-        ['ff2-speedrun-normal-time', 'Speedrun · Normal'], ['ff2-speedrun-hard-time', 'Speedrun · Hard'], ['ff2-speedrun-blazing-time', 'Speedrun · Blazing'],
-        ['ff2-raid-time', 'Raid'], ['ff2-goopliath-time', 'Goopliath'],
+        ...[['speedrun', 'Speedrun'], ['raid', 'Raid'], ['goopliath', 'Goopliath']].flatMap(([family, label]) =>
+          runBoardsFor(family)
+            .filter((id) => id !== `ff2-${family}-time`)
+            .map((id) => {
+              const tier = TIERS.find((t) => id.includes(`-${t.id}-`));
+              return [id, `${label} · ${tier.label}${id.endsWith('-hc-time') ? ' hardcore' : ''}`];
+            }),
+        ),
+        ['ff2-raid-time', 'Raid'],
+        ['ff2-goopliath-time', 'Goopliath'],
       ];
 
       const profile = { uid: '', name: '', open: false, seq: 0 };
@@ -3895,9 +3976,12 @@
               .filter((r) => r.value > 0));
           lines.push([label, rank, fmt(v)]);
         }
+        const hasFeat = (family) =>
+          RUN_BOARD_NAMES.some(([id]) => id.startsWith(`ff2-${family}-`) && id !== `ff2-${family}-time` && rows.get(`boards/${id}/rows/${uid}`));
         for (const [id, label] of RUN_BOARD_NAMES) {
           const row = rows.get(`boards/${id}/rows/${uid}`);
           if (!row) continue;
+          if ((id === 'ff2-raid-time' && hasFeat('raid')) || (id === 'ff2-goopliath-time' && hasFeat('goopliath'))) continue;
           const rank = await rankOf(`b:${id}`, async () =>
             (await runQuery('rows', { parent: `boards/${id}`, orderBy: 'value', dir: 'ASCENDING', limit: 100 }))
               .map((d) => ({ uid: d.id, name: d.data.name || '???', value: Number(d.data.value) || 0, names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [], difficulty: d.data.meta?.difficulty || 'normal', hardcore: !!d.data.meta?.hardcore, at: Number(d.data.at) || 0 })));
@@ -4038,18 +4122,7 @@
       if (!startFace || startFace[0] === 'ff') {
         void (async () => {
           try {
-            for (const tier of TIERS) {
-              const docs = await runQuery('rows', { parent: `boards/ff2-speedrun-${tier.id}-time`, orderBy: 'value', dir: 'ASCENDING', limit: 100 });
-              ff.cache.set(`b:ff2-speedrun-${tier.id}-time`, docs.map((d) => ({
-                uid: d.id,
-                name: d.data.name || '???',
-                value: Number(d.data.value) || 0,
-                names: Array.isArray(d.data.meta?.names) ? d.data.meta.names.map(String) : [],
-                difficulty: d.data.meta?.difficulty || tier.id,
-                hardcore: !!d.data.meta?.hardcore,
-                at: Number(d.data.at) || 0,
-              })));
-            }
+            if (!ff.cache.has('r:speedrun')) ff.cache.set('r:speedrun', await loadRunFamily('speedrun'));
             const xpDocs = await runQuery('players', { orderBy: 'xp', dir: 'DESCENDING', limit: 100 });
             ff.cache.set('p:xp', xpDocs.map((d) => ({ uid: d.id, name: d.data.name || '???', value: Number(d.data.xp) || 0, look: d.data.look || '' })).filter((r) => r.value > 0));
             drawFfStrip();
