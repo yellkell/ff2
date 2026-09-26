@@ -130,6 +130,11 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
   ctx.lineJoin = 'round';
   const dim = 'rgba(150,150,170,0.55)';
   const line = Math.max(2, r * 0.14);
+  if (def.slot === 'face') {
+    drawHeadGlyph(ctx, def.id, cx, cy, r, color);
+    ctx.restore();
+    return;
+  }
   if (def.slot === 'head') {
     ctx.fillStyle = dim;
     ctx.beginPath();
@@ -420,6 +425,102 @@ export function drawGearIcon(ctx: CanvasRenderingContext2D, def: GearDef, cx: nu
     }
   }
   ctx.restore();
+}
+
+/**
+ * A HEADS tile's glyph (avatar/heads.ts): the head itself, face on, as a
+ * solid in the tile's brass with its eyes cut dark — ears, snout and
+ * silhouette are what tell a bear from a wolf at tile size.
+ */
+function drawHeadGlyph(ctx: CanvasRenderingContext2D, id: string, cx: number, cy: number, r: number, color: string): void {
+  const hole = 'rgba(10,10,14,0.85)';
+  const blob = (x: number, y: number, rx: number, ry: number, rot = 0): void => {
+    ctx.beginPath();
+    ctx.ellipse(cx + x * r, cy + y * r, rx * r, ry * r, rot, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  const tri = (pts: ReadonlyArray<readonly [number, number]>): void => {
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(cx + x * r, cy + y * r) : ctx.moveTo(cx + x * r, cy + y * r)));
+    ctx.closePath();
+    ctx.fill();
+  };
+  const eyes = (dx: number, y: number, rx: number, ry: number, tilt = 0): void => {
+    ctx.fillStyle = hole;
+    blob(-dx, y, rx, ry, tilt);
+    blob(dx, y, rx, ry, -tilt);
+  };
+  ctx.fillStyle = color;
+  switch (id) {
+    case 'bear':
+      blob(-0.46, -0.52, 0.2, 0.2);
+      blob(0.46, -0.52, 0.2, 0.2);
+      blob(0, 0, 0.6, 0.56);
+      blob(0, 0.3, 0.3, 0.24);
+      eyes(0.22, -0.08, 0.07, 0.07);
+      blob(0, 0.2, 0.12, 0.08);
+      break;
+    case 'panther':
+      tri([[-0.55, -0.2], [-0.42, -0.8], [-0.12, -0.45]]);
+      tri([[0.55, -0.2], [0.42, -0.8], [0.12, -0.45]]);
+      blob(0, 0.02, 0.56, 0.5);
+      eyes(0.22, -0.04, 0.1, 0.07, 0.35);
+      blob(0, 0.2, 0.06, 0.04);
+      break;
+    case 'eagle':
+      for (const x of [-0.18, 0, 0.18]) tri([[x - 0.1, -0.3], [x * 1.6, -0.95], [x + 0.1, -0.3]]);
+      blob(0, -0.06, 0.46, 0.5);
+      tri([[-0.18, 0.05], [0.18, 0.05], [0.06, 0.72], [-0.02, 0.8]]);
+      eyes(0.24, -0.12, 0.09, 0.08, -0.3);
+      break;
+    case 'knight':
+      ctx.fillRect(cx - r * 0.5, cy - r * 0.7, r * 1.0, r * 1.3);
+      ctx.fillStyle = hole;
+      ctx.fillRect(cx - r * 0.42, cy - r * 0.18, r * 0.84, r * 0.1);
+      ctx.fillStyle = color;
+      ctx.fillRect(cx - r * 0.08, cy - r * 0.62, r * 0.16, r * 1.14);
+      break;
+    case 'stallion':
+      tri([[-0.3, -0.45], [-0.22, -0.92], [-0.06, -0.5]]);
+      tri([[0.3, -0.45], [0.22, -0.92], [0.06, -0.5]]);
+      blob(0, -0.2, 0.38, 0.36);
+      tri([[-0.34, -0.1], [0.34, -0.1], [0.2, 0.72], [-0.2, 0.72]]);
+      blob(0, 0.7, 0.24, 0.14);
+      eyes(0.33, -0.2, 0.06, 0.08);
+      break;
+    case 'wolf':
+      tri([[-0.5, -0.1], [-0.4, -0.9], [-0.08, -0.4]]);
+      tri([[0.5, -0.1], [0.4, -0.9], [0.08, -0.4]]);
+      blob(0, -0.02, 0.52, 0.44);
+      tri([[-0.22, 0.1], [0.22, 0.1], [0.08, 0.66], [-0.08, 0.66]]);
+      eyes(0.22, -0.1, 0.11, 0.045, 0.4);
+      break;
+    case 'frog':
+      blob(-0.34, -0.42, 0.24, 0.22);
+      blob(0.34, -0.42, 0.24, 0.22);
+      blob(0, 0.06, 0.72, 0.42);
+      eyes(0.34, -0.44, 0.13, 0.05);
+      ctx.strokeStyle = hole;
+      ctx.lineWidth = Math.max(1.5, r * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(cx - r * 0.5, cy + r * 0.12);
+      ctx.quadraticCurveTo(cx, cy + r * 0.34, cx + r * 0.5, cy + r * 0.12);
+      ctx.stroke();
+      break;
+    default: // bunny
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(cx + s * r * 0.24, cy - r * 0.72, r * 0.12, r * 0.4, s * 0.18, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      blob(0, 0.08, 0.5, 0.54);
+      eyes(0.16, -0.02, 0.09, 0.13);
+      ctx.fillStyle = color;
+      blob(0, 0.34, 0.3, 0.18);
+      ctx.fillStyle = hole;
+      blob(0, 0.26, 0.06, 0.05);
+      break;
+  }
 }
 
 /** A thumbnail of a deck material (arena/decks.ts), drawn inside the pad's

@@ -36,7 +36,7 @@ import { font } from '../ui/kit/fonts.js';
 import { customization, platformOwned, gearOwned } from './customization.js';
 import { canAfford, coins } from './wallet.js';
 import { DECK_SHELVES, PLATFORM_SKINS, type PlatformSkin, platformShelf } from '../avatar/skins.js';
-import { GEAR as GEAR_CATALOGUE, type GearDef } from '../avatar/gear.js';
+import { GEAR as GEAR_CATALOGUE, type GearDef, type GearSlot } from '../avatar/gear.js';
 import { drawGearIcon, drawPlatformIcon } from './skinIcons.js';
 import { bankBoard } from './bankBoard.js';
 import { HUB_TITLE, bayFaceState, colourRect, drawColourChip, drawShapeChips, hubTabs, rackColours, shapeButtons } from './paintbay.js';
@@ -174,12 +174,15 @@ export function lockerFace(locker: boolean): LockerFace {
   });
   // THE SHELVES: one slot of gear, or one material of pad, at a time.
   if (b === 'gear') {
-    const shelves: Array<['head' | 'body' | 'hands', string]> = [
-      ['head', 'HEAD'],
+    // HEADS first: a whole head (avatar/heads.ts) is the biggest thing
+    // you can change about the blank; HEADGEAR is what bolts on over it.
+    const shelves: Array<[GearSlot, string]> = [
+      ['face', 'HEADS'],
+      ['head', 'HEADGEAR'],
       ['body', 'BODY'],
       ['hands', 'HANDS'],
     ];
-    const sw = (INNER - 2 * 16) / 3;
+    const sw = (INNER - (shelves.length - 1) * 16) / shelves.length;
     shelves.forEach(([slot, label], i) => {
       buttons.push({
         id: `gear-${slot}`,

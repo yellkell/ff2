@@ -398,6 +398,25 @@ paint's fail-soft law). Probes: `check:wrap` dresses the podium through
 sees a punter's gear arrive on the hello. PAINT 2 later made gear a
 PAINT SURFACE too, with its own canvases per slot.
 
+**SHIPPED — THE HEADS** (`src/avatar/heads.ts`): FIRE FIGHT 1's eight
+animal heads come back as a fourth gear slot, `face` (the HEADS shelf,
+first on the GEAR board; the old HEAD shelf is now HEADGEAR). BEAR,
+PANTHER, EAGLE, KNIGHT, STALLION, WOLF, FROG and BUNNY keep FF1's lofted
+skulls — the shapes the bare egg never had — re-made for the blank: the
+shell in the body's primer (a paint surface, `gearFace`, part 7 on the
+wire), only the holes in TRIM (nose pads, sockets, inner ears, slits),
+and only the EYES lit in the accent (FF1's neon blazes, vanes, rims and
+lit teeth are gone — paint does markings now). Fur, manes, crests and
+ruffs are rounded tufts instead of FF1's flat plates, which read as
+cards in porcelain; the knight's cross and sight wrap the barrel; every
+head is carried at about four-fifths of its FF1 size, which was scaled
+for the old shoulder-heavy robots. A worn head hides the skull (and the
+paint bay stops aiming at it), head GEAR rides out to the head's crown
+(`HEAD_FIT`), the wearer's own first-person head builds none of it, and
+the BODY_IK head sphere never moves. `face` packs last, so a reader from
+before it simply drops the id. Dev: `node tools/gear-gallery.mjs out.png
+bear,panther,eagle,knight,stallion,wolf,frog,bunny`.
+
 **SHIPPED — THE PADS, rebuilt entire.** The platform shop no longer sells
 neon tints over one steel slab with a grin, a bolt and a grid on top. A
 platform skin is a MATERIAL (`arena/decks.ts`): thirteen procedural

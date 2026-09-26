@@ -60,10 +60,10 @@ export const PAINT_KINDS: readonly PaintKind[] = ['stripe', 'dot', 'square', 'tr
  *  cuff share one material, so a stripe lands on the whole hand — both of
  *  them. Legacy 'chest'/'pelvis' units fold into the body's v range on
  *  read, so paint made before the merge survives it. */
-export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand' | 'gearHandsR';
+export type PaintPart = 'head' | 'body' | 'gearHead' | 'gearBody' | 'gearHands' | 'hand' | 'gearHandsR' | 'gearFace';
 /** 'gearHands' is the LEFT hand's gear, 'gearHandsR' the right's (they
  *  were one surface, both hands wearing the same paint, until wire 6). */
-export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR'];
+export const PAINT_PARTS: readonly PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'gearFace'];
 
 export interface PlacedPaint {
   kind: PaintKind;
@@ -97,7 +97,7 @@ const LOOK_VERSION = 3;
 
 /** A gear surface: laid out by the atlas, painted as decals. */
 export const isGearPart = (part: PaintPart): boolean =>
-  part === 'gearHead' || part === 'gearBody' || part === 'gearHands' || part === 'gearHandsR';
+  part === 'gearHead' || part === 'gearBody' || part === 'gearHands' || part === 'gearHandsR' || part === 'gearFace';
 /** `variant` bit: a gear unit placed before the atlas (see LOOK_VERSION). */
 const LEGACY_GEAR = 0x80;
 const markLegacy = (p: PlacedPaint): PlacedPaint => (isGearPart(p.part) ? { ...p, variant: p.variant | LEGACY_GEAR } : p);
@@ -211,7 +211,10 @@ export function clearLook(): void {
  */
 const WIRE_FORMAT = 6;
 /** Part order ON THE WIRE — append-only. */
-const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR'];
+// 'gearFace' (THE HEADS, avatar/heads.ts) is index 7: an older reader
+// finds no part there and drops the unit — its fighter just wears the
+// head bare, never the wrong paint.
+const WIRE_PARTS: PaintPart[] = ['head', 'body', 'gearHead', 'gearBody', 'gearHands', 'hand', 'gearHandsR', 'gearFace'];
 /** Format 2's part order (the merged body, before gear was paintable). */
 const WIRE_PARTS_V2: PaintPart[] = ['head', 'body'];
 /** Format 1's part order, kept only to read looks packed before the merge. */

@@ -13,6 +13,15 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
+- **THE HEADS** — FIRE FIGHT 1's animals are back, on the blank: a new
+  HEADS shelf on the GEAR board sells BEAR, PANTHER, EAGLE, KNIGHT,
+  STALLION, WOLF, FROG and BUNNY, each worn in place of the bare egg
+  (`avatar/heads.ts`). Same lofted skulls as FF1, iterated for FF2: primer
+  shell you can paint, dark trim only where a face needs holes, eyes lit
+  in your accent and nothing else, tufts for fur and feathers where FF1
+  had flat plates, and sized down to sit on the slender mannequin. Wear
+  headgear with them — horns and crests ride out to the bigger crown.
+  Purely visual: the head hitbox never moves. DESIGN.md §5.2.
 This repo is seeded with the complete FIRE FIGHT 1 engine — it builds and
 plays exactly as FF1 did, and gets rebuilt into FF2 phase by phase
 (DESIGN.md §10). [`FOUNDATION.md`](FOUNDATION.md) is FF1's own README,

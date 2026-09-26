@@ -19,10 +19,12 @@
  * the rig's head / body / glove groups and the BODY_IK hitboxes never
  * move, so a horned fighter is exactly as hittable as a bare one.
  *
- * One piece per SLOT (head · body · hands). The equipped set is three ids,
- * packed for the wire as a short comma-joined string that every receiver
- * re-validates against this catalogue (unknown id → dropped, one per slot,
- * hard length cap) — the same fail-soft law as THE PAINT's look.
+ * One piece per SLOT (head · body · hands · face — the last is THE HEADS,
+ * FF1's animals worn in place of the skull, avatar/heads.ts). The equipped
+ * set is up to four ids, packed for the wire as a short comma-joined
+ * string that every receiver re-validates against this catalogue (unknown
+ * id → dropped, one per slot, hard length cap) — the same fail-soft law as
+ * THE PAINT's look.
  *
  * Local frames (see avatar/mannequin.ts + avatar/hands.ts): the HEAD group
  * sits at the head centre, front −z, skull radius BODY_IK.headRadius; the
@@ -37,9 +39,14 @@ import { BoxGeometry, BufferGeometry, CapsuleGeometry, CatmullRomCurve3, ConeGeo
 import { BODY_IK, PAINT } from '../config.js';
 import { EGG_SCALE, HEAD_SCALE, type BlankTone } from './mannequin.js';
 import { atlasGear, mergePiece } from './gearAtlas.js';
+import { HEAD_FIT, HEAD_PIECES } from './heads.js';
 
-export type GearSlot = 'head' | 'body' | 'hands';
-export const GEAR_SLOTS: readonly GearSlot[] = ['head', 'body', 'hands'];
+/** 'face' is THE HEADS (avatar/heads.ts): a whole head worn in place of
+ *  the bare skull. It came after the other three, so it packs LAST — the
+ *  wire is slot-ordered, and an older reader simply drops an id it doesn't
+ *  know. */
+export type GearSlot = 'head' | 'body' | 'hands' | 'face';
+export const GEAR_SLOTS: readonly GearSlot[] = ['head', 'body', 'hands', 'face'];
 
 export interface GearDef {
   id: string;
@@ -83,6 +90,17 @@ export const GEAR: GearDef[] = [
   { id: 'earfins', name: 'EAR FINS', slot: 'head', price: 140, blurb: 'swept fins at the temples' },
   { id: 'thrusters', name: 'THRUSTERS', slot: 'body', price: 300, blurb: 'a jet pack, two lit nozzles' },
   { id: 'wristblades', name: 'WRIST BLADES', slot: 'hands', price: 220, blurb: 'a blade along each forearm' },
+  // ── THE HEADS: FIRE FIGHT 1's animals, back on the blank (avatar/heads.ts).
+  // Each replaces the bare skull; ids are the FF1 animals, never the old
+  // skin ids (cobalt, crimson…), so nothing from the retired roster aliases.
+  { id: 'bear', name: 'BEAR', slot: 'face', price: 400, blurb: 'a domed skull, a short deep muzzle' },
+  { id: 'panther', name: 'PANTHER', slot: 'face', price: 400, blurb: 'all cheek, a slanted stare, whiskers' },
+  { id: 'eagle', name: 'EAGLE', slot: 'face', price: 450, blurb: 'a hooked beak under a scowling brow' },
+  { id: 'knight', name: 'KNIGHT', slot: 'face', price: 350, blurb: 'a great helm, a cross at the sight' },
+  { id: 'stallion', name: 'STALLION', slot: 'face', price: 450, blurb: 'a long face, a swept mane' },
+  { id: 'wolf', name: 'WOLF', slot: 'face', price: 450, blurb: 'a long muzzle, ears up, a ruff' },
+  { id: 'frog', name: 'FROG', slot: 'face', price: 300, blurb: 'a wide flat grin, eyes up top' },
+  { id: 'bunny', name: 'BUNNY', slot: 'face', price: 350, blurb: 'tall ears, buck teeth' },
 ];
 
 export function gearDef(id: string): GearDef | undefined {
@@ -1221,14 +1239,20 @@ const FOURTH_BUILDERS: Record<string, Builder> = {
 };
 
 Object.assign(BUILDERS, MORE_BUILDERS, THIRD_BUILDERS, FOURTH_BUILDERS);
+for (const [id, build] of Object.entries(HEAD_PIECES)) BUILDERS[id] = (mat, _side, trimMat, glowMat) => build(mat, trimMat, glowMat);
 
-/** The rig groups gear can hang off, by the names buildBoxer gives them. */
-const SLOT_OF_NAME: Record<string, GearSlot> = {
-  'opponent-head': 'head',
-  'opponent-body': 'body',
-  'opponent-glove-left': 'hands',
-  'opponent-glove-right': 'hands',
+/** The rig groups gear can hang off, by the names buildBoxer gives them —
+ *  the head carries two slots: its GEAR (horns, crest…) and its FACE. */
+const SLOTS_OF_NAME: Record<string, readonly GearSlot[]> = {
+  'opponent-head': ['face', 'head'],
+  'opponent-body': ['body'],
+  'opponent-glove-left': ['hands'],
+  'opponent-glove-right': ['hands'],
 };
+
+/** The child each slot builds under its rig group ('gear' for the three
+ *  that came first, so every probe that looks for it still finds it). */
+const childName = (slot: GearSlot): string => (slot === 'face' ? 'gear-face' : 'gear');
 
 /**
  * Dress a rig (or any subtree holding rig pieces) in a gear set. Finds the
@@ -1247,73 +1271,104 @@ export function applyGear(root: Object3D, ids: readonly string[], tone: BlankTon
     // By name for the rig's head and body; by the tag buildHand leaves for
     // any glove — your own gloves are renamed 'player-glove-*' by the
     // arena and left nameless by the pub, and neither got its cuffs.
-    const slot = SLOT_OF_NAME[o.name] ?? (o.userData.gearSlot as GearSlot | undefined);
-    if (!slot) return;
-    // THE WEARER'S OWN HEAD: gear on the head slot of a first-person rig
+    const tagged = o.userData.gearSlot as GearSlot | undefined;
+    const slots = SLOTS_OF_NAME[o.name] ?? (tagged ? [tagged] : null);
+    if (!slots) return;
+    // THE WEARER'S OWN HEAD: gear on the head of a first-person rig
     // (userData.firstPerson — the arena's PlayerBodySystem flags its own
     // head) is never built. Your horns are for everyone else to see; from
-    // inside the skull they would only sit in the edge of your vision.
-    const id = slot === 'head' && o.userData.firstPerson ? '' : (want.get(slot) ?? '');
-    const key = `${id}|${tone}`;
-    if (o.userData.gearKey === key) return;
-    o.userData.gearKey = key;
-    const old = o.getObjectByName('gear');
-    if (old) {
-      old.removeFromParent();
-      old.traverse((m) => {
-        const mesh = m as Mesh;
-        if (mesh.isMesh) {
-          mesh.geometry.dispose();
-          (mesh.material as MeshStandardMaterial).dispose?.();
-        }
+    // inside the skull they would only sit in the edge of your vision —
+    // and a whole bear's head would be all you saw.
+    const fp = !!o.userData.firstPerson && slots.includes('face');
+    const face = fp ? '' : (slots.includes('face') ? (want.get('face') ?? '') : '');
+    for (const slot of slots) dressSlot(o, slot, fp ? '' : (want.get(slot) ?? ''), tone, face);
+    // A worn head REPLACES the bare skull (the skull stays built — it is
+    // the 'head' paint surface, and it comes back the moment the head
+    // comes off).
+    if (slots.includes('face')) {
+      o.traverse((m) => {
+        if (m.userData.paintPart === 'head') m.visible = !face;
       });
     }
-    const build = BUILDERS[id];
-    if (!build) return;
-    const side: 1 | -1 = (o.userData.gearSide as 1 | -1 | undefined) ?? (o.name.endsWith('-right') ? -1 : 1);
-    const glowMat = glow();
-    const accent = accentOf(o);
-    if (accent !== null) {
-      glowMat.color.set(accent);
-      glowMat.emissive.set(accent);
-    }
-    const g = build(primer(tone), side, trim(tone), glowMat);
-    g.name = 'gear';
-    g.userData.gear = id;
-    // The head pieces were modelled on the old egg skull; refit them.
-    if (slot === 'head') g.scale.set(HEAD_SCALE[0] / EGG_SCALE[0], HEAD_SCALE[1] / EGG_SCALE[1], HEAD_SCALE[2] / EGG_SCALE[2]);
-    // A PAINT SURFACE (avatar/paint.ts): the piece shares its slot's
-    // canvas, laid out by THE GEAR ATLAS (avatar/gearAtlas.ts) — every
-    // mesh and every face its own patch of it, so each pauldron, plate and
-    // spike takes paint of its own, and a mark is placed in 3D where it
-    // was aimed. Each mesh takes its own material (the bake sets a map per
-    // mesh) and the piece is NOT collapsed — the merge would drop the UVs.
-    // Each HAND's gear is its own surface — the right hand's is
-    // 'gearHandsR' — so a pair of cuffs can be painted two ways.
-    const part = slot === 'head' ? 'gearHead' : slot === 'body' ? 'gearBody' : side === -1 ? 'gearHandsR' : 'gearHands';
-    const paintable: Mesh[] = [];
-    g.traverse((m) => {
-      const mesh = m as Mesh;
-      if (!mesh.isMesh) return;
-      mesh.material = (mesh.material as MeshStandardMaterial).clone();
-      // Trim keeps its own finish: no part tag, so the bake walks past it.
-      if (mesh.userData.trim) return;
-      mesh.userData.paintPart = part;
-      mesh.userData.paintTone = tone;
-      paintable.push(mesh);
-    });
-    const map = atlasGear(g, paintable, `${id}|${side}`, PAINT.canvas[part] ?? 256);
-    for (const mesh of paintable) mesh.userData.paintMap = map;
-    mergePiece(g); // a few draw calls per piece, not dozens (gearAtlas.ts)
-    o.add(g);
   });
+}
+
+/** Build (or keep) one slot's piece under a rig group. */
+function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, face: string): void {
+  const keyName = slot === 'face' ? 'faceKey' : 'gearKey';
+  // The head gear is fitted to whatever face it sits on, so a new face is
+  // a new fit.
+  const key = slot === 'head' ? `${id}|${tone}|${face}` : `${id}|${tone}`;
+  if (o.userData[keyName] === key) return;
+  o.userData[keyName] = key;
+  const old = o.getObjectByName(childName(slot));
+  if (old) {
+    old.removeFromParent();
+    old.traverse((m) => {
+      const mesh = m as Mesh;
+      if (mesh.isMesh) {
+        mesh.geometry.dispose();
+        (mesh.material as MeshStandardMaterial).dispose?.();
+      }
+    });
+  }
+  const build = BUILDERS[id];
+  if (!build) return;
+  const side: 1 | -1 = (o.userData.gearSide as 1 | -1 | undefined) ?? (o.name.endsWith('-right') ? -1 : 1);
+  const glowMat = glow();
+  const accent = accentOf(o);
+  if (accent !== null) {
+    glowMat.color.set(accent);
+    glowMat.emissive.set(accent);
+  }
+  const g = build(primer(tone), side, trim(tone), glowMat);
+  g.name = childName(slot);
+  g.userData.gear = id;
+  // The head pieces were modelled on the old egg skull; refit them.
+  if (slot === 'head') g.scale.set(HEAD_SCALE[0] / EGG_SCALE[0], HEAD_SCALE[1] / EGG_SCALE[1], HEAD_SCALE[2] / EGG_SCALE[2]);
+  // A PAINT SURFACE (avatar/paint.ts): the piece shares its slot's
+  // canvas, laid out by THE GEAR ATLAS (avatar/gearAtlas.ts) — every
+  // mesh and every face its own patch of it, so each pauldron, plate and
+  // spike takes paint of its own, and a mark is placed in 3D where it
+  // was aimed. Each mesh takes its own material (the bake sets a map per
+  // mesh) and the piece is NOT collapsed — the merge would drop the UVs.
+  // Each HAND's gear is its own surface — the right hand's is
+  // 'gearHandsR' — so a pair of cuffs can be painted two ways.
+  const part =
+    slot === 'face' ? 'gearFace' : slot === 'head' ? 'gearHead' : slot === 'body' ? 'gearBody' : side === -1 ? 'gearHandsR' : 'gearHands';
+  const paintable: Mesh[] = [];
+  g.traverse((m) => {
+    const mesh = m as Mesh;
+    if (!mesh.isMesh) return;
+    mesh.material = (mesh.material as MeshStandardMaterial).clone();
+    // Trim keeps its own finish: no part tag, so the bake walks past it.
+    if (mesh.userData.trim) return;
+    mesh.userData.paintPart = part;
+    mesh.userData.paintTone = tone;
+    paintable.push(mesh);
+  });
+  const map = atlasGear(g, paintable, `${id}|${side}`, PAINT.canvas[part] ?? 256);
+  for (const mesh of paintable) mesh.userData.paintMap = map;
+  mergePiece(g); // a few draw calls per piece, not dozens (gearAtlas.ts)
+  // …and out to a worn head's crown (HEAD_FIT): the heads are bigger than
+  // the skull, and a horn fitted to the egg would sink inside a bear's
+  // dome. Only AFTER the atlas: its map is measured in the piece's frame
+  // and kept per piece, so it must be the same map whatever face the
+  // piece first met — the mark rides out with the horn, the same mark on
+  // every headset.
+  const fit = slot === 'head' ? HEAD_FIT[face] : undefined;
+  if (fit) {
+    g.scale.multiplyScalar(fit.scale);
+    g.position.y = fit.lift;
+  }
+  o.add(g);
 }
 
 /** The gear a subtree is wearing right now (dev hooks / probes). */
 export function wornGear(root: Object3D): string[] {
   const out: string[] = [];
   root.traverse((o) => {
-    if (o.name === 'gear' && typeof o.userData.gear === 'string') out.push(o.userData.gear);
+    if ((o.name === 'gear' || o.name === 'gear-face') && typeof o.userData.gear === 'string') out.push(o.userData.gear);
   });
   return out;
 }

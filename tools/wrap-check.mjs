@@ -513,6 +513,19 @@ check('CLOSE folds it', !(await wrap(`visible('profilecard')`)));
   check('GEAR: the podium wears what you equip (crest + pauldrons)', Array.isArray(worn) && worn.includes('crest') && worn.includes('pauldrons') && (before?.length ?? 0) === 0, JSON.stringify({ before, worn }));
   check('GEAR: the wire packs slot-ordered and drops junk / a second head', wire.packed === 'crest,pauldrons' && wire.junk.join(',') === 'crest,pauldrons', JSON.stringify(wire));
   check('GEAR: an oversized wire string is refused whole (bare)', wire.oversized.length === 0, JSON.stringify(wire.oversized));
+  // THE HEADS (avatar/heads.ts): a whole head is its own slot, worn WITH
+  // headgear, packed last so an older reader just drops it.
+  await page.evaluate(() => {
+    window.__ff2.gear.equip('crest');
+    window.__ff2.gear.equip('bear');
+  });
+  await page.waitForTimeout(400);
+  const withHead = await page.evaluate(() => ({ worn: window.__ff2.podium.gear(), packed: window.__ff2.gear.pack() }));
+  await page.evaluate(() => {
+    window.__ff2.gear.clear('face');
+    window.__ff2.gear.clear('head');
+  });
+  check('GEAR: a HEAD is worn with headgear (bear + crest), packed last', withHead.worn.includes('bear') && withHead.worn.includes('crest') && withHead.packed === 'crest,bear', JSON.stringify(withHead));
 }
 
 console.log('\n=== the bout: what you wear, on your own hands ===');

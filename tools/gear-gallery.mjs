@@ -90,7 +90,7 @@ const sheet = await page.evaluate(async ([only, accent]) => {
     // Frame the slot: head pieces close on the head, hand pieces on the hands.
     // [x, y, z] to orbit, distance, the two yaws (0 = from the front).
     const focus =
-      def?.slot === 'head' ? [[0, 1.55, 0], 0.95, [0.6, Math.PI - 0.7]]
+      def?.slot === 'head' || def?.slot === 'face' ? [[0, 1.55, 0], 0.95, [0.6, Math.PI - 0.7]]
         : def?.slot === 'hands' ? [[0.2, 1.1, -0.26], 0.42, [0.9, 2.3]]
           : [[0, 1.25, 0], 1.7, [0.6, Math.PI - 0.7]];
     for (const yaw of focus[2]) {

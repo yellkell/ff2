@@ -281,6 +281,8 @@ export function setGloveLit(glove: Group, lit: boolean, delta: number): void {
 // (bear/panther/eagle/knight/stallion/wolf/frog/oswald — ~2,100 lines of
 // lofted steel) retired with the skins system; the mannequin is the one
 // entry every table serves, and the paint system owns identity from here.
+// (The animals' HEADS came back later as gear — avatar/heads.ts — worn over
+// this blank rather than as bodies of their own.)
 const HEAD_BUILDERS: Record<string, (accent: number) => Group> = {
   blank: () => buildMannequinHead('white'),
   onyx: () => buildMannequinHead('onyx'),

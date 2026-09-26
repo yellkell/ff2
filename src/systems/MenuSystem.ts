@@ -77,7 +77,7 @@ import { currentVoiceContext, VOICE_RULES, voiceAllowed, hearAllowed } from '../
 import { applyGhost, applyLook, bay, handLift, handPlace, handReturn, installPaintDevHook, myLook, paintState, togglePaintHiddenAll, undoLast, unitAt, type PaintPart } from '../avatar/paint.js';
 import { pulseHand } from '../input/haptics.js';
 import type { GearMap } from '../avatar/gearAtlas.js';
-import { applyGear, cleanGear, GEAR, gearDef, wornGear } from '../avatar/gear.js';
+import { applyGear, cleanGear, GEAR, gearDef, type GearSlot, wornGear } from '../avatar/gear.js';
 import { installGrammarDevHook } from '../campaign/grammar.js';
 import { botGradeLine, botLive, installBotBrainDevHook } from '../combat/botBrain.js';
 import { KitMenuPanel } from '../menu/wrap.js';
@@ -1540,8 +1540,9 @@ export class MenuSystem extends createSystem({}) {
       case 'gear-head':
       case 'gear-body':
       case 'gear-hands':
+      case 'gear-face':
         customization.tab = 'gear';
-        customization.gearSlot = action.slice(5) as 'head' | 'body' | 'hands';
+        customization.gearSlot = action.slice(5) as GearSlot;
         break;
       case 'av-uncolor':
         setAvatarColor(-1); // back to the skin's own palette
@@ -1899,7 +1900,7 @@ export class MenuSystem extends createSystem({}) {
           const d = gearDef(id);
           if (d) setGear(d.slot, id);
         },
-        clear: (slot: 'head' | 'body' | 'hands') => setGear(slot, ''),
+        clear: (slot: GearSlot) => setGear(slot, ''),
         pack: () => myPackedGear(),
         clean: (s: string) => cleanGear(s),
       };
@@ -2425,6 +2426,10 @@ export class MenuSystem extends createSystem({}) {
     this.bayGear = [];
     this.mirror?.group.traverse((o) => {
       if (!o.userData?.paintPart) return;
+      // A worn HEAD (avatar/heads.ts) hides the bare skull rather than
+      // deleting it; hidden, it is not there to paint — and the frog's flat
+      // crown would otherwise let the ray find the egg underneath.
+      if (!o.visible) return;
       this.bayMeshes.push(o);
       if (String(o.userData.paintPart).startsWith('gear')) this.bayGear.push(o as Mesh);
     });

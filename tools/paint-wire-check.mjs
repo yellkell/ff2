@@ -111,6 +111,21 @@ console.log('=== the wire: pack / unpack ===');
     return back.map((u) => `${u.kind}@${u.part}`).slice(-3);
   });
   check('a square, a TRIANGLE and a gear-surface unit roundtrip as themselves', shapes.join(',') === 'square@body,triangle@body,dot@gearHead', shapes.join(','));
+  // THE HEADS (avatar/heads.ts): a worn head is its own surface, part 7 on
+  // the wire — and a wire-6 reader that predates it drops the unit, never
+  // paints it somewhere else.
+  const face = await page.evaluate(() => {
+    const p = window.__ff2.paint;
+    p.set({ paint: [{ kind: 'dot', part: 'gearFace', colour: 9, variant: 0, u: 0.5, v: 0.5, angle: 0, len: 0.2, wid: 0.2 }] });
+    const packed = p.pack();
+    const back = p.unpack(packed).paint.map((u) => `${u.kind}@${u.part}`);
+    // Part index past the end of the table: what an older client sees.
+    const unknown = p.unpack(btoa(String.fromCharCode(6, (31 << 3) | 2, 9, 0, 128, 128, 0, 60, 60))).paint.length;
+    p.clear();
+    return { back, unknown };
+  });
+  check('a mark on a HEAD (gearFace) roundtrips as itself', face.back.join(',') === 'dot@gearFace', face.back.join(','));
+  check('a mark on a part the reader does not know is dropped', face.unknown === 0, String(face.unknown));
   check('fields survive quantization (body stripe at u≈0.72)', wire.first.kind === 'stripe' && wire.first.part === 'body' && Math.abs(wire.first.u - 0.72) < 0.01, JSON.stringify(wire.first));
 
   // THE MERGE: chest and pelvis became one body surface, so a look packed

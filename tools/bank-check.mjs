@@ -283,6 +283,12 @@ try {
     await page.waitForTimeout(200);
     ids = await m(`buttons('shop')`);
     check('HANDS offers the CLAWS', ids.includes('shop-gr-16'), ids.filter((b) => b.startsWith('shop-gr-')).join(','));
+    await wrap(`act('gear-face')`);
+    await page.waitForTimeout(200);
+    ids = await m(`buttons('shop')`);
+    // THE HEADS are catalogue 22..29 (appended after WRIST BLADES).
+    check('HEADS offers all eight heads, BEAR to BUNNY', [22, 23, 24, 25, 26, 27, 28, 29].every((i) => ids.includes(`shop-gr-${i}`)), ids.filter((b) => b.startsWith('shop-gr-')).join(','));
+    await shot('store-heads');
     await wrap(`act('custom-close')`);
     check('no page errors fell out', errors.length === 0, errors[0]);
     await browser.close();
