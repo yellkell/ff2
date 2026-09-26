@@ -38,12 +38,15 @@ import {
   CatmullRomCurve3,
   ConeGeometry,
   CylinderGeometry,
+  DoubleSide,
   Float32BufferAttribute,
   Group,
   LatheGeometry,
   Mesh,
+  MeshBasicMaterial,
   type MeshStandardMaterial,
   type Object3D,
+  Raycaster,
   SphereGeometry,
   TubeGeometry,
   Vector2,
@@ -426,10 +429,51 @@ function onLoft(st: HeadStation, a: number, scale: number, out = 1.0): Vector3 {
  *  for both sides at once (a → the +x side, π − a → the −x side), joined
  *  across the front: a mouth that follows the head it is cut into. */
 function loftSmile(stations: HeadStation[], a: number, from: number, to: number, scale: number, out: number): Vector3[] {
+  // Sampled BETWEEN stations too (the loft runs straight from ring to
+  // ring, so a curve through the stations alone dips under the skin).
   const right: Vector3[] = [];
-  for (let i = from; i <= to; i++) right.push(onLoft(stations[i], a, scale, out));
+  const steps = 5;
+  for (let i = from; i <= to; i++) {
+    for (let k = 0; k < (i === to ? 1 : steps); k++) {
+      const t = k / steps;
+      const a0 = stations[i];
+      const b0 = stations[Math.min(i + 1, to)];
+      const mix = (p: number, q: number): number => p + (q - p) * t;
+      right.push(onLoft({
+        top: [mix(a0.top[0], b0.top[0]), mix(a0.top[1], b0.top[1])],
+        bot: [mix(a0.bot[0], b0.bot[0]), mix(a0.bot[1], b0.bot[1])],
+        w: mix(a0.w, b0.w),
+        n: mix(a0.n, b0.n),
+      }, a, scale, out));
+    }
+  }
   const left = right.map((p) => new Vector3(-p.x, p.y, p.z)).reverse();
   return [...left, ...right];
+}
+
+/** DRAPE a line over a surface: each point is found again by a ray cast
+ *  from the head's axis (x = 0, at the point's own height, `axisZ` deep)
+ *  out through it to the skin, and lifted `lift` along the skin's normal
+ *  there — so the line sits proud of the surface all the way round,
+ *  whichever way the surface faces (a push out from the section centre
+ *  left it half-buried wherever the snout turned to face forward). */
+function drape(surface: Mesh, pts: Vector3[], axisZ: number, lift: number): Vector3[] {
+  const probe = new Mesh(surface.geometry, new MeshBasicMaterial({ side: DoubleSide }));
+  const ray = new Raycaster();
+  const o = new Vector3();
+  const d = new Vector3();
+  return pts.map((p) => {
+    o.set(0, p.y, axisZ);
+    d.copy(p).sub(o);
+    if (d.lengthSq() < 1e-12) return p.clone();
+    d.normalize();
+    ray.set(o, d);
+    const hit = ray.intersectObject(probe, false).pop(); // the outermost crossing
+    if (!hit?.face) return p.clone();
+    const n = hit.face.normal.clone();
+    if (n.dot(d) < 0) n.negate();
+    return hit.point.clone().addScaledVector(n, lift);
+  });
 }
 
 /** A thin trim line through `pts` — a mouth, a seam. */
@@ -740,12 +784,18 @@ function buildStallionHead(mat: MeshStandardMaterial, trimMat: MeshStandardMater
     g.add(brow);
   }
 
-  // Ears: leaves on the poll, alert, dark inside.
+  // Ears: leaves on the poll, alert, dark inside — ROOTED: the poll falls
+  // away either side of the midline, so an ear set at the crest's height
+  // hung clear of the skull; each now sinks into it and grows out of a
+  // soft root.
   for (const side of [-1, 1]) {
     const ear = new Group();
-    ear.position.set(side * r * 0.18, r * 1.06, r * 0.1);
-    ear.rotation.set(0.1, side * -0.2, side * -0.1);
+    ear.position.set(side * r * 0.19, r * 0.9, r * 0.1);
+    ear.rotation.set(0.1, side * -0.2, side * -0.12);
     g.add(ear);
+    const root = new Mesh(ellipsoid(r * 0.24, r * 0.2, r * 0.2), mat);
+    root.position.y = r * 0.02;
+    ear.add(root);
     const shell = new Mesh(leaf(r * 0.24, r * 0.6, r * 0.14, 0.95, r * 0.05), mat);
     shell.position.y = r * 0.26;
     ear.add(shell);
@@ -926,11 +976,24 @@ function buildFrogHead(mat: MeshStandardMaterial, trimMat: MeshStandardMaterial,
     { top: [0.02, -0.9], bot: [-0.36, -0.86], w: 0.4, n: 2.1 }, // lip
     { top: [-0.06, -0.98], bot: [-0.26, -0.97], w: 0.2, n: 2.0 }, // tip
   ];
-  g.add(new Mesh(loftGeometry(st, r), mat));
+  const skull = new Mesh(loftGeometry(st, r), mat);
+  g.add(skull);
 
-  // THE SMILE: along the skull at a fixed angle just below its equator,
-  // from under the eardrums round the snout and back.
-  g.add(groove(loftSmile(st, -0.42, 2, 6, r, 1.012), r * 0.024, trimMat));
+  // THE SMILE: ONE line, along the skull at a fixed angle just below its
+  // equator, from under one eardrum round the snout to the other. The
+  // snout's tip is a flat cap, and a line laid straight across it sank
+  // into it — the mouth read as two strokes with a gap under the nose — so
+  // the line is carried round the FRONT of the cap on a shallow arc.
+  const smile = loftSmile(st, -0.18, 2, 5, r, 1.025);
+  const lip = smile[smile.length / 2]; // the right-hand end, at the lip station
+  const tipZ = ((st[6].top[1] + st[6].bot[1]) / 2) * r;
+  const front: Vector3[] = [];
+  for (let k = 1; k < 8; k++) {
+    const t = -1 + (2 * k) / 8; // -1..1 across the snout, ends excluded
+    front.push(new Vector3(lip.x * t * 0.95, lip.y - r * 0.01 * (1 - t * t), tipZ - r * 0.04 * (1 - t * t) + (lip.z - tipZ) * t * t));
+  }
+  const line = [...smile.slice(0, smile.length / 2), ...front, ...smile.slice(smile.length / 2)];
+  g.add(groove(drape(skull, line, -r * 0.2, r * 0.012), r * 0.026, trimMat));
 
   // The turrets: domes sunk into the crown, a big lit lens in each — no
   // pupil, the glass is the eye — and a heavy lid over the top.
