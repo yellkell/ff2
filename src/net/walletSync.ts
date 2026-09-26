@@ -41,6 +41,15 @@ export const walletSync = {
 
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
 let merged = false;
+let settle: () => void = () => {};
+/** Resolves once the boot merge has decided the balance (or there is no
+ *  cloud) — a coin grant made before then could be argued away by a fresh
+ *  browser adopting the cloud's copy (net/gifts.ts waits on it). */
+const mergedOnce = new Promise<void>((resolve) => (settle = resolve));
+
+export function walletMerged(): Promise<void> {
+  return mergedOnce;
+}
 
 function localShape(): WalletShape {
   const o = ownedIds();
@@ -100,6 +109,7 @@ export function initWalletSync(): void {
     if (!h) {
       walletSync.status = 'off';
       merged = true;
+      settle();
       return;
     }
     let adopting = false;
@@ -116,6 +126,7 @@ export function initWalletSync(): void {
     } catch {
       walletSync.status = 'off';
       merged = true;
+      settle();
       return;
     }
     const m = mergeWallet(localShape(), remote, walletIsFresh(), adopting);
@@ -124,6 +135,7 @@ export function initWalletSync(): void {
       adoptOwned({ platforms: m.platforms, gear: m.gear, avatars: m.avatars });
       hydrateWallet(m.coins, m.at);
     }
+    settle();
     if (m.push) void push();
     else walletSync.status = 'synced';
   })();

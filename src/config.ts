@@ -196,6 +196,20 @@ export const CURRENCY = {
   bell: 20,
 };
 
+/**
+ * THE NAME GIFT (net/gifts.ts): at midnight UK time, 27 Sep 2026, every
+ * account that had swapped its IRON-XXXX callsign for a name of its own is
+ * paid £10 worth of iron-dollars, once. £10 buys 3,337 at the STRONGBOX's
+ * rate (3000 for £8.99) and 3,891 at the VAULT's (7000 for £17.99) —
+ * 3,500 sits between. Only names typed before the hour count.
+ */
+export const RENAME_GIFT = {
+  id: 'rename-2026-09',
+  coins: 3500,
+  /** 00:00 BST, 27 September 2026. */
+  at: Date.parse('2026-09-27T00:00:00+01:00'),
+};
+
 /** What a finished record pays, by the night's grade (menu/wallet.ts). */
 export function songCoins(grade: string): number {
   return CURRENCY.song + (CURRENCY.songGrade[grade] ?? 0);
