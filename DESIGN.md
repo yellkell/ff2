@@ -423,7 +423,15 @@ tufts off the cheeks and nape; the frog around lidded eye turrets, a
 smile laid along the skull's own surface and eardrums in the shell's
 colour (dark ones gave it four eyes); the bunny around leaf ears, one
 FOLDED forward over the brow, whisker pads, a Y mouth and buck teeth.
-The knight's gorget skirt is primer, the body's own colour.
+The knight's gorget skirt is primer, the body's own colour. Third pass:
+the BEAR rebuilt smooth (FF1's face was add-on lumps: jowl, jaw and
+bridge balls — now one loft into a deep muzzle, a jaw under it, the face
+drawn on); the PANTHER rebuilt as a cat (round skull, flat face, almond
+eyes with slit pupils, tall triangle ears, triangle nose and W mouth,
+cheek fluff); the STALLION's slit nostrils and mouth slab (black through
+the nose) replaced by round flared nostrils and a lip line, plus leaf
+ears, brows, the cheek ridge, a mane lying down the nape and a trim
+BRIDLE laid on the skull; the FROG's eyes lose their pupils.
 
 **PAULDRONS, the shells again.** The first cut's plain tilted domes were
 the shape people liked; they were swapped for a riveted cap-lame-rim

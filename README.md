@@ -23,8 +23,9 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
   headgear with them — horns and crests ride out to the bigger crown.
   Purely visual: the head hitbox never moves. DESIGN.md §5.2. The WOLF
   (ruff, leaf ears, a proper jaw), FROG (lidded turrets, a wrap-round
-  smile) and BUNNY (leaf ears, one folded over) are FF2 redesigns; the
-  KNIGHT's skirt wears the body's colour.
+  smile, no pupils), BUNNY (leaf ears, one folded over), BEAR (smooth,
+  no lumps), PANTHER (a proper cat) and STALLION (bridle, clean nose)
+  are FF2 redesigns; the KNIGHT's skirt wears the body's colour.
 - **PAULDRONS** — the plain shell domes are back, now seated on the body
   so their inner edges rest on the shoulders instead of cutting into them.
 This repo is seeded with the complete FIRE FIGHT 1 engine — it builds and
