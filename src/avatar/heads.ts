@@ -1242,20 +1242,17 @@ export const HEAD_FIT: Record<string, { s: [number, number, number]; y: number; 
 /**
  * Where one head needs one piece placed by hand, over its HEAD_FIT: a
  * whole fit (`s`, `y`, `z`, as above) and a tilt about x (`rx`, radians,
- * negative tips the front down). A frog's eyes are turrets on TOP of a
- * flat head, so its visor rides them as goggles and its crown rings the
- * plateau; a horse's face slopes away long and narrow, so its visor
- * follows the slope like blinkers; ram's horns meant for a skull are too
- * much on either.
+ * negative tips the front down). Ram's horns meant for a skull are too
+ * much on a frog's flat head or a horse's small cranium.
  */
 export const PIECE_FIT: Record<string, Record<string, Partial<{ s: [number, number, number]; y: number; z: number; rx: number }>>> = {
+  // (The frog's VISOR and CROWN, and the horse's VISOR, are not fitted at
+  // all: those heads wear their own cut of the piece — goggles, a Frog
+  // Prince's crown, blinkers — VARIANTS in avatar/gear.ts.)
   frog: {
-    crown: { s: [1.2, 0.75, 0.95], y: -0.021 },
-    visorband: { s: [0.98, 0.85, 0.82], y: 0.052, z: -0.012 },
     horns: { s: [0.74, 0.58, 0.62], y: -0.038, z: 0.012 },
   },
   stallion: {
     horns: { s: [0.57, 0.56, 0.55], y: 0.004 },
-    visorband: { s: [0.56, 0.6, 0.86], y: 0.006, z: -0.03, rx: -0.2 },
   },
 };

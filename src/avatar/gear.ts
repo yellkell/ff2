@@ -1779,6 +1779,120 @@ const FIFTH_BUILDERS: Record<string, Builder> = {
 };
 
 Object.assign(BUILDERS, MORE_BUILDERS, THIRD_BUILDERS, FOURTH_BUILDERS, FIFTH_BUILDERS);
+
+/* ── the head variants: a piece re-made for one head ─────────────────── */
+//
+// Some head pieces can't be FITTED to some heads — no scale or tilt turns
+// a wraparound visor into something a frog (eyes on turrets up top) or a
+// horse (eyes on the sides of a long face) can wear. For those, the head
+// wears its own cut of the piece: the same id, bought once, re-made for
+// that animal. Built straight in the head's own frame (origin at the head
+// centre, front −z, the head seated — avatar/heads.ts), so no refit.
+
+const VARIANTS: Record<string, Record<string, Builder>> = {
+  frog: {
+    visorband: (mat, _side, trimMat, glowMat) => {
+      // GOGGLES: a fat rolled rim round each eye turret's lit face, lit on
+      // its inner edge, a bridge between them and a strap of trim round
+      // the back of the head. The eyes still show through: no glass.
+      const g = new Group();
+      const eyeY = 0.05;
+      const eyeZ = -0.094;
+      const r = 0.037;
+      for (const s of [-1, 1] as const) {
+        const at = new Vector3(s * 0.08, eyeY, eyeZ);
+        const face = new Vector3(s * 0.35, 0.15, -1).normalize(); // a touch outward and up
+        const q = new Quaternion().setFromUnitVectors(FWD, face.clone().negate());
+        const rim = new Mesh(new TorusGeometry(r, 0.0085, 10, 32), mat);
+        rim.quaternion.copy(q);
+        rim.position.copy(at);
+        g.add(rim);
+        const lit = asGlow(new Mesh(new TorusGeometry(r - 0.007, 0.0026, 6, 32), glowMat));
+        lit.quaternion.copy(q);
+        lit.position.copy(at).addScaledVector(face, 0.004);
+        g.add(lit);
+        // The strap, from the rim's outer edge down round the back of the
+        // head where it is widest (measured on the frog: the top is short,
+        // so a strap at eye height would float off the back of it).
+        const strap = [
+          new Vector3(s * 0.117, eyeY - 0.004, eyeZ + 0.018),
+          new Vector3(s * 0.131, 0.024, -0.042),
+          new Vector3(s * 0.147, 0.005, 0),
+          new Vector3(s * 0.135, 0.004, 0.049),
+          new Vector3(s * 0.108, 0.004, 0.091),
+          new Vector3(s * 0.064, 0.004, 0.11),
+          new Vector3(0, 0.004, 0.111),
+        ];
+        g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(strap), 32, 0.0055, 6), trimMat)));
+      }
+      // The bridge over the nose-line between the lenses.
+      const bridge = [new Vector3(-0.045, eyeY + 0.004, eyeZ + 0.004), new Vector3(0, eyeY + 0.012, eyeZ - 0.002), new Vector3(0.045, eyeY + 0.004, eyeZ + 0.004)];
+      g.add(new Mesh(new TubeGeometry(new CatmullRomCurve3(bridge), 16, 0.006, 8), mat));
+      return g;
+    },
+    crown: (mat, _side, trimMat, glowMat) => {
+      // THE FROG PRINCE's crown: a small circlet perched on the crown of
+      // the head between the eyes, tipped at an angle — the head's own
+      // crown, not a ring round a skull it doesn't have.
+      const g = new Group();
+      const cr = 0.04;
+      const band = asTrim(new Mesh(new CylinderGeometry(cr, cr * 1.06, 0.018, 32, 1, true), trimMat));
+      (band.material as MeshStandardMaterial).side = DoubleSide;
+      g.add(band);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 - Math.PI / 2;
+        const h = i === 0 ? 0.03 : 0.022;
+        const point = new Mesh(new ConeGeometry(0.009, h, 4), mat);
+        point.position.set(Math.cos(a) * cr, 0.009 + h / 2 - 0.002, Math.sin(a) * cr);
+        point.rotation.set(Math.sin(a) * 0.18, Math.PI / 4 - a, -Math.cos(a) * 0.18, 'YXZ');
+        g.add(point);
+        const out = new Vector3(Math.cos(a), 0, Math.sin(a));
+        g.add(asGlow(rivet(glowMat, new Vector3(Math.cos(a) * cr * 1.06, 0, Math.sin(a) * cr * 1.06), out, 0.0055)));
+      }
+      // On the flat of the head just behind the eyes (the plateau is at
+      // 0.044–0.046 there), so it peeks up between them from the front.
+      g.position.set(-0.008, 0.052, 0.036);
+      g.rotation.set(-0.1, 0, 0.2); // tipped over to one side — worn at an angle
+      return g;
+    },
+  },
+  stallion: {
+    visorband: (mat, _side, trimMat, glowMat) => {
+      // BLINKERS: a cup beside and behind each eye (a racehorse's
+      // blinkers — the eye sees forward, not back), riveted with a lit
+      // stud, hung from a cheek strap that climbs to the poll behind the
+      // ears. The horse already wears its bridle; these hang off it.
+      const g = new Group();
+      const cupR = 0.03;
+      for (const s of [-1, 1] as const) {
+        const eye = new Vector3(s * 0.066, -0.014, -0.063);
+        // A shell of a sphere round the eye, open toward the front and
+        // the face: the back and outer quarter of a ball, facing +x·s, +z.
+        const cup = new Mesh(new SphereGeometry(cupR, 24, 14, 0, Math.PI, Math.PI * 0.18, Math.PI * 0.64), mat.clone());
+        (cup.material as MeshStandardMaterial).side = DoubleSide;
+        // phi 0..π sweeps +x round through +z to −x; turned so it sweeps
+        // from the outer side round behind the eye.
+        cup.rotation.y = s > 0 ? -Math.PI / 2 + 0.35 : Math.PI / 2 - 0.35 + Math.PI;
+        cup.position.copy(eye).add(new Vector3(s * 0.006, 0, 0.004));
+        g.add(cup);
+        const stud = new Vector3(s * (0.066 + cupR * 0.95), -0.014, -0.063 + cupR * 0.2);
+        g.add(asGlow(rivet(glowMat, stud, new Vector3(s, 0, 0.25).normalize(), 0.0065)));
+        // Up the cheek from the cup's top and over the poll, hugging the
+        // head (measured on the horse) rather than arching over the ears.
+        const strap = [
+          new Vector3(s * 0.086, 0.008, -0.054),
+          new Vector3(s * 0.072, 0.028, -0.028),
+          new Vector3(s * 0.058, 0.05, -0.006),
+          new Vector3(s * 0.046, 0.075, 0),
+          new Vector3(s * 0.024, 0.087, 0.002),
+          new Vector3(0, 0.087, 0.002),
+        ];
+        g.add(asTrim(new Mesh(new TubeGeometry(new CatmullRomCurve3(strap), 32, 0.0045, 6), trimMat)));
+      }
+      return g;
+    },
+  },
+};
 for (const [id, build] of Object.entries(HEAD_PIECES)) BUILDERS[id] = (mat, _side, trimMat, glowMat) => build(mat, trimMat, glowMat);
 
 /** The rig groups gear can hang off, by the names buildBoxer gives them —
@@ -1852,7 +1966,10 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
       }
     });
   }
-  const build = BUILDERS[id];
+  // A head that wears its own cut of this piece (VARIANTS) builds that,
+  // in its own frame: no skull refit, no HEAD_FIT.
+  const variant = slot === 'head' && face ? VARIANTS[face]?.[id] : undefined;
+  const build = variant ?? BUILDERS[id];
   if (!build) return;
   const side: 1 | -1 = (o.userData.gearSide as 1 | -1 | undefined) ?? (o.name.endsWith('-right') ? -1 : 1);
   const glowMat = glow();
@@ -1865,7 +1982,7 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
   g.name = childName(slot);
   g.userData.gear = id;
   // The head pieces were modelled on the old egg skull; refit them.
-  if (slot === 'head') g.scale.set(HEAD_SCALE[0] / EGG_SCALE[0], HEAD_SCALE[1] / EGG_SCALE[1], HEAD_SCALE[2] / EGG_SCALE[2]);
+  if (slot === 'head' && !variant) g.scale.set(HEAD_SCALE[0] / EGG_SCALE[0], HEAD_SCALE[1] / EGG_SCALE[1], HEAD_SCALE[2] / EGG_SCALE[2]);
   // A PAINT SURFACE (avatar/paint.ts): the piece shares its slot's
   // canvas, laid out by THE GEAR ATLAS (avatar/gearAtlas.ts) — every
   // mesh and every face its own patch of it, so each pauldron, plate and
@@ -1897,7 +2014,8 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
     mesh.userData.paintTone = tone;
     paintable.push(mesh);
   });
-  const map = atlasGear(g, paintable, `${id}|${side}`, PAINT.canvas[part] ?? 256);
+  // A variant is its own geometry, so its own atlas (the map is cached by key).
+  const map = atlasGear(g, paintable, variant ? `${id}@${face}|${side}` : `${id}|${side}`, PAINT.canvas[part] ?? 256);
   for (const mesh of paintable) mesh.userData.paintMap = map;
   mergePiece(g); // a few draw calls per piece, not dozens (gearAtlas.ts)
   // …and onto a worn head's own skull (HEAD_FIT): every head piece was
@@ -1912,7 +2030,7 @@ function dressSlot(o: Object3D, slot: GearSlot, id: string, tone: BlankTone, fac
   // frame and kept per piece, so it must be the same map whatever face the
   // piece first met — the mark rides out with the horn, the same mark on
   // every headset.
-  const fit = slot === 'head' && HEAD_FIT[face] ? { rx: 0, ...HEAD_FIT[face], ...PIECE_FIT[face]?.[id] } : undefined;
+  const fit = slot === 'head' && !variant && HEAD_FIT[face] ? { rx: 0, ...HEAD_FIT[face], ...PIECE_FIT[face]?.[id] } : undefined;
   if (fit) {
     const w = new Group();
     w.name = g.name;
