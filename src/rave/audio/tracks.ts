@@ -61,6 +61,7 @@ import awakeningUrl from '../assets/music/awakening.m4a';
 import passionUrl from '../assets/music/passion.m4a';
 import finalUrl from '../assets/music/final.m4a';
 import overtimeUrl from '../assets/music/overtime.m4a';
+import bringitonUrl from '../assets/music/bringiton.m4a';
 import type { MoveKind } from '../config.js';
 
 /** Where a record is allowed to play. 'credits' is a role of one: the
@@ -499,6 +500,32 @@ export const TRACKS: Track[] = [
     // the same encoder lead-in as FINAL, so bar 1 beat 1 sits at 49 ms
     // (calibrated against FINAL's and SAKUPENED's measured downbeats). No
     // intro to skip.
+    roles: ['raid'],
+  },
+  {
+    id: 'bringiton',
+    title: 'BRING IT ON',
+    url: bringitonUrl,
+    bpm: 89.995,
+    downbeat: 2.656,
+    seconds: 237.34,
+    lufs: -14.2,
+    // The lattice is 180 (hats on every half-beat) and the kick lands every
+    // other beat of 90, so the question is which octave the floor dances.
+    // 180 would put one kick in every four beats; 90 is the pulse, the same
+    // call ORIGINAL got at 95 off its 190. Both halves of the file lock at
+    // 89.995 and 90.000, and the fraction outscores 90 flat on the full
+    // file (17.5 against 15.8), so it stays. The downbeat vote splits
+    // between the two kick slots, and the section entries settle it: every
+    // big entry (beats 15, 47 and 111 counted from the first kick) lands on
+    // the same one of them.
+    //
+    // It opens on ten and a half seconds of near-silent intro, 13 dB under
+    // the body, then SLAMS in out of digital silence (−66 dB to −14 inside
+    // 20 ms) at 10.668 s, which is 12 ms after bar 4. So the needle drops on
+    // bar 4, the same treatment ASSEMBLE and DEFENSE get, and the intro
+    // never plays.
+    startAt: 10.6564,
     roles: ['raid'],
   },
   {
