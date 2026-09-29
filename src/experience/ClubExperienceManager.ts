@@ -25,6 +25,7 @@ import { Color, type Fog, type FogExp2, type Object3D, type Texture } from 'thre
 import { setMenuMusicActive } from '../audio/menuMusic.js';
 import { myPackedLook } from '../avatar/paint.js';
 import { clearFirePools } from '../fx/fire.js';
+import { clearImpactFx } from '../fx/effects.js';
 import { app, saveDifficulty } from '../menu/appState.js';
 import { myPackedGear, myTone } from '../menu/customization.js';
 import { net as duel } from '../net/client.js';
@@ -278,6 +279,7 @@ export function installTownExperienceManager(
     for (const system of arenaSystems) system.stop();
     setMenuMusicActive(false);
     clearFirePools();
+    clearImpactFx();
   };
   const resumeArena = (): void => {
     world.player.position.set(0, 0, 0);
@@ -288,6 +290,7 @@ export function installTownExperienceManager(
     world.getSystem(DesertSystem)?.restoreEnvironment();
     setMenuMusicActive(true);
     clearFirePools();
+    clearImpactFx();
   };
 
   /* ── THE DOOR, HELD ─────────────────────────────────────────────────── */

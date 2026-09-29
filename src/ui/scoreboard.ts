@@ -32,8 +32,13 @@
  *
  * Every board is a canvas texture and a canvas redraw + upload is the most
  * expensive UI op we have, so each board fingerprints what it drew and
- * skips when nothing it shows has changed; the trails and flashes are
- * quantised so an animation costs a handful of redraws, not one per frame.
+ * skips when nothing it shows has changed. The parts of a card that MOVE
+ * on a hit — the health bar with its damage trail, and the flash round the
+ * glass — are not on the canvas at all: they are two small shader quads
+ * over it (CardFx), driven by uniforms, so a landed hit costs one canvas
+ * redraw (the new number) instead of one every frame while the trail eases
+ * away. That per-frame redraw + 1.5 MB texture upload, on both cards at
+ * once, was a big part of the stutter on every hit.
  *
  * In Aim Training the left card becomes your score/streak readout and the
  * right card shows the dodge bar + time.
@@ -49,6 +54,7 @@ import {
   MeshBasicMaterial,
   PlaneGeometry,
   SRGBColorSpace,
+  ShaderMaterial,
   type Scene,
 } from 'three';
 import { ARENA_GAP, winTargetFor } from '../config.js';
@@ -92,6 +98,8 @@ interface Board {
   tex: CanvasTexture;
   w: number;
   h: number;
+  /** A fighter card's live health bar + hit flash (cards only). */
+  fx?: CardFx;
   /**
    * Content fingerprint of the last draw. Boards are asked to refresh every
    * frame but a canvas redraw + GPU texture upload is the single most
@@ -138,6 +146,179 @@ interface CardMotion {
   trail: number;
   hitAt: number;
   seen: number;
+}
+
+/* ── the live overlays ─────────────────────────────────────────────────── */
+
+/** The health pill on the card canvas (px): where the bar overlay sits. */
+const BAR = { x: 64, y: 176, w: W - 128, h: 52 };
+/** Room round the pill for its hairline and anti-aliasing (px). */
+const BAR_PAD = 4;
+/** The card's glass on the canvas (px): where the flash overlay traces. */
+const GLASS = { x: 10, y: 10, w: W - 20, h: H - 20, r: 34 };
+
+const SDF_GLSL = /* glsl */ `
+  float sdRound(vec2 p, vec2 halfSize, float r) {
+    vec2 q = abs(p) - halfSize + vec2(r);
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+  }
+  vec4 over(vec4 dst, vec3 c, float a) {
+    float oa = a + dst.a * (1.0 - a);
+    vec3 oc = (c * a + dst.rgb * dst.a * (1.0 - a)) / max(oa, 1e-4);
+    return vec4(oc, oa);
+  }
+`;
+
+const UV_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+`;
+
+/**
+ * THE HEALTH READOUT, live: a slim pill — a faint track, the damage trail
+ * (a ghost of what was just lost that flares white on the hit, then eases
+ * away), the live level in the team colour (red once LOW) with the menu
+ * CTA's soft top sheen, hairline quarter marks and a hairline rim.
+ */
+const BAR_FRAG = /* glsl */ `
+  uniform vec2 uSize;
+  uniform float uPad, uFrac, uTrail, uFlash, uAlpha, uLow;
+  uniform vec3 uColor, uDanger;
+  varying vec2 vUv;
+  ${SDF_GLSL}
+  void main() {
+    vec2 hs = uSize * 0.5;
+    vec2 px = (vUv - 0.5) * (uSize + 2.0 * uPad);
+    float d = sdRound(px, hs, hs.y);
+    float inside = clamp(0.5 - d, 0.0, 1.0);
+    float x01 = (px.x + hs.x) / uSize.x;
+    vec4 col = over(vec4(0.0), vec3(1.0), 0.07 * inside);
+    // The trail: what the hit just took, burning white for an instant.
+    float ghost = clamp((x01 - uFrac) * uSize.x + 0.5, 0.0, 1.0) * clamp((uTrail - x01) * uSize.x + 0.5, 0.0, 1.0);
+    col = over(col, vec3(1.0), (0.32 + 0.5 * uFlash) * ghost * inside);
+    if (uFrac > 0.0) {
+      float fw = max(uSize.y, uSize.x * uFrac);
+      float fd = sdRound(px - vec2(-hs.x + fw * 0.5, 0.0), vec2(fw * 0.5, hs.y), hs.y);
+      float fill = clamp(0.5 - fd, 0.0, 1.0) * inside;
+      float down = (hs.y - px.y) / uSize.y;
+      vec3 c = mix(mix(uColor, uDanger, uLow), vec3(1.0), 0.28 * clamp(1.0 - down / 0.55, 0.0, 1.0));
+      col = over(col, c, fill);
+    }
+    for (int q = 1; q < 4; q++) {
+      float qx = uSize.x * float(q) / 4.0 - hs.x;
+      col = over(col, vec3(0.004, 0.003, 0.002), 0.55 * clamp(1.5 - abs(px.x - qx), 0.0, 1.0) * inside);
+    }
+    float rim = clamp(1.5 - abs(d), 0.0, 1.0);
+    col = over(col, mix(vec3(1.0), uDanger, uLow), mix(0.10, 0.7, uLow) * rim);
+    gl_FragColor = vec4(col.rgb, col.a * uAlpha);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
+/**
+ * THE HIT FLASH, live: the glass washes pale, its hairline flares white and
+ * a glow in the fighter's colour spills off the rim — then all of it
+ * settles. Only drawn while a flash is up.
+ */
+const RIM_FRAG = /* glsl */ `
+  uniform vec2 uSize, uGlass;
+  uniform float uRadius, uFlash, uAlpha;
+  uniform vec3 uColor;
+  varying vec2 vUv;
+  ${SDF_GLSL}
+  void main() {
+    vec2 px = (vUv - 0.5) * uSize;
+    float d = sdRound(px, uGlass * 0.5, uRadius);
+    float inside = clamp(0.5 - d, 0.0, 1.0);
+    vec4 col = over(vec4(0.0), vec3(1.0), 0.12 * uFlash * inside);
+    float halo = d > 0.0 ? exp(-d / 3.5) : exp(d / 14.0) * 0.5;
+    col = over(col, uColor, 0.8 * uFlash * halo);
+    col = over(col, vec3(1.0), 0.75 * uFlash * clamp(1.0 + 2.0 * uFlash - abs(d), 0.0, 1.0));
+    gl_FragColor = vec4(col.rgb, col.a * uAlpha);
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
+`;
+
+interface CardFx {
+  bar: Mesh;
+  barMat: ShaderMaterial;
+  rim: Mesh;
+  rimMat: ShaderMaterial;
+}
+
+/** Hang the live bar + flash over a card board (sized to its plane). */
+function addCardFx(board: Board, wMeters: number, hMeters: number): void {
+  const sx = wMeters / W;
+  const sy = hMeters / H;
+  const barMat = new ShaderMaterial({
+    uniforms: {
+      uSize: { value: [BAR.w, BAR.h] },
+      uPad: { value: BAR_PAD },
+      uFrac: { value: 1 },
+      uTrail: { value: 1 },
+      uFlash: { value: 0 },
+      uAlpha: { value: 1 },
+      uLow: { value: 0 },
+      uColor: { value: new Color() },
+      uDanger: { value: new Color(KIT.danger) },
+    },
+    vertexShader: UV_VERT,
+    fragmentShader: BAR_FRAG,
+    transparent: true,
+    depthWrite: false,
+  });
+  const bar = new Mesh(new PlaneGeometry((BAR.w + 2 * BAR_PAD) * sx, (BAR.h + 2 * BAR_PAD) * sy), barMat);
+  bar.position.set((BAR.x + BAR.w / 2 - W / 2) * sx, (H / 2 - (BAR.y + BAR.h / 2)) * sy, 0.002);
+  bar.renderOrder = 1;
+  const rimMat = new ShaderMaterial({
+    uniforms: {
+      uSize: { value: [W, H] },
+      uGlass: { value: [GLASS.w, GLASS.h] },
+      uRadius: { value: GLASS.r },
+      uFlash: { value: 0 },
+      uAlpha: { value: 1 },
+      uColor: { value: new Color() },
+    },
+    vertexShader: UV_VERT,
+    fragmentShader: RIM_FRAG,
+    transparent: true,
+    depthWrite: false,
+  });
+  const rim = new Mesh(new PlaneGeometry(wMeters, hMeters), rimMat);
+  rim.position.z = 0.003;
+  rim.renderOrder = 2;
+  rim.visible = false;
+  board.mesh.add(bar, rim);
+  board.fx = { bar, barMat, rim, rimMat };
+}
+
+/** Drive a card's live overlays for this frame. */
+function setCardFx(fx: CardFx, neon: string, frac: number, trail: number, flash: number, low: boolean, dim: boolean): void {
+  const alpha = dim ? 0.5 : 1;
+  const b = fx.barMat.uniforms;
+  b.uFrac.value = Math.max(0, frac);
+  b.uTrail.value = Math.max(frac, trail);
+  b.uFlash.value = flash;
+  b.uLow.value = low ? 1 : 0;
+  b.uAlpha.value = alpha;
+  (b.uColor.value as Color).set(neon);
+  fx.bar.visible = true;
+  fx.rim.visible = flash > 0.002;
+  if (fx.rim.visible) {
+    const r = fx.rimMat.uniforms;
+    r.uFlash.value = flash;
+    r.uAlpha.value = alpha;
+    (r.uColor.value as Color).set(neon);
+  }
+}
+
+/** Hide a card's overlays (the card is showing something that isn't a fighter). */
+function hideCardFx(fx: CardFx | undefined): void {
+  if (!fx) return;
+  fx.bar.visible = false;
+  fx.rim.visible = false;
 }
 
 function makeBoard(wMeters: number, hMeters: number, cw = W, ch = H, srgb = true): Board {
@@ -238,9 +419,9 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
 }
 
 /** THE GLASS — the menu panel's surface: near-black with a warm cast, one
- *  soft sheen of depth across the top, a white hairline. A hit brightens
- *  the hairline and washes the glass, then both settle back. */
-function glass(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number, flash = 0): void {
+ *  soft sheen of depth across the top, a white hairline. (A hit's flash
+ *  rides the card's live overlay, not the canvas.) */
+function glass(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.fillStyle = KIT.panel;
@@ -252,22 +433,18 @@ function glass(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h
   sheen.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = sheen;
   ctx.fillRect(x, y, w, h * 0.45);
-  if (flash > 0) {
-    ctx.fillStyle = `rgba(255,255,255,${(0.1 * flash).toFixed(3)})`;
-    ctx.fillRect(x, y, w, h);
-  }
   ctx.restore();
-  ctx.lineWidth = 2 + 2 * flash;
-  ctx.strokeStyle = flash > 0 ? `rgba(255,255,255,${(0.14 + 0.6 * flash).toFixed(3)})` : KIT.line;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = KIT.line;
   ctx.stroke();
 }
 
 /** The card's glass and its team EDGE TICK. */
-function cardGlass(ctx: CanvasRenderingContext2D, neon: string, flash: number, dim: boolean): void {
+function cardGlass(ctx: CanvasRenderingContext2D, neon: string, dim: boolean): void {
   ctx.clearRect(0, 0, W, H);
   ctx.save();
   if (dim) ctx.globalAlpha = 0.5;
-  glass(ctx, 10, 10, W - 20, H - 20, 34, flash);
+  glass(ctx, GLASS.x, GLASS.y, GLASS.w, GLASS.h, GLASS.r);
   ctx.fillStyle = neon;
   ctx.beginPath();
   ctx.roundRect(26, 44, 7, H - 88, 3.5);
@@ -293,47 +470,6 @@ function scorePips(ctx: CanvasRenderingContext2D, x: number, y: number, won: num
   }
 }
 
-/**
- * THE HEALTH READOUT: a slim pill — a faint track, the damage trail (a
- * white ghost of what was just lost, easing away), the live level in the
- * team colour (red once LOW) with the menu CTA's soft top sheen, and
- * hairline quarter marks.
- */
-function healthBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, frac: number, trail: number, neon: string): void {
-  const low = frac < LOW_HP && frac > 0;
-  const r = h / 2;
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.fillStyle = 'rgba(255,255,255,0.07)';
-  ctx.fill();
-  ctx.save();
-  ctx.clip();
-  if (trail > frac + 0.002) {
-    ctx.fillStyle = 'rgba(255,255,255,0.32)';
-    ctx.fillRect(x, y, w * trail, h);
-  }
-  if (frac > 0) {
-    ctx.fillStyle = low ? KIT.danger : neon;
-    ctx.beginPath();
-    ctx.roundRect(x, y, Math.max(h, w * frac), h, r);
-    ctx.fill();
-    const sheen = ctx.createLinearGradient(0, y, 0, y + h);
-    sheen.addColorStop(0, 'rgba(255,255,255,0.28)');
-    sheen.addColorStop(0.55, 'rgba(255,255,255,0)');
-    ctx.fillStyle = sheen;
-    ctx.fill();
-  }
-  // Quarter marks: hairline notches cut through the pill.
-  ctx.fillStyle = 'rgba(14,11,8,0.55)';
-  for (let q = 1; q < 4; q++) ctx.fillRect(x + (w * q) / 4 - 1, y, 2, h);
-  ctx.restore();
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = low ? 'rgba(255,82,102,0.7)' : KIT.lineFaint;
-  ctx.stroke();
-}
-
 /* ── the board ────────────────────────────────────────────────────────── */
 
 export function createScoreboard(scene: Scene): Scoreboard {
@@ -346,10 +482,15 @@ export function createScoreboard(scene: Scene): Scoreboard {
   const BOARD_Z = -ARENA_GAP - 1.1;
   const CARD_W = 1.5;
   const CARD_H = 0.72;
-  const left = makeBoard(CARD_W, CARD_H); // YOU — ember
+  const card = (w: number, h: number): Board => {
+    const b = makeBoard(w, h);
+    addCardFx(b, w, h);
+    return b;
+  };
+  const left = card(CARD_W, CARD_H); // YOU — ember
   left.mesh.position.set(-1.0, BOARD_Y, BOARD_Z);
   left.mesh.rotation.y = 0.18;
-  const right = makeBoard(CARD_W, CARD_H); // primary opponent — blue
+  const right = card(CARD_W, CARD_H); // primary opponent — blue
   right.mesh.position.set(1.0, BOARD_Y, BOARD_Z);
   right.mesh.rotation.y = -0.18;
 
@@ -358,16 +499,16 @@ export function createScoreboard(scene: Scene): Scoreboard {
   // the top, bar and pips below — so the step has to clear the whole card,
   // not just its margin. (It used to be 0.56 against a 0.72 card: the upper
   // card's rim cut straight through the lower one's name and number.)
-  const extraLeft = makeBoard(CARD_W, CARD_H);
+  const extraLeft = card(CARD_W, CARD_H);
   extraLeft.mesh.rotation.y = 0.18;
-  const extraRightA = makeBoard(CARD_W, CARD_H);
+  const extraRightA = card(CARD_W, CARD_H);
   extraRightA.mesh.rotation.y = -0.18;
-  const extraRightB = makeBoard(CARD_W, CARD_H);
+  const extraRightB = card(CARD_W, CARD_H);
   extraRightB.mesh.rotation.y = -0.18;
 
   // FFA: PAD CARDS for the fighters on the flanking pads, hung over their
   // own platforms and turned to face you (placed per bout from the layout).
-  const padCards = [makeBoard(1.2, 0.58), makeBoard(1.2, 0.58)];
+  const padCards = [card(1.2, 0.58), card(1.2, 0.58)];
   const extras = [extraLeft, extraRightA, extraRightB, ...padCards];
   for (const e of extras) e.mesh.visible = false;
 
@@ -464,7 +605,7 @@ export function createScoreboard(scene: Scene): Scoreboard {
   const motion = new Map<number, CardMotion>();
   let lastReset = -1;
 
-  /** Advance a fighter's trail and flash, and return them quantised. */
+  /** Advance a fighter's trail and flash (live: they drive uniforms, not the canvas). */
   const advance = (f: FighterHud, now: number): { trail: number; flash: number } => {
     let m = motion.get(f.slot);
     if (!m) {
@@ -485,8 +626,9 @@ export function createScoreboard(scene: Scene): Scoreboard {
     if (m.trail > f.hpFrac && now - m.hitAt > TRAIL_HOLD * 1000) {
       m.trail = Math.max(f.hpFrac, m.trail - TRAIL_RATE * dt);
     }
-    const flashRaw = Math.max(0, 1 - (now - m.hitAt) / (FLASH_SECONDS * 1000));
-    return { trail: Math.round(m.trail * 100) / 100, flash: Math.round(flashRaw * 4) / 4 };
+    // Unquantised: these drive the live overlay's uniforms, never the canvas.
+    const flash = Math.max(0, 1 - (now - m.hitAt) / (FLASH_SECONDS * 1000));
+    return { trail: m.trail, flash: flash * flash };
   };
 
   // --- verdict animation (transform/opacity only — no canvas redraws) -------
@@ -559,25 +701,25 @@ export function createScoreboard(scene: Scene): Scoreboard {
   const drawCard = (board: Board, f: FighterHud, target: number, now: number, teamTotal?: string): void => {
     const { trail, flash } = advance(f, now);
     const low = f.alive && f.hpFrac < LOW_HP && f.hpFrac > 0;
+    const dim = !f.alive;
+    const hp = Math.max(0, Math.round(f.hp));
+    // The bar, its trail and the hit flash are live — uniforms, every frame.
+    if (board.fx) setCardFx(board.fx, f.neon, f.hpFrac, trail, flash, low, dim);
     // The LOW strip breathes at ~1 Hz, quantised to four steps a beat.
     const lowPhase = low ? Math.round((0.5 + 0.5 * Math.sin(now * 0.0063)) * 3) / 3 : 0;
-    const hpQ = Math.round(f.hpFrac * 200) / 200;
-    const key = `c|${f.name}|${f.neon}|${hpQ}|${f.hp}|${trail}|${flash}|${f.pips}|${target}|${f.alive ? 1 : 0}|${lowPhase}|${teamTotal ?? ''}|${fontsReady() ? 1 : 0}`;
+    const key = `c|${f.name}|${f.neon}|${hp}|${f.pips}|${target}|${f.alive ? 1 : 0}|${low ? 1 : 0}|${lowPhase}|${teamTotal ?? ''}|${fontsReady() ? 1 : 0}`;
     if (board.key === key) return;
     board.key = key;
     const { ctx, tex } = board;
-    const dim = !f.alive;
-    cardGlass(ctx, f.neon, flash, dim);
+    cardGlass(ctx, f.neon, dim);
     ctx.save();
     if (dim) ctx.globalAlpha = 0.5;
     ctx.textBaseline = 'middle';
     // The callsign, left; the health number, right — white, red when LOW.
     const namePx = fitText(ctx, f.name, W - 400, 58, 30, 600, 2);
     label(ctx, f.name, 64, 102, 600, namePx, KIT.text, 2);
-    label(ctx, String(Math.max(0, Math.round(f.hp))), W - 64, 98, 700, 96, low ? KIT.danger : KIT.text, 1, 'right');
-    // The health pill.
-    healthBar(ctx, 64, 176, W - 128, 52, f.hpFrac, trail, f.neon);
-    // A hairline, then the rounds row.
+    label(ctx, String(hp), W - 64, 98, 700, 96, low ? KIT.danger : KIT.text, 1, 'right');
+    // (The health pill is the live overlay, over BAR.) A hairline, then the rounds row.
     ctx.fillStyle = KIT.lineFaint;
     ctx.fillRect(64, 276, W - 128, 2);
     if (target > 0) {
@@ -807,13 +949,14 @@ export function createScoreboard(scene: Scene): Scoreboard {
         ctx.fill();
         tex.needsUpdate = true;
       }
-      // Left card: score + streak.
+      // Left card: score + streak — no health on it.
+      hideCardFx(left.fx);
       const best = Math.max(app.stats.trainingBest, training.score);
       const key = `t|${training.score}|${training.streak}|${best}|${fontsReady() ? 1 : 0}`;
       if (left.key !== key) {
         left.key = key;
         const { ctx, tex } = left;
-        cardGlass(ctx, UI.emberBright, 0, false);
+        cardGlass(ctx, UI.emberBright, false);
         ctx.textBaseline = 'middle';
         label(ctx, 'AIM TRAINING', 64, 96, 600, 42, KIT.text, 4);
         label(ctx, String(training.score), 64, 200, 700, 124, KIT.text, 2);
