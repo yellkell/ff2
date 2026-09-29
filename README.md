@@ -147,7 +147,11 @@ carried over verbatim: everything in it still applies to this code.
   client may write it, `firestore.rules`), and the headset **CLAIMS**
   what it is owed (`src/net/bank.ts`) at every boot and every few
   seconds while a checkout is up, so the coins land in the wallet within
-  a breath of paying. The client never sees a card and never names a
+  a breath of paying. A claim carries an id the headset keeps until its
+  coins land, so a reply lost on the way back is asked for again and paid
+  again rather than lost; a full refund or a dispute cancels whatever of
+  that purchase is still unclaimed, and records what was already
+  collected as `unrecovered` on the account. The client never sees a card and never names a
   sum; the packs and prices are the server's. **Without
   `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` + `FIREBASE_SERVICE_ACCOUNT`
   on Render the bank runs in DEV mode** — a one-button fake checkout
@@ -156,8 +160,9 @@ carried over verbatim: everything in it still applies to this code.
   go live: create the Stripe account, add the three secrets to the
   Render service (`render.yaml` lists them; the webhook endpoint is
   `https://<room server>/bank/webhook`, events
-  `checkout.session.completed` and
-  `checkout.session.async_payment_succeeded`), and make a service-account
+  `checkout.session.completed`,
+  `checkout.session.async_payment_succeeded`, `charge.refunded` and
+  `charge.dispute.created`), and make a service-account
   key for the ff2 project. The bank charges in GBP by default
   (`BANK_CURRENCY`), prices tax-inclusive. **Managed Payments** — Stripe
   as the merchant of record, charging and filing the VAT of wherever the

@@ -29,10 +29,10 @@ import {
 } from 'three';
 import { ATTACKS, CREATURE, GEL_LOOK, type AttackName } from './goopConfig.js';
 import * as sfx from '../audio/sfx.js';
-import type { GooFx } from './splats.js';
+import type { GooFx } from '../../goopliath/splats.js';
 import { createGelMaterial, type GelUniforms } from './gelMaterial.js';
-import { A, ANCHOR_COUNT, BOXER_POSE } from './poses.js';
-import type { StylePoseDelta } from './styles.js';
+import { A, ANCHOR_COUNT, BOXER_POSE } from '../../goopliath/poses.js';
+import type { StylePoseDelta } from '../../goopliath/styles.js';
 import { GoopSim, type PunchResult } from './sim.js';
 
 export type Hand = 'left' | 'right';

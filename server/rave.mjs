@@ -169,10 +169,25 @@ export function handleHttp(req, res) {
   res.end(JSON.stringify({ game: 'goopliath-dance-raid', rooms: rooms.size }));
 }
 
-export const wss = new WebSocketServer({ noServer: true });
+/** The biggest honest message is a look (a few hundred bytes) or a voice
+ *  frame; without a cap `ws` accepts 100 MiB and fans it to the room. */
+const MAX_PAYLOAD = 64 * 1024;
+/** Past this much unsent data a member is on bad Wi-Fi: the pose and voice
+ *  firehose is dropped for them rather than queued (see index.mjs). */
+const MAX_BUFFERED = 512 * 1024;
+/** High-rate traffic that wants the newest state, not a faithful replay. */
+const DROPPABLE = new Set(['p', 's', 'cp']);
+
+export const wss = new WebSocketServer({ noServer: true, maxPayload: MAX_PAYLOAD });
+
+// An 'error' with no listener is re-thrown as an uncaught exception: one bad
+// frame or ECONNRESET took the whole room server down (see index.mjs).
+wss.on('error', (err) => console.error('[dance-raid] server error', err));
 
 function send(ws, obj) {
-  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
+  if (ws.readyState !== ws.OPEN) return;
+  if (ws.bufferedAmount > MAX_BUFFERED && DROPPABLE.has(obj.t)) return;
+  ws.send(JSON.stringify(obj));
 }
 
 function mintCode() {
@@ -527,13 +542,14 @@ function relayVoice(ws, frame) {
   const head = Buffer.from([id.length, ...Buffer.from(id, 'ascii')]);
   const packet = Buffer.concat([head, Buffer.isBuffer(frame) ? frame : Buffer.from(frame)]);
   for (const member of room.members.keys()) {
-    if (member !== ws && member.readyState === member.OPEN) member.send(packet, { binary: true });
+    if (member !== ws && member.readyState === member.OPEN && member.bufferedAmount <= MAX_BUFFERED) member.send(packet, { binary: true });
   }
 }
 
 wss.on('connection', (ws) => {
   ws.isAlive = true;
   ws.room = null;
+  ws.on('error', () => ws.terminate());
   ws.on('pong', () => {
     ws.isAlive = true;
   });
@@ -550,6 +566,9 @@ wss.on('connection', (ws) => {
     } catch {
       return;
     }
+    // `null` parses and has no `.t` — reading it threw and took the whole
+    // room server down (see index.mjs).
+    if (!msg || typeof msg !== 'object') return;
 
     switch (msg.t) {
       case 'ping':
