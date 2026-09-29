@@ -62,6 +62,7 @@ import passionUrl from '../assets/music/passion.m4a';
 import finalUrl from '../assets/music/final.m4a';
 import overtimeUrl from '../assets/music/overtime.m4a';
 import bringitonUrl from '../assets/music/bringiton.m4a';
+import eraseUrl from '../assets/music/erase.m4a';
 import type { MoveKind } from '../config.js';
 
 /** Where a record is allowed to play. 'credits' is a role of one: the
@@ -526,6 +527,26 @@ export const TRACKS: Track[] = [
     // bar 4, the same treatment ASSEMBLE and DEFENSE get, and the intro
     // never plays.
     startAt: 10.6564,
+    roles: ['raid'],
+  },
+  {
+    id: 'erase',
+    title: 'ERASE',
+    url: eraseUrl,
+    bpm: 126.0,
+    downbeat: 0.0495,
+    seconds: 293.33,
+    lufs: -8.1,
+    // Autocorrelation's loudest peak is 63 again — PASSION and FINAL's 252
+    // lattice — but the kick settles it the way it did for FINAL: four on
+    // the floor at 126, the off-eighths nearly empty (2 dB of attack
+    // against 18 on the beat). 126.000 flat wins the phase lock on the
+    // whole file and on each half, so no fraction this time. Sound starts
+    // 49 ms in (the same AAC lead-in as FINAL and OVERTIME) and bar 1 beat
+    // 1 is the first thing in the file. Every big section entry, the +6.6
+    // dB drop at 217 s included, lands on a sixteen-beat line counted from
+    // it. The first four bars sit 3 dB under the body with the kick
+    // already going, so there's no intro to skip.
     roles: ['raid'],
   },
   {
