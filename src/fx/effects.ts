@@ -562,11 +562,9 @@ interface Popup {
   live: boolean;
 }
 
-/** The damage-number styles: an ordinary hit, and a big one. */
+/** The damage-number style: red for every hit — a heavy one just reads bigger. */
 const DMG_FILL = '#ff1605';
 const DMG_GLOW = 'rgba(255,30,10,1)';
-const BIG_FILL = '#ffc21a';
-const BIG_GLOW = 'rgba(255,120,10,1)';
 
 /* ── the module's pools ──────────────────────────────────────────────────── */
 
@@ -613,10 +611,9 @@ export function initImpactFx(scene: Scene): void {
 
   // Rasterise the numbers a bout actually throws before the first one lands.
   const big = FIREBALL.headDamage;
-  for (const d of [FIREBALL.damage, Math.round(FIREBALL.damage / 3), Math.round(FIREBALL.damage / 3) + big - FIREBALL.damage, 10, 15]) {
+  for (const d of [FIREBALL.damage, Math.round(FIREBALL.damage / 3), Math.round(FIREBALL.damage / 3) + big - FIREBALL.damage, 10, 15, big, 30]) {
     prewarm.push([String(d), DMG_FILL, DMG_GLOW]);
   }
-  for (const d of [big, 30]) prewarm.push([String(d), BIG_FILL, BIG_GLOW]);
   prewarm.push(['X', '#ff2a2a', 'rgba(255,40,30,1)'], ['GG', '#ffffff', 'rgba(255,255,255,0.95)']);
 }
 
@@ -694,14 +691,13 @@ export function spawnPopup(
   pop.mesh.visible = true;
 }
 
-/** The damage number: a whole number (a split ball's 20/3 reads "7"), red
- *  for an ordinary hit, a hot gold and bigger for a heavy one. */
+/** The damage number: a whole number (a split ball's 20/3 reads "7"), always
+ *  red — a heavy one (a headshot) just punches in bigger. */
 export function spawnDamagePopup(world: World, pos: Vector3, dmg: number): void {
   const d = Math.round(dmg);
   const big = d >= FIREBALL.headDamage;
   const scale = Math.min(1.5, 0.85 + d / 60) * (big ? 1.15 : 1);
-  if (big) spawnPopup(world, pos, String(d), BIG_FILL, BIG_GLOW, scale);
-  else spawnPopup(world, pos, String(d), DMG_FILL, DMG_GLOW, scale);
+  spawnPopup(world, pos, String(d), DMG_FILL, DMG_GLOW, scale);
 }
 
 /**
