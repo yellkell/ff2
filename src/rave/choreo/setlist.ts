@@ -175,11 +175,11 @@ function twinSide(rng: () => number, at: number | undefined): 1 | -1 {
  *  once per song, so some expert nights carry it and some never do.
  *  `park` is where the LAST move left a dancer who played it right (see
  *  THE FLOOR MANAGER); the twins aim their opening volley at it.
- *  `doubleTime` stretches the two cascade gaps that aren't nailed to the
- *  bar line (seesaw floods, routine steps) back to the real seconds the
- *  fast shelf serves them at — the bar-locked cascades (twin returns,
- *  nova chains, the donut's one-two) have no legal middle value on a
- *  doubled grid and stay put. */
+ *  `doubleTime` reads every cascade gap from the doubled pace table:
+ *  routine steps stretch back to the real seconds the fast shelf serves
+ *  them at, while seesaw floods stay on the record's real beats and the
+ *  bar-locked cascades (twin returns, nova chains, the donut's one-two)
+ *  keep their own spacing. */
 function buildLandings(
   kind: MoveKind,
   landBeat: number,

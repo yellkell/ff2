@@ -586,7 +586,10 @@ export const CHOREO = {
       duckdonut: 10,
       wave: 5,
     } as Record<MoveKind, number>,
-    seesawGapBeats: [4, 4, 3, 3, 3],
+    // Seesaw floods stay on the record's own beats — the standard table
+    // doubled. The shelf's spacing (3) put every other flood on an eighth,
+    // and a flood you cross on reads as off the music there, not a ghost.
+    seesawGapBeats: [8, 8, 4, 4, 4],
     waveStepBeats: [4, 4, 2, 2, 2],
     waveTurnExtraBeats: 2,
     routineStepBeats: 5,
