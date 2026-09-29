@@ -303,6 +303,15 @@ const labShown = await page.evaluate(() => ({
   stage: document.getElementById('ff-stage').classList.contains('hidden'),
 }));
 check('THE LAB replaces the board stage inside FIRE FIGHT', labShown.lab && labShown.stage, JSON.stringify(labShown));
+// Opening the tab starts the page's own pull from the live tape room. Let
+// it land (or fail) before the fixture goes in: a slow reply arriving
+// after the inject replaces the fixture with whatever is live — on CI,
+// often nothing.
+await page.waitForFunction(
+  () => window.__ffLab.state().loaded || /UNREACHABLE/.test(document.getElementById('lab-status').textContent),
+  null,
+  { timeout: 15000 },
+);
 const grid = (fill) => Array.from({ length: 16 * 14 }, (_, i) => fill(i));
 const fixture = (n, win, names) => ({
   id: `fx${n}`,
