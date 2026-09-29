@@ -29,7 +29,61 @@
           radial-gradient(circle at 72% 28%, rgba(229, 63, 26, 0.24), transparent 34rem),
           linear-gradient(135deg, #07080b 0%, #13151a 52%, #22100b 100%);
       }
-      /* The landing is the in-game marquee, verbatim: the FIRE FIGHT sign
+      /* 1. The publisher card, as the headset opens (experience/BootIntro.ts):
+         black, "yellkell.com PRESENTS" fades in and out, then the landing. */
+      #presents {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: #000;
+        cursor: pointer;
+        /* two animations, not one: the fade is opacity alone, so it runs off
+           the main thread and still happens while the world is being built
+           (visibility can't, and in the same keyframes the black card sat
+           there, text gone, until the build let go) */
+        animation:
+          presents-out 0.45s ease 3s forwards,
+          presents-gone 0s linear 3.45s forwards;
+      }
+      #presents .pub,
+      #presents .sub {
+        opacity: 0;
+        animation: presents-card 3s linear forwards;
+      }
+      #presents .pub {
+        font: 500 clamp(44px, 9vw, 104px) / 1 system-ui, -apple-system, sans-serif;
+        color: #fff;
+        text-shadow: 0 0 30px rgba(255, 255, 255, 0.45);
+      }
+      #presents .sub {
+        font: 400 clamp(13px, 2.2vw, 26px) / 1 system-ui, -apple-system, sans-serif;
+        letter-spacing: 0.9em;
+        text-indent: 0.9em;
+        color: #9aa0a8;
+      }
+      @keyframes presents-card {
+        0% { opacity: 0; }
+        17% { opacity: 1; }
+        83% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      @keyframes presents-out {
+        to { opacity: 0; }
+      }
+      @keyframes presents-gone {
+        to { visibility: hidden; }
+      }
+      /* A tap on the card goes straight to the landing. */
+      body.skip-intro #presents,
+      body.app-entered #presents {
+        display: none;
+      }
+      /* 2. The landing is the in-game marquee, verbatim: the FIRE FIGHT sign
          breathing in its pool of red, on black, one button beneath. */
       .landing {
         position: fixed;
@@ -46,6 +100,28 @@
         transition:
           opacity 220ms ease,
           visibility 220ms ease;
+      }
+      /* The landing's contents rise in as the publisher card lets go (on the
+         contents, not the landing: its own opacity is the app-entered fade). */
+      .landing__stage {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: clamp(28px, 6vh, 56px);
+        width: 100%;
+      }
+      .landing__stage,
+      .discord-corner {
+        opacity: 0;
+        animation: splash-in 0.9s ease 3.1s forwards;
+      }
+      body.skip-intro .landing__stage,
+      body.skip-intro .discord-corner {
+        animation-delay: 0s;
+      }
+      @keyframes splash-in {
+        from { opacity: 0; transform: scale(1.03); }
+        to { opacity: 1; transform: none; }
       }
       .landing__logo-wrap {
         position: relative;
@@ -88,10 +164,44 @@
           animation: none;
         }
       }
+      /* The loader: a status line and an ember bar over the button. */
+      .landing__dock {
+        width: min(100%, 300px);
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+      }
+      #status {
+        font: 500 13px/1.4 system-ui, -apple-system, sans-serif;
+        letter-spacing: 0.04em;
+        color: rgba(255, 224, 194, 0.7);
+      }
+      #bar {
+        height: 3px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.12);
+        overflow: hidden;
+        margin: 10px 0 18px;
+      }
+      /* The bar moves from the first frame: until the game's code is in and
+         can report real progress (main.ts takes it from there), it creeps
+         along on its own, off the main thread. */
+      #bar-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #c41208, #ff7a18, #ffc07a);
+        box-shadow: 0 0 10px rgba(255, 90, 20, 0.6);
+        transform: scaleX(0);
+        transform-origin: left;
+        animation: bar-creep 14s cubic-bezier(0.1, 0.6, 0.3, 1) forwards;
+      }
+      @keyframes bar-creep {
+        to { transform: scaleX(0.3); }
+      }
       /* The button is the game's own furniture: a steel plate with an ember
          neon edge, breathing in the same pool as the sign. */
       .enter-vr {
-        width: min(100%, 300px);
+        width: 100%;
         min-height: 70px;
         border: 2px solid #ff7a18;
         border-radius: 10px;
@@ -212,13 +322,23 @@
   </head>
   <body>
     <div id="scene-container"></div>
+    <div id="presents" aria-hidden="true">
+      <div class="pub">yellkell.com</div>
+      <div class="sub">PRESENTS</div>
+    </div>
     <section class="landing" id="landing" aria-label="Fire Fight">
-      <div class="landing__logo-wrap">
-        <div class="landing__glow" aria-hidden="true"></div>
-        <img class="landing__logo" src="/signs/fire-fight.png" alt="FIRE FIGHT" />
+      <div class="landing__stage">
+        <div class="landing__logo-wrap">
+          <div class="landing__glow" aria-hidden="true"></div>
+          <img class="landing__logo" src="/signs/fire-fight.png" alt="FIRE FIGHT" />
+        </div>
+        <div class="landing__dock">
+          <div id="status" role="status">Loading…</div>
+          <div id="bar" aria-hidden="true"><div id="bar-fill"></div></div>
+          <button class="enter-vr" id="enter-vr" type="button" disabled>Enter VR</button>
+        </div>
+        <p class="landing__join" id="join-hint" hidden></p>
       </div>
-      <button class="enter-vr" id="enter-vr" type="button">Enter VR</button>
-      <p class="landing__join" id="join-hint" hidden></p>
       <script>
         // A join link (?join=CODE): say so under the button, so a phone that
         // opened it knows to hand over to the headset (DESIGN §8.2).
@@ -235,6 +355,12 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.946 2.4189-2.1568 2.4189Z" /></svg>
       </a>
     </section>
+    <script>
+      // A tap on the publisher card goes straight to the landing.
+      document.getElementById('presents').addEventListener('click', function () {
+        document.body.classList.add('skip-intro');
+      });
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
