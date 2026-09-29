@@ -55,6 +55,14 @@ const _otherPos = new Vector3();
 const _ballPrev = new Vector3();
 const _seg = new Vector3();
 const _ap = new Vector3();
+const _dir = new Vector3();
+
+/** The way a ball is travelling (unnormalised) — the impact sparks splash
+ *  back off whatever it struck. */
+function ballDir(ball: Entity): Vector3 {
+  const v = ball.getVectorView(Fireball, 'velocity');
+  return _dir.set(v[0], v[1], v[2]);
+}
 
 /** Squared distance from point `p` to the segment `a`→`b`. */
 function pointSegDistSq(p: Vector3, a: Vector3, b: Vector3): number {
@@ -187,7 +195,7 @@ export class CollisionSystem extends createSystem({
       // extra spark spray, plate-clink sound, hard double-hand buzz. The damage
       // NUMBER is the attacker's read-out, not ours — they spawn it on landing
       // the hit (see myBallVsOpponent / the net `hit` handler), so we don't.
-      spawnFireImpact(this.world, _ballPos, 1, 1.7);
+      spawnFireImpact(this.world, _ballPos, 1, 1.7, ballDir(ball));
       emberBurst(_ballPos, 18, true);
       sfx.hitTaken();
       feedback.playerHitFlash = 1;
@@ -280,7 +288,7 @@ export class CollisionSystem extends createSystem({
 
       const victimIsMe = (victim.getValue(Combatant, 'slot') ?? -1) === 0;
       if (victimIsMe) {
-        spawnFireImpact(this.world, _ballPos, 1, 1.7);
+        spawnFireImpact(this.world, _ballPos, 1, 1.7, ballDir(ball));
         emberBurst(_ballPos, 18, true);
         sfx.hitTaken();
         {
@@ -297,7 +305,7 @@ export class CollisionSystem extends createSystem({
         pulseHand(this.world.session, 'left', 1.0, 160);
         pulseHand(this.world.session, 'right', 1.0, 160);
       } else {
-        spawnFireImpact(this.world, _ballPos, 0);
+        spawnFireImpact(this.world, _ballPos, 0, 1, ballDir(ball));
         spawnDamagePopup(this.world, _ballPos, actualDamage);
         if (bestScale > 1) sfx.coreHit(); // a titan weak point, rung loud
         else sfx.hitDealt();

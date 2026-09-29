@@ -45,6 +45,8 @@ const HANDS = ['left', 'right'] as const;
 const _p = new Vector3();
 const _q = new Quaternion();
 const _v = new Vector3();
+/** The way my ball was flying when a hit report lands — its sparks splash back. */
+const _hitDir = new Vector3();
 
 /** Pose targets we smooth toward (raw network poses jitter). */
 const target = {
@@ -207,7 +209,8 @@ export class NetworkSystem extends createSystem({
         this.damageThem(msg.dmg);
         const ball = this.findMyBall(msg.hand);
         if (ball?.object3D) {
-          spawnFireImpact(this.world, ball.object3D.position, 0);
+          const v = ball.getVectorView(Fireball, 'velocity');
+          spawnFireImpact(this.world, ball.object3D.position, 0, 1, _hitDir.set(v[0], v[1], v[2]));
           spawnDamagePopup(this.world, ball.object3D.position, msg.dmg);
           if (!msg.ret) this.spendMyBall(ball);
         }
