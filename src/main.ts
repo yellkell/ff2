@@ -92,6 +92,37 @@ const enterVrButton = document.getElementById('enter-vr') as HTMLButtonElement |
 
 enterVrButton?.setAttribute('disabled', '');
 
+const loadStatus = document.getElementById('status') as HTMLElement | null;
+const loadBar = document.getElementById('bar-fill') as HTMLElement | null;
+
+/**
+ * The loading bar, 0 to 1, and it never goes back. index.html creeps it along
+ * on its own until the code is in; from the first call here it's the real
+ * thing: the code (to 0.3), the engine (to 0.45), the arena (to 0.9), then
+ * the headset check (to 1).
+ */
+let loadShown = 0;
+function loadProgress(f: number, text?: string): void {
+  if (text && loadStatus) loadStatus.textContent = text;
+  if (!loadBar) return;
+  if (loadBar.style.animation !== 'none') {
+    // take over from the creep where it's got to
+    const t = getComputedStyle(loadBar).transform;
+    loadShown = t.startsWith('matrix(') ? parseFloat(t.slice(7)) || 0 : 0;
+    loadBar.style.animation = 'none';
+  }
+  loadShown = Math.max(loadShown, Math.min(1, f));
+  loadBar.style.transform = `scaleX(${loadShown})`;
+}
+/** A build step's done: move the bar and let the page draw before the next
+ *  (one long synchronous block would freeze the landing mid-bar). */
+function loadStep(f: number, text?: string): Promise<void> {
+  loadProgress(f, text);
+  return new Promise((r) => window.setTimeout(r, 0));
+}
+
+loadProgress(0.3, 'Starting the engine…');
+
 function hideLanding(): void {
   document.body.classList.add('app-entered');
 }
@@ -147,6 +178,7 @@ World.create(container, {
   }
 
   world.renderer.xr.setFoveation(FOVEATION);
+  await loadStep(0.45, 'Building the arena…');
 
   initLeaderboard(); // anonymous profile + first board fetch
   initGazette(); // pull the day's Gasket Gazette for the lobby paper button
@@ -164,8 +196,11 @@ World.create(container, {
   // a minute, and the CLUB door is the one that can't hide a cold host.
   warmRoomServer();
   setupEnvironment(world);
+  await loadStep(0.55);
   buildArena(world);
+  await loadStep(0.65);
   setupCombatants(world);
+  await loadStep(0.75, 'Heating the gloves…');
 
   // Body pose first so hitboxes are current for everything downstream.
   world.registerSystem(PlayerBodySystem);
@@ -263,6 +298,8 @@ World.create(container, {
     document.body.append(controls);
   }
 
+  await loadStep(0.9, 'Checking for a headset…');
+
   // Opaque arenas launch in immersive VR. Running a painted-in world through
   // Quest's AR compositor exposes grey reprojection strips at the eye edges
   // during quick head turns. Immersive AR is reserved for the one setting
@@ -333,6 +370,8 @@ World.create(container, {
       if (!world.session) enterVrButton?.removeAttribute('disabled');
     }, 4000);
   };
+
+  loadProgress(1, xrSupported ? 'Ready.' : 'WebXR not available in this browser.');
 
   if (enterVrButton && xrSupported) {
     enterVrButton.textContent = app.environment === 'ar' ? 'Enter AR' : 'Enter VR';
