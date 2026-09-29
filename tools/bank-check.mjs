@@ -137,6 +137,63 @@ try {
   const twice = await api('/redeem', { method: 'POST', headers: jsonH, body: JSON.stringify({ code: hand.body?.code }) });
   check('and only once', twice.status === 404, String(twice.status));
 
+  // A claim whose reply is lost on the way back: the headset asks again
+  // with the same id and must get the same coins, not nothing.
+  console.log('\n=== THE CLAIM: a lost reply, asked again ===');
+  const who3 = { ...jsonH, 'x-dev-uid': 'probe-three' };
+  const payFor = async (h) => {
+    const c = await api('/checkout', { method: 'POST', headers: h, body: JSON.stringify({ pack: 'pocket' }) });
+    return api('/dev-pay', { method: 'POST', headers: jsonH, body: JSON.stringify({ s: c.body?.id }) });
+  };
+  await payFor(who3);
+  const cl = (claim) => api('/claim', { method: 'POST', headers: who3, body: JSON.stringify({ claim }) });
+  const first = await cl('claim-aaaaaaaa');
+  check('a claim with an id hands over the 500', first.body?.coins === 500, JSON.stringify(first.body));
+  const lost = await cl('claim-aaaaaaaa');
+  check('the same id again (the reply was lost) hands over the same 500', lost.body?.coins === 500, JSON.stringify(lost.body));
+  const fresh = await cl('claim-bbbbbbbb');
+  check('a fresh id is owed nothing', fresh.body?.coins === 0, JSON.stringify(fresh.body));
+  await payFor(who3);
+  const next = await cl('claim-cccccccc');
+  check('a new purchase is claimed by the next fresh id', next.body?.coins === 500 && next.body?.credit === 1000, JSON.stringify(next.body));
+  let spent = null;
+  for (let i = 0; i < 4; i++) spent = await cl('claim-cccccccc');
+  check('redelivery runs out — an id is not a tap', spent.body?.coins === 0, JSON.stringify(spent.body));
+
+  const { planReverse } = await import('../server/bank.mjs');
+  const r1 = planReverse({ credit: 1000, claimed: 500 }, 500);
+  check('a refund cancels coins still unclaimed', r1.credit === 500 && r1.cancelled === 500 && r1.lost === 0, JSON.stringify(r1));
+  const r2 = planReverse({ credit: 1000, claimed: 800 }, 500);
+  check('what was already collected is recorded, not taken from later purchases', r2.credit === 800 && r2.cancelled === 200 && r2.lost === 300 && r2.unrecovered === 300, JSON.stringify(r2));
+
+  // THE RELAYS: a message that parses to no object used to throw inside the
+  // socket handler and end the process — every relay and the bank with it.
+  console.log('\n=== THE ROOM SERVER: bad messages ===');
+  const { WebSocket } = await import('ws');
+  for (const path of ['/ff', '/pub', '/rave', '/tv']) {
+    await new Promise((resolve) => {
+      const ws = new WebSocket(`ws://127.0.0.1:${PORT}${path}`);
+      ws.on('open', () => {
+        for (const junk of ['null', '42', '"x"', 'true', '[]']) ws.send(junk);
+        setTimeout(() => {
+          ws.close();
+          resolve();
+        }, 150);
+      });
+      ws.on('error', resolve);
+    });
+  }
+  await sleep(300);
+  const still = await fetch(`http://127.0.0.1:${PORT}/`).then((r) => r.ok).catch(() => false);
+  check('null, numbers and bare strings on every relay leave the server standing', still && server.exitCode === null, still ? 'up' : log.trim().split('\n').slice(-3).join(' | '));
+
+  // THE REDEEM CEILING: wrong guesses are counted across everyone. Last in
+  // part 1, because it leaves /redeem refusing for the window.
+  console.log('\n=== THE ACCOUNT: guessing codes ===');
+  let last = null;
+  for (let i = 0; i < 40; i++) last = await api('/redeem', { method: 'POST', headers: jsonH, body: JSON.stringify({ code: String(100000 + i) }) });
+  check('a run of wrong codes is refused with 429', last.status === 429, String(last.status));
+
   /* ── the headset ───────────────────────────────────────────────────── */
 
   if (headset) {

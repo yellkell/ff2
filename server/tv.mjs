@@ -62,8 +62,9 @@ const VIDEO_TTL_MS = 4000;
  * turning the floor into a channel: whoever holds the room sends frames
  * here, and viewers peeping at the club get the render instead of the map.
  *
- * Last writer wins, which is the host, and there is only ever one of them.
- * When they leave, the picture goes with them and the map comes back —
+ * The first sender holds it (the host — there is only ever one of them)
+ * and nobody else can talk over it while it's fresh. When they leave, the
+ * picture goes stale, the map comes back and the next host can take over —
  * which is why the socket is kept beside the frame.
  */
 let clubVideo = null;
@@ -81,8 +82,17 @@ const PRIORITY = { '1v1': 3, '2v2': 3, ffa: 3, raid: 2, solo: 1 };
 /** One invite per room, one per IP every so often — the bot is not a horn. */
 const INVITE_IP_GAP_MS = 20_000;
 const INVITE_CODE_GAP_MS = 5 * 60_000;
+/** Any socket can open a channel, so the LIVE posts get a ceiling of their
+ *  own: a script opening channels in a loop can't turn the bot into a horn. */
+const LIVE_POST_MAX = 6;
+const LIVE_POST_WINDOW_MS = 10 * 60_000;
+/** When recent LIVE posts went out, oldest first. */
+const livePosts = [];
+/** The SHARE card's ceiling over everyone, per the same window. */
+const INVITE_POST_MAX = 20;
+const invitePosts = [];
 
-/** id → { id, kind, title, names, since, frame, frameAt, ws, posted, ended } */
+/** id → { id, kind, title, names, since, frame, frameAt, ws, posted, live, ended } */
 const channels = new Map();
 /** viewer socket → { tuned: id | null, sawGuide: string } */
 const viewers = new Map();
@@ -154,7 +164,7 @@ function openChannel(ws, msg) {
   const kind = KINDS.has(msg.kind) ? msg.kind : 'solo';
   const title = text(msg.title, 60) || kind.toUpperCase();
   if (!c || c.ended) {
-    c = { id: String(nextId++), kind, title, names: names(msg.names), since: Date.now(), frame: null, frameAt: Date.now(), ws, posted: false, ended: false };
+    c = { id: String(nextId++), kind, title, names: names(msg.names), since: Date.now(), frame: null, frameAt: Date.now(), ws, posted: false, live: false, ended: false };
     channels.set(c.id, c);
     ws.channel = c.id;
     console.log(`[tv] channel ${c.id} on air — ${kind}: ${title}`);
@@ -173,7 +183,7 @@ function endChannel(id, result) {
   c.ended = true;
   channels.delete(id);
   console.log(`[tv] channel ${id} off air — ${c.kind}: ${c.title}${result ? ` (${result})` : ''}`);
-  if (c.posted && discordConfigured()) void postDiscord(finalCard({ kind: c.kind, title: c.title, result: text(result, 200) }));
+  if (c.live && discordConfigured()) void postDiscord(finalCard({ kind: c.kind, title: c.title, result: text(result, 200) }));
   broadcastGuide();
 }
 
@@ -214,6 +224,9 @@ function onFrame(ws, msg, rawLen) {
 function onClubVideo(ws, msg, bytes) {
   if (bytes > VIDEO_MAX) return;
   if (typeof msg.d !== 'string' || !msg.d) return;
+  // The picture stays with whoever is sending it: a second socket can't
+  // talk over a live feed, only take over once it has gone stale.
+  if (clubFresh() && clubVideo.ws !== ws) return;
   clubVideo = { d: msg.d, at: Date.now(), ws };
   const out = JSON.stringify({ t: 'cv', d: msg.d });
   for (const [vws, v] of viewers) {
@@ -262,7 +275,12 @@ setInterval(() => {
     }
     if (!c.posted && POST_KINDS.has(c.kind) && now - c.since >= LIVE_POST_DELAY_MS) {
       c.posted = true;
-      if (discordConfigured()) void postDiscord(liveCard({ kind: c.kind, title: c.title, names: c.names }));
+      while (livePosts.length && now - livePosts[0] > LIVE_POST_WINDOW_MS) livePosts.shift();
+      if (discordConfigured() && livePosts.length < LIVE_POST_MAX) {
+        livePosts.push(now);
+        c.live = true; // its FINAL follows only a LIVE that actually went out
+        void postDiscord(liveCard({ kind: c.kind, title: c.title, names: c.names }));
+      }
     }
   }
   // The club, for whoever is watching it (auto-tuned with nothing on air,
@@ -405,10 +423,19 @@ export async function postInvite({ code, mode, name, open }, ip = '?') {
   const who = text(name, 16) || 'A BOXER';
   const seats = Math.max(0, Math.min(9, Number(open) || 0));
   const now = Date.now();
+  // Forget throttle entries once they can't refuse anything any more, so
+  // the maps don't grow for as long as the process lives.
+  for (const [k, at] of inviteByIp) if (now - at >= INVITE_IP_GAP_MS) inviteByIp.delete(k);
+  for (const [k, at] of inviteByCode) if (now - at >= INVITE_CODE_GAP_MS) inviteByCode.delete(k);
+  // The IP comes from a header a client can write, so there's a ceiling
+  // over everyone too.
+  while (invitePosts.length && now - invitePosts[0] > LIVE_POST_WINDOW_MS) invitePosts.shift();
+  if (invitePosts.length >= INVITE_POST_MAX) return { posted: false, reason: 'slow down' };
   if (now - (inviteByIp.get(ip) ?? 0) < INVITE_IP_GAP_MS) return { posted: false, reason: 'slow down' };
   if (now - (inviteByCode.get(c) ?? 0) < INVITE_CODE_GAP_MS) return { posted: false, reason: 'already posted' };
   inviteByIp.set(ip, now);
   inviteByCode.set(c, now);
+  invitePosts.push(now);
   if (!discordConfigured()) return { posted: false, reason: 'bot off' };
   const ok = await postDiscord(inviteCard({ name: who, mode: m, code: c, open: seats }));
   return { posted: ok, reason: ok ? '' : 'discord refused' };

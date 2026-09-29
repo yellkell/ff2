@@ -1,7 +1,7 @@
 name: Checks
 
-# Typecheck, build, and prove the security rules actually say what they look
-# like they say.
+# Typecheck, build, prove the security rules actually say what they look
+# like they say, and run the headless probes that hold on a CI runner.
 #
 # The rules check runs HERE rather than being something you remember to run,
 # because it needs the Firestore emulator and the emulator needs a JDK 21+ that
@@ -48,3 +48,36 @@ jobs:
       - run: npm install -g firebase-tools
       - name: Prove the rules
         run: npm run check:rules
+
+  # The probes in tools/ that drive the real game headless. They used to be
+  # run by hand, and when nobody ran them they quietly fell behind the code
+  # they check (tv-check still expected the boards from before FEATS). These
+  # are the ones that hold on a GPU-less runner: the bank and the room
+  # server's bad-message guard (no browser), THE CHANNEL and the stats page,
+  # and the rave's identity/wallet/navigation loop. Each starts its own room
+  # server; the browser ones need the dev server up.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: The bank, and the room server shrugging off bad messages
+        run: npm run check:bank
+      - run: npx playwright install --with-deps chromium
+      - name: Start the dev server
+        run: |
+          npx vite --port 5173 --strictPort > vite.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:5173/ && exit 0
+            sleep 1
+          done
+          cat vite.log
+          exit 1
+      - name: THE CHANNEL and the stats page
+        run: npm run check:tv
+      - name: The rave, mounted in the one town
+        run: npm run check:rave

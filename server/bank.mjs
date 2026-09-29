@@ -11,7 +11,7 @@
  *   POST /checkout    {pack} → {id, url, short, pack}           (signed)
  *   GET  /go/<code>   the short link → 302 to the checkout      (public)
  *   POST /webhook     Stripe's word that a session was paid     (Stripe)
- *   POST /claim       {} → {coins, credit, claimed, email}      (signed)
+ *   POST /claim       {claim?} → {coins, credit, claimed, email} (signed)
  *   GET  /whoami      {uid, protected, email (masked)}          (signed)
  *   POST /protect     {email} → attach it to this uid           (signed)
  *   POST /handoff     {} → {code} for a new headset to redeem   (signed)
@@ -24,7 +24,13 @@
  * Stripe has paid for, ever), `claimed` (what the headset has collected),
  * and one receipt per checkout session, so a webhook Stripe retries
  * credits nothing twice. Claiming is a transaction: owed = credit −
- * claimed, and claimed becomes credit in the same write.
+ * claimed, and claimed becomes credit in the same write. A claim carries
+ * an id the headset keeps until the coins land: if the reply is lost on
+ * the way back, asking again with the same id hands the SAME coins back
+ * rather than nothing (CLAIM_REDELIVER_MS). A refund or a dispute cancels
+ * whatever of that purchase is still unclaimed (`reverse`); coins already
+ * collected are recorded as `unrecovered`, since the wallet is the
+ * headset's.
  *
  * MODES. With STRIPE_SECRET_KEY + FIREBASE_SERVICE_ACCOUNT set this is a
  * bank ('live' with an sk_live key, 'test' with sk_test — Stripe's own
@@ -102,6 +108,43 @@ const packName = (pack) => `${pack.coins} iron-dollars`;
 
 /* ── the ledger ──────────────────────────────────────────────────────── */
 
+/** A claim whose reply never arrived can be asked for again, by its id,
+ *  for this long — and only this many times. */
+const CLAIM_REDELIVER_MS = 15 * 60 * 1000;
+const CLAIM_REDELIVER_MAX = 3;
+/** How many recent claims an account remembers (a few headsets at once). */
+const CLAIM_MEMORY = 4;
+const CLAIM_ID_OK = /^[A-Za-z0-9_-]{8,64}$/;
+
+/**
+ * The claim both ledgers make: given the account's figures and the claim id,
+ * what to pay out and what to store. `recent` is [{ id, coins, at, n }].
+ */
+export function planClaim({ credit = 0, claimed = 0, recent = [] }, claimId, now) {
+  const again = claimId ? recent.find((c) => c.id === claimId) : null;
+  if (again && now - again.at < CLAIM_REDELIVER_MS && again.n < CLAIM_REDELIVER_MAX) {
+    // The headset never heard back: the same coins again, not a fresh
+    // claim — anything credited since stays owed for the next one.
+    const kept = recent.map((c) => (c === again ? { ...c, n: c.n + 1 } : c));
+    return { coins: again.coins, claimed, recent: kept, write: true };
+  }
+  // A fresh claim (or an old id past its redelivery, which claims afresh).
+  const owed = Math.max(0, credit - claimed);
+  if (owed <= 0) return { coins: 0, claimed, recent, write: false };
+  const others = recent.filter((c) => c.id !== claimId);
+  const next = claimId ? [...others, { id: claimId, coins: owed, at: now, n: 0 }].slice(-CLAIM_MEMORY) : recent;
+  return { coins: owed, claimed: credit, recent: next, write: true };
+}
+
+/**
+ * A refund or dispute against one purchase: cancel what of it is still
+ * unclaimed, and record the rest as unrecovered. Pure; both ledgers use it.
+ */
+export function planReverse({ credit = 0, claimed = 0, unrecovered = 0 }, coins) {
+  const cancelled = Math.min(coins, Math.max(0, credit - claimed));
+  return { credit: credit - cancelled, cancelled, unrecovered: unrecovered + (coins - cancelled), lost: coins - cancelled };
+}
+
 /** Dev only: forgets everything on restart. */
 class MemoryLedger {
   persistent = false;
@@ -109,7 +152,7 @@ class MemoryLedger {
   account(uid) {
     let a = this.accounts.get(uid);
     if (!a) {
-      a = { credit: 0, claimed: 0, receipts: new Map() };
+      a = { credit: 0, claimed: 0, unrecovered: 0, recent: [], receipts: new Map() };
       this.accounts.set(uid, a);
     }
     return a;
@@ -122,11 +165,23 @@ class MemoryLedger {
     if (meta.email) a.lastEmail = meta.email;
     return { credited: true, credit: a.credit };
   }
-  async claim(uid) {
+  async claim(uid, claimId) {
     const a = this.account(uid);
-    const owed = Math.max(0, a.credit - a.claimed);
-    a.claimed = a.credit;
-    return { coins: owed, credit: a.credit, claimed: a.claimed, email: a.lastEmail ?? '' };
+    const plan = planClaim(a, claimId, Date.now());
+    a.claimed = plan.claimed;
+    a.recent = plan.recent;
+    return { coins: plan.coins, credit: a.credit, claimed: a.claimed, email: a.lastEmail ?? '' };
+  }
+  async reverse(uid, receipt, reason) {
+    const a = this.account(uid);
+    const r = a.receipts.get(receipt);
+    if (!r) return { found: false };
+    if (r.reversed) return { found: true, duplicate: true };
+    const plan = planReverse(a, r.coins);
+    a.credit = plan.credit;
+    a.unrecovered = plan.unrecovered;
+    r.reversed = { reason, at: Date.now(), cancelled: plan.cancelled, lost: plan.lost };
+    return { found: true, cancelled: plan.cancelled, lost: plan.lost };
   }
 }
 
@@ -153,15 +208,31 @@ class FirestoreLedger {
       return { credited: true, credit };
     });
   }
-  async claim(uid) {
+  async claim(uid, claimId) {
     const acct = this.db.collection('bank').doc(uid);
     return this.db.runTransaction(async (tx) => {
       const a = await tx.get(acct);
       if (!a.exists) return { coins: 0, credit: 0, claimed: 0, email: '' };
-      const { credit = 0, claimed = 0, lastEmail = '' } = a.data();
-      const owed = Math.max(0, credit - claimed);
-      if (owed > 0) tx.update(acct, { claimed: credit, claimedAt: Date.now() });
-      return { coins: owed, credit, claimed: credit, email: lastEmail };
+      const data = a.data();
+      const now = Date.now();
+      const plan = planClaim({ credit: data.credit, claimed: data.claimed, recent: data.recentClaims ?? [] }, claimId, now);
+      if (plan.write) tx.update(acct, { claimed: plan.claimed, claimedAt: now, recentClaims: plan.recent });
+      return { coins: plan.coins, credit: data.credit ?? 0, claimed: plan.claimed, email: data.lastEmail ?? '' };
+    });
+  }
+  async reverse(uid, receipt, reason) {
+    const acct = this.db.collection('bank').doc(uid);
+    const rcpt = acct.collection('receipts').doc(receipt);
+    return this.db.runTransaction(async (tx) => {
+      const r = await tx.get(rcpt);
+      if (!r.exists) return { found: false };
+      if (r.data().reversed) return { found: true, duplicate: true };
+      const a = await tx.get(acct);
+      const plan = planReverse(a.exists ? a.data() : {}, r.data().coins ?? 0);
+      const at = Date.now();
+      tx.update(rcpt, { reversed: { reason, at, cancelled: plan.cancelled, lost: plan.lost } });
+      tx.set(acct, { credit: plan.credit, unrecovered: plan.unrecovered, at }, { merge: true });
+      return { found: true, cancelled: plan.cancelled, lost: plan.lost };
     });
   }
 }
@@ -255,6 +326,18 @@ const codes = new Map();
 const handoffs = new Map();
 const HANDOFF_TTL_MS = 10 * 60 * 1000;
 const MAX_HANDOFFS_PER_UID = 3;
+/**
+ * A redeemed code signs in AS its owner, and six digits is 900,000 guesses —
+ * a script could walk a good share of them in a code's ten minutes. So
+ * wrong guesses are counted across everyone (a per-IP count would trust a
+ * header the client writes), and past the ceiling /redeem answers 429 until
+ * the window rolls on: ~300 guesses in a code's whole life, not millions.
+ * An honest player typing a code once is never near it.
+ */
+const REDEEM_MISS_MAX = 30;
+const REDEEM_WINDOW_MS = 60 * 1000;
+/** When recent wrong guesses came in, oldest first. */
+const redeemMisses = [];
 /** Dev mode only: email → uid, in place of Firebase Auth. */
 const devEmails = new Map();
 
@@ -497,20 +580,58 @@ async function handleWebhook(req, res) {
     console.error(`[bank] webhook refused: ${err?.message ?? err}`);
     return json(res, 400, { error: 'bad signature' });
   }
-  if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
-    const s = event.data.object;
-    if (s.payment_status === 'paid') {
-      const uid = String(s.metadata?.uid ?? s.client_reference_id ?? '');
-      const coins = Number(s.metadata?.coins ?? 0);
-      if (UID_OK.test(uid) && Number.isInteger(coins) && coins > 0 && coins <= 100000) {
-        const email = String(s.customer_details?.email ?? '').trim().toLowerCase();
-        await settle(s.id, uid, coins, { pack: String(s.metadata?.pack ?? ''), amount: s.amount_total ?? 0, currency: s.currency ?? CURRENCY, event: event.id, email: EMAIL_OK.test(email) ? email : '' });
-      } else {
-        console.error(`[bank] paid session ${s.id} carries no usable uid/coins — not credited`);
+  // Anything that throws from here on (a Firestore blip mid-credit) is a
+  // 500, which Stripe retries — the receipts make a retry credit once.
+  try {
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
+      const s = event.data.object;
+      if (s.payment_status === 'paid') {
+        const uid = String(s.metadata?.uid ?? s.client_reference_id ?? '');
+        const coins = Number(s.metadata?.coins ?? 0);
+        if (UID_OK.test(uid) && Number.isInteger(coins) && coins > 0 && coins <= 100000) {
+          const email = String(s.customer_details?.email ?? '').trim().toLowerCase();
+          await settle(s.id, uid, coins, { pack: String(s.metadata?.pack ?? ''), amount: s.amount_total ?? 0, currency: s.currency ?? CURRENCY, event: event.id, email: EMAIL_OK.test(email) ? email : '' });
+        } else {
+          console.error(`[bank] paid session ${s.id} carries no usable uid/coins — not credited`);
+        }
       }
+    } else if (event.type === 'charge.refunded' || event.type === 'charge.dispute.created') {
+      await handleReversal(event);
     }
+  } catch (err) {
+    console.error(`[bank] webhook ${event.id} (${event.type}) failed, Stripe will retry: ${err?.message ?? err}`);
+    return json(res, 500, { error: 'not recorded — retry' });
   }
   return json(res, 200, { received: true });
+}
+
+/**
+ * A REFUND or a DISPUTE (chargeback): find the checkout it paid for and
+ * reverse that purchase in the ledger. Both events have to be switched on
+ * for the endpoint in the Stripe dashboard. A partial refund is logged and
+ * left alone — the packs are sold whole, so that's a judgement call for a
+ * person, not this server.
+ */
+async function handleReversal(event) {
+  const obj = event.data.object;
+  if (event.type === 'charge.refunded' && !obj.refunded) {
+    console.log(`[bank] partial refund on ${obj.id} (${obj.amount_refunded}/${obj.amount}) — ledger left as is`);
+    return;
+  }
+  const intent = typeof obj.payment_intent === 'string' ? obj.payment_intent : obj.payment_intent?.id;
+  if (!intent) return;
+  const found = await stripe.checkout.sessions.list({ payment_intent: intent, limit: 1 });
+  const s = found.data[0];
+  const uid = String(s?.metadata?.uid ?? s?.client_reference_id ?? '');
+  if (!s || !UID_OK.test(uid)) {
+    console.error(`[bank] ${event.type} on ${intent}: no checkout with a uid behind it — nothing reversed`);
+    return;
+  }
+  const reason = event.type === 'charge.refunded' ? 'refund' : 'dispute';
+  const out = await ledger.reverse(uid, s.id, reason);
+  if (!out.found) console.error(`[bank] ${reason} on ${s.id} → ${uid}: no receipt in the ledger — nothing reversed`);
+  else if (out.duplicate) console.log(`[bank] ${reason} on ${s.id} → ${uid}: already reversed`);
+  else console.log(`[bank] ${reason} on ${s.id} → ${uid}: ${out.cancelled} unclaimed coins cancelled, ${out.lost} already collected (unrecovered)`);
 }
 
 /* ── dev-pay: the fake checkout page ─────────────────────────────────── */
@@ -570,8 +691,10 @@ export function handleHttp(req, res) {
     void (async () => {
       const uid = await whoIs(req);
       if (!uid) return json(res, 401, { error: 'sign in first' });
+      const body = await readBody(req);
+      const claimId = CLAIM_ID_OK.test(String(body?.claim ?? '')) ? String(body.claim) : '';
       try {
-        json(res, 200, await ledger.claim(uid));
+        json(res, 200, await ledger.claim(uid, claimId));
       } catch (err) {
         console.error(`[bank] claim failed: ${err?.message ?? err}`);
         json(res, 502, { error: 'the ledger is not answering' });
@@ -629,10 +752,16 @@ export function handleHttp(req, res) {
 
   if (req.method === 'POST' && path === '/redeem') {
     void (async () => {
+      const now = Date.now();
+      while (redeemMisses.length && now - redeemMisses[0] > REDEEM_WINDOW_MS) redeemMisses.shift();
+      if (redeemMisses.length >= REDEEM_MISS_MAX) return json(res, 429, { error: 'too many wrong codes just now — try again in a minute' });
       const body = await readBody(req);
       const code = String(body?.code ?? '').trim();
       const h = /^\d{6}$/.test(code) ? handoffs.get(code) : undefined;
-      if (!h || h.at < Date.now() - HANDOFF_TTL_MS) return json(res, 404, { error: 'no such code — it may have expired' });
+      if (!h || h.at < now - HANDOFF_TTL_MS) {
+        redeemMisses.push(now);
+        return json(res, 404, { error: 'no such code — it may have expired' });
+      }
       handoffs.delete(code); // once
       try {
         const token = auth ? await auth.createCustomToken(h.uid) : `dev:${h.uid}`;
@@ -669,7 +798,13 @@ export function handleHttp(req, res) {
         const id = String(body?.s ?? '');
         const s = sessions.get(id);
         if (!s) return json(res, 404, { error: 'no such checkout' });
-        const out = await settle(id, s.uid, s.coins, { pack: s.pack, amount: PACKS.find((p) => p.id === s.pack)?.minor ?? 0, currency: CURRENCY, event: 'dev' });
+        let out;
+        try {
+          out = await settle(id, s.uid, s.coins, { pack: s.pack, amount: PACKS.find((p) => p.id === s.pack)?.minor ?? 0, currency: CURRENCY, event: 'dev' });
+        } catch (err) {
+          console.error(`[bank] dev-pay failed: ${err?.message ?? err}`);
+          return json(res, 502, { error: 'the ledger is not answering' });
+        }
         const wantsJson = String(req.headers.accept ?? '').includes('application/json') || String(req.headers['content-type'] ?? '').includes('json');
         if (wantsJson) return json(res, 200, { paid: true, duplicate: !!out.duplicate, credit: out.credit });
         html(res, 200, devPayPage(req, s, id, true));

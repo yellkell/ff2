@@ -336,6 +336,37 @@ interface ClaimReply {
 let claiming: Promise<number> | null = null;
 
 /**
+ * The id of the claim in flight, kept until its coins land. If the reply
+ * is lost (the 12 s abort, a reload mid-claim) after the server has already
+ * marked the coins claimed, the next claim sends the same id and the
+ * server hands the same coins back instead of nothing. Per TAB
+ * (sessionStorage, which a reload keeps): two tabs sharing one id would
+ * each be handed the same coins.
+ */
+const CLAIM_KEY = 'ff-bank-claim';
+
+function pendingClaimId(): string {
+  try {
+    let id = sessionStorage.getItem(CLAIM_KEY);
+    if (!id) {
+      id = `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+      sessionStorage.setItem(CLAIM_KEY, id);
+    }
+    return id;
+  } catch {
+    return '';
+  }
+}
+
+function settleClaimId(): void {
+  try {
+    sessionStorage.removeItem(CLAIM_KEY);
+  } catch {
+    /* nothing kept, nothing to clear */
+  }
+}
+
+/**
  * Collect whatever the ledger says is owed and bank it. Idempotent on the
  * server; harmless to call often. Resolves to the coins that landed (0
  * when nothing was owed, or the bank could not be reached).
@@ -346,8 +377,13 @@ export function claimPurchases(): Promise<number> {
     try {
       const who = await identity();
       if (!who) return 0;
-      const reply = await call<ClaimReply>('/claim', { method: 'POST', headers: { 'content-type': 'application/json', ...who }, body: '{}' });
-      const coins = Math.floor(reply?.coins ?? 0);
+      const claim = pendingClaimId();
+      const reply = await call<ClaimReply>('/claim', { method: 'POST', headers: { 'content-type': 'application/json', ...who }, body: JSON.stringify({ claim }) });
+      if (!reply) return 0; // no answer: keep the id, so a retry is the same claim
+      const coins = Math.floor(reply.coins ?? 0);
+      // Cleared in the same tick the coins are banked, so the next claim is a
+      // fresh one and this one can't be paid twice.
+      if (coins > 0) settleClaimId();
       if (reply?.email && reply.email !== bank.lastEmail) {
         bank.lastEmail = reply.email;
         bump();

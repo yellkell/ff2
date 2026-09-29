@@ -15,8 +15,8 @@
  * the gesture reads as a gesture, not a stray blob.
  */
 
-import { A } from './poses.js';
-import type { StylePoseDelta } from './styles.js';
+import { A } from '../../goopliath/poses.js';
+import type { StylePoseDelta } from '../../goopliath/styles.js';
 
 export interface DanceStance {
   name: string;

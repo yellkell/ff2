@@ -116,6 +116,10 @@ wss.on('connection', (ws) => {
     } catch {
       return;
     }
+    // `null`, a number or a bare string parse fine and have no `.t` to read:
+    // without this, the text `null` threw here and took the whole room
+    // server (every relay, and the bank) down with it.
+    if (!msg || typeof msg !== 'object') return;
     switch (msg.t) {
       case 'queue':
         // Re-queueing from inside a room means this client left the bout

@@ -284,6 +284,9 @@ setInterval(() => {
 
 const ZERO_POSE = [0, 0, 0, 0, 0, 0, 1];
 
+/** A PoseTuple off the wire: position + quaternion, seven numbers. */
+const isPose = (v) => Array.isArray(v) && v.length === 7 && v.every((n) => typeof n === 'number');
+
 // --- voice routing --------------------------------------------------------------
 // Spatial voice rides this same socket as binary PCM frames. The server fans
 // each frame out to the WHOLE room — fighters and crowd alike always hear
@@ -295,12 +298,19 @@ function relayVoice(senderId, payload) {
   const out = Buffer.concat([Buffer.from([idBuf.length]), idBuf, payload]);
   for (const [rid, r] of players) {
     if (rid === senderId) continue;
-    if (r.ws.readyState === r.ws.OPEN) r.ws.send(out, { binary: true });
+    if (r.ws.readyState === r.ws.OPEN && r.ws.bufferedAmount <= MAX_BUFFERED) r.ws.send(out, { binary: true });
   }
 }
 
+/** Past this much unsent data a punter is on bad Wi-Fi: the pose firehose
+ *  (snapshots, voice) is dropped for them rather than queued, so one slow
+ *  socket can't grow the relay's memory until it dies (see index.mjs). */
+const MAX_BUFFERED = 512 * 1024;
+
 function send(ws, msg) {
-  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
+  if (ws.readyState !== ws.OPEN) return;
+  if (msg.t === 'snap' && ws.bufferedAmount > MAX_BUFFERED) return;
+  ws.send(JSON.stringify(msg));
 }
 
 function broadcast(msg, exceptId) {
@@ -600,6 +610,9 @@ wss.on('connection', (ws, req) => {
     } catch {
       return;
     }
+    // `null` parses and has no `.t` — reading it threw and took the whole
+    // room server down (see index.mjs).
+    if (!msg || typeof msg !== 'object') return;
 
     if (msg.t === 'hello') {
       if (myId) return;
@@ -656,6 +669,10 @@ wss.on('connection', (ws, req) => {
 
     switch (msg.t) {
       case 'pose':
+        // Stored and rebroadcast to the whole room at 20 Hz, so only a real
+        // pose tuple is kept — anything else (a 64 KB blob, say) would be
+        // fanned out to every punter every tick.
+        if (!isPose(msg.head) || !isPose(msg.left) || !isPose(msg.right)) break;
         me.head = msg.head;
         me.left = msg.left;
         me.right = msg.right;

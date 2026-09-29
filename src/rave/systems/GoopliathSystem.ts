@@ -35,7 +35,7 @@ import { arena } from '../arena/arena.js';
 import { GelCreature } from '../goopliath/GelCreature.js';
 import { CREATURE, ATTACKS, type AttackName } from '../goopliath/goopConfig.js';
 import { DANCE_COMBOS } from '../goopliath/dancePoses.js';
-import { GooFx } from '../goopliath/splats.js';
+import { GooFx } from '../../goopliath/splats.js';
 import { roll } from '../game/rng.js';
 import { match, phraseBeats, type GestureCue } from '../game/state.js';
 import { choreoView } from './ChoreoSystem.js';

@@ -36,7 +36,7 @@
 
 import { Vector3 } from 'three';
 import { CREATURE, PUNCH } from './goopConfig.js';
-import { A, ANCHOR_COUNT, BOXER_POSE, GLOB_POSE, PUDDLE_POSE } from './poses.js';
+import { A, ANCHOR_COUNT, BOXER_POSE, GLOB_POSE, PUDDLE_POSE } from '../../goopliath/poses.js';
 
 // Uniform array size shared with the shader. 20 core + 8 lumps + 4 drips —
 // the loop bound is a real cost on Quest, so this is sized exactly.

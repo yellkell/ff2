@@ -271,7 +271,9 @@ const tiers = await page.evaluate(() => {
   };
 });
 await page.waitForTimeout(500);
-check('SPEEDRUN opens a difficulty sub-rail', tiers.shown && tiers.labels.join(',') === 'Normal,Hard,Blazing', tiers.labels.join(','));
+// FEAT BOARDS: the run boards open on FEATS (each squad's hardest clear),
+// then the three tiers, then HARDCORE on its own.
+check('SPEEDRUN opens a feats + difficulty sub-rail', tiers.shown && tiers.labels.join(',') === 'Feats,Normal,Hard,Blazing,Hardcore', tiers.labels.join(','));
 const tierSwitch = await page.evaluate(async () => {
   const tab = [...document.querySelectorAll('#tier-rail .rail-tab')].find((b) => b.textContent.trim() === 'Blazing');
   tab.click();
@@ -483,7 +485,9 @@ const wiring = await page.evaluate(async () => {
     project: /flappy-ff9f6/.test(src),
     old: /arfi-b68f9|raveraid-bc866/.test(src),
     boardParent: /parent: `boards\//.test(src),
-    speedrun: /ff2-speedrun-/.test(src),
+    // One board per feat, named from its family and tier (net/boards.ts
+    // runBoard): ff2-speedrun-<tier>-time, -hc-time.
+    speedrun: /family: 'speedrun'/.test(src) && /`ff2-\$\{family\}-\$\{t\.id\}-time`/.test(src),
   };
 });
 check('the page reads the ff2.web.app project', wiring.project && !wiring.old, JSON.stringify(wiring));

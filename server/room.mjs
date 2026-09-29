@@ -65,6 +65,14 @@ function handleHttp(req, res) {
 }
 
 if (isMain(import.meta.url)) {
+  // The last line of defence. Every relay and the bank share this process,
+  // so one throw nobody caught — a malformed message, a Firestore blip in an
+  // async handler — used to end every live match and stop the bank. Log it
+  // and keep serving: a relay's state is per-room and a bad message's room
+  // is the one that pays, not the town.
+  process.on('unhandledRejection', (err) => console.error('[room] unhandled rejection', err));
+  process.on('uncaughtException', (err) => console.error('[room] uncaught exception', err));
+
   const server = serve({
     port: PORT,
     http: handleHttp,
