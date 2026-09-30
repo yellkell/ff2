@@ -13,6 +13,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   deleteField,
   doc,
   FieldPath,
@@ -25,7 +26,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { cloud, currentIdToken, firebaseConfig, type Cloud } from './firebase.js';
-import { expiryMs } from './rooms.js';
+import { CandidateLitter, expiryMs, sweepSignals } from './rooms.js';
 import { serverNow } from './serverClock.js';
 import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
@@ -82,10 +83,19 @@ async function openCloud(): Promise<Cloud> {
   return live;
 }
 
-function db(): Firestore {
-  if (!live) throw new Error('cloud not open'); // openCloud() first — always awaited by the caller
-  return live.db;
+/** The open connection — openCloud() first, always awaited by the caller. */
+function need(): Cloud {
+  if (!live) throw new Error('cloud not open');
+  return live;
 }
+
+function db(): Firestore {
+  return need().db;
+}
+
+/** Already warned that a candidate write failed — once per tab is enough to
+ *  make rules drift visible without flooding the console. */
+let candidateWarned = false;
 
 /** The one rooms collection — `arcadeRooms` and `privateRooms` folded in. */
 function roomsCol(): ReturnType<typeof collection> {
@@ -135,6 +145,11 @@ interface Peer {
    *  snapshot listener never re-delivers an 'added', so they'd be lost and
    *  the pair could simply never connect). */
   pending: RTCIceCandidateInit[];
+  /** The candidates THIS side wrote for the pair, deleted once it's done. */
+  litter: CandidateLitter;
+  /** The pair's `sig` doc, and whether we are the side that created it. */
+  sig: DocumentReference | null;
+  offerer: boolean;
 }
 
 export class MeshImpl {
@@ -210,7 +225,7 @@ export class MeshImpl {
       const code = String(Math.floor(Math.random() * 100000)).padStart(5, '0');
       const ref = doc(roomsCol(), code);
       try {
-        await runTransaction(db(), async (txn) => {
+        const replaced = await runTransaction(db(), async (txn) => {
           // A code is taken while its room is still LEASED. close() deletes a
           // room once its last member leaves, so this only matters for one
           // abandoned by a crash — and the lease is what frees those, rather
@@ -231,7 +246,14 @@ export class MeshImpl {
             createdAt: serverTimestamp(),
             ...roomFields(mode, 'private'),
           });
+          return held.exists();
         });
+        // Taking over an abandoned room: its pair docs sit at the very paths
+        // our seats will use ('0_1' is '0_1' in every room). Sweep them before
+        // anyone can join, so no handshake of ours starts on a dead one's.
+        if (replaced) {
+          await sweepSignals(need(), code).catch((err: unknown) => console.warn('[mesh] sweep of a reused code failed', err));
+        }
         this.roomRef = ref;
         this.state.mySeat = 0;
         this.state.joined = true;
@@ -404,6 +426,7 @@ export class MeshImpl {
     this.roomUnsub = null;
     for (const peer of this.peers.values()) {
       for (const u of peer.unsubs) u();
+      this.finishHandshake(peer);
       peer.evt?.close();
       peer.pose?.close();
       peer.pc.close();
@@ -418,20 +441,27 @@ export class MeshImpl {
       const ref = this.roomRef;
       const seat = this.state.mySeat;
       const id = this.clientId;
+      const c = need();
       void runTransaction(db(), async (txn) => {
         const snap = await txn.get(ref);
-        if (!snap.exists()) return;
+        if (!snap.exists()) return false;
         const seats = (snap.data().seats as string[]) ?? [];
         // Last one out deletes the room, WHATEVER seat they hold — a raid's
         // host (seat 0) usually leaves first at run end, and the old seat-0-
         // only rule left every finished raid behind as a zombie doc.
         if (seats.filter((s) => s).length <= 1 && (!seats[seat] || seats[seat] === id)) {
           txn.delete(ref);
+          return true;
         } else if (seats[seat] === id) {
           seats[seat] = '';
           txn.update(ref, { seats, open: true });
         }
-      }).catch(() => {});
+        return false;
+      })
+        // The room is gone; sweep what its handshakes left under it — the
+        // pairs whose members crashed out never got to clean up their own.
+        .then((deleted) => (deleted ? sweepSignals(c, ref.id) : undefined))
+        .catch(() => {});
     }
     this.roomRef = null;
   }
@@ -631,7 +661,17 @@ export class MeshImpl {
 
   private newPeer(seat: number): Peer {
     const pc = new RTCPeerConnection(iceConfig());
-    const peer: Peer = { seat, pc, evt: null, pose: null, unsubs: [], pending: [] };
+    const peer: Peer = {
+      seat,
+      pc,
+      evt: null,
+      pose: null,
+      unsubs: [],
+      pending: [],
+      litter: new CandidateLitter(need()),
+      sig: null,
+      offerer: false,
+    };
     this.peers.set(seat, peer);
     pc.onconnectionstatechange = () => {
       // Only terminal states drop the peer outright. 'disconnected' is
@@ -706,6 +746,35 @@ export class MeshImpl {
     evt.onclose = () => {
       if (!this.closed && this.peers.get(peer.seat) === peer) this.dropPeer(peer.seat);
     };
+    // Connected: the signalling for this pair has done its job.
+    if (evt.readyState === 'open') this.finishHandshake(peer);
+    else evt.addEventListener('open', () => this.finishHandshake(peer), { once: true });
+  }
+
+  /**
+   * One pair's handshake is over — connected, dropped or closed. Delete the
+   * candidates this side wrote, and if we are the offerer, the pair doc we
+   * made (offer and answer SDP, the biggest thing signalling leaves behind).
+   * The answerer's candidates are the answerer's to delete. Idempotent.
+   */
+  private finishHandshake(peer: Peer): void {
+    if (peer.litter.swept) return;
+    peer.litter.sweep();
+    if (peer.offerer && peer.sig) void deleteDoc(peer.sig).catch(() => {});
+  }
+
+  /** Publish one of our candidates for a pair, unless that pair is done. */
+  private postCandidate(peer: Peer, cands: ReturnType<typeof collection>, cand: RTCIceCandidate): void {
+    if (peer.litter.swept) return;
+    void addDoc(cands, cand.toJSON()).then(
+      (ref) => peer.litter.add(ref),
+      (err: unknown) => {
+        // A denied candidate is a pair that cannot connect — never silent.
+        if (candidateWarned) return;
+        candidateWarned = true;
+        console.warn(`[mesh] ICE candidate write to ${cands.path} failed — peers may not connect`, err);
+      },
+    );
   }
 
   private async connectAsOfferer(seat: number): Promise<void> {
@@ -719,17 +788,22 @@ export class MeshImpl {
       pc.createDataChannel('pose', { ordered: false, maxRetransmits: 0 }),
     );
     const ref = this.sigRef(this.state.mySeat, seat);
+    peer.sig = ref;
+    peer.offerer = true;
     const myCands = collection(ref, `c${this.state.mySeat}`);
     const theirCands = collection(ref, `c${seat}`);
     pc.onicecandidate = (ev) => {
-      if (ev.candidate) void addDoc(myCands, ev.candidate.toJSON()).catch(() => {});
+      if (ev.candidate) this.postCandidate(peer, myCands, ev.candidate);
     };
     await this.addVoice(pc); // mic m-line must be in the offer SDP
     if (this.closed) return;
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     await runTransaction(db(), async (txn) => {
-      txn.set(ref, { offer: { type: offer.type, sdp: offer.sdp } }, { merge: true });
+      // Clear any ANSWER left on this pair doc by a previous occupant of the
+      // seat: merged in, a stale answer is applied to our fresh connection
+      // the moment our listener sees it, and the pair never comes up.
+      txn.set(ref, { offer: { type: offer.type, sdp: offer.sdp }, answer: deleteField() }, { merge: true });
     });
     peer.unsubs.push(
       onSnapshot(ref, (snap) => {
@@ -757,10 +831,11 @@ export class MeshImpl {
       if (evt) this.adopt(peer, evt, pose);
     };
     const ref = this.sigRef(seat, this.state.mySeat);
+    peer.sig = ref;
     const myCands = collection(ref, `c${this.state.mySeat}`);
     const theirCands = collection(ref, `c${seat}`);
     pc.onicecandidate = (ev) => {
-      if (ev.candidate) void addDoc(myCands, ev.candidate.toJSON()).catch(() => {});
+      if (ev.candidate) this.postCandidate(peer, myCands, ev.candidate);
     };
     peer.unsubs.push(
       onSnapshot(ref, (snap) => {
@@ -812,6 +887,7 @@ export class MeshImpl {
     const peer = this.peers.get(seat);
     if (peer) {
       for (const u of peer.unsubs) u();
+      this.finishHandshake(peer);
       // Delete from the map BEFORE closing, so the channels' own onclose
       // (fired async by our close() calls) sees a stale peer and bails.
       this.peers.delete(seat);

@@ -72,12 +72,13 @@ export function startLobbyWatch(mode: ArcadeMode, onRooms: ListListener): void {
       // the boards and the club use. A watch is a READ, and rooms are readable
       // by anyone signed in, so this needs the sign-in as much as any write.
       const { cloud } = await import('./firebase.js');
+      const { reapRoom } = await import('./rooms.js');
       const c = await cloud();
       if (!c) {
         onRooms([]);
         return;
       }
-      const { collection, deleteDoc, onSnapshot, query, where } = c.fs;
+      const { collection, onSnapshot, query, where } = c.fs;
       const rooms = collection(c.db, 'rooms');
 
       // Correct for device clock skew BEFORE judging beats: this watch used to
@@ -102,7 +103,7 @@ export function startLobbyWatch(mode: ArcadeMode, onRooms: ListListener): void {
             // with a server-confirmed clock: deleting on an unsynced skewed
             // clock is how live rooms got assassinated.
             if (now - beat > ROOM_REAP_MS) {
-              if (clockConfident()) void deleteDoc(docSnap.ref).catch(() => {});
+              if (clockConfident()) reapRoom(c, docSnap.id); // the room, then its signalling
               return;
             }
             if (data.started === true) return;

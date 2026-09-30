@@ -55,12 +55,13 @@ export function startRankedWatch(onRooms: ListListener): void {
       // the boards and the club use. A watch is a READ, and rooms are readable
       // by anyone signed in, so this needs the sign-in as much as any write.
       const { cloud } = await import('./firebase.js');
+      const { reapRoom } = await import('./rooms.js');
       const c = await cloud();
       if (!c) {
         onRooms([]);
         return;
       }
-      const { collection, deleteDoc, onSnapshot, query, where } = c.fs;
+      const { collection, onSnapshot, query, where } = c.fs;
       const rooms = collection(c.db, 'rooms');
 
       // AWAITED so the first snapshot never judges (or reaps) rooms on a raw
@@ -80,7 +81,7 @@ export function startRankedWatch(onRooms: ListListener): void {
             if (now - seen > ROOM_REAP_MS) {
               // Long-dead ghost host — reap it (see the quick-match outage),
               // but only with a server-confirmed clock behind the judgement.
-              if (clockConfident()) void deleteDoc(docSnap.ref).catch(() => {});
+              if (clockConfident()) reapRoom(c, docSnap.id); // the room, then its signalling
               return;
             }
             if (now - seen <= FRESH_MS) {

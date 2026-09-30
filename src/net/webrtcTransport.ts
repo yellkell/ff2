@@ -50,7 +50,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { cloud, type Cloud } from './firebase.js';
-import { candidatesCol, expiryMs } from './rooms.js';
+import { CandidateLitter, candidatesCol, expiryMs, reapRoom, sweepSignals } from './rooms.js';
 import { clockConfident, serverNow, syncServerClock } from './serverClock.js';
 import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
@@ -127,9 +127,14 @@ async function openCloud(): Promise<Cloud> {
   return live;
 }
 
+/** The open connection — openCloud() first, always awaited by the caller. */
+function need(): Cloud {
+  if (!live) throw new Error('cloud not open');
+  return live;
+}
+
 function db(): Firestore {
-  if (!live) throw new Error('cloud not open'); // openCloud() first — always awaited by the caller
-  return live.db;
+  return need().db;
 }
 
 /** This headset's uid — who a room is hosted by. */
@@ -145,8 +150,7 @@ function rooms(): ReturnType<typeof collection> {
 /** One side's ICE candidates for a duel — under the room's `sig/duel` doc,
  *  the one place the rules let both halves of a handshake write. */
 function duelCandidates(room: DocumentReference, side: 'caller' | 'callee') {
-  if (!live) throw new Error('cloud not open'); // openCloud() first — always awaited by the caller
-  return candidatesCol(live, room.id, 'duel', side);
+  return candidatesCol(need(), room.id, 'duel', side);
 }
 
 /** A scan of the OPEN public rooms of one mode. Equality filters only, so
@@ -218,6 +222,10 @@ export class WebRtcTransport implements Transport {
   private pendingCandidates: RTCIceCandidateInit[] = [];
   /** Already warned that a candidate write failed — see postCandidate. */
   private candidateWarned = false;
+  /** The candidates WE wrote, deleted once the handshake is over. */
+  private litter: CandidateLitter | null = null;
+  /** The other side's candidate docs as they arrive — see the claim watch. */
+  private theirCandidates: DocumentReference[] = [];
   /** Grace timer for a TRANSIENT 'disconnected' — see watchConnection. */
   private iceGraceTimer: ReturnType<typeof setTimeout> | null = null;
   /** Deadline for a claimer to actually answer — see runCallerOn. */
@@ -394,7 +402,7 @@ export class WebRtcTransport implements Transport {
       const code = String(Math.floor(Math.random() * 100000)).padStart(5, '0');
       const ref = doc(rooms(), code);
       try {
-        await runTransaction(db(), async (txn) => {
+        const replaced = await runTransaction(db(), async (txn) => {
           const snap = await txn.get(ref);
           if (snap.exists()) {
             // A code is TAKEN while its room is still leased, whatever kind of
@@ -402,7 +410,14 @@ export class WebRtcTransport implements Transport {
             if (Date.now() < expiryMs(snap.data()?.expiresAt)) throw new Error('taken');
           }
           txn.set(ref, { open: true, createdAt: serverTimestamp(), ...roomFields('duel', 'private') });
+          return snap.exists();
         });
+        // Taking over an expired room: sweep what ITS handshakes left under
+        // this code BEFORE ours starts — otherwise our guest drinks the last
+        // pair's candidates, and a sweep run any later would take ours too.
+        if (replaced) {
+          await sweepSignals(need(), code).catch((err: unknown) => console.warn('[duel] sweep of a reused code failed', err));
+        }
         this.lobbyRef = ref;
         return code;
       } catch {
@@ -437,6 +452,7 @@ export class WebRtcTransport implements Transport {
     this.clearIceGrace();
     this.clearClaimWatch();
     this.pendingCandidates.length = 0;
+    this.litter?.sweep();
     for (const t of this.earlyScans) clearTimeout(t);
     this.earlyScans = [];
     for (const u of this.unsubs.splice(0)) u();
@@ -500,7 +516,7 @@ export class WebRtcTransport implements Transport {
         // A ghost — skip it, and REAP it if it's long dead so ghosts can never
         // crowd live lobbies out of this scan again. Only with a
         // server-confirmed clock: a raw skewed clock must never delete.
-        if (clockConfident() && lobbyLongDead(snap.data(), now)) void deleteDoc(snap.ref).catch(() => {});
+        if (clockConfident() && lobbyLongDead(snap.data(), now)) reapRoom(need(), snap.id);
         continue;
       }
       try {
@@ -565,7 +581,7 @@ export class WebRtcTransport implements Transport {
     for (const snap of open.docs) {
       if (snap.id === myId) continue;
       if (!lobbyFresh(snap.data(), now)) {
-        if (clockConfident() && lobbyLongDead(snap.data(), now)) void deleteDoc(snap.ref).catch(() => {});
+        if (clockConfident() && lobbyLongDead(snap.data(), now)) reapRoom(need(), snap.id);
         continue;
       }
       if (myId < snap.id) continue; // we hold the smaller id — we're the keeper, they cross to us
@@ -595,6 +611,7 @@ export class WebRtcTransport implements Transport {
 
     const callerCandidates = duelCandidates(lobbyRef, 'caller');
     const calleeCandidates = duelCandidates(lobbyRef, 'callee');
+    this.litter = new CandidateLitter(need());
 
     pc.onicecandidate = (ev) => {
       if (ev.candidate) this.postCandidate(callerCandidates, ev.candidate);
@@ -629,6 +646,10 @@ export class WebRtcTransport implements Transport {
           this.claimWatchTimer = setTimeout(() => {
             this.claimWatchTimer = null;
             if (this.closed || this.matched || !this.lobbyRef || pc.currentRemoteDescription) return;
+            // The claimer is gone, and so is any use for the candidates it
+            // left. Nobody else will ever delete them: their author is the
+            // one side that isn't coming back to.
+            for (const ref of this.theirCandidates.splice(0)) void deleteDoc(ref).catch(() => {});
             this.events.onStatus('waiting for an opponent…');
             void updateDoc(this.lobbyRef, { open: true, seen: serverTimestamp() }).catch(() => {});
           }, CLAIM_ANSWER_MS);
@@ -652,6 +673,7 @@ export class WebRtcTransport implements Transport {
     this.lobbyRef = lobbyRef;
     const callerCandidates = duelCandidates(lobbyRef, 'caller');
     const calleeCandidates = duelCandidates(lobbyRef, 'callee');
+    this.litter = new CandidateLitter(need());
 
     const channels: RTCDataChannel[] = [];
     pc.ondatachannel = (ev) => {
@@ -698,7 +720,11 @@ export class WebRtcTransport implements Transport {
    * dozen copies of the same line.
    */
   private postCandidate(candidates: ReturnType<typeof collection>, cand: RTCIceCandidate): void {
-    void addDoc(candidates, cand.toJSON()).catch((err: unknown) => {
+    // Connected or closed: the route is settled, and a late candidate would
+    // only be written to be deleted again.
+    const litter = this.litter;
+    if (!litter || litter.swept) return;
+    void addDoc(candidates, cand.toJSON()).then((ref) => litter.add(ref), (err: unknown) => {
       if (this.candidateWarned) return;
       this.candidateWarned = true;
       console.warn(`[duel] ICE candidate write to ${candidates.path} failed — peers may not connect`, err);
@@ -712,6 +738,7 @@ export class WebRtcTransport implements Transport {
         (snap) => {
           for (const change of snap.docChanges()) {
             if (change.type !== 'added') continue;
+            this.theirCandidates.push(change.doc.ref);
             const cand = change.doc.data() as RTCIceCandidateInit;
             // Trickle-ICE race: until the remote description lands, addIceCandidate
             // throws and the candidate is gone for good. Buffer early arrivals and
@@ -760,8 +787,12 @@ export class WebRtcTransport implements Transport {
       clearInterval(this.hostTimer);
       this.hostTimer = null;
     }
-    // Signaling is done — the lobby doc has served its purpose.
+    // Signaling is done — the lobby doc has served its purpose, and so have
+    // our candidates. Each side deletes only its OWN (see CandidateLitter);
+    // the other side's are theirs to take away.
     if (this.lobbyRef && this.isCaller) void deleteDoc(this.lobbyRef).catch(() => {});
+    this.litter?.sweep();
+    this.theirCandidates = [];
     this.events.onMatched(this.isCaller ? 0 : 1);
   }
 

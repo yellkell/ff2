@@ -33,6 +33,7 @@
  * its expiry so a ghost is invisible even before the sweep runs.
  */
 
+import type { DocumentReference } from 'firebase/firestore';
 import { cloud } from './firebase.js';
 import type { Cloud } from './firebase.js';
 
@@ -114,6 +115,111 @@ export function sigRef(c: Cloud, roomId: string, pair: string) {
  *  apart so a peer never tries to add its own candidates. */
 export function candidatesCol(c: Cloud, roomId: string, pair: string, side: 'caller' | 'callee') {
   return c.fs.collection(c.db, 'rooms', roomId, 'sig', pair, side);
+}
+
+/* ── signalling housekeeping ──────────────────────────────────────────── */
+//
+// Deleting a room does NOT delete what sits under it: Firestore leaves a
+// subcollection in place when its parent goes, still reachable by path but
+// by nothing else. So every handshake's SDP and ICE outlived its room unless
+// somebody took it away. None of it can crowd a lobby list — the scans read
+// `rooms` documents only — but on the Spark plan there is no TTL to fall back
+// on, so the clients tidy up after themselves:
+//
+//   - each side of a handshake deletes the candidates IT wrote once it is
+//     done (connected, dropped or closed) — CandidateLitter below;
+//   - whoever reaps a dead room also sweeps its `sig` path — reapRoom;
+//   - a private code taken over from an expired room is swept before the new
+//     room's handshakes can land on the old one's leftovers.
+
+/**
+ * The candidate collections under one pair's `sig` doc. The duel's single
+ * pair is 'duel', written as 'caller'/'callee' (candidatesCol above); a mesh
+ * pair is `${lo}_${hi}` in seat numbers, with one collection per seat,
+ * `c${seat}` (net/meshImpl.ts). Anything else is not ours to guess at.
+ */
+function pairSides(pair: string): string[] {
+  if (pair === 'duel') return ['caller', 'callee'];
+  const seats = pair.split('_');
+  return seats.length === 2 && seats.every((s) => /^\d+$/.test(s)) ? seats.map((s) => `c${s}`) : [];
+}
+
+/**
+ * Delete everything a room's handshakes left under `rooms/{id}/sig` — the
+ * mesh's pair docs (offer and answer SDP) and every candidate under them, and
+ * the duel's candidates. Works whether or not the room doc still exists.
+ * Best effort: a delete that fails is left for the next sweep.
+ */
+export async function sweepSignals(c: Cloud, roomId: string): Promise<void> {
+  const { collection, deleteDoc, getDocs, limit, query } = c.fs;
+  const pairs = await getDocs(query(collection(c.db, 'rooms', roomId, 'sig'), limit(64)));
+  // The duel never writes its pair doc — only the candidates under it — so it
+  // does not show up in that listing and has to be named.
+  const named = new Set(['duel', ...pairs.docs.map((d) => d.id)]);
+  await Promise.all(
+    [...named].map(async (pair) => {
+      for (const side of pairSides(pair)) {
+        const cands = await getDocs(query(collection(c.db, 'rooms', roomId, 'sig', pair, side), limit(200)));
+        await Promise.all(cands.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+      }
+    }),
+  );
+  await Promise.all(pairs.docs.map((d) => deleteDoc(d.ref).catch(() => {})));
+}
+
+/** Rooms this tab is reaping right now — a live listener fires again before
+ *  the delete lands, and one sweep per room is plenty. */
+const reaping = new Set<string>();
+
+/**
+ * Delete a dead room, then sweep its signalling path.
+ *
+ * THE ROOM GOES FIRST, and does not wait on the sweep. A ghost room is the
+ * thing that fills a scan window and stops everyone pairing; a few stray
+ * candidates are clutter. The sweep only needs the id, which still leads to
+ * the `sig` path after the room doc is gone.
+ */
+export function reapRoom(c: Cloud, roomId: string): void {
+  if (reaping.has(roomId)) return;
+  reaping.add(roomId);
+  void c.fs
+    .deleteDoc(roomRef(c, roomId))
+    .catch(() => {})
+    .then(() => sweepSignals(c, roomId))
+    .catch((err: unknown) => console.warn(`[rooms] signalling sweep of ${roomId} failed`, err))
+    .finally(() => reaping.delete(roomId));
+}
+
+/**
+ * The ICE candidates ONE side of ONE handshake wrote, kept so that side can
+ * take them away again. Only its own: each side cleaning up after itself
+ * means no doc is deleted twice, and on Spark deletes are a daily quota.
+ *
+ * Once swept, it stays swept — a candidate write still in flight when the
+ * handshake finished is deleted the moment it lands, rather than leaking.
+ */
+export class CandidateLitter {
+  private refs: DocumentReference[] = [];
+  private done = false;
+
+  constructor(private readonly c: Cloud) {}
+
+  /** Has this side finished? Callers stop posting candidates once it has. */
+  get swept(): boolean {
+    return this.done;
+  }
+
+  /** Record a candidate doc this side wrote. */
+  add(ref: DocumentReference): void {
+    if (this.done) void this.c.fs.deleteDoc(ref).catch(() => {});
+    else this.refs.push(ref);
+  }
+
+  /** The handshake is over, one way or another: delete what we wrote. */
+  sweep(): void {
+    this.done = true;
+    for (const ref of this.refs.splice(0)) void this.c.fs.deleteDoc(ref).catch(() => {});
+  }
 }
 
 /* ── the stamps every write needs ─────────────────────────────────────── */

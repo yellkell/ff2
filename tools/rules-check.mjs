@@ -19,6 +19,8 @@
  *     cannot leak one for ever;
  *   - both halves of a 1v1 handshake can trade ICE candidates at the exact
  *     path net/webrtcTransport.ts uses — without them no duel connects;
+ *   - what a handshake leaves behind really is swept away, by the REAL
+ *     net/rooms.ts helpers run against the emulator, not a copy of them;
  *   - a report can be filed and then never read back, by anyone;
  *   - the front page is read-only to every client;
  *   - a collection nobody wrote a rule for is closed.
@@ -28,12 +30,17 @@
  * which is explicitly marked.
  */
 
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import ts from 'typescript';
 import {
   assertFails,
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
+import * as firestore from 'firebase/firestore';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, addDoc } from 'firebase/firestore';
 
 const results = [];
@@ -228,6 +235,101 @@ await check('a signed-out visitor cannot read the candidates', () =>
 await check('the old codelab path (rooms/{id}/callerCandidates) is closed', () =>
   assertFails(addDoc(collection(me, 'rooms/r1/callerCandidates'), cand)),
 );
+
+/* ── signalling housekeeping ────────────────────────────────────────────── */
+
+console.log('\n=== signalling: nothing a handshake writes outlives it ===');
+
+// net/rooms.ts itself, transpiled — so these checks exercise the code the game
+// ships. Its one runtime import opens the game's own connection; the checks
+// hand it an emulator connection instead, so that import is stubbed out.
+const rooms = await (async () => {
+  const firebaseImport = /^import \{ cloud \} from '\.\/firebase\.js';\r?$/m;
+  const src = readFileSync('src/net/rooms.ts', 'utf8');
+  if (!firebaseImport.test(src)) throw new Error("rooms.ts no longer imports { cloud } from './firebase.js' — update the stub");
+  const js = ts.transpileModule(src.replace(firebaseImport, 'const cloud = async () => null;'), {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const file = join(mkdtempSync(join(tmpdir(), 'ff2-rooms-')), 'rooms.mjs');
+  writeFileSync(file, js);
+  return import(pathToFileURL(file).href);
+})();
+
+/** A Cloud (net/firebase.ts) as a given player — what rooms.ts is handed. */
+const as = (db, uid) => ({ fs: firestore, db, uid });
+
+/** How many docs are left across these collections — read as admin, so a
+ *  rule can't make an unswept doc look swept. */
+const left = async (...paths) => {
+  let n = 0; // withSecurityRulesDisabled resolves with nothing — count out here
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    for (const p of paths) n += (await getDocs(collection(ctx.firestore(), p))).size;
+  });
+  return n;
+};
+
+/** The sweeps are fire-and-forget, as in the game: wait for them to land. */
+const settle = async (paths, want = 0) => {
+  for (let i = 0; i < 50; i++) {
+    const n = await left(...paths);
+    if (n === want) return;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error(`${await left(...paths)} docs left under ${paths.join(', ')}, wanted ${want}`);
+};
+
+await check('a side can delete its own candidate', async () => {
+  const ref = await addDoc(collection(me, 'rooms/r1/sig/duel/caller'), cand);
+  await assertSucceeds(deleteDoc(ref));
+});
+
+await check('a signed-out visitor cannot delete one', async () => {
+  const ref = await addDoc(collection(me, 'rooms/r1/sig/duel/caller'), cand);
+  await assertFails(deleteDoc(doc(nobody, ref.path)));
+});
+
+await check('CandidateLitter deletes what it wrote — and a write that lands AFTER the sweep', async () => {
+  const col = 'rooms/r5/sig/duel/caller';
+  const litter = new rooms.CandidateLitter(as(me, ME));
+  litter.add(await addDoc(collection(me, col), cand));
+  litter.add(await addDoc(collection(me, col), cand));
+  litter.sweep();
+  if (!litter.swept) throw new Error('not marked swept');
+  litter.add(await addDoc(collection(me, col), cand)); // in flight when the handshake finished
+  await settle([col]);
+});
+
+// A stranger reaping a dead room, after the room doc has already gone — the
+// exact position the lobby browsers and the duel scan are in.
+await check('sweepSignals clears a dead room\'s duel AND mesh signalling', async () => {
+  await setDoc(doc(me, 'rooms', 'r6'), room());
+  await addDoc(collection(me, 'rooms/r6/sig/duel/caller'), cand);
+  await addDoc(collection(them, 'rooms/r6/sig/duel/callee'), cand);
+  await setDoc(doc(me, 'rooms/r6/sig', '0_1'), { offer: { sdp: 'x' }, answer: { sdp: 'y' } });
+  await addDoc(collection(me, 'rooms/r6/sig/0_1/c0'), cand);
+  await addDoc(collection(them, 'rooms/r6/sig/0_1/c1'), cand);
+  await addDoc(collection(me, 'rooms/r7/sig/duel/caller'), cand); // a neighbour, still live
+  await deleteDoc(doc(me, 'rooms', 'r6'));
+
+  await rooms.sweepSignals(as(them, THEM), 'r6');
+
+  const n = await left('rooms/r6/sig', 'rooms/r6/sig/duel/caller', 'rooms/r6/sig/duel/callee', 'rooms/r6/sig/0_1/c0', 'rooms/r6/sig/0_1/c1');
+  if (n) throw new Error(`${n} docs left behind`);
+  if ((await left('rooms/r7/sig/duel/caller')) !== 1) throw new Error("swept a neighbouring room's signalling");
+});
+
+await check('reapRoom deletes the room, then sweeps its signalling', async () => {
+  await setDoc(doc(me, 'rooms', 'r8'), room());
+  await addDoc(collection(me, 'rooms/r8/sig/duel/caller'), cand);
+  await addDoc(collection(them, 'rooms/r8/sig/duel/callee'), cand);
+  rooms.reapRoom(as(them, THEM), 'r8');
+  await settle(['rooms/r8/sig/duel/caller', 'rooms/r8/sig/duel/callee']);
+  let survived = true;
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    survived = (await getDoc(doc(ctx.firestore(), 'rooms', 'r8'))).exists();
+  });
+  if (survived) throw new Error('the room itself survived');
+});
 
 /* ── presence ───────────────────────────────────────────────────────────── */
 
