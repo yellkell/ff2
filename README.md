@@ -13,6 +13,20 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
+- **THE TITANS THROW THE HIT** — a titan's floor attacks used to charge
+  a mark on your deck and then just go off there, while the machine mimed
+  from across the pit; nothing ever left its body. Now, as each zone comes
+  due, a fire bolt leaves the striking fist and lobs onto your deck, landing
+  on the beat inside the part that burns (the doomed half, the rim, the
+  lane; never the safe gap), and the whole chassis lunges in behind the
+  throw. The sweep's blade rides a lit haft back to the fist, so the cut is
+  the end of the arm. It's purely visual: zones, timings and the hit rules
+  are unchanged, so every read and dodge is exactly as fair as before
+  (`campaign/delivery.ts`, tuned by `DELIVERY` in `config.ts`). Checked by
+  `npm run check:delivery`. That probe, and `check:grammar`, now freeze the
+  titan's clock and step it at a fixed 60 Hz, because a GPU-less runner
+  renders a frame every few seconds and whole moves used to land between
+  two looks.
 - **THE FEAT BOARDS, and a plain-spoken GAZETTE** — the run boards could
   not keep the runs worth bragging about. RAID and GOOPLIATH held one row
   per player across every difficulty, and the rules only let a row get
