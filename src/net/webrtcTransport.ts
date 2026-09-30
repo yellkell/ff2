@@ -16,8 +16,13 @@
  *   - look for an open room; claim it with a transaction → you are the
  *     CALLEE (guest, side 1);
  *   - none open → create one and wait → you are the CALLER (host, side 0).
- *   Offer/answer ride on the room doc; ICE candidates ride two
- *   subcollections, exactly the Firestore WebRTC codelab shape.
+ *   Offer/answer ride on the room doc; ICE candidates ride the room's
+ *   signalling path, `rooms/{id}/sig/duel/{caller|callee}` (net/rooms.ts).
+ *   They used to ride `callerCandidates`/`calleeCandidates` straight under
+ *   the room — the Firestore codelab shape — which the rules never opened, so
+ *   every candidate was denied and silently dropped. The SDP is published
+ *   before gathering finishes, so the trickle is the ONLY way the peers learn
+ *   each other's addresses: that was every serverless duel failing to connect.
  *
  * THE THREE COLLECTIONS THIS USED TO USE — `lobbies` (public queue),
  * `privateLobbies` (5-digit codes) and `rankedRooms` (the server browser) —
@@ -45,7 +50,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import { cloud, type Cloud } from './firebase.js';
-import { expiryMs } from './rooms.js';
+import { candidatesCol, expiryMs } from './rooms.js';
 import { clockConfident, serverNow, syncServerClock } from './serverClock.js';
 import { voiceAllowed } from './voiceRules.js';
 import { ensureIceServers, iceConfig } from './iceConfig.js';
@@ -137,6 +142,13 @@ function rooms(): ReturnType<typeof collection> {
   return collection(db(), 'rooms');
 }
 
+/** One side's ICE candidates for a duel — under the room's `sig/duel` doc,
+ *  the one place the rules let both halves of a handshake write. */
+function duelCandidates(room: DocumentReference, side: 'caller' | 'callee') {
+  if (!live) throw new Error('cloud not open'); // openCloud() first — always awaited by the caller
+  return candidatesCol(live, room.id, 'duel', side);
+}
+
 /** A scan of the OPEN public rooms of one mode. Equality filters only, so
  *  Firestore serves it by merging single-field indexes. */
 function openRooms(mode: 'duel' | 'ranked') {
@@ -204,6 +216,8 @@ export class WebRtcTransport implements Transport {
    * the duel path was still dropping them.
    */
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  /** Already warned that a candidate write failed — see postCandidate. */
+  private candidateWarned = false;
   /** Grace timer for a TRANSIENT 'disconnected' — see watchConnection. */
   private iceGraceTimer: ReturnType<typeof setTimeout> | null = null;
   /** Deadline for a claimer to actually answer — see runCallerOn. */
@@ -579,11 +593,11 @@ export class WebRtcTransport implements Transport {
       pc.createDataChannel('pose', { ordered: false, maxRetransmits: 0 }),
     );
 
-    const callerCandidates = collection(lobbyRef, 'callerCandidates');
-    const calleeCandidates = collection(lobbyRef, 'calleeCandidates');
+    const callerCandidates = duelCandidates(lobbyRef, 'caller');
+    const calleeCandidates = duelCandidates(lobbyRef, 'callee');
 
     pc.onicecandidate = (ev) => {
-      if (ev.candidate) void addDoc(callerCandidates, ev.candidate.toJSON()).catch(() => {});
+      if (ev.candidate) this.postCandidate(callerCandidates, ev.candidate);
     };
 
     const offer = await pc.createOffer();
@@ -636,8 +650,8 @@ export class WebRtcTransport implements Transport {
   private async runCallee(lobbyRef: DocumentReference): Promise<void> {
     const pc = this.pc!;
     this.lobbyRef = lobbyRef;
-    const callerCandidates = collection(lobbyRef, 'callerCandidates');
-    const calleeCandidates = collection(lobbyRef, 'calleeCandidates');
+    const callerCandidates = duelCandidates(lobbyRef, 'caller');
+    const calleeCandidates = duelCandidates(lobbyRef, 'callee');
 
     const channels: RTCDataChannel[] = [];
     pc.ondatachannel = (ev) => {
@@ -648,7 +662,7 @@ export class WebRtcTransport implements Transport {
     };
 
     pc.onicecandidate = (ev) => {
-      if (ev.candidate) void addDoc(calleeCandidates, ev.candidate.toJSON()).catch(() => {});
+      if (ev.candidate) this.postCandidate(calleeCandidates, ev.candidate);
     };
 
     this.events.onStatus('opponent found — connecting…');
@@ -676,19 +690,40 @@ export class WebRtcTransport implements Transport {
 
   // --- plumbing -------------------------------------------------------------------
 
+  /**
+   * Publish one of our ICE candidates. A failure here is NOT noise to swallow:
+   * a denied candidate write is a duel that cannot connect, and for as long as
+   * this was `.catch(() => {})` a rules mismatch hid every one of them. Warn
+   * once per connection, so rules drift shows up in the console without a
+   * dozen copies of the same line.
+   */
+  private postCandidate(candidates: ReturnType<typeof collection>, cand: RTCIceCandidate): void {
+    void addDoc(candidates, cand.toJSON()).catch((err: unknown) => {
+      if (this.candidateWarned) return;
+      this.candidateWarned = true;
+      console.warn(`[duel] ICE candidate write to ${candidates.path} failed — peers may not connect`, err);
+    });
+  }
+
   private drinkCandidates(candidates: ReturnType<typeof collection>): void {
     this.unsubs.push(
-      onSnapshot(candidates, (snap) => {
-        for (const change of snap.docChanges()) {
-          if (change.type !== 'added') continue;
-          const cand = change.doc.data() as RTCIceCandidateInit;
-          // Trickle-ICE race: until the remote description lands, addIceCandidate
-          // throws and the candidate is gone for good. Buffer early arrivals and
-          // flush them the moment the SDP is set.
-          if (!this.pc?.remoteDescription) this.pendingCandidates.push(cand);
-          else void this.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
-        }
-      }),
+      onSnapshot(
+        candidates,
+        (snap) => {
+          for (const change of snap.docChanges()) {
+            if (change.type !== 'added') continue;
+            const cand = change.doc.data() as RTCIceCandidateInit;
+            // Trickle-ICE race: until the remote description lands, addIceCandidate
+            // throws and the candidate is gone for good. Buffer early arrivals and
+            // flush them the moment the SDP is set.
+            if (!this.pc?.remoteDescription) this.pendingCandidates.push(cand);
+            else void this.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          }
+        },
+        // Same reasoning as postCandidate: a denied listen means we never hear
+        // the other side's addresses, so say so.
+        (err) => console.warn(`[duel] ICE candidate listen on ${candidates.path} failed — peers may not connect`, err),
+      ),
     );
   }
 

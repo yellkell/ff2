@@ -17,6 +17,8 @@
  *     comes from the board's own name (`-time` boards rank low-to-high);
  *   - a room must carry the lease that lets it be swept, so a crashed host
  *     cannot leak one for ever;
+ *   - both halves of a 1v1 handshake can trade ICE candidates at the exact
+ *     path net/webrtcTransport.ts uses — without them no duel connects;
  *   - a report can be filed and then never read back, by anyone;
  *   - the front page is read-only to every client;
  *   - a collection nobody wrote a rule for is closed.
@@ -32,7 +34,7 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, addDoc } from 'firebase/firestore';
 
 const results = [];
 const check = async (name, run) => {
@@ -190,6 +192,41 @@ await check('a signed-out visitor cannot even read the room list', () =>
 
 await check('both peers can write the signalling handshake', () =>
   assertSucceeds(setDoc(doc(them, 'rooms/r1/sig', 'duel'), { offer: { sdp: 'x' } })),
+);
+
+// THE 1v1 TRICKLE. The duel publishes its SDP before ICE gathering finishes,
+// so these candidates are the only way the two peers learn each other's
+// addresses. The paths are the ones net/rooms.ts candidatesCol() builds for
+// pair 'duel' — if the transport moves, move these with it.
+const cand = { candidate: 'candidate:1 1 udp 2122260223 192.0.2.1 50000 typ host', sdpMid: '0', sdpMLineIndex: 0 };
+
+await check('the duel HOST can post an ICE candidate (sig/duel/caller)', () =>
+  assertSucceeds(addDoc(collection(me, 'rooms/r1/sig/duel/caller'), cand)),
+);
+
+await check('the duel GUEST can post an ICE candidate (sig/duel/callee)', () =>
+  assertSucceeds(addDoc(collection(them, 'rooms/r1/sig/duel/callee'), cand)),
+);
+
+await check('each side can read the other\'s candidates back', async () => {
+  await assertSucceeds(getDocs(collection(them, 'rooms/r1/sig/duel/caller')));
+  await assertSucceeds(getDocs(collection(me, 'rooms/r1/sig/duel/callee')));
+});
+
+await check('a signed-out visitor cannot post a candidate', () =>
+  assertFails(addDoc(collection(nobody, 'rooms/r1/sig/duel/caller'), cand)),
+);
+
+await check('a signed-out visitor cannot read the candidates', () =>
+  assertFails(getDocs(collection(nobody, 'rooms/r1/sig/duel/caller'))),
+);
+
+// Where the duel used to put them — the Firestore codelab shape, straight
+// under the room. No rule ever opened it, every write was denied, and the
+// transport's `.catch(() => {})` hid it. It stays closed; this just pins that
+// the old path was never a working one.
+await check('the old codelab path (rooms/{id}/callerCandidates) is closed', () =>
+  assertFails(addDoc(collection(me, 'rooms/r1/callerCandidates'), cand)),
 );
 
 /* ── presence ───────────────────────────────────────────────────────────── */
