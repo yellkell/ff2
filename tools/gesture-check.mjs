@@ -30,7 +30,7 @@
  */
 
 import { Group, Vector3 } from 'three';
-import { ARM_REST, grammarFollowThrough, grammarGesture } from '../src/campaign/gestures.ts';
+import { ARM_REST, grammarFollowThrough, grammarGesture, rigFold, rigPitch } from '../src/campaign/gestures.ts';
 import { guardDebug, keepArmsApart } from '../src/campaign/armGuard.ts';
 
 const verbose = process.argv.includes('--verbose');
@@ -76,10 +76,12 @@ function posed(delta) {
   for (const i of [0, 1]) {
     const arm = arms[i];
     const d = delta[i];
-    arm.pivot.rotation.x = arm.restX + d.x;
+    // Onto the rig exactly as animateTitan puts it (gestures.ts rigPitch /
+    // rigFold: the language's reaches and folds turned toward the player).
+    arm.pivot.rotation.x = rigPitch(arm.restX, d.x);
     arm.pivot.rotation.z = arm.restZ + d.z;
-    arm.elbow.rotation.x = -d.elbow;
-    arm.wrist.rotation.x = -d.wrist;
+    arm.elbow.rotation.x = rigFold(d.elbow);
+    arm.wrist.rotation.x = rigFold(d.wrist);
   }
   root.updateMatrixWorld(true);
   for (const arm of arms) {
@@ -352,7 +354,7 @@ for (const [amp, snap] of CHASSIS) {
             if (pushed > 0) {
               guardHits++;
               for (const i of [0, 1]) {
-                state[i].x = arms[i].pivot.rotation.x - arms[i].restX;
+                state[i].x = arms[i].restX - arms[i].pivot.rotation.x;
                 state[i].z = arms[i].pivot.rotation.z - arms[i].restZ;
               }
             }

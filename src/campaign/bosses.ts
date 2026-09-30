@@ -1488,7 +1488,7 @@ export function buildTitan(def: BossDef): TitanRig {
     // little bent (gestures.ts ARM_REST), the hand loose.
     pivot.rotation.x = 0.18;
     pivot.rotation.z = side * 0.14;
-    elbow.rotation.x = -0.35;
+    elbow.rotation.x = 0.35; // ARM_REST's forward fold, through rigFold (gestures.ts)
     for (const d of digits) d.node.rotation.x = d.open + (d.closed - d.open) * 0.3;
     root.add(pivot);
     return { pivot, elbow, wrist, fist, digits, restX: 0.18, restZ: side * 0.14 } satisfies TitanArm;

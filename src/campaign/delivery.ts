@@ -21,7 +21,6 @@
 import { Group, Vector3, type Scene } from 'three';
 import type { Zone } from './zones.js';
 import { glowSprite } from '../materials/glow.js';
-import { emberBurst } from '../fx/fire.js';
 
 /** How far in from a zone's edge an impact sits (m) — clear of the lip. */
 const INSET = 0.45;
@@ -93,6 +92,17 @@ export function arcPoint(from: Vector3, to: Vector3, k: number, lift: number, ou
   return out;
 }
 
+/** How a titan's thrown bolt looks: a halo, a hot core, and a trail
+ *  called every ~50 ms of flight. (GOOPLIATH throws nothing — his blows
+ *  are his whole body heaving at the deck; CampaignSystem.surgeAt.) */
+export interface BoltLook {
+  halo: number;
+  core: number;
+  /** Halo size, metres. */
+  size: number;
+  trail?: (at: Vector3) => void;
+}
+
 /**
  * One thrown bolt in flight. The launch point is sampled at the throw (the
  * fist keeps moving after it lets go); the impact point is fixed. `update`
@@ -106,24 +116,23 @@ export class Bolt {
   /** Where it lands (world). */
   readonly target: Vector3;
   private age = 0;
-  private trail = 0;
+  private trailClock = 0;
   private readonly _p = new Vector3();
+  private readonly travel: number;
+  private readonly lift: number;
+  private readonly look: BoltLook;
+  /** Theatre for someone else's deck: no trail (it's across the pit). */
+  private readonly quiet: boolean;
 
-  constructor(
-    scene: Scene,
-    from: Vector3,
-    to: Vector3,
-    private readonly travel: number,
-    private readonly lift: number,
-    accent: number,
-    size: number,
-    /** Theatre for someone else's deck: no ember trail (it's across the pit). */
-    private readonly quiet = false,
-  ) {
+  constructor(scene: Scene, from: Vector3, to: Vector3, travel: number, lift: number, look: BoltLook, quiet = false) {
     this.from = from.clone();
     this.target = to.clone();
-    this.group.add(glowSprite(accent, size));
-    this.group.add(glowSprite(0xffe9c2, size * 0.5));
+    this.travel = travel;
+    this.lift = lift;
+    this.look = look;
+    this.quiet = quiet;
+    this.group.add(glowSprite(look.halo, look.size));
+    this.group.add(glowSprite(look.core, look.size * 0.5));
     this.group.position.copy(this.from);
     scene.add(this.group);
   }
@@ -135,10 +144,10 @@ export class Bolt {
     this.group.position.copy(this._p);
     // It swells as it closes — the last thing you see is how big it is.
     this.group.scale.setScalar(0.7 + 0.5 * k);
-    this.trail -= delta;
-    if (!this.quiet && this.trail <= 0) {
-      this.trail = 0.05;
-      emberBurst(this._p, 2, true);
+    this.trailClock -= delta;
+    if (!this.quiet && this.look.trail && this.trailClock <= 0) {
+      this.trailClock = 0.05;
+      this.look.trail(this._p);
     }
     return k < 1;
   }

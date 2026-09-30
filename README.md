@@ -13,6 +13,30 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
+- **THE TITANS FACE YOU, GOOPLIATH MOVES WITH HIS ATTACKS, AND THE WAVE
+  STOPS FLASHING.**
+  - **Arms in front.** Every titan gesture used to play behind its back:
+    the move language writes a reach as a negative shoulder pitch, but on
+    these rigs a positive pitch swings the arm toward you. So the X crossed
+    its bars a metre past the titan's shoulders, the point jabbed away from
+    you and the press clapped behind its head. `rigPitch` / `rigFold` in
+    `campaign/gestures.ts` are now the one place a pose meets the rig. They
+    turn every reach and fold toward the player, in the game and in
+    `check:gestures` alike. The X and the scissor bars come down 0.35 so the
+    high bar still clears the visor: the rest pose's forward hang now adds
+    on instead of cancelling.
+  - **Goopliath moves with his attacks.** He throws nothing. Every beat
+    of an attack heaves his whole body toward the part of your deck about
+    to burn, peaking as it goes off. The seesaw rocks him half to half with
+    the floods, about ±0.55 m. He sinks into each heave, the gel shudders
+    on the beat, his sweep is a fat gel tendril, and it all runs to blood
+    once THE TIDE RISES.
+  - **The wave flash.** A new move's danger strips were added visible and
+    unfilled, and a cascade's later steps were only hidden on the next
+    frame. So every beam of THE WAVE flashed down at once as the move began.
+    Each read is now settled the moment it's built.
+  - **Checks.** `check:delivery` asserts no read shows before its turn
+    (it counted 5 on the old code) and runs a GOOPLIATH bout too.
 - **THE TITANS THROW THE HIT** — a titan's floor attacks used to charge
   a mark on your deck and then just go off there, while the machine mimed
   from across the pit; nothing ever left its body. Now, as each zone comes
