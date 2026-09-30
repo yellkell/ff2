@@ -133,8 +133,7 @@ export type MenuAction =
   | 'lb-gauntlet'
   | 'lb-raid'
   | 'lb-goopliath'
-  /** The run boards' view strip: FEATS or one difficulty, and HC ONLY. */
-  | 'lb-view-feats'
+  /** The run boards' view strip: one difficulty, and HC ONLY. */
   | 'lb-view-normal'
   | 'lb-view-hard'
   | 'lb-view-blazing'

@@ -13,6 +13,21 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
+- **NO MORE FEATS ON THE LEADERBOARD.** The run boards (SPEEDRUN, RAID,
+  GOOP RAID) are plain races against the clock again, one difficulty at a
+  time:
+  - **In game:** RANKINGS › ARCADE opens each board on NORMAL, with HARD
+    and BLAZING beside it and the HC ONLY toggle. The FEATS view is gone,
+    along with its hardest-first ordering, the difficulty plate on every
+    row and the dividers between feats. A hardcore run keeps a small HC
+    plate.
+  - **`stats.html`:** its rail is Normal · Hard · Blazing and each of those
+    again for HC, every row ranked by time. Its strip shows the fastest
+    Normal speedrun instead of the "top feat".
+  - **Unchanged:** runs are stored exactly as before (one board per
+    difficulty, and per difficulty for hardcore, plus the legacy mixed
+    board), so nothing posted is lost. The profile's achievement badges
+    and the Gazette are untouched.
 - **THE TITANS THROW THE HIT** — a titan's floor attacks used to charge
   a mark on your deck and then just go off there, while the machine mimed
   from across the pit; nothing ever left its body. Now, as each zone comes
