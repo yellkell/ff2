@@ -22,7 +22,7 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
     you and the press clapped behind its head. `rigPitch` / `rigFold` in
     `campaign/gestures.ts` are now the one place a pose meets the rig. They
     turn every reach and fold toward the player, in the game and in
-    `check:gesture` alike. The X and the scissor bars come down 0.35 so the
+    `check:gestures` alike. The X and the scissor bars come down 0.35 so the
     high bar still clears the visor: the rest pose's forward hang now adds
     on instead of cancelling.
   - **Gel throws.** GOOPLIATH's throws are gel now. A wobbling glob
