@@ -83,9 +83,9 @@ type DataTab = 'ranked' | 'xp' | 'training' | 'duo' | 'ffa';
 /** RUN-TIME boards — each row is one completed RUN (a squad + a clock), not a
  *  player. One tab per mode — GOOPLIATH raids race their own clock (one long
  *  fight is a different race from a five-titan run, so they never share a
- *  board with titan raids). Behind each tab sit its FEAT boards (difficulty ×
- *  hardcore), and the tab's view (runView) decides whether it ranks by feat
- *  or by one tier's clock; EASY runs never rank at all. */
+ *  board with titan raids). Behind each tab sit its boards (difficulty ×
+ *  hardcore), and the tab's view (runView) picks one tier's clock to race;
+ *  EASY runs never rank at all. */
 export type RunTab = 'gauntlet' | 'raid' | 'goopliath';
 const RUN_TABS: RunTab[] = ['gauntlet', 'raid', 'goopliath'];
 /**
@@ -115,37 +115,28 @@ export interface RunRow {
 }
 
 /**
- * How a run board is being looked at. FEATS is the landing view: everyone's
- * HARDEST clear, hardest first — blazing hardcore above blazing above hard
- * hardcore … — and the clock only breaks ties inside a feat. A difficulty
- * picks that tier's fastest clears. `hc` narrows either to hardcore runs.
+ * How a run board is being looked at: one difficulty's FASTEST clears, the
+ * clock alone deciding. `hc` narrows it to hardcore runs. (There used to be
+ * a FEATS view — everyone's hardest clear, hardest first — and it's gone:
+ * every board is a plain race against the clock now.)
  */
-export type RunViewTier = 'feats' | 'normal' | 'hard' | 'blazing';
-export const RUN_VIEW_TIERS: RunViewTier[] = ['feats', 'normal', 'hard', 'blazing'];
-
-/** A clear's weight: difficulty first, hardcore breaking the tie. */
-function featRank(r: Pick<RunRow, 'difficulty' | 'hardcore'>): number {
-  const tier = r.difficulty === 'blazing' ? 3 : r.difficulty === 'hard' ? 2 : 1;
-  return tier * 2 + (r.hardcore ? 1 : 0);
-}
+export type RunViewTier = 'normal' | 'hard' | 'blazing';
+export const RUN_VIEW_TIERS: RunViewTier[] = ['normal', 'hard', 'blazing'];
 
 /**
  * Build a run board's VIEW from every row its boards returned.
  *
  * The same run lands on more than one board (its tier board, its hardcore
  * board, the legacy mixed board) and every raider posts their own copy, so
- * the raw pile is full of repeats. Per player, keep the one row that answers
- * the view's question; then fold raiders who posted the SAME run into one
- * squad row.
+ * the raw pile is full of repeats. Per player, keep their fastest run on the
+ * view's tier; then fold raiders who posted the SAME run into one squad row.
  */
 function buildRunView(raw: RunRow[], tier: RunViewTier, hc: boolean): RunRow[] {
-  const pool = raw.filter((r) => (!hc || r.hardcore) && (tier === 'feats' || r.difficulty === tier));
-  const better = (a: RunRow, b: RunRow): boolean =>
-    tier === 'feats' ? featRank(a) > featRank(b) || (featRank(a) === featRank(b) && a.seconds < b.seconds) : a.seconds < b.seconds;
+  const pool = raw.filter((r) => (!hc || r.hardcore) && r.difficulty === tier);
   const best = new Map<string, RunRow>();
   for (const r of pool) {
     const cur = best.get(r.uid);
-    if (!cur || better(r, cur)) best.set(r.uid, r);
+    if (!cur || r.seconds < cur.seconds) best.set(r.uid, r);
   }
   const squads = new Map<string, RunRow>();
   for (const r of best.values()) {
@@ -154,9 +145,7 @@ function buildRunView(raw: RunRow[], tier: RunViewTier, hc: boolean): RunRow[] {
     if (cur) cur.me = cur.me || r.me;
     else squads.set(key, { ...r });
   }
-  return [...squads.values()]
-    .sort((a, b) => (tier === 'feats' ? featRank(b) - featRank(a) : 0) || a.seconds - b.seconds)
-    .slice(0, LEADERBOARD_FETCH_LIMIT);
+  return [...squads.values()].sort((a, b) => a.seconds - b.seconds).slice(0, LEADERBOARD_FETCH_LIMIT);
 }
 
 const LEADERBOARD_FETCH_LIMIT = 50;
@@ -180,7 +169,7 @@ export const leaderboard = {
   /** Every row the run tabs' boards returned, before the view is applied. */
   runRaw: { gauntlet: [], raid: [], goopliath: [] } as Record<RunTab, RunRow[]>,
   /** How the run tabs are being looked at (shared by all three). */
-  runView: { tier: 'feats' as RunViewTier, hc: false },
+  runView: { tier: 'normal' as RunViewTier, hc: false },
   scroll: {
     ranked: 0,
     xp: 0,
@@ -321,7 +310,7 @@ function applyRunViews(): void {
   }
 }
 
-/** Change how the run boards are looked at — a difficulty (or FEATS), and
+/** Change how the run boards are looked at — a difficulty, and
  *  whether to show hardcore runs only. Lands where you are, as a tab switch does. */
 export function setRunView(view: Partial<{ tier: RunViewTier; hc: boolean }>): void {
   Object.assign(leaderboard.runView, view);

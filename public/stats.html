@@ -641,7 +641,7 @@
         height: 4px;
       }
       .rail.tier {
-        /* FEATS · NORMAL · HARD · BLAZING · HARDCORE */
+        /* NORMAL · HARD · BLAZING · and each of those HC */
         max-width: 640px;
       }
       .rail.lab {
@@ -859,7 +859,7 @@
         border-radius: 50%;
         border: 1px solid rgba(255, 255, 255, 0.25);
       }
-      /* Feat symbols: what a run was cleared on. */
+      /* Difficulty and HC chips: what a run was cleared on. */
       .diff-chip {
         display: inline-block;
         padding: 1px 8px;
@@ -874,12 +874,8 @@
       .diff-chip.hard { color: var(--warn); border-color: rgba(255, 180, 84, 0.4); }
       .diff-chip.blazing { color: var(--ember); border-color: rgba(255, 122, 24, 0.45); }
       .diff-chip.hc { color: #1a0406; background: var(--danger); border-color: var(--danger); }
-      /* THE FEAT reads before the names: a run row leads with what it was
-         cleared on, and the hardest clears carry a wash of their colour. */
-      .feat-lead { flex: none; display: inline-flex; min-width: 136px; }
-      .feat-lead .diff-chip { margin-left: 0; margin-right: 6px; }
-      .row.feat-blazing { background: linear-gradient(90deg, rgba(255, 122, 24, 0.12), transparent 75%); }
-      .row.feat-hc { background: linear-gradient(90deg, rgba(255, 82, 102, 0.14), transparent 75%); }
+      /* A hardcore run carries a faint red wash. */
+      .row.run-hc { background: linear-gradient(90deg, rgba(255, 82, 102, 0.14), transparent 75%); }
 
       /* What a board says instead of rows. */
       .status { padding: 26px 12px 30px; }
@@ -2053,24 +2049,19 @@
       ];
 
       /**
-       * How a run board is looked at (mirrors src/net/leaderboard.ts). FEATS
-       * is everyone's HARDEST clear, hardest first — blazing hardcore, then
-       * blazing, then hard hardcore … — with the clock breaking ties inside a
-       * feat. A difficulty is that tier's fastest clears. HARDCORE is the
-       * feats view narrowed to hardcore runs (the tide has none).
+       * How a run board is looked at (mirrors src/net/leaderboard.ts): one
+       * difficulty's FASTEST clears, the clock alone deciding — and each
+       * tier again narrowed to hardcore runs (the game's HC ONLY; the tide
+       * has none). There is no FEATS view any more.
        */
-      const RUN_VIEWS = [
-        { id: 'feats', label: 'Feats' },
-        ...TIERS,
-        { id: 'hc', label: 'Hardcore' },
-      ];
+      const RUN_VIEWS = [...TIERS, ...TIERS.map((t) => ({ id: `${t.id}-hc`, label: `${t.label} HC`, hc: true }))];
 
       /**
-       * Every board a run family's feats live on (src/net/boards.ts
+       * Every board a run family's runs live on (src/net/boards.ts
        * runBoardsFor): one per tier, one per tier for hardcore, plus the
        * legacy mixed board. Hardcore and harder runs used to share a row with
        * the easy ones, and a slower hard clear lost the ratchet to a faster
-       * easy one — so each feat keeps its own personal best now.
+       * easy one — so each tier keeps its own personal best now.
        */
       function runBoardsFor(family) {
         const ids = [];
@@ -2082,27 +2073,23 @@
         return ids;
       }
 
-      const featRank = (r) => (r.difficulty === 'blazing' ? 3 : r.difficulty === 'hard' ? 2 : 1) * 2 + (r.hardcore ? 1 : 0);
-
-      /** One view of a family's rows: per player the row that answers the
-       *  view's question, then raiders who posted the SAME run folded into
-       *  one squad row. */
+      /** One view of a family's rows: per player their fastest run on the
+       *  view's tier (hardcore only, on an HC view), then raiders who posted
+       *  the SAME run folded into one squad row. */
       function buildRunView(raw, view) {
-        const feats = view === 'feats' || view === 'hc';
-        const pool = raw.filter((r) => (view !== 'hc' || r.hardcore) && (feats || r.difficulty === view));
-        const better = (a, b) =>
-          feats ? featRank(a) > featRank(b) || (featRank(a) === featRank(b) && a.value < b.value) : a.value < b.value;
+        const [tier, hc] = view.split('-');
+        const pool = raw.filter((r) => r.difficulty === tier && (!hc || r.hardcore));
         const best = new Map();
         for (const r of pool) {
           const cur = best.get(r.uid);
-          if (!cur || better(r, cur)) best.set(r.uid, r);
+          if (!cur || r.value < cur.value) best.set(r.uid, r);
         }
         const squads = new Map();
         for (const r of best.values()) {
           const key = `${[...r.names].sort().join('|')}#${r.value}#${r.difficulty}#${r.hardcore}`;
           if (!squads.has(key)) squads.set(key, r);
         }
-        return [...squads.values()].sort((a, b) => (feats ? featRank(b) - featRank(a) : 0) || a.value - b.value);
+        return [...squads.values()].sort((a, b) => a.value - b.value);
       }
 
       /** Every row of every board in a run family, pulled side by side. */
@@ -2146,10 +2133,10 @@
         { id: 'lab', label: 'The Lab', kind: 'lab', col: '' },
       ];
 
-      const ff = { board: 'ranked', tier: 'feats', rows: [], players: [], cache: new Map(), loaded: false };
+      const ff = { board: 'ranked', tier: 'normal', rows: [], players: [], cache: new Map(), loaded: false };
 
       /** The run views a board offers — the tide has no hardcore. */
-      const viewsFor = (def) => RUN_VIEWS.filter((v) => v.id !== 'hc' || def.hc);
+      const viewsFor = (def) => RUN_VIEWS.filter((v) => !v.hc || def.hc);
 
       async function loadFf(force) {
         const def = FF_BOARDS.find((b) => b.id === ff.board);
@@ -2157,7 +2144,7 @@
         if (def.kind === 'lab') return loadLab(force);
         const status = document.getElementById('ff-status');
         const rowsEl = document.getElementById('ff-rows');
-        if (def.kind === 'run' && !viewsFor(def).some((v) => v.id === ff.tier)) ff.tier = 'feats';
+        if (def.kind === 'run' && !viewsFor(def).some((v) => v.id === ff.tier)) ff.tier = 'normal';
         const view = RUN_VIEWS.find((v) => v.id === ff.tier);
         const key = def.kind === 'player' ? `p:${def.field()}` : `r:${def.family}`;
         document.getElementById('ff-title').textContent = def.label + (def.kind === 'run' ? ` · ${view.label}` : '');
@@ -2221,16 +2208,10 @@
             const squad = r.names.length > 1
               ? r.names.map((n) => (n === r.name ? who(r.uid, n) : esc(n))).join(' · ')
               : who(r.uid, r.name);
-            const chips =
-              `<span class="diff-chip ${r.difficulty}">${esc(String(r.difficulty).toUpperCase())}</span>` +
-              (r.hardcore ? '<span class="diff-chip hc">HC</span>' : '');
-            const wash = r.hardcore ? ' feat-hc' : r.difficulty === 'blazing' ? ' feat-blazing' : '';
-            // A gauge only means something between clocks of the same feat:
-            // FEATS and HARDCORE rank different races, so they go without.
-            const sameRace = ff.tier !== 'feats' && ff.tier !== 'hc';
-            return `<li class="row ${rowClass(i)}${wash}"${sameRace ? gauge(r.value, rows[0].value, true) : ''}><span class="rank">${i + 1}</span>` +
-              `<span class="feat-lead">${chips}</span>` +
-              `<span class="name">${squad}</span>` +
+            // The rail already says the tier: a row only marks a hardcore run.
+            const hc = r.hardcore ? ' <span class="diff-chip hc">HC</span>' : '';
+            return `<li class="row ${rowClass(i)}${r.hardcore ? ' run-hc' : ''}"${gauge(r.value, rows[0].value, true)}><span class="rank">${i + 1}</span>` +
+              `<span class="name">${squad}${hc}</span>` +
               `<span class="when">${esc(ago(r.at))}</span>` +
               `<span class="score">${runClock(r.value)}</span></li>`;
           })
@@ -2239,16 +2220,15 @@
       }
 
       /** The strip over the FIRE FIGHT rail: who leads, how deep the board
-       *  goes, and the hardest speedrun anyone has posted. */
+       *  goes, and the fastest NORMAL speedrun anyone has posted. */
       function drawFfStrip() {
         const host = document.getElementById('ff-strip');
         const ranked = ff.cache.get(`p:score_s${seasonIndex()}`) || [];
         const xp = ff.cache.get('p:xp') || [];
-        const top = buildRunView(ff.cache.get('r:speedrun') || [], 'feats')[0];
-        const featName = (r) => `${r.difficulty[0].toUpperCase()}${r.difficulty.slice(1)}${r.hardcore ? ' hardcore' : ''}`;
+        const top = buildRunView(ff.cache.get('r:speedrun') || [], 'normal')[0];
         const tiles = [
           { cap: `Season ${seasonIndex()} leader`, val: ranked[0] ? who(ranked[0].uid, ranked[0].name) : '—', sub: ranked[0] ? `${num(ranked[0].value)} points` : 'nobody has banked a point' },
-          { cap: 'Top speedrun feat', val: top ? runClock(top.value) : '—', sub: top ? `${esc(top.name)} · ${featName(top)}` : 'the titans stand unbeaten', minor: true },
+          { cap: 'Fastest speedrun', val: top ? runClock(top.value) : '—', sub: top ? `${esc(top.name)} · Normal${top.hardcore ? ' hardcore' : ''}` : 'the titans stand unbeaten', minor: true },
           { cap: 'Most experience', val: xp[0] ? num(xp[0].value) : '—', sub: xp[0] ? who(xp[0].uid, xp[0].name) : 'no XP banked yet', minor: true },
         ];
         host.innerHTML = tiles
@@ -2266,7 +2246,7 @@
         const tierRail = document.getElementById('tier-rail');
         if (def && def.kind === 'run') {
           tierRail.classList.remove('hidden');
-          if (!viewsFor(def).some((v) => v.id === ff.tier)) ff.tier = 'feats';
+          if (!viewsFor(def).some((v) => v.id === ff.tier)) ff.tier = 'normal';
           fillRail('tier-rail', 'tier-marker', viewsFor(def), ff.tier, (id) => {
             ff.tier = id;
             drawFfRail();

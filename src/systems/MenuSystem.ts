@@ -1336,7 +1336,6 @@ export class MenuSystem extends createSystem({}) {
       case 'lb-goopliath':
         setLeaderboardTab('goopliath');
         break;
-      case 'lb-view-feats':
       case 'lb-view-normal':
       case 'lb-view-hard':
       case 'lb-view-blazing':
