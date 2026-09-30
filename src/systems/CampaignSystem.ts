@@ -38,6 +38,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   type MeshStandardMaterial,
+  NormalBlending,
   Object3D,
   PointLight,
 } from 'three';
@@ -64,13 +65,15 @@ import {
   gestureTemper,
   grammarFollowThrough,
   grammarGesture,
+  rigFold,
+  rigPitch,
   type ArmDelta,
   type GestureFocus,
   type GestureShape,
 } from '../campaign/gestures.js';
 import { RecitalBlockfall } from '../campaign/blockfall.js';
 import type { Zone } from '../campaign/zones.js';
-import { Bolt, impactOf, lungeEnvelope, throwingArm } from '../campaign/delivery.js';
+import { Bolt, impactOf, lungeEnvelope, throwingArm, type BoltLook } from '../campaign/delivery.js';
 import { playBossVoice, preloadBossVoice } from '../audio/bossVoice.js';
 import { GelCreature } from '../goopliath/GelCreature.js';
 import { GooFx } from '../goopliath/splats.js';
@@ -424,9 +427,10 @@ export class CampaignSystem extends createSystem({
           return {
             shape: g?.shape ?? null,
             fill: g?.fill ?? 0,
-            arms: rig.arms.map((a) => [a.pivot.rotation.x - a.restX, a.pivot.rotation.z - a.restZ]),
-            elbows: rig.arms.map((a) => -a.elbow.rotation.x),
-            wrists: rig.arms.map((a) => -a.wrist.rotation.x),
+            // In the language's own terms (rigPitch / rigFold undone).
+            arms: rig.arms.map((a) => [a.restX - a.pivot.rotation.x, a.pivot.rotation.z - a.restZ]),
+            elbows: rig.arms.map((a) => a.elbow.rotation.x),
+            wrists: rig.arms.map((a) => a.wrist.rotation.x),
             curl: [...this.curl],
             lean: rig.root.rotation.x,
           };
@@ -469,18 +473,36 @@ export class CampaignSystem extends createSystem({
           lunge: number;
           thrown: number;
           impactsBurn: boolean[];
+          early: number;
+          root: number[];
         } => {
           const a = this.attack;
           const live = (a?.bolts ?? []).filter((b): b is Bolt => !!b);
           const bolts = live.map((b) => b.group.position.toArray());
           const origins = live.map((b) => b.from.toArray());
-          const fists = this.rig ? [0, 1].map((i) => this.fistPos(i as 0 | 1, new Vector3()).toArray()) : [];
+          const fists = this.rig || this.goop ? [0, 1].map((i) => this.fistPos(i as 0 | 1, new Vector3()).toArray()) : [];
           const impactsBurn: boolean[] = [];
           for (const zone of a?.zones ?? []) {
             const p = impactOf(zone);
             if (p) impactsBurn.push(this.pointBurns(zone, p.x, p.z));
           }
-          return { bolts, origins, fists, lunge: this.lungeCur, thrown: (a?.thrown ?? []).filter((t) => t === 1).length, impactsBurn };
+          // Reads showing before their turn (a cascade's later steps must stay
+          // hidden until their window opens) — the WAVE's all-at-once flash.
+          let early = 0;
+          if (a) {
+            a.telegraphs.forEach((t, i) => {
+              if (!t?.group.visible || a.resolved[i]) return;
+              const due = a.chargeTime + a.staggers[i];
+              const rem = due - a.time;
+              const open =
+                a.zones[i].kind === 'half'
+                  ? rem < GOOPLIATH.seesawGap * 1.9
+                  : a.windows[i] === undefined || rem <= Math.min(a.windows[i], due);
+              if (!open) early++;
+            });
+          }
+          const root = this.rig || this.goop ? this.bossRootPos().toArray() : [];
+          return { early, root, bolts, origins, fists, lunge: this.lungeCur, thrown: (a?.thrown ?? []).filter((t) => t === 1).length, impactsBurn };
         },
         heal: (): void => {
           const me = fighterAt(0);
@@ -2386,6 +2408,12 @@ export class CampaignSystem extends createSystem({
     };
     if (this.goop) this.goopTelegraph(this.attack.kind as AttackKind, chargeTime, seats[0]);
     sfx.chargeWhine(chargeTime);
+    // Settle every read NOW, before this frame renders: each telegraph was
+    // added to the scene visible and unfilled, and a cascade's later steps
+    // (THE WAVE's lanes, a seesaw's far halves) only get hidden by the first
+    // advanceAttack — which runs NEXT frame. Without this, every beam of the
+    // whole cascade flashed down at once as the move began.
+    this.advanceAttack(0);
   }
 
   /** Seconds from fist to floor — longer across the raid's wide pit. */
@@ -2434,16 +2462,7 @@ export class CampaignSystem extends createSystem({
     const from = this.fistPos(arm, new Vector3());
     const travel = Math.max(0.08, Math.min(this.throwTravel(), remaining));
     const mine = seat === this.mySeatId();
-    a.bolts[i] = new Bolt(
-      this.scene,
-      from,
-      target,
-      travel,
-      DELIVERY.arcLift * from.distanceTo(target),
-      this.def.accent,
-      DELIVERY.boltSize,
-      !mine,
-    );
+    a.bolts[i] = new Bolt(this.scene, from, target, travel, DELIVERY.arcLift * from.distanceTo(target), this.boltLook(arm), !mine);
     this.swingFor(a.kind, zone);
     this.startLunge();
     if (a.time - this.throwSfxAt > 0.05) {
@@ -2451,6 +2470,39 @@ export class CampaignSystem extends createSystem({
       if (this.goop) sfx.gooWhoosh();
       else sfx.mortarThump();
     }
+  }
+
+  /** A titan throws fire; GOOPLIATH flings gel — a glob on a strand from
+   *  his fist, dripping as it goes, running to blood when THE TIDE RISES. */
+  private boltLook(arm: 0 | 1): BoltLook {
+    if (!this.goop) {
+      return {
+        halo: this.def.accent,
+        core: 0xffe9c2,
+        size: DELIVERY.boltSize,
+        trail: (p) => emberBurst(p, 2, true),
+      };
+    }
+    const blood = this.enraged;
+    return {
+      halo: blood ? DELIVERY.gooBlood : this.def.accent,
+      core: blood ? 0xffc9bd : 0xeaffdd,
+      size: DELIVERY.boltSize * DELIVERY.globScale,
+      glob: true,
+      trail: (p, dir) => this.goopFx?.burst(p, dir, 1, 1.4),
+      tether: (out) => this.fistPos(arm, out),
+    };
+  }
+
+  /** A bolt has come down. Fire hands straight to the zone's own strike;
+   *  gel LANDS — a splat on the deck, a wet flash and a spray of droplets. */
+  private boltLanded(bolt: Bolt): void {
+    if (!this.goop || !this.goopFx) return;
+    const blood = this.enraged;
+    this.goopFx.splat(bolt.target, DELIVERY.splatSize);
+    this.goopFx.flash(bolt.target, blood ? DELIVERY.gooBlood : 0x8cff70, 0.7);
+    this.goopFx.burst(bolt.target, _up, 7, 2.2);
+    sfx.gooSlam();
   }
 
   /** Step the chassis in behind a throw. A throw landing while the last
@@ -2620,8 +2672,12 @@ export class CampaignSystem extends createSystem({
         a.telegraphs[i]?.dispose();
         a.telegraphs[i] = null;
         // The bolt lands as the zone goes off — the strike visual takes over.
-        a.bolts[i]?.dispose();
-        a.bolts[i] = null;
+        const landing = a.bolts[i];
+        if (landing) {
+          this.boltLanded(landing);
+          landing.dispose();
+          a.bolts[i] = null;
+        }
         // The ghost hammer's hover spot feeds the crash, then it's gone.
         const m = a.markers[i] ?? null;
         this.disposeMarker(m);
@@ -2658,6 +2714,7 @@ export class CampaignSystem extends createSystem({
         if (a.thrown[i] === 0 && remaining <= this.throwTravel()) this.throwAt(a, i, remaining);
         const bolt = a.bolts[i];
         if (bolt && !bolt.update(delta)) {
+          this.boltLanded(bolt);
           bolt.dispose();
           a.bolts[i] = null;
         }
@@ -3067,13 +3124,17 @@ export class CampaignSystem extends createSystem({
     // for the whole cut, so the blade is visibly the END OF THE ARM sweeping
     // your deck — not a wall that appears on it. (A unit cylinder along +y,
     // stretched and turned onto fist → blade every frame.)
+    // GOOPLIATH's is a fat gel tendril (translucent, not lit) that goes
+    // to blood with him.
+    const gel = !!this.goop;
+    const hr = gel ? DELIVERY.gooHaft : 0.04;
     const haft = new Mesh(
-      new CylinderGeometry(0.03, 0.05, 1, 8, 1, true),
+      new CylinderGeometry(hr * 0.75, hr * 1.25, 1, gel ? 10 : 8, 1, true),
       new MeshBasicMaterial({
-        color: this.def.accent,
+        color: gel && this.enraged ? DELIVERY.gooBlood : this.def.accent,
         transparent: true,
         opacity: 0.75,
-        blending: AdditiveBlending,
+        blending: gel ? NormalBlending : AdditiveBlending,
         depthWrite: false,
       }),
     );
@@ -3581,20 +3642,8 @@ export class CampaignSystem extends createSystem({
 
     // THE DELIVERY's step: every throw carries the whole chassis in along
     // its facing and back — the blow comes from a body that MEANT it.
-    if (this.lungeAge >= 0) {
-      this.lungeAge += delta;
-      if (this.lungeAge >= DELIVERY.lungeTime) this.lungeAge = -1;
-    }
-    const lungeTarget = this.lungeAge >= 0 ? lungeEnvelope(this.lungeAge / DELIVERY.lungeTime) : 0;
-    this.lungeCur += (lungeTarget - this.lungeCur) * Math.min(1, delta * 18);
-    this.lungeOff.set(0, 0, 0);
-    if (fighting && this.lungeCur > 1e-3) {
-      const reach = Math.min(DELIVERY.lunge * this.def.scale, DELIVERY.lungeMax) * this.lungeCur;
-      const ry = rig.root.rotation.y; // faces (−sin ry, −cos ry)
-      this.lungeOff.set(-Math.sin(ry) * reach, 0, -Math.cos(ry) * reach);
-      rig.root.position.x += this.lungeOff.x;
-      rig.root.position.z += this.lungeOff.z;
-    }
+    // (rotation.y faces (−sin ry, −cos ry).)
+    this.stepLunge(delta, fighting, rig.root.position, -Math.sin(rig.root.rotation.y), -Math.cos(rig.root.rotation.y));
 
     // RAID: the whole machine squares up to whoever it's hunting — the body
     // yaw eases toward the CENTROID of the marked platforms (one raider: dead
@@ -3804,12 +3853,13 @@ export class CampaignSystem extends createSystem({
       // home after a move, takes the easy rate.
       const rate = this.strikeSwing[i] > 0.45 && owned ? 26 : pose || swingK > 0 ? 7 : 4;
       const ease = Math.min(1, delta * rate * (pose ? temper.snap : 1));
-      arm.pivot.rotation.x += (targetX - arm.pivot.rotation.x) * ease;
+      // The pose meets the rig through gestures.ts (rigPitch / rigFold), which
+      // turns the language's reaches and folds TOWARD the player.
+      const pitch = rigPitch(arm.restX, targetX - arm.restX);
+      arm.pivot.rotation.x += (pitch - arm.pivot.rotation.x) * ease;
       arm.pivot.rotation.z += (targetZ - arm.pivot.rotation.z) * ease;
-      // Forward is negative x on the elbow and the wrist alike — the same
-      // sign the shoulder raises with.
-      arm.elbow.rotation.x += (-elbow - arm.elbow.rotation.x) * ease;
-      arm.wrist.rotation.x += (-wrist - arm.wrist.rotation.x) * ease;
+      arm.elbow.rotation.x += (rigFold(elbow) - arm.elbow.rotation.x) * ease;
+      arm.wrist.rotation.x += (rigFold(wrist) - arm.wrist.rotation.x) * ease;
       this.curl[i] += (curl - this.curl[i]) * ease;
       for (const d of arm.digits) d.node.rotation.x = d.open + (d.closed - d.open) * this.curl[i];
     }
@@ -3818,6 +3868,30 @@ export class CampaignSystem extends createSystem({
     // swung-through follow-through handed into THE X — the two fists never
     // fuse on the midline. A no-op on every pose the language holds.
     keepArmsApart(rig.arms, this.def.scale, this.armGuardMemo);
+  }
+
+  /**
+   * Advance THE DELIVERY's step and put it on `root` along the facing
+   * (fx, fz): x comes off first (the caller's sway eased the bare x — see
+   * animateTitan) and z is added on top of whatever the caller set this
+   * frame. The titan sets its root z every frame; the gel never does, so
+   * the gel also takes last frame's z back off (animateGoop).
+   */
+  private stepLunge(delta: number, fighting: boolean, root: Vector3, fx: number, fz: number): void {
+    if (this.lungeAge >= 0) {
+      this.lungeAge += delta;
+      if (this.lungeAge >= DELIVERY.lungeTime) this.lungeAge = -1;
+    }
+    const target = this.lungeAge >= 0 ? lungeEnvelope(this.lungeAge / DELIVERY.lungeTime) : 0;
+    this.lungeCur += (target - this.lungeCur) * Math.min(1, delta * 18);
+    this.lungeOff.set(0, 0, 0);
+    if (fighting && this.lungeCur > 1e-3) {
+      const reach = Math.min(DELIVERY.lunge * this.def.scale, DELIVERY.lungeMax) * this.lungeCur;
+      const len = Math.hypot(fx, fz) || 1;
+      this.lungeOff.set((fx / len) * reach, 0, (fz / len) * reach);
+      root.x += this.lungeOff.x;
+      root.z += this.lungeOff.z;
+    }
   }
 
   /** The clearance guard's memory (armGuard.ts) — which way it last pushed. */
@@ -3837,6 +3911,14 @@ export class CampaignSystem extends createSystem({
     const root = this.goopRoot!;
     this.goopFx?.update(delta);
     const fighting = this.phase === 'fight';
+
+    // THE DELIVERY's step, the gel's way: he surges toward whoever he's
+    // flinging at. Nothing else sets his root per frame, so last frame's
+    // step comes off both axes before this frame's goes on.
+    root.position.x -= this.lungeOff.x;
+    root.position.z -= this.lungeOff.z;
+    this.playerHeadOf(fighting ? this.faceSeat : this.mySeatId(), _head);
+    this.stepLunge(delta, fighting, root.position, _head.x - root.position.x, _head.z - root.position.z);
 
     // Square up to whoever he's hunting. The steering APIs live in the scaled
     // parent's space (the parent never rotates — the creature owns its yaw).

@@ -127,6 +127,27 @@ export interface GesturePose {
   gaze: number;
 }
 
+/**
+ * WHERE THE LANGUAGE MEETS THE RIG. Every pose in this file writes a REACH
+ * toward the player as a negative shoulder-pitch delta and a FOLD (elbow,
+ * wrist) as a positive value. But on the titan rigs a positive pitch swings
+ * an arm toward the player (the rest pose hangs them at +0.18, a touch
+ * forward), so read literally, the whole language played BEHIND the titan:
+ * the X crossed its bars a metre past its own back, the point jabbed away
+ * from you, the press clapped behind its head. These two map a pose onto
+ * the rig the right way round, for animateTitan and tools/gesture-check
+ * alike. (Every clearance is unchanged: the head and both shoulders sit on
+ * the rig's z = 0 plane, so a front/back mirror moves no arm nearer
+ * anything.)
+ */
+export function rigPitch(restX: number, dx: number): number {
+  return restX - dx;
+}
+/** A pose's elbow or wrist value → the joint's rotation.x. */
+export function rigFold(v: number): number {
+  return v;
+}
+
 /** The joints at rest: a slightly bent elbow, a level wrist, a loose hand. */
 export const ARM_REST = { elbow: 0.35, wrist: 0, curl: 0.3 } as const;
 
@@ -292,10 +313,14 @@ export function grammarGesture(
       // The arms LIFT first, a little apart, to their staggered heights,
       // then swing in across each other — so an arm arriving late never
       // rises through the bar already in place.
+      // (Pitches as the front reads them: through rigPitch the rest pose's
+      // forward hang adds itself on, so these sit 0.35 under the old
+      // behind-the-back values — the same bar heights, the high one still
+      // clear of the visor.)
       const lift = smooth(fill / 0.55);
       const cross = smooth((fill - 0.4) / 0.6);
       for (const i of [0, 1] as const) {
-        arms[i].x = (i === 0 ? -1.95 : -1.35) * lift;
+        arms[i].x = (i === 0 ? -1.6 : -1.0) * lift;
         arms[i].z = OUT[i] * 0.2 * lift - OUT[i] * 1.0 * cross;
         joints(arms[i], lift, 0.15, 0.3, 1);
       }
@@ -315,7 +340,9 @@ export function grammarGesture(
         // Higher than the press's level spread — wings, not a shelf. The
         // jaws close as two straight bars, one OVER the other (arm 0 high,
         // arm 1 low), crossing in front of the face with air between them.
-        arms[i].x = -(1.95 + lead) * e + (i === 0 ? 0.0 : 0.6) * close;
+        // Closing, both bars drop 0.35 so the jaws meet at the old heights
+        // now they meet IN FRONT (see the X, and rigPitch).
+        arms[i].x = -(1.95 + lead) * e + ((i === 0 ? 0.0 : 0.6) + 0.35) * close;
         arms[i].z = OUT[i] * 1.3 * e - OUT[i] * 2.1 * close;
         joints(arms[i], e, lerp(0.08, 0.15, close), lerp(-0.25, 0.35, close), 0.15);
       }
