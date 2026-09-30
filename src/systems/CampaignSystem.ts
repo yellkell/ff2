@@ -73,7 +73,7 @@ import {
 } from '../campaign/gestures.js';
 import { RecitalBlockfall } from '../campaign/blockfall.js';
 import type { Zone } from '../campaign/zones.js';
-import { Bolt, impactOf, lungeEnvelope, throwingArm, type BoltLook } from '../campaign/delivery.js';
+import { Bolt, impactOf, lungeEnvelope, throwingArm } from '../campaign/delivery.js';
 import { playBossVoice, preloadBossVoice } from '../audio/bossVoice.js';
 import { GelCreature } from '../goopliath/GelCreature.js';
 import { GooFx } from '../goopliath/splats.js';
@@ -357,6 +357,8 @@ export class CampaignSystem extends createSystem({
   private lungeAge = -1;
   private lungeCur = 0;
   private readonly lungeOff = new Vector3();
+  /** Where GOOPLIATH's current heave is aimed (world) — see surgeAt. */
+  private readonly surgeAim = new Vector3(0, 0, 0);
   /** attack.time of the last throw sound — a raid chord is one throw. */
   private throwSfxAt = -1;
   private enraged = false;
@@ -475,6 +477,7 @@ export class CampaignSystem extends createSystem({
           impactsBurn: boolean[];
           early: number;
           root: number[];
+          step: number[];
         } => {
           const a = this.attack;
           const live = (a?.bolts ?? []).filter((b): b is Bolt => !!b);
@@ -502,7 +505,7 @@ export class CampaignSystem extends createSystem({
             });
           }
           const root = this.rig || this.goop ? this.bossRootPos().toArray() : [];
-          return { early, root, bolts, origins, fists, lunge: this.lungeCur, thrown: (a?.thrown ?? []).filter((t) => t === 1).length, impactsBurn };
+          return { early, root, step: this.lungeOff.toArray(), bolts, origins, fists, lunge: this.lungeCur, thrown: (a?.thrown ?? []).filter((t) => t === 1).length, impactsBurn };
         },
         heal: (): void => {
           const me = fighterAt(0);
@@ -2017,6 +2020,7 @@ export class CampaignSystem extends createSystem({
   ): void {
     this.disposeAttack(); // a straggling ratk never stacks two live attacks
     this.swingAt = -1; // the swing de-dup is per attack clock, which restarts here
+    this.throwSfxAt = -1; // …and so is the throw/heave de-dup
     if (!seats.length) seats = [this.mySeatId()];
     this.faceSeat = seats[0];
     const grammar = (GRAMMAR_KINDS as readonly string[]).includes(kind);
@@ -2418,6 +2422,9 @@ export class CampaignSystem extends createSystem({
 
   /** Seconds from fist to floor — longer across the raid's wide pit. */
   private throwTravel(): number {
+    // GOOPLIATH throws nothing: his "throw" is the surge, started so its
+    // peak lands on the beat.
+    if (this.goop) return DELIVERY.lungeTime * 0.3;
     return DELIVERY.travel * (this.raid() ? DELIVERY.raidTravelMult : 1);
   }
 
@@ -2447,6 +2454,10 @@ export class CampaignSystem extends createSystem({
     }
     a.thrown[i] = 1;
     const target = this.seatPoint(seat, impact.x, 0.06, impact.z, new Vector3());
+    if (this.goop) {
+      this.surgeAt(target, a.time);
+      return;
+    }
     // THE X's two arms (and any twin landing on one spot) are ONE throw.
     for (let j = 0; j < i; j++) {
       const b = a.bolts[j];
@@ -2462,47 +2473,45 @@ export class CampaignSystem extends createSystem({
     const from = this.fistPos(arm, new Vector3());
     const travel = Math.max(0.08, Math.min(this.throwTravel(), remaining));
     const mine = seat === this.mySeatId();
-    a.bolts[i] = new Bolt(this.scene, from, target, travel, DELIVERY.arcLift * from.distanceTo(target), this.boltLook(arm), !mine);
+    a.bolts[i] = new Bolt(this.scene, from, target, travel, DELIVERY.arcLift * from.distanceTo(target), {
+      halo: this.def.accent,
+      core: 0xffe9c2,
+      size: DELIVERY.boltSize,
+      trail: (p) => emberBurst(p, 2, true),
+    }, !mine);
     this.swingFor(a.kind, zone);
     this.startLunge();
     if (a.time - this.throwSfxAt > 0.05) {
       this.throwSfxAt = a.time;
-      if (this.goop) sfx.gooWhoosh();
-      else sfx.mortarThump();
+      sfx.mortarThump();
     }
   }
 
-  /** A titan throws fire; GOOPLIATH flings gel — a glob on a strand from
-   *  his fist, dripping as it goes, running to blood when THE TIDE RISES. */
-  private boltLook(arm: 0 | 1): BoltLook {
-    if (!this.goop) {
-      return {
-        halo: this.def.accent,
-        core: 0xffe9c2,
-        size: DELIVERY.boltSize,
-        trail: (p) => emberBurst(p, 2, true),
-      };
-    }
-    const blood = this.enraged;
-    return {
-      halo: blood ? DELIVERY.gooBlood : this.def.accent,
-      core: blood ? 0xffc9bd : 0xeaffdd,
-      size: DELIVERY.boltSize * DELIVERY.globScale,
-      glob: true,
-      trail: (p, dir) => this.goopFx?.burst(p, dir, 1, 1.4),
-      tether: (out) => this.fistPos(arm, out),
-    };
+  /**
+   * GOOPLIATH doesn't throw — he MOVES. Each beat of an attack heaves his
+   * whole body toward the part of your deck about to burn, so it peaks as
+   * the zone goes off: the seesaw rocks him left, right, left in time with
+   * the floods, the nova's lurch lands on the burning side, and the gel
+   * shudders with every beat. (A raid chord of five decks is one heave,
+   * toward the first.)
+   */
+  private surgeAt(target: Vector3, at: number): void {
+    if (at - this.throwSfxAt <= 0.05) return;
+    this.throwSfxAt = at;
+    this.surgeAim.copy(target);
+    this.lungeAge = 0; // every beat is its own heave (the eased step hides the restart)
+    if (this.goop) this.goop.sim.agitation = Math.max(this.goop.sim.agitation, DELIVERY.gooShudder);
+    sfx.gooWhoosh();
   }
 
-  /** A bolt has come down. Fire hands straight to the zone's own strike;
-   *  gel LANDS — a splat on the deck, a wet flash and a spray of droplets. */
-  private boltLanded(bolt: Bolt): void {
-    if (!this.goop || !this.goopFx) return;
-    const blood = this.enraged;
-    this.goopFx.splat(bolt.target, DELIVERY.splatSize);
-    this.goopFx.flash(bolt.target, blood ? DELIVERY.gooBlood : 0x8cff70, 0.7);
-    this.goopFx.burst(bolt.target, _up, 7, 2.2);
-    sfx.gooSlam();
+  /** Step the body in behind a throw (the sweep's cut, too): the titan
+   *  along its facing, GOOPLIATH toward the hunted fighter. */
+  private startLungeAtPrey(): void {
+    if (this.goop) {
+      this.playerHeadOf(this.faceSeat, this.surgeAim);
+      this.surgeAim.y = 0;
+    }
+    this.startLunge();
   }
 
   /** Step the chassis in behind a throw. A throw landing while the last
@@ -2672,12 +2681,8 @@ export class CampaignSystem extends createSystem({
         a.telegraphs[i]?.dispose();
         a.telegraphs[i] = null;
         // The bolt lands as the zone goes off — the strike visual takes over.
-        const landing = a.bolts[i];
-        if (landing) {
-          this.boltLanded(landing);
-          landing.dispose();
-          a.bolts[i] = null;
-        }
+        a.bolts[i]?.dispose();
+        a.bolts[i] = null;
         // The ghost hammer's hover spot feeds the crash, then it's gone.
         const m = a.markers[i] ?? null;
         this.disposeMarker(m);
@@ -2714,7 +2719,6 @@ export class CampaignSystem extends createSystem({
         if (a.thrown[i] === 0 && remaining <= this.throwTravel()) this.throwAt(a, i, remaining);
         const bolt = a.bolts[i];
         if (bolt && !bolt.update(delta)) {
-          this.boltLanded(bolt);
           bolt.dispose();
           a.bolts[i] = null;
         }
@@ -2840,7 +2844,7 @@ export class CampaignSystem extends createSystem({
       // The duckdonut's blade / the swept recital — the classic cut.
       sfx.sweepWhoosh();
       this.spawnBladeSweep(zone.y, this.attack!.arm, seat);
-      this.startLunge();
+      this.startLungeAtPrey();
     } else if (kind === 'slam') {
       sfx.slamImpact();
       if (zone.kind === 'circle') this.spawnFistCrash(zone.x, zone.z, seat);
@@ -2850,7 +2854,7 @@ export class CampaignSystem extends createSystem({
       // (GOOPLIATH already coiled through the charge — his backfist telegraph
       // whips through on this beat; see goopTelegraph.) The chassis steps
       // into the cut — the scythe is its reach.
-      this.startLunge();
+      this.startLungeAtPrey();
     } else if (kind === 'beam') {
       sfx.beamBlast();
       if (zone.kind === 'beam') this.spawnBeamColumn(zone);
@@ -3877,7 +3881,7 @@ export class CampaignSystem extends createSystem({
    * frame. The titan sets its root z every frame; the gel never does, so
    * the gel also takes last frame's z back off (animateGoop).
    */
-  private stepLunge(delta: number, fighting: boolean, root: Vector3, fx: number, fz: number): void {
+  private stepLunge(delta: number, fighting: boolean, root: Vector3, fx: number, fz: number, side = 0): void {
     if (this.lungeAge >= 0) {
       this.lungeAge += delta;
       if (this.lungeAge >= DELIVERY.lungeTime) this.lungeAge = -1;
@@ -3886,9 +3890,12 @@ export class CampaignSystem extends createSystem({
     this.lungeCur += (target - this.lungeCur) * Math.min(1, delta * 18);
     this.lungeOff.set(0, 0, 0);
     if (fighting && this.lungeCur > 1e-3) {
-      const reach = Math.min(DELIVERY.lunge * this.def.scale, DELIVERY.lungeMax) * this.lungeCur;
+      const reach = Math.min(DELIVERY.lunge * this.def.scale, this.goop ? DELIVERY.gooSurge : DELIVERY.lungeMax) * this.lungeCur;
       const len = Math.hypot(fx, fz) || 1;
-      this.lungeOff.set((fx / len) * reach, 0, (fz / len) * reach);
+      // `side`: a sideways shift (m, along the facing's right hand) that
+      // rides the same envelope — GOOPLIATH's rock toward the burning half.
+      const s = side * this.lungeCur;
+      this.lungeOff.set((fx / len) * reach - (fz / len) * s, 0, (fz / len) * reach + (fx / len) * s);
       root.x += this.lungeOff.x;
       root.z += this.lungeOff.z;
     }
@@ -3912,13 +3919,25 @@ export class CampaignSystem extends createSystem({
     this.goopFx?.update(delta);
     const fighting = this.phase === 'fight';
 
-    // THE DELIVERY's step, the gel's way: he surges toward whoever he's
-    // flinging at. Nothing else sets his root per frame, so last frame's
-    // step comes off both axes before this frame's goes on.
-    root.position.x -= this.lungeOff.x;
-    root.position.z -= this.lungeOff.z;
+    // THE HEAVE (surgeAt): his whole body lurches toward the part of the
+    // deck each beat burns, and sinks into it — gel throwing its weight,
+    // not a hand letting go. Nothing else sets his root per frame, so last
+    // frame's heave comes off before this frame's goes on.
+    root.position.sub(this.lungeOff);
+    // Forward at the fighter he's hunting; sideways toward the heave's mark,
+    // so the seesaw visibly rocks him half to half, not just nods him in.
     this.playerHeadOf(fighting ? this.faceSeat : this.mySeatId(), _head);
-    this.stepLunge(delta, fighting, root.position, _head.x - root.position.x, _head.z - root.position.z);
+    const fx = _head.x - root.position.x;
+    const fz = _head.z - root.position.z;
+    const fl = Math.hypot(fx, fz) || 1;
+    const across = ((this.surgeAim.x - root.position.x) * -fz + (this.surgeAim.z - root.position.z) * fx) / fl;
+    const side = clamp(across * DELIVERY.gooSway, -DELIVERY.gooSwayMax, DELIVERY.gooSwayMax);
+    this.stepLunge(delta, fighting, root.position, fx, fz, side);
+    if (fighting) {
+      const dip = DELIVERY.gooDip * this.goopScale * this.lungeCur;
+      this.lungeOff.y = -dip;
+      root.position.y -= dip;
+    }
 
     // Square up to whoever he's hunting. The steering APIs live in the scaled
     // parent's space (the parent never rotates — the creature owns its yaw).

@@ -13,8 +13,8 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
 
 ## What's here now
 
-- **THE TITANS FACE YOU, GOOPLIATH FLINGS GEL, AND THE WAVE STOPS
-  FLASHING.**
+- **THE TITANS FACE YOU, GOOPLIATH MOVES WITH HIS ATTACKS, AND THE WAVE
+  STOPS FLASHING.**
   - **Arms in front.** Every titan gesture used to play behind its back:
     the move language writes a reach as a negative shoulder pitch, but on
     these rigs a positive pitch swings the arm toward you. So the X crossed
@@ -25,12 +25,12 @@ beautiful dark desert, link/Discord match joins, and the web leaderboard.
     `check:gestures` alike. The X and the scissor bars come down 0.35 so the
     high bar still clears the visor: the rest pose's forward hang now adds
     on instead of cancelling.
-  - **Gel throws.** GOOPLIATH's throws are gel now. A wobbling glob
-    stretched along its flight, tied to his fist by a strand that snaps a
-    third of the way out, drips as it goes and splats on your deck (flash,
-    droplets, a floor splat). The whole body surges in behind each fling,
-    his sweep is a fat gel tendril, and all of it runs to blood once THE
-    TIDE RISES.
+  - **Goopliath moves with his attacks.** He throws nothing. Every beat
+    of an attack heaves his whole body toward the part of your deck about
+    to burn, peaking as it goes off. The seesaw rocks him half to half with
+    the floods, about ±0.55 m. He sinks into each heave, the gel shudders
+    on the beat, his sweep is a fat gel tendril, and it all runs to blood
+    once THE TIDE RISES.
   - **The wave flash.** A new move's danger strips were added visible and
     unfilled, and a cascade's later steps were only hidden on the next
     frame. So every beam of THE WAVE flashed down at once as the move began.

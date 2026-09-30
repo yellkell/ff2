@@ -17,6 +17,8 @@
  *   - every thrown impact point BURNS under its zone's own law: a throw may
  *     confirm the read, never land on safe ground;
  *   - the body STEPS IN behind the throw (the lunge), sweeps included;
+ *   - GOOPLIATH throws NOTHING: his blows are his body heaving at the
+ *     deck — the seesaw rocks him one way, then the other, on its beats;
  *   - nothing is left in flight once the attack resolves;
  *   - (--shots) a screenshot mid-flight for each kind.
  */
@@ -87,7 +89,7 @@ async function bout(browser, label, acts, boss, kinds) {
   const run = (stopAtFirstBolt) =>
     page.evaluate((stopAtFirstBolt) => {
       const T = window.__ff2.titan;
-      const out = { sawBolt: false, firstFromFist: Infinity, maxLunge: 0, impactsBurn: null, done: false, peakBolts: 0, early: 0 };
+      const out = { sawBolt: false, firstFromFist: Infinity, maxLunge: 0, impactsBurn: null, done: false, peakBolts: 0, early: 0, minX: 0, maxX: 0 };
       // The fists as they stood going INTO each frame — a throw samples the
       // fist before that frame's swing moves it.
       let fists = T.delivery().fists;
@@ -102,6 +104,8 @@ async function bout(browser, label, acts, boss, kinds) {
         out.maxLunge = Math.max(out.maxLunge, d.lunge);
         out.peakBolts = Math.max(out.peakBolts, d.bolts.length);
         out.early = Math.max(out.early, d.early);
+        out.minX = Math.min(out.minX, d.step[0]);
+        out.maxX = Math.max(out.maxX, d.step[0]);
         if (d.origins.length && !out.sawBolt) {
           out.sawBolt = true;
           for (const o of d.origins) {
@@ -153,7 +157,12 @@ async function bout(browser, label, acts, boss, kinds) {
         JSON.stringify(impactsBurn),
       );
     } else {
-      check(`${kind}: no bolt (the blow is the arm)`, !sawBolt);
+      check(`${kind}: nothing thrown (the blow is the ${boss === 'GOOPLIATH' ? 'body' : 'arm'})`, !sawBolt);
+    }
+    if (kind === 'seesaw' && boss === 'GOOPLIATH') {
+      const minX = Math.min(a.minX, b.minX);
+      const maxX = Math.max(a.maxX, b.maxX);
+      check('seesaw: he heaves one way, then the other, with the floods', minX < -0.1 && maxX > 0.1, `x from ${minX.toFixed(2)} to ${maxX.toFixed(2)} m`);
     }
     check(`${kind}: the body steps in`, Math.max(a.maxLunge, b.maxLunge) > 0.3, `peak lunge ${Math.max(a.maxLunge, b.maxLunge).toFixed(2)}`);
     check(`${kind}: the attack resolves, nothing left in flight`, (a.done || b.done) && after.bolts.length === 0, `${after.bolts.length} bolts`);
@@ -174,9 +183,9 @@ await bout(browser, 'RUSTHOOK, every floor attack thrown', ['campaign-0'], 'RUST
   wave: true,
   sweep: false,
 });
-await bout(browser, 'GOOPLIATH, every attack flung as gel', ['campaign-goopliath', 'campaign-launch-start'], 'GOOPLIATH', {
-  seesaw: true,
-  nova: true,
+await bout(browser, 'GOOPLIATH, every blow his body heaving', ['campaign-goopliath', 'campaign-launch-start'], 'GOOPLIATH', {
+  seesaw: false,
+  nova: false,
   sweep: false,
 });
 await browser.close();

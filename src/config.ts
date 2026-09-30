@@ -683,10 +683,13 @@ export const DELIVERY = {
   lunge: 0.2, // how far the chassis steps in on a throw, per unit of titan scale…
   lungeMax: 0.55, // …capped (m), so GOLIATH's step doesn't swallow the gap
   lungeTime: 0.6, // seconds for the whole step: in fast, hold, settle back
-  // GOOPLIATH flings GEL instead: a glob on a strand from his fist that
-  // splats where it lands, running to blood once THE TIDE RISES.
-  globScale: 1.15, // glob size relative to boltSize
-  splatSize: 0.55, // floor splat radius (m) where a glob lands
+  // GOOPLIATH throws nothing: every beat HEAVES his whole body toward the
+  // part of your deck about to burn, sinking into it, the gel shuddering.
+  gooSurge: 0.8, // the heave's cap (m) — he's the one boss who moves that far
+  gooDip: 0.06, // how far he sinks into each heave, per unit of his scale
+  gooShudder: 0.55, // the gel's agitation kick on each beat (0..1)
+  gooSway: 1.3, // his sideways rock per metre the beat's mark sits off his line to you…
+  gooSwayMax: 0.65, // …capped (m)
   gooBlood: 0xff3b2e, // the enraged gel's colour (matches his HUD accent)
   gooHaft: 0.07, // the gel sweep's tendril radius (m) — fatter than a titan's haft
 };
