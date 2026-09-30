@@ -9,7 +9,11 @@
  *            SLAMS (a ghost hammer descends onto the disc — step out),
  *            horizontal SWEEPS (duck the travelling blade), eye BEAMS
  *            (sidestep the strip) and pod VOLLEYS (fireballs hurled straight
- *            at you — dodge them or BLOCK with a fist). Damage runs on
+ *            at you — dodge them or BLOCK with a fist). The blow comes FROM
+ *            the titan (campaign/delivery.ts): as a zone comes due, a fire
+ *            bolt leaves the striking fist and lands in the burning part of
+ *            it on the beat, the chassis lunging in behind the throw, and
+ *            the sweep's blade rides a lit haft back to the fist. Damage runs on
  *            per-boss WEAK-POINT PATTERNS
  *            (BossDef.weakPattern): whatever is vulnerable BLINKS — the
  *            visor tell, the chest core, the low emblem — and everything
@@ -65,6 +69,8 @@ import {
   type GestureShape,
 } from '../campaign/gestures.js';
 import { RecitalBlockfall } from '../campaign/blockfall.js';
+import type { Zone } from '../campaign/zones.js';
+import { Bolt, impactOf, lungeEnvelope, throwingArm } from '../campaign/delivery.js';
 import { playBossVoice, preloadBossVoice } from '../audio/bossVoice.js';
 import { GelCreature } from '../goopliath/GelCreature.js';
 import { GooFx } from '../goopliath/splats.js';
@@ -129,6 +135,7 @@ import {
   CAMPAIGN,
   COMBAT,
   CURRENCY,
+  DELIVERY,
   DIFFICULTY,
   FIREBALL,
   GOOPLIATH,
@@ -148,27 +155,6 @@ type Phase = 'idle' | 'intro' | 'fight' | 'victory' | 'defeat' | 'resurrect';
 
 /** rst wire codes for Phase (guests follow the host's machine). */
 const PHASE_CODE: Record<Phase, number> = { idle: 0, intro: 1, fight: 2, victory: 3, defeat: 4, resurrect: 5 };
-
-type Zone =
-  | { kind: 'circle'; x: number; z: number; r: number }
-  | { kind: 'beam'; x: number; z: number; dx: number; dz: number; halfW: number }
-  | { kind: 'sweep'; y: number }
-  /** One volley shot: launches from the pod on `side` when its stagger hits. */
-  | { kind: 'shot'; side: -1 | 1 }
-  /** GOLIATH's nova: everything burns EXCEPT the safe wedge at `angle`. */
-  | { kind: 'nova'; angle: number; halfAngle: number }
-  /** The seesaw / surge flood: the platform half on `side`'s sign of the
-   *  `axis` (0 = local x, left/right seesaw; 1 = local z, front/back surge)
-   *  burns — be across the centreline when it lands. */
-  | { kind: 'half'; side: -1 | 1; axis: 0 | 1 }
-  /** THE ENCORE's grammar zones (campaign/grammar.ts): lanes, rails, the
-   *  gate, the donut's ring and the recital's quarters — all target-local.
-   *  (The grammar's height-less sweep maps onto the classic sweep above.) */
-  | { kind: 'lane'; x: number; halfW: number; yaw?: number }
-  | { kind: 'rail'; z: number; halfD: number; from: 1 | -1 }
-  | { kind: 'gate'; at: number; half: number; axis: 0 | 1 }
-  | { kind: 'ring'; innerR: number }
-  | { kind: 'quad'; corner: number; step: number; hold: boolean; pattern: readonly number[]; holds: readonly boolean[] };
 
 /** A weak point a pattern can light. The crown circuit uses all five. */
 type WeakSpot = 'head' | 'core' | 'low' | 'shoulderL' | 'shoulderR';
@@ -225,6 +211,14 @@ interface ActiveAttack {
   /** THE RECITAL only: how the lesson is timed, for the gesture that
    *  follows it (pendingGesture) — one slot per taught step. */
   lesson?: { stepSecs: number; steps: number };
+  /** THE DELIVERY (campaign/delivery.ts): the bolt thrown at each zone,
+   *  in flight until the zone detonates (null before the throw, after the
+   *  landing, and for zones with no thrown blow). */
+  bolts: (Bolt | null)[];
+  /** Per zone: 0 not yet thrown, 1 THROWN (its swing went with the throw,
+   *  so the detonation mustn't swing it again), 2 nothing to throw (the
+   *  detonation swings, as it always did). */
+  thrown: (0 | 1 | 2)[];
 }
 
 /** One volley fireball in flight — dodge it, or put a fist in its path. */
@@ -249,6 +243,7 @@ interface Strike {
 const _v = new Vector3();
 const _p = new Vector3();
 const _head = new Vector3();
+const _up = new Vector3(0, 1, 0);
 const _eyeShade = new Color();
 const _eyeAccent = new Color();
 
@@ -314,6 +309,11 @@ export class CampaignSystem extends createSystem({
   private cooldown = 2.5;
   /** The headless probe holding the titan's own picks while it forces moves. */
   private probeHold = false;
+  /** The headless probe's clock: frozen, the system only moves when the
+   *  probe STEPS it (a GPU-less runner renders a frame every few seconds,
+   *  so whole attacks would land between two looks). */
+  private probeFrozen = false;
+  private probeStepping = false;
   /** Last attack picked, classic or grammar — the never-twice law spans
    *  both vocabularies on a titan that learned to dance. */
   private lastKind: AttackKind | GrammarKind | null = null;
@@ -348,6 +348,14 @@ export class CampaignSystem extends createSystem({
    *  detonates one zone per seat on the same frame, and is ONE swing. */
   private swingAt = -1;
   private flinch = 0;
+  /** THE DELIVERY's chassis step: seconds since the last throw (−1 idle),
+   *  the eased step actually applied (0..1), and the offset it put on the
+   *  root last frame (taken back off before the sway eases x). */
+  private lungeAge = -1;
+  private lungeCur = 0;
+  private readonly lungeOff = new Vector3();
+  /** attack.time of the last throw sound — a raid chord is one throw. */
+  private throwSfxAt = -1;
   private enraged = false;
   private lastBossHp = 0;
   private hudTimer = 0;
@@ -437,6 +445,43 @@ export class CampaignSystem extends createSystem({
         hold: (on: boolean): void => {
           this.probeHold = on;
         },
+        /** Freeze the titan's clock; it then moves only on step(). */
+        freeze: (on: boolean): void => {
+          this.probeFrozen = on;
+        },
+        /** Advance the titan `n` fixed frames of `dt` seconds. */
+        step: (dt: number, n = 1): void => {
+          this.probeStepping = true;
+          try {
+            for (let i = 0; i < n; i++) this.update(dt);
+          } finally {
+            this.probeStepping = false;
+          }
+        },
+        /** THE DELIVERY, live (tools/delivery-check.mjs): bolts in flight
+         *  and where, both fists, the chassis step, and — per thrown zone —
+         *  whether its impact point burns under the zone's own law (the
+         *  throw must never land on safe ground). */
+        delivery: (): {
+          bolts: number[][];
+          origins: number[][];
+          fists: number[][];
+          lunge: number;
+          thrown: number;
+          impactsBurn: boolean[];
+        } => {
+          const a = this.attack;
+          const live = (a?.bolts ?? []).filter((b): b is Bolt => !!b);
+          const bolts = live.map((b) => b.group.position.toArray());
+          const origins = live.map((b) => b.from.toArray());
+          const fists = this.rig ? [0, 1].map((i) => this.fistPos(i as 0 | 1, new Vector3()).toArray()) : [];
+          const impactsBurn: boolean[] = [];
+          for (const zone of a?.zones ?? []) {
+            const p = impactOf(zone);
+            if (p) impactsBurn.push(this.pointBurns(zone, p.x, p.z));
+          }
+          return { bolts, origins, fists, lunge: this.lungeCur, thrown: (a?.thrown ?? []).filter((t) => t === 1).length, impactsBurn };
+        },
         heal: (): void => {
           const me = fighterAt(0);
           me?.setValue(Health, 'current', me.getValue(Health, 'max') ?? 100);
@@ -446,6 +491,7 @@ export class CampaignSystem extends createSystem({
   }
 
   update(delta: number): void {
+    if (this.probeFrozen && !this.probeStepping) return;
     this.time += delta;
     const live = app.state === 'playing' && app.mode === 'campaign';
 
@@ -926,6 +972,9 @@ export class CampaignSystem extends createSystem({
     this.hitsOnPoint = 0;
     this.invuln = 0;
     this.spinT = 0;
+    this.lungeAge = -1;
+    this.lungeCur = 0;
+    this.lungeOff.set(0, 0, 0);
     this.stunTimer = 0;
     this.stunMeter = 0;
     this.enraged = false;
@@ -1006,6 +1055,7 @@ export class CampaignSystem extends createSystem({
     a.markers.forEach((m) => this.disposeMarker(m));
     a.blockfalls.forEach((b) => b?.dispose());
     a.dressing.forEach((d) => d.dispose());
+    a.bolts.forEach((b) => b?.dispose());
     this.attack = null;
   }
 
@@ -2331,9 +2381,83 @@ export class CampaignSystem extends createSystem({
       dressing,
       cues,
       lesson,
+      bolts: zones.map(() => null),
+      thrown: zones.map(() => 0 as const),
     };
     if (this.goop) this.goopTelegraph(this.attack.kind as AttackKind, chargeTime, seats[0]);
     sfx.chargeWhine(chargeTime);
+  }
+
+  /** Seconds from fist to floor — longer across the raid's wide pit. */
+  private throwTravel(): number {
+    return DELIVERY.travel * (this.raid() ? DELIVERY.raidTravelMult : 1);
+  }
+
+  /** Where the fist on `arm` is right now (world) — the titan's gauntlet,
+   *  or the gel's own fist mass. */
+  private fistPos(arm: 0 | 1, out: Vector3): Vector3 {
+    if (this.rig) return this.rig.arms[arm].fist.getWorldPosition(out);
+    if (this.goop) return this.goop.fistWorld(arm === 0 ? 'left' : 'right', out);
+    return out.set(0, 1.5, this.bossZ());
+  }
+
+  /**
+   * THE DELIVERY: throw zone i's blow. A bolt leaves the fist on the zone's
+   * side and lobs onto the TARGET's deck inside the danger (impactOf), due
+   * exactly as the zone detonates; the arm swings through as it lets go and
+   * the chassis steps in behind it. Zones with no thrown blow (the sweep's
+   * scythe, the beam, a volley shot, the conducted recital, the slam's own
+   * ghost hammer) are marked done and keep their old path.
+   */
+  private throwAt(a: ActiveAttack, i: number, remaining: number): void {
+    const zone = a.zones[i];
+    const seat = a.zoneSeats[i] ?? a.seats[0];
+    const impact = a.kind === 'slam' ? null : impactOf(zone);
+    if (!impact) {
+      a.thrown[i] = 2; // never ask again; the detonation swings as before
+      return;
+    }
+    a.thrown[i] = 1;
+    const target = this.seatPoint(seat, impact.x, 0.06, impact.z, new Vector3());
+    // THE X's two arms (and any twin landing on one spot) are ONE throw.
+    for (let j = 0; j < i; j++) {
+      const b = a.bolts[j];
+      if (!b || (a.zoneSeats[j] ?? a.seats[0]) !== seat || a.staggers[j] !== a.staggers[i]) continue;
+      if (b.target.distanceTo(target) < 0.05) return;
+    }
+    // The fist on the target's side of the chassis: right-hand vector of a
+    // body yawed `ry` (it faces (−sin ry, −cos ry)) is (−cos ry, sin ry).
+    const root = this.bossRootPos();
+    const ry = this.rig ? this.rig.root.rotation.y : Math.PI;
+    const side = (target.x - root.x) * -Math.cos(ry) + (target.z - root.z) * Math.sin(ry);
+    const arm = throwingArm(side, a.arm);
+    const from = this.fistPos(arm, new Vector3());
+    const travel = Math.max(0.08, Math.min(this.throwTravel(), remaining));
+    const mine = seat === this.mySeatId();
+    a.bolts[i] = new Bolt(
+      this.scene,
+      from,
+      target,
+      travel,
+      DELIVERY.arcLift * from.distanceTo(target),
+      this.def.accent,
+      DELIVERY.boltSize,
+      !mine,
+    );
+    this.swingFor(a.kind, zone);
+    this.startLunge();
+    if (a.time - this.throwSfxAt > 0.05) {
+      this.throwSfxAt = a.time;
+      if (this.goop) sfx.gooWhoosh();
+      else sfx.mortarThump();
+    }
+  }
+
+  /** Step the chassis in behind a throw. A throw landing while the last
+   *  step is still coming IN doesn't restart it — only a settling one. */
+  private startLunge(): void {
+    if (this.lungeAge >= 0 && this.lungeAge < DELIVERY.lungeTime * 0.3) return;
+    this.lungeAge = 0;
   }
 
   /**
@@ -2495,6 +2619,9 @@ export class CampaignSystem extends createSystem({
         a.resolved[i] = true;
         a.telegraphs[i]?.dispose();
         a.telegraphs[i] = null;
+        // The bolt lands as the zone goes off — the strike visual takes over.
+        a.bolts[i]?.dispose();
+        a.bolts[i] = null;
         // The ghost hammer's hover spot feeds the crash, then it's gone.
         const m = a.markers[i] ?? null;
         this.disposeMarker(m);
@@ -2518,7 +2645,7 @@ export class CampaignSystem extends createSystem({
             },
           });
         }
-        this.detonate(a.kind, a.zones[i], a.zoneSeats[i] ?? a.seats[0]);
+        this.detonate(a.kind, a.zones[i], a.zoneSeats[i] ?? a.seats[0], a.thrown[i] === 1);
       } else {
         // A grammar cascade's later steps carry a one-charge WINDOW: the
         // telegraph opens (and its fill runs) only that long before its own
@@ -2526,6 +2653,14 @@ export class CampaignSystem extends createSystem({
         const window = Math.min(a.windows[i] ?? dueAt, dueAt);
         const remaining = dueAt - a.time;
         const fill = clamp(1 - remaining / window, 0, 1);
+        // THE DELIVERY: the blow leaves the fist early enough to land on
+        // the beat, then flies on its own clock until the zone detonates.
+        if (a.thrown[i] === 0 && remaining <= this.throwTravel()) this.throwAt(a, i, remaining);
+        const bolt = a.bolts[i];
+        if (bolt && !bolt.update(delta)) {
+          bolt.dispose();
+          a.bolts[i] = null;
+        }
         const tg = a.telegraphs[i];
         if (tg) {
           tg.update(fill, this.time);
@@ -2623,30 +2758,12 @@ export class CampaignSystem extends createSystem({
   /** A zone goes off: strike visual + sound on the TARGET's platform, and
    *  damage only if the zone is MINE and I'm in it. (A volley zone
    *  "detonating" is its LAUNCH — the shot judges itself in updateShots.) */
-  private detonate(kind: AttackKind | GrammarKind, zone: Zone, seat: number): void {
+  private detonate(kind: AttackKind | GrammarKind, zone: Zone, seat: number, thrown = false): void {
     const mine = seat === this.mySeatId();
     const hit = mine && this.zoneTouchesPlayer(zone);
 
-    // The gesture keeps its promise: a grammar landing SWINGS the arm(s)
-    // its windup raised (campaign/gestures.ts) — once per landing beat, not
-    // once per seat, so a raid's five-deck chord is one swing, one sound.
-    const gshape = (GRAMMAR_KINDS as readonly string[]).includes(kind)
-      ? kind === 'recital' && zone.kind === 'quad'
-        ? 'conduct' // the recital's landings are conducted — the body never points at the answer
-        : gestureShapeOf(kind, zone)
-      : null;
-    if (gshape && this.attack && this.attack.time - this.swingAt > 0.05) {
-      this.swingAt = this.attack.time;
-      const focus = gestureFocusOf(zone);
-      this.swingShape = gshape;
-      this.swingFocus = focus;
-      const both = gshape === 'x' || gshape === 'scissor' || gshape === 'press' || gshape === 'ring';
-      const arm: 0 | 1 = focus.side === 0 ? this.attack.arm : armFor(focus.side);
-      if (both) this.strikeSwing[0] = this.strikeSwing[1] = 0.6;
-      else this.strikeSwing[arm] = 0.6;
-      if (gshape === 'press') sfx.clap(); // the gauntlets meet either side of the gap
-      else if (gshape === 'ring') sfx.fistBump(); // the overhead hands part with a DONK
-    }
+    // A thrown zone already swung its arm when the bolt left the fist.
+    if (!thrown) this.swingFor(kind, zone);
 
     // THE ENCORE's zones detonate by SHAPE (one grammar move mixes several).
     if (zone.kind === 'lane' || zone.kind === 'rail') {
@@ -2666,52 +2783,98 @@ export class CampaignSystem extends createSystem({
       // The duckdonut's blade / the swept recital — the classic cut.
       sfx.sweepWhoosh();
       this.spawnBladeSweep(zone.y, this.attack!.arm, seat);
+      this.startLunge();
     } else if (kind === 'slam') {
       sfx.slamImpact();
       if (zone.kind === 'circle') this.spawnFistCrash(zone.x, zone.z, seat);
-      this.swingShape = 'hammer';
-      this.swingFocus = { side: 0, fwd: 0, arm: this.attack!.arm };
-      this.strikeSwing[this.attack!.arm] = 0.6;
-      // A multi-platform slam alternates fists, landing to landing — both
-      // hoisted hammers visibly take their turns.
-      if (this.attack!.seats.length > 1) {
-        this.attack!.arm = (this.attack!.arm === 0 ? 1 : 0) as 0 | 1;
-      }
     } else if (kind === 'sweep') {
       sfx.sweepWhoosh();
       if (zone.kind === 'sweep') this.spawnBladeSweep(zone.y, this.attack!.arm, seat);
       // (GOOPLIATH already coiled through the charge — his backfist telegraph
-      // whips through on this beat; see goopTelegraph.)
-      this.swingShape = 'scythe';
-      this.swingFocus = { side: 0, fwd: 0, arm: this.attack!.arm };
-      this.strikeSwing[this.attack!.arm] = 0.6;
-      // The squad sweep: the titan whips through a FULL TURN while the blade
-      // cascades around the arc — re-armed per landing so the spin carries
-      // through the whole cut.
-      if (this.raid() && this.attack!.seats.length > 1) {
-        this.spinT = Math.max(this.spinT, 0.5);
-        this.strikeSwing[this.attack!.arm === 0 ? 1 : 0] = 0.6; // both arms follow through
-      }
+      // whips through on this beat; see goopTelegraph.) The chassis steps
+      // into the cut — the scythe is its reach.
+      this.startLunge();
     } else if (kind === 'beam') {
       sfx.beamBlast();
       if (zone.kind === 'beam') this.spawnBeamColumn(zone);
-      // The cannon KICKS on the shot.
-      this.swingShape = 'cannon';
-      this.swingFocus = { side: 0, fwd: 0, arm: this.attack!.arm };
-      this.strikeSwing[this.attack!.arm] = 0.6;
     } else if (kind === 'nova') {
       sfx.beamBlast();
       sfx.slamImpact();
       if (zone.kind === 'nova') this.spawnNovaWave(zone.angle, zone.halfAngle, seat);
       // (GOOPLIATH's uppercut telegraph surges the wave out on this beat.)
+    } else if (kind === 'seesaw' || kind === 'surge') {
+      if (this.goop) sfx.gooSlam();
+      else sfx.slamImpact();
+      if (zone.kind === 'half') this.spawnHalfFlood(zone.side, seat, zone.axis);
+    } else if (zone.kind === 'shot') {
+      this.launchShot(zone.side, seat);
+    }
+
+    if (hit && this.invuln <= 0) {
+      this.invuln = 0.7;
+      this.damagePlayer(CAMPAIGN.attackDamage);
+    }
+  }
+
+  /**
+   * The body's half of a strike: which arm(s) swing through and in what
+   * shape. Fires at the detonation — or, for a THROWN zone, as the bolt
+   * leaves the fist (throwAt), so the follow-through and the throw are one
+   * motion and the blow flies out of the swing rather than after it.
+   */
+  private swingFor(kind: AttackKind | GrammarKind, zone: Zone): void {
+    const a = this.attack;
+    if (!a) return;
+    // The gesture keeps its promise: a grammar landing SWINGS the arm(s)
+    // its windup raised (campaign/gestures.ts) — once per landing beat, not
+    // once per seat, so a raid's five-deck chord is one swing, one sound.
+    if ((GRAMMAR_KINDS as readonly string[]).includes(kind)) {
+      const gshape = kind === 'recital' && zone.kind === 'quad'
+        ? 'conduct' // the recital's landings are conducted — the body never points at the answer
+        : gestureShapeOf(kind, zone);
+      if (gshape && a.time - this.swingAt > 0.05) {
+        this.swingAt = a.time;
+        const focus = gestureFocusOf(zone);
+        this.swingShape = gshape;
+        this.swingFocus = focus;
+        const both = gshape === 'x' || gshape === 'scissor' || gshape === 'press' || gshape === 'ring';
+        const arm: 0 | 1 = focus.side === 0 ? a.arm : armFor(focus.side);
+        if (both) this.strikeSwing[0] = this.strikeSwing[1] = 0.6;
+        else this.strikeSwing[arm] = 0.6;
+        if (gshape === 'press') sfx.clap(); // the gauntlets meet either side of the gap
+        else if (gshape === 'ring') sfx.fistBump(); // the overhead hands part with a DONK
+      }
+      return;
+    }
+    if (kind === 'slam') {
+      this.swingShape = 'hammer';
+      this.swingFocus = { side: 0, fwd: 0, arm: a.arm };
+      this.strikeSwing[a.arm] = 0.6;
+      // A multi-platform slam alternates fists, landing to landing — both
+      // hoisted hammers visibly take their turns.
+      if (a.seats.length > 1) a.arm = (a.arm === 0 ? 1 : 0) as 0 | 1;
+    } else if (kind === 'sweep') {
+      this.swingShape = 'scythe';
+      this.swingFocus = { side: 0, fwd: 0, arm: a.arm };
+      this.strikeSwing[a.arm] = 0.6;
+      // The squad sweep: the titan whips through a FULL TURN while the blade
+      // cascades around the arc — re-armed per landing so the spin carries
+      // through the whole cut.
+      if (this.raid() && a.seats.length > 1) {
+        this.spinT = Math.max(this.spinT, 0.5);
+        this.strikeSwing[a.arm === 0 ? 1 : 0] = 0.6; // both arms follow through
+      }
+    } else if (kind === 'beam') {
+      // The cannon KICKS on the shot.
+      this.swingShape = 'cannon';
+      this.swingFocus = { side: 0, fwd: 0, arm: a.arm };
+      this.strikeSwing[a.arm] = 0.6;
+    } else if (kind === 'nova') {
       // The coil is THROWN wide.
       this.swingShape = 'coil';
       this.swingFocus = { side: 0, fwd: 0, both: true };
       this.strikeSwing[0] = this.strikeSwing[1] = 0.6;
     } else if (kind === 'seesaw' || kind === 'surge') {
-      if (this.goop) sfx.gooSlam();
-      else sfx.slamImpact();
-      if (zone.kind === 'half') this.spawnHalfFlood(zone.side, seat, zone.axis);
       // The rig titans' tilt SLAPS the flooding half down and the shove
       // DRIVES; GOOPLIATH keeps his opening gesture as the only swing —
       // per-half limb slams re-ballooned the raymarch bounds on every beat
@@ -2721,19 +2884,11 @@ export class CampaignSystem extends createSystem({
         this.swingFocus = zone.axis === 1 ? { side: 0, fwd: zone.side } : { side: zone.side, fwd: 0 };
         this.strikeSwing[0] = this.strikeSwing[1] = 0.6;
       }
-    } else {
-      if (zone.kind === 'shot') {
-        this.launchShot(zone.side, seat);
-        // The launcher JOLTS on every shot.
-        this.swingShape = 'launcher';
-        this.swingFocus = { side: 0, fwd: 0, both: true };
-        this.strikeSwing[0] = this.strikeSwing[1] = 0.45;
-      }
-    }
-
-    if (hit && this.invuln <= 0) {
-      this.invuln = 0.7;
-      this.damagePlayer(CAMPAIGN.attackDamage);
+    } else if (zone.kind === 'shot') {
+      // The launcher JOLTS on every shot.
+      this.swingShape = 'launcher';
+      this.swingFocus = { side: 0, fwd: 0, both: true };
+      this.strikeSwing[0] = this.strikeSwing[1] = 0.45;
     }
   }
 
@@ -2785,6 +2940,30 @@ export class CampaignSystem extends createSystem({
       }
     }
     return false;
+  }
+
+  /** Does a bare target-local floor point burn under `zone`'s law? The
+   *  probe's check that a delivery never lands on safe ground — the same
+   *  tests zoneTouchesPlayer runs, for a point with no body radius. */
+  private pointBurns(zone: Zone, x: number, z: number): boolean {
+    switch (zone.kind) {
+      case 'nova': {
+        const d = Math.abs(((Math.atan2(x, z) - zone.angle + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+        return d > zone.halfAngle;
+      }
+      case 'circle':
+        return Math.hypot(x - zone.x, z - zone.z) <= zone.r;
+      case 'half':
+        return (zone.axis === 1 ? z : x) * zone.side > GOOPLIATH.seesawSafeLip;
+      case 'lane':
+      case 'rail':
+      case 'gate':
+      case 'ring':
+      case 'quad':
+        return grammarZoneHit(zone, x, z, 0);
+      default:
+        return true;
+    }
   }
 
   private damagePlayer(amount: number): void {
@@ -2884,6 +3063,23 @@ export class CampaignSystem extends createSystem({
     this.scene.add(blade);
     const edge = glowSprite(this.def.accent, 0.5 * s);
     this.scene.add(edge);
+    // THE DELIVERY's scythe: a lit haft from the striking fist to the blade
+    // for the whole cut, so the blade is visibly the END OF THE ARM sweeping
+    // your deck — not a wall that appears on it. (A unit cylinder along +y,
+    // stretched and turned onto fist → blade every frame.)
+    const haft = new Mesh(
+      new CylinderGeometry(0.03, 0.05, 1, 8, 1, true),
+      new MeshBasicMaterial({
+        color: this.def.accent,
+        transparent: true,
+        opacity: 0.75,
+        blending: AdditiveBlending,
+        depthWrite: false,
+      }),
+    );
+    this.scene.add(haft);
+    const fistAt = (out: Vector3): Vector3 => this.fistPos(arm, out);
+    const fist = new Vector3();
     const from = arm === 0 ? 1 : -1; // the striking arm's side (see yaw)
     const span = OCTAGON_HALF_WIDTH + 0.7;
     let emberClock = 0;
@@ -2899,6 +3095,16 @@ export class CampaignSystem extends createSystem({
         blade.position.set(wx, y, wz);
         edge.position.set(wx, y, wz);
         (blade.material as MeshBasicMaterial).opacity = 0.9 * (1 - k * k * k);
+        fistAt(fist);
+        _p.set(wx, y, wz).sub(fist);
+        const len = _p.length();
+        haft.visible = len > 0.05;
+        if (haft.visible) {
+          haft.position.copy(fist).addScaledVector(_p, 0.5);
+          haft.quaternion.setFromUnitVectors(_up, _p.multiplyScalar(1 / len));
+          haft.scale.set(1, len, 1);
+          (haft.material as MeshBasicMaterial).opacity = 0.75 * (1 - k * k * k);
+        }
         // Sparks shed along the cut.
         if (age > emberClock) {
           emberClock = age + 0.045;
@@ -2913,6 +3119,9 @@ export class CampaignSystem extends createSystem({
         blade.removeFromParent();
         edge.material.dispose();
         edge.removeFromParent();
+        haft.geometry.dispose();
+        (haft.material as MeshBasicMaterial).dispose();
+        haft.removeFromParent();
       },
     });
   }
@@ -3356,6 +3565,8 @@ export class CampaignSystem extends createSystem({
     // swoop back to centre, and the flinch snap would erase the fortress's
     // roll-in). Enraged machines pace.
     if (fighting) {
+      // Last frame's lunge comes off first, so the sway eases the true x.
+      rig.root.position.x -= this.lungeOff.x;
       const swayRate = this.enraged ? 0.85 : 0.45;
       const sway = Math.sin(this.time * swayRate) * this.def.swayAmp;
       rig.root.position.x += (sway - rig.root.position.x) * Math.min(1, delta * 1.6);
@@ -3366,6 +3577,23 @@ export class CampaignSystem extends createSystem({
     this.flinch = Math.max(0, this.flinch - delta);
     if (fighting) {
       rig.root.position.z = this.bossZ() + (this.flinch > 0 ? -0.18 * (this.flinch / 0.35) : 0);
+    }
+
+    // THE DELIVERY's step: every throw carries the whole chassis in along
+    // its facing and back — the blow comes from a body that MEANT it.
+    if (this.lungeAge >= 0) {
+      this.lungeAge += delta;
+      if (this.lungeAge >= DELIVERY.lungeTime) this.lungeAge = -1;
+    }
+    const lungeTarget = this.lungeAge >= 0 ? lungeEnvelope(this.lungeAge / DELIVERY.lungeTime) : 0;
+    this.lungeCur += (lungeTarget - this.lungeCur) * Math.min(1, delta * 18);
+    this.lungeOff.set(0, 0, 0);
+    if (fighting && this.lungeCur > 1e-3) {
+      const reach = Math.min(DELIVERY.lunge * this.def.scale, DELIVERY.lungeMax) * this.lungeCur;
+      const ry = rig.root.rotation.y; // faces (−sin ry, −cos ry)
+      this.lungeOff.set(-Math.sin(ry) * reach, 0, -Math.cos(ry) * reach);
+      rig.root.position.x += this.lungeOff.x;
+      rig.root.position.z += this.lungeOff.z;
     }
 
     // RAID: the whole machine squares up to whoever it's hunting — the body

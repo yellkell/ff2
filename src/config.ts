@@ -667,6 +667,25 @@ export const CAMPAIGN = {
 };
 
 /**
+ * THE DELIVERY — the titan THROWS the hit. A floor zone used to charge on
+ * your deck and then simply go off; now the blow leaves the striking fist
+ * (or both, for the nova's coil) as a fire bolt that lands ON THE BEAT the
+ * zone detonates, always somewhere inside the danger — never on the safe
+ * ground — while the whole chassis lunges in behind it. Purely visual: the
+ * zones, their timing and their judge are untouched, so every read and
+ * every dodge is exactly as fair as before (campaign/delivery.ts).
+ */
+export const DELIVERY = {
+  travel: 0.36, // seconds from fist to floor — launches this long before the zone is due
+  raidTravelMult: 1.4, // the raid pit is twice as far out; a longer throw keeps it a throw
+  arcLift: 0.22, // how high the lob bows over its straight line, per metre travelled
+  boltSize: 0.5, // glow sprite size (m) of the bolt's halo
+  lunge: 0.2, // how far the chassis steps in on a throw, per unit of titan scale…
+  lungeMax: 0.55, // …capped (m), so GOLIATH's step doesn't swallow the gap
+  lungeTime: 0.6, // seconds for the whole step: in fast, hold, settle back
+};
+
+/**
  * THE MOVE GRAMMAR — tuning for the ENCORE campaign's RAVE RAID vocabulary
  * (campaign/grammar.ts; DESIGN.md §4). The numbers are RAVE RAID's own
  * (dance/src/config.ts CHOREO), proven on the same octagon deck; distances

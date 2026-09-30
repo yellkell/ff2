@@ -194,6 +194,14 @@ const bossName = await page.evaluate(() => window.__ff2.titan.boss());
 check('stage I launches into a fight', fighting, `phase wait; boss=${bossName}`);
 check('RUSTHOOK takes the pit, grammar learned', bossName === 'RUSTHOOK', bossName);
 const learned = await page.evaluate(() => window.__ff2.titan.moves());
+// The titan's clock is frozen and STEPPED at a fixed 60 Hz from here on: a
+// GPU-less runner renders a frame every few seconds, and a wall-clock wait
+// let whole moves land (or never start) between two looks.
+await page.evaluate(() => {
+  window.__ff2.titan.hold(true);
+  window.__ff2.titan.freeze(true);
+});
+const step = (secs) => page.evaluate((n) => window.__ff2.titan.step(1 / 60, n), Math.round(secs * 60));
 check('the scrapyard knows the gate', learned.includes('gate') && learned.includes('lanes'), learned.join(','));
 
 const EXPECT = {
@@ -220,14 +228,20 @@ const GESTURE = {
 const silhouettes = {};
 for (const [kind, wants] of Object.entries(EXPECT)) {
   await page.evaluate(() => window.__ff2.titan.heal());
+  // Let the last move play out before forcing the next.
+  await page.evaluate(() => {
+    for (let f = 0; f < 900 && window.__ff2.titan.kind(); f++) window.__ff2.titan.step(1 / 60);
+  });
   const forced = await page.evaluate((k) => window.__ff2.titan.force(k, 11), kind);
   const zones = await page.evaluate(() => window.__ff2.titan.zones());
   const ok = forced && zones.length > 0 && wants.some((w) => zones.includes(w));
   check(`${kind}: builds and marks the deck`, ok, zones.join(','));
-  // Mid-read: the telegraph is lit and the arms are up. Sampled well short
-  // of the shortest charge (RUSTHOOK reads in ~1.4 s) so a slow frame can't
-  // let the move land before the pose is read.
-  await page.waitForTimeout(700);
+  // Mid-read: the telegraph is lit and the arms are up. Sampled short of
+  // the shortest charge (RUSTHOOK reads in ~1.4 s) but past the first third
+  // of the read — at 0.7 s the donut's opening point had only lifted 0.33
+  // rad, under the 0.35 bar, on a stepped clock that no longer gets the
+  // extra slack a slow real frame used to add.
+  await step(1.0);
   const pose = await page.evaluate(() => window.__ff2.titan.pose());
   // Some shapes point ONE arm; the donut's opening lane is a point too, so
   // only the shape family is asserted, not the exact zone.
@@ -236,11 +250,12 @@ for (const [kind, wants] of Object.entries(EXPECT)) {
   check(`${kind}: the body makes the ${GESTURE[kind]}`, shapeOk && reach > 0.35, `shape=${pose?.shape} fill=${pose?.fill?.toFixed(2)} reach=${reach.toFixed(2)}`);
   if (pose) silhouettes[kind] = pose.arms.flat();
   if (shots) {
+    await page.waitForTimeout(2500); // one real frame to draw the frozen pose
     const file = join(here, `grammar-${kind}.png`);
     writeFileSync(file, await page.screenshot());
     console.log(`  wrote ${file}`);
   }
-  await page.waitForTimeout(shots ? 400 : 250);
+  await step(0.25);
 }
 // Every shape a DIFFERENT silhouette: no two windups within 0.4 rad (L1
 // over both arms' pitch + yaw) of each other — readable at a glance.
