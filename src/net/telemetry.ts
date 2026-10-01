@@ -257,7 +257,10 @@ export const telemetry = {
       par: t.par,
       att: t.att,
       grid: { w: TV.gridW, h: TV.gridH, stand: Array.from(t.stand), thrL: Array.from(t.thrL), thrR: Array.from(t.thrR), hit: Array.from(t.hit), land: Array.from(t.land) },
-      ev: t.ev,
+      // One string per event ("t,type,…"): Firestore refuses an array of
+      // arrays outright (the SDK throws before it sends), so a tape posted
+      // as rows never landed anywhere. public/stats.html splits them back.
+      ev: t.ev.map((row) => row.join(',')),
       dropped: t.dropped,
       ...(t.boss ? { boss: t.boss } : {}),
     });
