@@ -106,7 +106,6 @@ const SONG_Y0 = 96;
 const SONG_PITCH = 61;
 const SONG_ROW_H = 55;
 const SONG_VISIBLE = 12;
-const DIFF_KEY = 'gdr-diff';
 
 /** Club figures track the wire critically damped — real people's motion
  *  carries its own character; the spring's job is continuity, not bounce.
@@ -753,15 +752,6 @@ export class ClubSocialSystem extends createSystem({}) {
     } else if (id === 'start') {
       // Cut the wait: the relay deals whoever is on the ball right now.
       startBall();
-    } else if (id.startsWith('diff')) {
-      // The act floor for the chart my ball calls — same store the board
-      // uses, so the foyer and the floor always agree.
-      match.difficulty = Math.max(0, Math.min(3, Number(id.slice(4))));
-      try {
-        localStorage.setItem(DIFF_KEY, String(match.difficulty));
-      } catch {
-        /* fine */
-      }
     } else if (id === 'leave') {
       this.panel.setShown(false);
       this.closeSongs();
@@ -1223,19 +1213,17 @@ export class ClubSocialSystem extends createSystem({}) {
         h: fights ? 58 : 74,
         small: true,
       });
-      // DIFFICULTY: the chart's act floor — the caller's pick rides the ball
-      // with the song (the board's row, moved in with the rest of the desk).
-      DIFFICULTY.labels.forEach((label, i) => {
-        buttons.push({
-          id: `diff${i}`,
-          label,
-          selected: match.difficulty === i,
-          x: 24 + i * 165,
-          y: fights ? 764 : 740,
-          w: 157,
-          h: fights ? 40 : 54,
-          small: true,
-        });
+      // DIFFICULTY: every ball off the tour calls EXPERT (DIFFICULTY.solo) —
+      // one plate across the row the four choices used to share.
+      buttons.push({
+        id: 'expert',
+        label: DIFFICULTY.labels[DIFFICULTY.solo],
+        selected: true,
+        x: 24,
+        y: fights ? 764 : 740,
+        w: 3 * 165 + 157,
+        h: fights ? 40 : 54,
+        small: true,
       });
     }
     const ctaY = tiered ? 838 : fights ? 810 : 808;

@@ -99,8 +99,8 @@ export interface MatchState {
   /** Lobby override: a track id to always play, or '' for seed shuffle. */
   preferredTrack: string;
   /** DIFFICULTY (0 easy · 1 normal · 2 hard · 3 expert) — the act floor for
-   *  the whole song. Chosen on the board; the ball carries the caller's
-   *  choice. */
+   *  the whole song. EXPERT everywhere but the tour (DIFFICULTY.solo); a
+   *  tour night sets its own, and the ball carries the caller's. */
   difficulty: number;
   bpm: number;
   /** Is this chart running EXPERT DOUBLE TIME? match.bpm is then 2× the
@@ -193,7 +193,7 @@ export const match: MatchState = {
   seed: 1,
   trackId: '',
   preferredTrack: '',
-  difficulty: 1,
+  difficulty: 3, // DIFFICULTY.solo — EXPERT off the tour
   bpm: MUSIC.fallbackBpm,
   doubleTime: false,
   phrases: 8,

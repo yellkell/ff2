@@ -615,6 +615,12 @@ export const CHOREO = {
  */
 export const DIFFICULTY = {
   labels: ['EASY', 'NORMAL', 'HARD', 'EXPERT'],
+  /** EXPERT ONLY. Off the tour there is no picker any more: every solo set
+   *  and every ball on the club floor is EXPERT, because the lower floors
+   *  read as boring and nearly every run on the world boards was EXPERT
+   *  anyway. The tour keeps its own ramp (game/flow.ts startRaid) — EASY,
+   *  NORMAL, HARD by set — as the place the moves are learnt. */
+  solo: 3,
   baseAct: [0, 1, 2, 3],
   /** The lift: one more act from this fraction of the set on. */
   liftAt: 0.6,

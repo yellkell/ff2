@@ -10,7 +10,7 @@
  * boundaries are fractions of the set) stretches to fit whatever is on.
  */
 
-import { MUSIC, RING, TOUR, chartBpm, countInBeatsFor, nextMcVisit } from '../config.js';
+import { DIFFICULTY, MUSIC, RING, TOUR, chartBpm, countInBeatsFor, nextMcVisit } from '../config.js';
 import { pickRaidTrack, trackById, trackPhrases, type Track } from '../audio/tracks.js';
 import { submitWorldScore } from '../net/scores.js';
 import { addCoins } from '../../menu/wallet.js';
@@ -67,11 +67,10 @@ export function startRaid(opts: RaidOptions = {}): void {
   match.mySeat = opts.mySeat ?? 0;
   match.seed = opts.seed ?? freshSeed();
   if (opts.difficulty !== undefined) match.difficulty = Math.max(0, Math.min(3, opts.difficulty));
-  // THE CAMPAIGN CURVE: tour nights ignore every picker. The road teaches —
-  // EASY through the opening set, NORMAL through peak hours, HARD after
-  // hours — and EXPERT stays a thing you choose on the SOLO shelf, never
-  // something the entry night ambushes you with because the difficulty row
-  // happened to be parked high. (toLobby/toTour hand the picker back.)
+  // THE CAMPAIGN CURVE: the tour is the one place below EXPERT. The road
+  // teaches — EASY through the opening set, NORMAL through peak hours, HARD
+  // after hours — and everywhere else is EXPERT (DIFFICULTY.solo).
+  // (toLobby/toTour hand EXPERT back.)
   if (opts.tour) match.difficulty = Math.min(2, opts.tour.set);
 
   // The headliner: the MC runs most nights; the GOOP takes tour finales.
@@ -156,16 +155,10 @@ export function finishRaid(): void {
   match.screen = 'podium';
 }
 
-/** The campaign clamps match.difficulty per set; leaving a night hands the
- *  SOLO picker's stored choice back so the shelf shows what YOU set. */
+/** The campaign clamps match.difficulty per set; leaving a night puts the
+ *  floor back on EXPERT, the only difficulty off the tour. */
 function restorePickedDifficulty(): void {
-  try {
-    const raw = localStorage.getItem('gdr-diff');
-    const n = raw === null ? NaN : Number(raw);
-    match.difficulty = Number.isFinite(n) && n >= 0 && n <= 3 ? n : 1;
-  } catch {
-    match.difficulty = 1;
-  }
+  match.difficulty = DIFFICULTY.solo;
 }
 
 /** The tour screen (the campaign of song sets). */

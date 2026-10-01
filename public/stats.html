@@ -1767,9 +1767,6 @@
 
       <!-- ══ RAVE RAID ══ -->
       <section id="face-rr" class="hidden">
-        <nav class="rail sub" id="rr-rail" role="tablist" aria-label="Difficulty">
-          <div class="rail-marker" id="rr-marker"></div>
-        </nav>
         <main class="stage split">
           <section class="panel opening">
             <i class="halo"></i><span class="sheen"></span>
@@ -2917,27 +2914,18 @@
         ['passion', 'PASSION'], ['final', 'FINAL'], ['overtime', 'OVERTIME'],
         ['bringiton', 'BRING IT ON'], ['erase', 'ERASE'],
       ];
-      const RR_DIFFS = [
-        { id: '0', label: 'Easy' }, { id: '1', label: 'Normal' },
-        { id: '2', label: 'Hard' }, { id: '3', label: 'Expert' },
-      ];
+      // Rave Raid is EXPERT only off the tour (src/rave/config.ts DIFFICULTY.solo),
+      // so every chart's board is its EXPERT board. Runs from before that on
+      // other difficulties stay in Firestore; nothing reads them.
+      const RR_DIFF = '3';
       const GRADE_COLOUR = { S: 'var(--g-s)', A: 'var(--g-a)', B: 'var(--g-b)', C: 'var(--g-c)', F: 'var(--g-f)' };
-      const rr = { track: [...RR_TRACKS].sort((a, b) => a[1].localeCompare(b[1]))[0][0], diff: '1', cache: new Map() };
+      const rr = { track: [...RR_TRACKS].sort((a, b) => a[1].localeCompare(b[1]))[0][0], diff: RR_DIFF, cache: new Map() };
 
       /** A rave chart's board id — mirrors src/net/boards.ts raveBoard(). */
       const raveBoard = (track, diff) =>
         `rave-${String(track).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}-${diff}`;
 
       document.getElementById('rr-find').addEventListener('input', () => drawRrSongs());
-
-      function drawRrRail() {
-        fillRail('rr-rail', 'rr-marker', RR_DIFFS, rr.diff, (id) => {
-          rr.diff = id;
-          drawRrRail();
-          drawRrSongs();
-          void loadRr(false);
-        });
-      }
 
       function drawRrSongs() {
         const host = document.getElementById('rr-songs');
@@ -2969,7 +2957,7 @@
         const rowsEl = document.getElementById('rr-rows');
         const board = raveBoard(rr.track, rr.diff);
         const name = (RR_TRACKS.find(([id]) => id === rr.track) || [rr.track, rr.track])[1];
-        document.getElementById('rr-title').textContent = `${name} · ${(RR_DIFFS.find((d) => d.id === rr.diff) || {}).label || ''}`;
+        document.getElementById('rr-title').textContent = name;
         if (!force && rr.cache.has(board)) return paintRr(rr.cache.get(board));
         rowsEl.innerHTML = '';
         showStatus(status, 'READING THE BOARD', '', false);
@@ -3861,7 +3849,7 @@
 
         // The player doc, the run boards and every rave chart, all at once.
         const ravePaths = [];
-        for (const [track] of RR_TRACKS) for (const d of ['0', '1', '2', '3']) ravePaths.push(`boards/${raveBoard(track, d)}/rows/${uid}`);
+        for (const [track] of RR_TRACKS) ravePaths.push(`boards/${raveBoard(track, RR_DIFF)}/rows/${uid}`);
         const runPaths = RUN_BOARD_NAMES.map(([id]) => `boards/${id}/rows/${uid}`);
         let player = null, rows = new Map();
         try {
@@ -3985,10 +3973,8 @@
         const status = document.getElementById('profile-rave-status');
         const charts = [];
         for (const [track, title] of RR_TRACKS) {
-          for (const d of ['0', '1', '2', '3']) {
-            const r = rows.get(`boards/${raveBoard(track, d)}/rows/${profile.uid}`);
-            if (r) charts.push({ title, diff: RR_DIFFS.find((x) => x.id === d)?.label || d, score: Number(r.value) || 0, grade: (r.meta && r.meta.grade) || '' });
-          }
+          const r = rows.get(`boards/${raveBoard(track, RR_DIFF)}/rows/${profile.uid}`);
+          if (r) charts.push({ title, diff: 'Expert', score: Number(r.value) || 0, grade: (r.meta && r.meta.grade) || '' });
         }
         charts.sort((a, b) => b.score - a.score);
         if (!charts.length) {
@@ -4059,7 +4045,7 @@
         moveMarker(document.getElementById('face-rail'), document.getElementById('face-marker'));
         try { history.replaceState(null, '', FACES[id].hash); } catch {}
         if (id === 'ff') { syncFfFace(); if (!profile.open) void loadFf(false); }
-        else if (id === 'rr') { drawRrRail(); drawRrSongs(); void loadRr(false); }
+        else if (id === 'rr') { drawRrSongs(); void loadRr(false); }
         else { tvOpen(); tvGuide(); tvBar(); }
       }
 
@@ -4076,7 +4062,6 @@
         moveMarker(document.getElementById('board-rail'), document.getElementById('board-marker'));
         const tier = document.getElementById('tier-rail');
         if (!tier.classList.contains('hidden')) moveMarker(tier, document.getElementById('tier-marker'));
-        moveMarker(document.getElementById('rr-rail'), document.getElementById('rr-marker'));
       });
 
       /* The press flash, on every plate. */
