@@ -2325,7 +2325,10 @@
           par: Number(b.par) || 0,
           att: b.att && typeof b.att === 'object' ? { mine: b.att.mine || [], theirs: b.att.theirs || [] } : null,
           grid: b.grid && b.grid.w ? b.grid : null,
-          ev: Array.isArray(b.ev) ? b.ev : [],
+          // Each event arrives as "t,type,…" (src/net/telemetry.ts posts them
+          // as strings — Firestore can't hold an array of arrays); rows that
+          // are already arrays (a test fixture) pass straight through.
+          ev: Array.isArray(b.ev) ? b.ev.map((e) => (typeof e === 'string' ? e.split(',').map(Number) : e)).filter(Array.isArray) : [],
           boss: b.boss || null,
         };
       }
