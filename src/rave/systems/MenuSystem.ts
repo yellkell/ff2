@@ -102,7 +102,6 @@ import { raveBridge } from '../bridge.js';
 
 const SEATS_KEY = 'gdr-seats';
 const TRACK_KEY = 'gdr-track';
-const DIFF_KEY = 'gdr-diff';
 
 /** Canvas geometry of the board. */
 const W = 1660;
@@ -272,11 +271,6 @@ export class MenuSystem extends createSystem({}) {
       }
       const track = localStorage.getItem(TRACK_KEY);
       if (track && trackById(track)) match.preferredTrack = track;
-      // NB: a missing key must not read as 0 — Number(null) is 0, and that
-      // silently forced every fresh headset onto EASY.
-      const diffRaw = localStorage.getItem(DIFF_KEY);
-      const diff = diffRaw === null ? NaN : Number(diffRaw);
-      if (Number.isFinite(diff) && diff >= 0 && diff <= 3) match.difficulty = diff;
     } catch {
       /* fine */
     }
@@ -634,14 +628,6 @@ export class MenuSystem extends createSystem({}) {
       match.generation++; // the next set is booked at this size
       try {
         localStorage.setItem(SEATS_KEY, String(match.seats));
-      } catch {
-        /* fine */
-      }
-    } else if (id.startsWith('diff')) {
-      match.difficulty = Math.max(0, Math.min(3, Number(id.slice(4))));
-      this.boardScroll = 0; // another chart, another list
-      try {
-        localStorage.setItem(DIFF_KEY, String(match.difficulty));
       } catch {
         /* fine */
       }
@@ -1578,19 +1564,18 @@ export class MenuSystem extends createSystem({}) {
       });
     }
 
-    // DIFFICULTY: the act floor for the whole song — and the lens the
-    // list's BEST column reads through.
-    DIFFICULTY.labels.forEach((label, i) => {
-      buttons.push({
-        id: `diff${i}`,
-        label,
-        selected: match.difficulty === i,
-        x: SOLO_RIGHT_X + i * 148,
-        y: 216,
-        w: 132,
-        h: 60,
-        small: true,
-      });
+    // DIFFICULTY: EXPERT, and nothing else off the tour (DIFFICULTY.solo) —
+    // one plate across the row the four choices used to share, so the board
+    // still says what it is a board of. Tapping it does nothing.
+    buttons.push({
+      id: 'expert',
+      label: DIFFICULTY.labels[DIFFICULTY.solo],
+      selected: true,
+      x: SOLO_RIGHT_X,
+      y: 216,
+      w: 3 * 148 + 132,
+      h: 60,
+      small: true,
     });
 
     // The board's source, and — when the world can't be reached — the way
