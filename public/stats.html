@@ -2540,10 +2540,10 @@
         // ONE scale for both axes — the platform is 1.72 by 1.5, and a
         // box fitted per-axis quietly stretches it into the canvas's own
         // proportion. Fit the wider constraint, then centre what's left.
-        const pad = 26, boxW = W - pad * 2, boxH = H - pad * 2 - 12;
+        const pad = 26, boxW = W - pad * 2, boxH = H - pad * 2;
         const scale = Math.min(boxW / (HALF_W * 2), boxH / (HALF_D * 2));
         const pw = HALF_W * 2 * scale, ph = HALF_D * 2 * scale;
-        const ox = (W - pw) / 2, oz = pad + 12 + (boxH - ph) / 2;
+        const ox = (W - pw) / 2, oz = pad + (boxH - ph) / 2;
         const X = (x) => ox + (x + HALF_W) * scale;
         const Z = (z) => oz + (z + HALF_D) * scale;
         const path = () => {
@@ -2572,8 +2572,6 @@
         g.font = '700 11px Rajdhani, system-ui, sans-serif';
         g.fillStyle = 'rgba(243,240,234,0.52)';
         g.textAlign = 'center';
-        g.textBaseline = 'top';
-        g.fillText('▲ THE FIGHT', W / 2, 3);
         g.textBaseline = 'bottom';
         g.fillText(max > 1 ? `peak ${Math.round(max)}` : 'no data yet', W / 2, H - 3);
       }
