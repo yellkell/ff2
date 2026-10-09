@@ -706,8 +706,14 @@ export function generateSetlist(
   banned: readonly MoveKind[] = [],
   difficulty = 1,
   doubleTime = false,
+  /** Chart-beat spans where the record drops out (tracks.ts breakBeats). */
+  breaks: readonly (readonly [number, number])[] = [],
 ): SetMove[] {
   const rng = mulberry32(mix(seed, 0xc03e0));
+  // A move that is telegraphing or landing while the music is gone reads as
+  // the boss playing to an empty room. Returns the break a move's span
+  // [telegraph, last landing] would cross, if any.
+  const breakHit = (tele: number, end: number) => breaks.find(([from, to]) => tele < to && end > from);
   const moves: SetMove[] = [];
   // EXPERT is a floor, not a phase: the whole night is served at the top
   // difficulty's terms (the donut's disc reads this — see buildLandings).
@@ -770,7 +776,9 @@ export function generateSetlist(
       for (
         let attempt = 0;
         attempt < 12 &&
-        (!evictsPark(landings, park) || landings[landings.length - 1].beat > moveEnd);
+        (!evictsPark(landings, park) ||
+          landings[landings.length - 1].beat > moveEnd ||
+          breakHit(landBeat - charge, landings[landings.length - 1].beat));
         attempt++
       ) {
         kind = pickKind(rng, act, last, banned);
@@ -778,7 +786,11 @@ export function generateSetlist(
         landBeat = Math.ceil((cursor + charge) / barBeats) * barBeats;
         landings = buildLandings(kind, landBeat, act, rng, sweptRoutines, park, doubleTime, expert);
       }
-      if (!evictsPark(landings, park) || landings[landings.length - 1].beat > moveEnd) {
+      if (
+        !evictsPark(landings, park) ||
+        landings[landings.length - 1].beat > moveEnd ||
+        breakHit(landBeat - charge, landings[landings.length - 1].beat)
+      ) {
         // TWELVE SHAPES AND NOT ONE OF THEM FITS. This used to abandon the
         // phrase — every remaining slot with it — which is how a chart ended
         // up with a whole phrase of nothing and the floor stood there
@@ -788,6 +800,17 @@ export function generateSetlist(
         // asks for a dodge. Only genuinely empty ground ends the phrase now.
         const standBeat = Math.ceil((cursor + closerChargeBeats(doubleTime)) / barBeats) * barBeats;
         if (standBeat > moveEnd) break;
+        // THE BREAK: not even the stand-in fits in front of the gap, so the
+        // floor rests through it and booking resumes as the music comes
+        // back. The slot isn't spent — the quota still wants its moves after
+        // the gap. (The stand-in's telegraph sits at or after `cursor` and
+        // before the break's end, so this always moves the cursor forward.)
+        const standGap = breakHit(standBeat - closerChargeBeats(doubleTime), standBeat);
+        if (standGap) {
+          cursor = standGap[1];
+          m--;
+          continue;
+        }
         const stand = buildAimed(standBeat, act, banned, last, park, rng);
         if (!stand) break; // a record that bans the whole vocabulary
         moves.push({
