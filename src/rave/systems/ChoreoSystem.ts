@@ -17,9 +17,9 @@
  */
 
 import { createSystem } from '@iwsdk/core';
-import { BOTS, CHOREO, GRADE, MOVES, SCORE, type MoveKind } from '../config.js';
+import { BOTS, CHOREO, GRADE, MOVES, SCORE, countInBeatsFor, type MoveKind } from '../config.js';
 import * as sfx from '../audio/sfx.js';
-import { trackById } from '../audio/tracks.js';
+import { breakBeats, trackById } from '../audio/tracks.js';
 import { platformRoot } from '../arena/arena.js';
 import { RoutineBlockfall } from '../choreo/blockfall.js';
 import { StrikeFx } from '../choreo/strikes.js';
@@ -353,7 +353,9 @@ export class ChoreoSystem extends createSystem({}) {
     // from the same shared inputs every client holds, so a room's charts
     // agree on the pace as surely as they agree on the seed.
     this.doubleTime = match.doubleTime;
-    this.setlist = generateSetlist(match.seed, match.phrases, banned, match.difficulty, this.doubleTime);
+    // And its breaks: the chart rests wherever the record drops out.
+    const breaks = record ? breakBeats(record, countInBeatsFor(match.bpm), match.bpm) : [];
+    this.setlist = generateSetlist(match.seed, match.phrases, banned, match.difficulty, this.doubleTime, breaks);
   }
 
   update(delta: number): void {

@@ -63,6 +63,8 @@ import finalUrl from '../assets/music/final.m4a';
 import overtimeUrl from '../assets/music/overtime.m4a';
 import bringitonUrl from '../assets/music/bringiton.m4a';
 import eraseUrl from '../assets/music/erase.m4a';
+import indecisiveUrl from '../assets/music/indecisive.m4a';
+import climbUrl from '../assets/music/climb.m4a';
 import type { MoveKind } from '../config.js';
 
 /** Where a record is allowed to play. 'credits' is a role of one: the
@@ -98,6 +100,11 @@ export interface Track {
    *  desyncs a room either — online raids are never tour nights, so
    *  `match.tour` is null on every client in one.) */
   tourBanned?: MoveKind[];
+  /** Optional: stretches where the record drops out, in file seconds —
+   *  [last sound before the gap, first sound back]. The set-list books
+   *  nothing across one: no telegraph opens and nothing lands until the
+   *  music is back, so the floor rests with the song. */
+  breaks?: [number, number][];
 }
 
 /**
@@ -550,6 +557,63 @@ export const TRACKS: Track[] = [
     roles: ['raid'],
   },
   {
+    id: 'indecisive',
+    title: 'INDECISIVE',
+    url: indecisiveUrl,
+    bpm: 118.0,
+    downbeat: 0.9924,
+    seconds: 310.1,
+    lufs: -13.9,
+    // 118 flat, and it is not close: the phase lock scores 6.3× the track
+    // mean there against 3.9 for the next candidate (94.4), and each half of
+    // the file locks to 118 on its own (117.995 and 118.000, inside one
+    // analyser step). Kick starts measured across the body drift under 2 ms
+    // end to end at 118, and several ms either way at 117.995 or 118.005, so
+    // the grid is a DAW integer.
+    //
+    // The downbeat is the break. At 30.9 s the record cuts to digital
+    // silence and comes back in at 35.569 s, going from nothing to −4 dB
+    // inside 10 ms. That return is the honest anchor (downbeat + 17 bars),
+    // and the body's kick vote and the two-bar level swaps near the end
+    // (every 8 beats from 234.9 s) all land on the same slot of the bar. The
+    // sparse intro's heavy hit falls on the 4, as a pull into each bar.
+    // Kick onsets sit about 10 ms behind this grid, which is inside the
+    // slack BRING IT ON already takes.
+    //
+    // It plays from the head, intro and all, and the floor rests through
+    // the gap: nothing telegraphs or lands between the last sound before it
+    // and the slam back in.
+    breaks: [[30.8954, 35.5687]],
+    roles: ['raid'],
+  },
+  {
+    id: 'climb',
+    title: 'CLIMB',
+    url: climbUrl,
+    bpm: 128.0,
+    downbeat: 0.0,
+    seconds: 232.61,
+    lufs: -18.5,
+    // The phase lock's loudest reading is 64, a half-time accent, but the
+    // kick settles it the way it did for FINAL: four on the floor at 128,
+    // and nothing on the off-beats (0.04 of the on-beats). Kick starts sit
+    // within 2 ms of a 128.000 grid end to end and drift either way at
+    // ±0.005, so the grid is a DAW integer.
+    //
+    // It is a bounce from bar 1: the grid starts at the very first sample.
+    // The chopped intro and outro prove it (each chop comes back on a beat
+    // of that grid, the last one 225.469 s in, exactly beat 481), and every
+    // big section change lands on a sixteen-beat line counted from zero.
+    // The chops are a fifth of a second long, so it carries no breaks.
+    //
+    // The quietest master in the box, 1.1 dB under AWAKENING. Gain-matching
+    // lifts it +4.5 dB, which puts its true peak (−3.9 dBFS) just over full
+    // scale on a maxed music slider, so the music-bus limiter catches it the
+    // same as AWAKENING. (It arrived as Climb.wav, but the file inside is
+    // AAC in an MP4 box, so it goes in as .m4a with no re-encode.)
+    roles: ['raid'],
+  },
+  {
     id: 'swag',
     title: 'SWAG',
     url: swagUrl,
@@ -642,6 +706,15 @@ export function trackPhrases(track: Track, countInBeats: number, beatsPerPhrase 
   const zero = Math.max(track.downbeat, track.startAt ?? 0) + countInBeats * beatLen;
   const beats = (track.seconds - zero) / beatLen - beatsPerPhrase / 8; // tail guard
   return Math.max(2, Math.floor(beats / beatsPerPhrase));
+}
+
+/** A record's breaks on the CHART's beat grid (beat 0 sits `countInBeats`
+ *  after the first downbeat, as in trackPhrases). Same track, same tempo,
+ *  same count-in on every client, so a room's charts rest together. */
+export function breakBeats(track: Track, countInBeats: number, bpm = track.bpm): [number, number][] {
+  const beatLen = 60 / bpm;
+  const zero = Math.max(track.downbeat, track.startAt ?? 0) + countInBeats * beatLen;
+  return (track.breaks ?? []).map(([from, to]) => [(from - zero) / beatLen, (to - zero) / beatLen]);
 }
 
 /** Deterministic track pick for a seed — every client lands on the same set. */
